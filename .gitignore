@@ -1,0 +1,71 @@
+# ==========================================
+# Vocaship Project Root .gitignore
+# ==========================================
+
+# Python / Backend
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+vocab-backend/venv/
+vocab-backend/.venv/
+vocab-backend/__pycache__/
+vocab-backend/.pytest_cache/
+
+# Node / Frontend
+node_modules/
+.next/
+out/
+build/
+dist/
+.pnp
+.pnp.js
+.yarn/
+*.tsbuildinfo
+next-env.d.ts
+quizwise-frontend/node_modules/
+quizwise-frontend/.next/
+quizwise-frontend/out/
+quizwise-frontend/build/
+quizwise-frontend/dist/
+
+# Gizli Anahtarlar & Çevre Değişkenleri (ÇOK ÖNEMLİ)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+*.env
+vocab-backend/.env
+vocab-backend/*.env
+quizwise-frontend/.env
+quizwise-frontend/.env.local
+quizwise-frontend/.env.*.local
+
+# Yerel Veritabanları (SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Vercel & Deployment Artifacts
+.vercel/
+
+# Sistem & IDE Dosyaları
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

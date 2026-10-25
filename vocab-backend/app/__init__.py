@@ -1,0 +1,3 @@
+"""
+Vocab Backend Application Package
+"""
