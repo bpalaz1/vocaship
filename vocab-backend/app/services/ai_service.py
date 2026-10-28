@@ -112,7 +112,7 @@ def call_gemini_with_fallback(prompt: str, temperature: float = 0.2) -> dict:
             err_str = str(e)
             print(f"[Model Fallback] {model_name} başarısız: {err_str[:120]}... Sıradaki deneniyor.")
             if "429" in err_str or "503" in err_str:
-                time.sleep(0.3)
+                pass
             continue
 
     raise last_error

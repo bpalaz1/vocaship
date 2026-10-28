@@ -254,11 +254,11 @@ export default function AddWordModal({
             {enrichedData.source && (
               <div className="flex items-center space-x-2 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs">
                 {enrichedData.source === "common_vocab" ? (
-                  <span className="text-emerald-400 font-semibold">⚡ Hızlı Sözlük Havuzundan Anında Getirildi (0ms)</span>
+                  <span className="text-emerald-400 font-semibold">{t("source_common_vocab", "⚡ Hızlı Sözlük Havuzundan Anında Getirildi (0ms)")}</span>
                 ) : enrichedData.source === "database" ? (
-                  <span className="text-indigo-300 font-semibold">💾 Deste Hafızasından Getirildi (0ms)</span>
+                  <span className="text-indigo-300 font-semibold">{t("source_database", "💾 Deste Hafızasından Getirildi (0ms)")}</span>
                 ) : (
-                  <span className="text-purple-300 font-semibold">✨ Otomatik Tanımlandı</span>
+                  <span className="text-purple-300 font-semibold">{t("source_ai_defined", "✨ Otomatik Tanımlandı")}</span>
                 )}
               </div>
             )}

@@ -223,7 +223,7 @@ export default function WeakSpotRecoveryModal({
           {loading ? (
             <div className="py-16 text-center flex flex-col items-center justify-center space-y-3">
               <RotateCw className="w-8 h-8 animate-spin text-rose-400" />
-              <p className="text-xs text-slate-400">Zayıf noktaların taranıyor...</p>
+              <p className="text-xs text-slate-400">{t("scanning_weak_spots", "Zayıf noktaların taranıyor...")}</p>
             </div>
           ) : sessionFinished || cards.length === 0 ? (
             /* SEANS BİTİŞ EKRANI */
@@ -237,15 +237,15 @@ export default function WeakSpotRecoveryModal({
 
               {allClearedCelebration && (
                 <div className="my-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/20 border-2 border-emerald-500/50 text-emerald-300 font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 animate-bounce">
-                  <span>🎉 Tüm zayıf noktalarını temizledin!</span>
+                  <span>{t("all_weak_spots_cleared", "🎉 Tüm zayıf noktalarını temizledin!")}</span>
                 </div>
               )}
 
               <p className="text-xs sm:text-sm text-slate-300 max-w-sm mb-6 leading-relaxed">
                 {allClearedCelebration
-                  ? "Tüm zayıf noktalarını başarıyla temizleyip hafızana mühürledin! Harika bir çalışma."
+                  ? t("weak_spots_sealed", "Tüm zayıf noktalarını başarıyla temizleyip hafızana mühürledin! Harika bir çalışma.")
                   : clearedCount > 0
-                  ? `Bu seansta ${clearedCount} zayıf nokta başarıyla temizlendi!`
+                  ? t("session_cleared_count", "Bu seansta {count} zayıf nokta başarıyla temizlendi!", { count: clearedCount })
                   : t("weak_spots_empty", "Şu anda hiç zayıf noktan yok! Harika gidiyorsun.")}
               </p>
               <button
@@ -256,7 +256,7 @@ export default function WeakSpotRecoveryModal({
                 }}
                 className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-emerald-600/30"
               >
-                Kütüphaneme Dön
+                {t("btn_back_to_library", "Kütüphaneme Dön")}
               </button>
             </div>
           ) : (
@@ -281,7 +281,7 @@ export default function WeakSpotRecoveryModal({
                     {isFlipped ? "TANIM & ANLAM" : t("label_target_word", "HEDEF KELİME")}
                   </span>
                   <span className="text-[11px] bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-400 font-medium">
-                    Çevirmek için tıkla / Boşluk
+                    {t("click_to_flip", "Çevirmek için tıkla / Boşluk")}
                   </span>
                 </div>
 
@@ -340,7 +340,7 @@ export default function WeakSpotRecoveryModal({
                 </div>
 
                 <div className="text-center text-[11px] text-slate-500">
-                  {isFlipped ? "Kelimeni değerlendir ↓" : t("flip_to_see_answer", "Cevabı görmek için kartı çevir")}
+                  {isFlipped ? t("evaluate_word", "Kelimeni değerlendir ↓") : t("flip_to_see_answer", "Cevabı görmek için kartı çevir")}
                 </div>
               </div>
 

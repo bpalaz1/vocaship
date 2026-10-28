@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Trophy, Flame, Zap, X, Crown, Medal, Sparkles, RefreshCw, ChevronUp, UserCheck } from "lucide-react";
 import { API_BASE } from "../config";
+import { useLanguage } from "../context/LanguageContext";
 
 export interface LeaderboardEntry {
     rank: number;
@@ -30,6 +31,7 @@ interface LeaderboardModalProps {
 }
 
 export default function LeaderboardModal({ isOpen, onClose }: LeaderboardModalProps) {
+    const { t } = useLanguage();
     const [timeframe, setTimeframe] = useState<"weekly" | "all_time">("weekly");
     const [data, setData] = useState<LeaderboardResponse | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
@@ -82,10 +84,10 @@ export default function LeaderboardModal({ isOpen, onClose }: LeaderboardModalPr
                             </div>
                             <div>
                                 <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                                    <span>Liderlik Sıralaması</span>
+                                    <span>{t("leaderboard_title", "Liderlik Sıralaması")}</span>
                                 </h2>
                                 <p className="text-xs text-slate-400 mt-0.5">
-                                    Kelime çalış, hikaye oku ve puan toplayarak zirveye çık!
+                                    {t("leaderboard_subtitle", "Kelime çalış, hikaye oku ve puan toplayarak zirveye çık!")}
                                 </p>
                             </div>
                         </div>
@@ -94,7 +96,7 @@ export default function LeaderboardModal({ isOpen, onClose }: LeaderboardModalPr
                             <button
                                 onClick={() => fetchLeaderboard(timeframe)}
                                 disabled={loading}
-                                title="Yenile"
+                                title={t("btn_refresh", "Yenile")}
                                 className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
                             >
                                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
@@ -119,7 +121,7 @@ export default function LeaderboardModal({ isOpen, onClose }: LeaderboardModalPr
                             }`}
                         >
                             <Flame className="w-4 h-4 text-orange-400" />
-                            <span>Bu Hafta (Haftalık)</span>
+                            <span>{t("tab_this_week", "Bu Hafta (Haftalık)")}</span>
                         </button>
                         <button
                             onClick={() => setTimeframe("all_time")}
@@ -130,7 +132,7 @@ export default function LeaderboardModal({ isOpen, onClose }: LeaderboardModalPr
                             }`}
                         >
                             <Crown className="w-4 h-4 text-yellow-300" />
-                            <span>Tüm Zamanlar</span>
+                            <span>{t("tab_all_time", "Tüm Zamanlar")}</span>
                         </button>
                     </div>
                 </div>

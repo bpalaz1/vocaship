@@ -6,7 +6,7 @@ router = APIRouter(prefix="/import", tags=["Importer"])
 
 
 @router.post("/quizlet/preview", response_model=ImportPreviewResponse)
-def preview_quizlet_import(payload: QuizletImportRequest):
+async def preview_quizlet_import(payload: QuizletImportRequest):
     """Quizlet metnini ayristirip onizleme listesi dondurur."""
     cards = parse_quizlet_text(
         raw_text=payload.raw_text,

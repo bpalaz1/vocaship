@@ -7,7 +7,7 @@ from app.services.story_library import STORY_ARCHIVE, get_preset_story
 router = APIRouter(prefix="/reading", tags=["Reading & Stories"])
 
 @router.get("/library", response_model=List[StoryResponse])
-def get_library_stories():
+async def get_library_stories():
     """Tüm ücretsiz hazır hikaye arşivini listeler."""
     return STORY_ARCHIVE
 

@@ -14,21 +14,22 @@ import {
   KeyRound,
   Menu,
   X,
-  Globe
+  Globe,
+  Mic
 } from "lucide-react";
-import GamificationBadge, { UserProfileData } from "./GamificationBadge";
-import JoinCodeModal from "./JoinCodeModal";
-import LeaderboardModal from "./LeaderboardModal";
+import dynamic from "next/dynamic";
+import GamificationBadge, { UserProfileData, DEFAULT_GUEST_PROFILE } from "./GamificationBadge";
+
+const JoinCodeModal = dynamic(() => import("./JoinCodeModal"), { ssr: false });
+const LeaderboardModal = dynamic(() => import("./LeaderboardModal"), { ssr: false });
 import LanguageSelector from "./LanguageSelector";
 import { useTranslation } from "../context/LanguageContext";
-import { useExperience } from "../context/ExperienceContext";
 import { API_BASE } from "../config";
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useTranslation();
-  const { mode, toggleMode } = useExperience();
 
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -38,12 +39,32 @@ export default function Navbar() {
   const fetchUserProfile = async () => {
     try {
       const res = await fetch(`${API_BASE}/gamification/profile`);
-      if (res.ok) {
-        const data: UserProfileData = await res.json();
-        setUserProfile(data);
+      if (!res.ok) {
+        console.warn(`[Navbar] Profil API yanıt vermedi (HTTP ${res.status}). Misafir profili kullanılıyor.`);
+        setUserProfile(DEFAULT_GUEST_PROFILE);
+        return;
+      }
+
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        setUserProfile({
+          ...DEFAULT_GUEST_PROFILE,
+          ...data,
+          total_xp: typeof data.total_xp === "number" ? data.total_xp : (data.xp ?? 0),
+          xp: typeof data.xp === "number" ? data.xp : (data.total_xp ?? 0),
+          level: typeof data.level === "number" ? data.level : 1,
+          streak_days: typeof data.streak_days === "number" ? data.streak_days : (data.streak ?? 0),
+          streak: typeof data.streak === "number" ? data.streak : (data.streak_days ?? 0),
+          full_name: data.full_name || data.name || "Guest",
+          name: data.name || data.full_name || "Guest",
+        });
+      } else {
+        setUserProfile(DEFAULT_GUEST_PROFILE);
       }
     } catch (e) {
-      console.error("Kullanıcı profili yüklenemedi:", e);
+      // Backend kapalıysa (Failed to fetch) veya ağ kesildiyse uygulamanın çökmesini engelle
+      console.warn("[Navbar] Kullanıcı profili yüklenirken ağ/bağlantı hatası oluştu, misafir profiline geçiliyor:", e);
+      setUserProfile(DEFAULT_GUEST_PROFILE);
     }
   };
 
@@ -55,10 +76,12 @@ export default function Navbar() {
       const custom = e as CustomEvent<{ amount: number; label?: string }>;
       if (custom.detail?.amount) {
         setUserProfile((prev) => {
-          if (!prev) return prev;
+          const base = prev || DEFAULT_GUEST_PROFILE;
+          const currentXp = base.total_xp ?? base.xp ?? 0;
           return {
-            ...prev,
-            total_xp: prev.total_xp + custom.detail.amount,
+            ...base,
+            total_xp: currentXp + custom.detail.amount,
+            xp: currentXp + custom.detail.amount,
           };
         });
         setTimeout(fetchUserProfile, 1200);
@@ -77,28 +100,42 @@ export default function Navbar() {
     };
   }, []);
 
-  // YALNIZCA 3 ANA KATEGORİ: Kütüphanem, Okuma Odası, Oyun Arenası
+  // 5 Temel Menü Bağlantısı
   const navLinks = [
     {
-      name: t("nav_decks") || "Kütüphanem",
+      name: t("nav_decks", "Kütüphanem"),
       href: "/",
       icon: Layers,
+      emoji: "📚",
       isActive: pathname === "/" || pathname.startsWith("/study"),
-      badge: null,
     },
     {
-      name: t("nav_reading") || "Okuma Odası",
+      name: t("nav_reading", "Okuma Odası"),
       href: "/reading",
       icon: BookOpen,
+      emoji: "📖",
       isActive: pathname.startsWith("/reading"),
-      badge: null,
     },
     {
-      name: t("nav_games") || "Oyun Arenası",
+      name: t("nav_speaking", "Speaking Lounge"),
+      href: "/speaking",
+      icon: Mic,
+      emoji: "🎙️",
+      isActive: pathname.startsWith("/speaking"),
+    },
+    {
+      name: t("nav_games", "Oyun Arenası"),
       href: "/games",
       icon: Gamepad2,
+      emoji: "🎮",
       isActive: pathname.startsWith("/games"),
-      badge: null,
+    },
+    {
+      name: t("nav_classroom", "Sınıfım"),
+      href: "/classroom",
+      icon: GraduationCap,
+      emoji: "🎓",
+      isActive: pathname.startsWith("/classroom"),
     },
   ];
 
@@ -114,9 +151,9 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-slate-950/85 backdrop-blur-xl border-b border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full h-16 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+          <div className="flex items-center justify-between h-full gap-3 sm:gap-4">
             {/* SOL: LOGO & İSİM */}
             <div className="flex items-center space-x-3 shrink-0">
               <Link
@@ -124,11 +161,11 @@ export default function Navbar() {
                 className="flex items-center space-x-2.5 group hover:scale-[1.02] active:scale-95 transition-all duration-150 shrink-0"
               >
                 <div className="p-2 sm:p-2.5 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 rounded-2xl shadow-lg shadow-indigo-500/25 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-200">
-                  <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                  <BrainCircuit className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-lg sm:text-xl font-black tracking-tight text-white group-hover:text-indigo-300 transition-colors">
+                    <span className="text-base sm:text-lg font-black tracking-tight text-white group-hover:text-indigo-300 transition-colors">
                       Vocaship
                     </span>
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
@@ -142,21 +179,21 @@ export default function Navbar() {
               </Link>
             </div>
 
-            {/* ORTA: YALNIZCA 3 ANA BAĞLANTI (FERAH & MİNİMALİST) */}
-            <nav className="hidden md:flex items-center space-x-1 sm:space-x-2">
+            {/* ORTA: 5 ANA BAĞLANTI (Kütüphanem, Okuma, Speaking, Oyun, Sınıfım) */}
+            <nav className="hidden md:flex items-center space-x-1 lg:space-x-1.5">
               {navLinks.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`relative flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold hover:scale-[1.02] active:scale-95 transition-all duration-150 ${
+                    className={`relative flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:scale-[1.02] active:scale-95 transition-all duration-150 ${
                       item.isActive
-                        ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 shadow-sm shadow-indigo-500/10"
+                        ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 shadow-sm shadow-indigo-500/10 font-bold"
                         : "text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent"
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${item.isActive ? "text-indigo-400" : "text-slate-400"}`} />
+                    <span className="text-sm leading-none">{item.emoji}</span>
                     <span>{item.name}</span>
                     {item.isActive && (
                       <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-indigo-400 rounded-full" />
@@ -166,43 +203,23 @@ export default function Navbar() {
               })}
             </nav>
 
-            {/* SAĞ: KONTROLLER (KOMPAKT MOD, DİL SEÇİCİ, ÖĞRETMEN İKONU, XP/ALTIN SAYACI) */}
+            {/* SAĞ: SADE KONTROLLER (SERİ 🔥, DİL SEÇİCİ, PROFİL AÇILIR PANELİ) */}
             <div className="flex items-center space-x-2 shrink-0">
-              {/* Kompakt Mod Rozeti (🎓 / 🎮) */}
-              <button
-                type="button"
-                onClick={toggleMode}
-                className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-2xl border transition-all duration-150 hover:scale-[1.02] active:scale-95 cursor-pointer shrink-0 ${
-                  mode === "academic"
-                    ? "bg-indigo-600/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-600/25"
-                    : "bg-amber-500/15 border-amber-500/30 text-amber-300 hover:bg-amber-500/25"
-                }`}
-                title={
-                  mode === "academic"
-                    ? "🎓 Akademik Mod Seçili (Tıkla ve Oyun Moduna Geç)"
-                    : "🎮 Oyun Modu Seçili (Tıkla ve Akademik Moda Geç)"
-                }
-                aria-label="Deneyim Modunu Değiştir"
+              {/* Seri (Streak 🔥) */}
+              <div
+                className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-2xl bg-orange-500/10 border border-orange-500/25 text-orange-400 font-bold text-xs shrink-0 select-none shadow-sm"
+                title={t("daily_streak", "Günlük Seri")}
               >
-                <span className="text-sm leading-none">{mode === "academic" ? "🎓" : "🎮"}</span>
-                <span className="hidden sm:inline font-mono text-xs font-bold">
-                  {mode === "academic" ? t("mode_academic", "Akademik") : t("mode_arcade", "Oyun")}
+                <span className="text-sm leading-none">🔥</span>
+                <span className="font-mono text-xs font-black">
+                  {userProfile?.streak_days ?? userProfile?.streak ?? 0}
                 </span>
-              </button>
+              </div>
 
               {/* Dil Seçici (🇹🇷 TR) */}
               <LanguageSelector align="right" />
 
-              {/* Sınıfım / Öğretmen Paneli Zarif Tek İkon (🎓) */}
-              <Link
-                href="/classroom"
-                className="hidden sm:flex items-center justify-center p-2 rounded-2xl bg-slate-900/90 hover:bg-slate-850 border border-slate-700/80 hover:border-indigo-500/50 text-slate-400 hover:text-white transition shadow-sm active:scale-95 shrink-0"
-                title="🎓 Sınıfım & Öğretmen Paneli"
-              >
-                <GraduationCap className="w-4 h-4 text-indigo-400" />
-              </Link>
-
-              {/* ⭐ XP & Altın Sayacı & Profil / Gelişim Karnesi Açılır Paneli */}
+              {/* ⭐ Profil / Gelişim Karnesi Açılır Paneli */}
               <div className="shrink-0">
                 <GamificationBadge
                   profile={userProfile}
@@ -214,7 +231,7 @@ export default function Navbar() {
               {/* Mobil Menü Butonu */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:scale-[1.02] active:scale-95 transition-all duration-150 shrink-0"
+                className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:scale-[1.02] active:scale-95 transition-all duration-150 shrink-0 cursor-pointer"
                 aria-label="Menüyü Aç"
               >
                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -225,58 +242,27 @@ export default function Navbar() {
 
         {/* MOBİL MENÜ AÇILIR PANEL */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-800 bg-slate-950/98 px-4 pt-3 pb-4 space-y-2">
-            {/* Mobil Mod Değiştirme */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80 mb-2">
-              <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300">
-                <span>{mode === "academic" ? "🎓" : "🎮"}</span>
-                <span>{mode === "academic" ? t("mode_academic", "Akademik") : t("mode_arcade", "Oyun & Sınıf")}</span>
-              </div>
-              <button
-                type="button"
-                onClick={toggleMode}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
-                  mode === "academic"
-                    ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/40"
-                    : "bg-amber-600/30 text-amber-300 border-amber-500/40"
-                }`}
-              >
-                Değiştir
-              </button>
-            </div>
-
-            {/* 3 Ana Navigasyon Bağlantısı */}
+          <div className="md:hidden border-t border-slate-800 bg-slate-950/98 px-4 pt-3 pb-4 space-y-2 shadow-2xl">
             <div className="space-y-1">
-              {navLinks.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                      item.isActive
-                        ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/40"
-                        : "text-slate-300 hover:bg-slate-900"
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 text-indigo-400" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
+              {navLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                    item.isActive
+                      ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/40 font-bold"
+                      : "text-slate-300 hover:bg-slate-900"
+                  }`}
+                >
+                  <span className="text-base">{item.emoji}</span>
+                  <span>{item.name}</span>
+                </Link>
+              ))}
             </div>
 
             {/* İkincil Araçlar */}
             <div className="pt-2 border-t border-slate-800 space-y-1">
-              <Link
-                href="/classroom"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-900"
-              >
-                <GraduationCap className="w-4 h-4 text-indigo-400" />
-                <span>🎓 Sınıfım & Öğretmen Paneli</span>
-              </Link>
               <Link
                 href="/leaderboard"
                 onClick={() => setMobileMenuOpen(false)}

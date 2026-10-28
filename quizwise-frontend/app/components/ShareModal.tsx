@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { X, Copy, Check, Share2, Users, Sparkles, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 
-interface ShareModalProps {
+export interface ShareModalProps {
     isOpen: boolean;
     onClose: () => void;
     title: string;

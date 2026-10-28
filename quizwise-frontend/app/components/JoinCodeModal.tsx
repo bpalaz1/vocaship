@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, ArrowRight, Loader2, KeyRound, AlertCircle, Sparkles } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 interface JoinCodeModalProps {
     isOpen: boolean;
@@ -10,6 +11,7 @@ interface JoinCodeModalProps {
 }
 
 export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCodeModalProps) {
+    const { t } = useLanguage();
     const [code, setCode] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCo
         e.preventDefault();
         const trimmed = code.trim().toUpperCase();
         if (!trimmed) {
-            setError("Lütfen 6 haneli katılım kodunu girin.");
+            setError(t("error_enter_pin", "Lütfen 6 haneli katılım kodunu girin."));
             return;
         }
 
@@ -38,7 +40,7 @@ export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCo
             const res = await fetch(`http://localhost:8000/api/v1/share/${encodeURIComponent(trimmed)}`);
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.detail || "Geçersiz veya süresi dolmuş katılım kodu.");
+                throw new Error(errData.detail || t("error_connection_failed", "Geçersiz veya süresi dolmuş katılım kodu."));
             }
 
             const data = await res.json();
@@ -46,7 +48,7 @@ export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCo
             setCode("");
             onClose();
         } catch (err: any) {
-            setError(err.message || "Bağlantı sağlanamadı. Lütfen kodu kontrol edin.");
+            setError(err.message || t("error_connection_failed", "Bağlantı sağlanamadı. Lütfen kodu kontrol edin."));
         } finally {
             setLoading(false);
         }
@@ -74,29 +76,29 @@ export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCo
                         <KeyRound className="w-6 h-6" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black text-white">Kod ile Katıl</h3>
-                        <p className="text-xs text-slate-400">Öğretmeninizden aldığınız 6 haneli kodu yazın</p>
+                        <h3 className="text-lg font-black text-white">{t("modal_join_code_title", "Kod ile Katıl")}</h3>
+                        <p className="text-xs text-slate-400">{t("modal_join_code_subtitle", "Öğretmeninizden aldığınız 6 haneli kodu yazın")}</p>
                     </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-300 block">
-                            Katılım PIN Kodu
+                            {t("label_join_pin", "Katılım PIN Kodu")}
                         </label>
                         <div className="relative">
                             <input
                                 type="text"
                                 autoFocus
                                 maxLength={10}
-                                placeholder="Örn: QW-8492 veya 8492"
+                                placeholder={t("placeholder_join_pin", "Örn: QW-8492 veya 8492")}
                                 value={code}
                                 onChange={handleCodeChange}
                                 className="w-full bg-slate-950 border-2 border-slate-800 focus:border-emerald-500 rounded-2xl px-4 py-3.5 text-center font-mono text-xl sm:text-2xl font-bold tracking-widest text-white placeholder-slate-600 outline-none transition uppercase selection:bg-emerald-500 selection:text-slate-950"
                             />
                         </div>
                         <p className="text-[11px] text-slate-500 text-center">
-                            "QW-" yazmadan yalnızca 4 haneli numarayı da girebilirsiniz.
+                            {t("hint_join_pin", "\"QW-\" yazmadan yalnızca 4 haneli numarayı da girebilirsiniz.")}
                         </p>
                     </div>
 
@@ -115,11 +117,11 @@ export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCo
                         {loading ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>İçerik Yükleniyor...</span>
+                                <span>{t("btn_joining_content", "İçerik Yükleniyor...")}</span>
                             </>
                         ) : (
                             <>
-                                <span>İçeriğe Katıl</span>
+                                <span>{t("btn_join_content", "İçeriğe Katıl")}</span>
                                 <ArrowRight className="w-4 h-4" />
                             </>
                         )}
@@ -129,7 +131,7 @@ export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCo
                 <div className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl text-[11px] text-slate-400 flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                     <span>
-                        Kod doğrulandığında deste, kelime kartları ve okuma odasındaki hikaye anında ekranınızda açılacaktır.
+                        {t("join_code_info_box", "Kod doğrulandığında deste, kelime kartları ve okuma odasındaki hikaye anında ekranınızda açılacaktır.")}
                     </span>
                 </div>
             </div>

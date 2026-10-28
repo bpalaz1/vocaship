@@ -16,20 +16,23 @@ import {
 import { useLanguage } from "../context/LanguageContext";
 
 export interface UserProfileData {
-  user_id: string;
-  email: string;
-  full_name: string;
+  user_id?: string;
+  email?: string;
+  full_name?: string;
+  name?: string;
   total_xp: number;
+  xp?: number;
   level: number;
-  title: string;
-  badge: string;
-  level_title: string;
+  title?: string;
+  badge?: string;
+  level_title?: string;
   streak_days: number;
+  streak?: number;
   last_active_date?: string | null;
-  next_level_xp: number;
-  xp_to_next_level: number;
-  current_level_min_xp: number;
-  level_progress_percent: number;
+  next_level_xp?: number;
+  xp_to_next_level?: number;
+  current_level_min_xp?: number;
+  level_progress_percent?: number;
   recent_awarded_xp?: number | null;
   leveled_up?: boolean;
   message?: string | null;
@@ -37,6 +40,28 @@ export interface UserProfileData {
   active_avatar?: string;
   active_avatar_id?: string;
 }
+
+export const DEFAULT_GUEST_PROFILE: UserProfileData = {
+  user_id: "guest",
+  email: "guest@vocaship.ai",
+  full_name: "Guest",
+  name: "Guest",
+  total_xp: 0,
+  xp: 0,
+  level: 1,
+  title: "Kelime Çırağı",
+  badge: "🥉",
+  level_title: "Seviye 1 - Kelime Çırağı 🥉",
+  streak_days: 0,
+  streak: 0,
+  next_level_xp: 300,
+  xp_to_next_level: 300,
+  current_level_min_xp: 0,
+  level_progress_percent: 0,
+  coins: 300,
+  active_avatar: "🌟",
+  active_avatar_id: "char_default",
+};
 
 interface GamificationBadgeProps {
   profile: UserProfileData | null;
@@ -56,16 +81,18 @@ export default function GamificationBadge({
   const [isBumping, setIsBumping] = useState(false);
   const prevXpRef = useRef<number | null>(null);
 
+  const effectiveXp = profile ? (profile.total_xp ?? profile.xp ?? 0) : 0;
+
   useEffect(() => {
-    if (profile && prevXpRef.current !== null && profile.total_xp > prevXpRef.current) {
+    if (profile && prevXpRef.current !== null && effectiveXp > prevXpRef.current) {
       setIsBumping(true);
       const timer = setTimeout(() => setIsBumping(false), 700);
       return () => clearTimeout(timer);
     }
     if (profile) {
-      prevXpRef.current = profile.total_xp;
+      prevXpRef.current = effectiveXp;
     }
-  }, [profile?.total_xp]);
+  }, [profile, effectiveXp]);
 
   if (!profile) {
     return (
@@ -76,17 +103,15 @@ export default function GamificationBadge({
     );
   }
 
-  const {
-    total_xp,
-    level,
-    title,
-    badge,
-    streak_days,
-    xp_to_next_level,
-    level_progress_percent,
-    next_level_xp,
-    coins = 300,
-  } = profile;
+  const total_xp = profile.total_xp ?? profile.xp ?? 0;
+  const level = profile.level ?? 1;
+  const title = profile.title || "Kelime Çırağı";
+  const badge = profile.badge || "🥉";
+  const streak_days = profile.streak_days ?? profile.streak ?? 0;
+  const xp_to_next_level = profile.xp_to_next_level ?? 300;
+  const level_progress_percent = profile.level_progress_percent ?? 0;
+  const next_level_xp = profile.next_level_xp ?? 300;
+  const coins = profile.coins ?? 300;
 
   // Seviye Temaları (Level Themes)
   const getLevelTheme = (lvl: number) => {

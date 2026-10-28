@@ -14,6 +14,8 @@ from app.api.v1.endpoints.share import router as share_router
 from app.api.v1.endpoints.gamification import router as gamification_router
 from app.api.v1.endpoints.classroom import router as classroom_router
 from app.api.v1.endpoints.cards import router as cards_router
+from app.api.v1.endpoints.speaking import router as speaking_router
+from app.api.v1.endpoints.career_hubs import router as career_hubs_router
 
 router = APIRouter()
 
@@ -27,6 +29,8 @@ router.include_router(folders_router, prefix="/folders", tags=["Folders"])
 router.include_router(share_router, tags=["Share & Classroom Code"])
 router.include_router(gamification_router, prefix="/gamification", tags=["Gamification & XP"])
 router.include_router(classroom_router, prefix="/classroom", tags=["Classroom & Teacher"])
+router.include_router(speaking_router, prefix="/speaking", tags=["AI Speaking Lounge"])
+router.include_router(career_hubs_router, tags=["Specialized Career Hubs"])
 
 
 @router.get("/health", response_model=HealthCheck, tags=["Health"])

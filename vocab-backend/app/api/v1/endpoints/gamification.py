@@ -25,7 +25,7 @@ router = APIRouter(prefix="", tags=["Gamification, XP & Gacha Shop"])
 
 @router.post("/award-xp", response_model=UserProfileResponse, status_code=status.HTTP_200_OK)
 @router.post("/award", response_model=UserProfileResponse, status_code=status.HTTP_200_OK)
-def award_xp_endpoint(payload: AwardXPRequest):
+async def award_xp_endpoint(payload: AwardXPRequest):
     """
     Kullanıcıya belirli bir eylem için XP ve Altın kazandırır.
     Eylemler:
@@ -46,7 +46,7 @@ def award_xp_endpoint(payload: AwardXPRequest):
 
 
 @router.get("/profile", response_model=UserProfileResponse, status_code=status.HTTP_200_OK)
-def get_profile_endpoint(user_id: Optional[str] = None):
+async def get_profile_endpoint(user_id: Optional[str] = None):
     """
     Kullanıcının güncel seviye, unvan, toplam XP, altın ve günlük seri (streak 🔥) bilgilerini döner.
     """
@@ -55,7 +55,7 @@ def get_profile_endpoint(user_id: Optional[str] = None):
 
 
 @router.get("/leaderboard", response_model=LeaderboardResponse, status_code=status.HTTP_200_OK)
-def get_leaderboard_endpoint(
+async def get_leaderboard_endpoint(
     timeframe: str = Query("weekly", description="Zaman aralığı: weekly veya all_time"),
     user_id: Optional[str] = None,
 ):
@@ -67,7 +67,7 @@ def get_leaderboard_endpoint(
 
 
 @router.get("/shop", response_model=ShopResponse, status_code=status.HTTP_200_OK)
-def get_shop_endpoint(user_id: Optional[str] = None):
+async def get_shop_endpoint(user_id: Optional[str] = None):
     """
     Mağazadaki mevcut gizemli sandıkları, fiyatlarını ve kullanıcının altın bakiyesini döner.
     """
@@ -75,7 +75,7 @@ def get_shop_endpoint(user_id: Optional[str] = None):
 
 
 @router.post("/open-chest", response_model=OpenChestResponse, status_code=status.HTTP_200_OK)
-def open_chest_endpoint(payload: OpenChestRequest):
+async def open_chest_endpoint(payload: OpenChestRequest):
     """
     Sandık açıp olasılıklara göre yeni bir karakter kazandırır veya kopya ise altın iadesi yapar.
     """
@@ -83,7 +83,7 @@ def open_chest_endpoint(payload: OpenChestRequest):
 
 
 @router.get("/my-characters", response_model=MyCharactersResponse, status_code=status.HTTP_200_OK)
-def get_my_characters_endpoint(user_id: Optional[str] = None):
+async def get_my_characters_endpoint(user_id: Optional[str] = None):
     """
     Kullanıcının kilitli ve açtığı tüm karakterleri, istatistiklerini ve aktif avatarını döner.
     """
@@ -91,7 +91,7 @@ def get_my_characters_endpoint(user_id: Optional[str] = None):
 
 
 @router.patch("/set-avatar", status_code=status.HTTP_200_OK)
-def set_avatar_endpoint(payload: SetAvatarRequest):
+async def set_avatar_endpoint(payload: SetAvatarRequest):
     """
     Açılmış karakterlerden birini kullanıcının profil ve liderlik tablosundaki aktif avatarı yapar.
     """

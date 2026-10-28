@@ -18,7 +18,7 @@ router = APIRouter(tags=["Study & SM-2"])
 
 
 @router.post("/review", response_model=ReviewCardResponse)
-def review_card(payload: ReviewCardRequest):
+async def review_card(payload: ReviewCardRequest):
     """
     İkili seçim (Biliyorum/Bilemedim) veya puanla SM-2 ve Zayıf Nokta Avcısı işletir.
     """
@@ -36,7 +36,7 @@ def review_card(payload: ReviewCardRequest):
 
 
 @router.get("/due-cards")
-def list_due_cards(
+async def list_due_cards(
     deck_id: Optional[str] = Query(None, description="Opsiyonel deste UUID'si"),
     limit: int = Query(20, ge=1, le=100, description="Getirilecek maksimum kart sayısı")
 ):
@@ -52,7 +52,7 @@ def list_due_cards(
 
 
 @router.get("/weak-spots", response_model=WeakSpotsResponse)
-def list_study_weak_spots(
+async def list_study_weak_spots(
     deck_id: Optional[str] = Query(None, description="Opsiyonel deste filtresi"),
     limit: int = Query(50, ge=1, le=100, description="Getirilecek maksimum zayıf kart sayısı")
 ):

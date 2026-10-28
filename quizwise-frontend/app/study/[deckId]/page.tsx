@@ -22,7 +22,9 @@ import {
   X,
   Target
 } from "lucide-react";
-import ShareModal from "../../components/ShareModal";
+import dynamic from "next/dynamic";
+const ShareModal = dynamic(() => import("../../components/ShareModal"), { ssr: false });
+import PronunciationCoach from "../../components/PronunciationCoach";
 import { useLanguage } from "../../context/LanguageContext";
 import { API_BASE } from "../../config";
 
@@ -80,14 +82,20 @@ export default function StudyRoomPage() {
           const allDecks: Deck[] = await decksRes.json();
           const currentDeck = allDecks.find((d) => String(d.id) === String(deckId));
           setDeck(currentDeck || null);
+        } else {
+          setDeck(null);
         }
 
         if (cardsRes.ok) {
           const cardsData: Card[] = await cardsRes.json();
-          setCards(cardsData || []);
+          setCards(Array.isArray(cardsData) ? cardsData : []);
+        } else {
+          setCards([]);
         }
       } catch (err) {
-        console.error("Deste bilgileri alınamadı:", err);
+        console.warn("Deste bilgileri alınamadı (sunucu kapalı veya ağ hatası):", err);
+        setDeck(null);
+        setCards([]);
       } finally {
         setLoading(false);
       }
@@ -375,14 +383,34 @@ export default function StudyRoomPage() {
                     </button>
                   </div>
 
-                  {currentCard.example_sentences && currentCard.example_sentences.length > 0 && (
-                    <div className="pt-3 border-t border-slate-800 text-left bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
-                      <p className="text-xs sm:text-sm text-slate-200 italic mb-1">
-                        &quot;{currentCard.example_sentences[0].target || currentCard.example_sentences[0].en}&quot;
-                      </p>
-                      <p className="text-[11px] sm:text-xs text-slate-400">
-                        {currentCard.example_sentences[0].native || currentCard.example_sentences[0].tr}
-                      </p>
+                  {currentCard.example_sentences && currentCard.example_sentences.length > 0 ? (
+                    <div className="pt-3 border-t border-slate-800 text-left bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+                      <div>
+                        <p className="text-xs sm:text-sm text-slate-200 italic mb-1">
+                          &quot;{currentCard.example_sentences[0].target || currentCard.example_sentences[0].en}&quot;
+                        </p>
+                        <p className="text-[11px] sm:text-xs text-slate-400">
+                          {currentCard.example_sentences[0].native || currentCard.example_sentences[0].tr}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-800/60 flex items-center justify-center sm:justify-start">
+                        <PronunciationCoach
+                          targetSentence={
+                            currentCard.example_sentences[0].target ||
+                            currentCard.example_sentences[0].en ||
+                            currentCard.word
+                          }
+                          lang={deck?.target_lang === "tr" ? "tr-TR" : "en-US"}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pt-3 border-t border-slate-800 flex justify-center">
+                      <PronunciationCoach
+                        targetSentence={currentCard.word}
+                        lang={deck?.target_lang === "tr" ? "tr-TR" : "en-US"}
+                      />
                     </div>
                   )}
                 </div>

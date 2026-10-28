@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "../../context/LanguageContext";
 import { API_BASE } from "../../config";
+import PronunciationCoach from "../PronunciationCoach";
 
 export interface TargetVocabularyItem {
   word: string;
@@ -236,9 +237,14 @@ function SingleFlashcard({
             </div>
 
             {exampleSentence && (
-              <p className="text-[11px] sm:text-xs text-slate-400 italic line-clamp-2 leading-relaxed pt-1.5 border-t border-slate-800/60">
-                &ldquo;{exampleSentence}&rdquo;
-              </p>
+              <div className="pt-2 border-t border-slate-800/60 space-y-2">
+                <p className="text-[11px] sm:text-xs text-slate-400 italic line-clamp-2 leading-relaxed">
+                  &ldquo;{exampleSentence}&rdquo;
+                </p>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <PronunciationCoach targetSentence={exampleSentence} compact className="w-full" />
+                </div>
+              </div>
             )}
           </div>
         )}

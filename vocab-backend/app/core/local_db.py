@@ -362,12 +362,34 @@ class LocalDatabaseClient:
             );
             """)
 
-            cursor.execute("""
+            cursor.executescript("""
             CREATE TABLE IF NOT EXISTS unlocked_characters (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 character_id TEXT NOT NULL,
                 unlocked_at TEXT,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS classrooms (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                grade_level TEXT DEFAULT 'Intermediate',
+                code TEXT UNIQUE NOT NULL,
+                student_count INTEGER DEFAULT 0,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS classroom_assignments (
+                id TEXT PRIMARY KEY,
+                classroom_id TEXT NOT NULL,
+                class_code TEXT NOT NULL,
+                title TEXT NOT NULL,
+                story_content TEXT,
+                target_words TEXT,
+                questions TEXT,
+                due_date TEXT,
+                completed_percent INTEGER DEFAULT 0,
                 created_at TEXT
             );
             """)

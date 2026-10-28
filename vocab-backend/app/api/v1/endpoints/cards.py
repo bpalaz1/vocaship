@@ -7,7 +7,7 @@ router = APIRouter(tags=["Cards & Weak-Spot Hunter"])
 
 
 @router.get("/weak-spots", response_model=WeakSpotsResponse)
-def list_weak_spots(
+async def list_weak_spots(
     deck_id: Optional[str] = Query(None, description="Opsiyonel deste filtresi"),
     limit: int = Query(50, ge=1, le=100, description="Getirilecek maksimum zayıf kart sayısı")
 ):
@@ -24,7 +24,7 @@ def list_weak_spots(
 
 
 @router.post("/{card_id}/review-result", response_model=ReviewResultResponse)
-def submit_review_result(card_id: str, payload: ReviewResultRequest):
+async def submit_review_result(card_id: str, payload: ReviewResultRequest):
     """
     Kullanıcının ikili cevap sonucunu (Biliyorum / Bilemedim) işler:
     - is_correct=False: mistake_count += 1, consecutive_correct = 0, needs_review = True

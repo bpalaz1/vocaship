@@ -89,7 +89,7 @@ def _load_from_db(pin: str) -> Optional[Dict[str, Any]]:
 
 @router.post("/create")
 @router.post("")
-def create_share(payload: CreateShareRequest):
+async def create_share(payload: CreateShareRequest):
     """
     Creates a unique 6-digit classroom/share code (e.g. 'QW-8492') for a deck or story.
     Returns the PIN, shareable direct link, and full data.
@@ -158,7 +158,7 @@ def create_share(payload: CreateShareRequest):
 
 
 @router.get("/{code}")
-def get_share_content(code: str):
+async def get_share_content(code: str):
     """
     Retrieves full deck, cards/words, and linked story content for a given 6-character code.
     """

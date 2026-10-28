@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("", response_model=List[FolderResponse])
 @router.get("/", response_model=List[FolderResponse])
-def list_folders(db: Client = Depends(get_db)):
+async def list_folders(db: Client = Depends(get_db)):
     """Kullanıcının klasörlerini ve içerdikleri deste sayısını listeler."""
     res = db.table("folders").select("*").order("created_at").execute()
     folders = res.data or []
@@ -21,7 +21,7 @@ def list_folders(db: Client = Depends(get_db)):
 
 @router.post("", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
-def create_folder(folder_in: FolderCreate, db: Client = Depends(get_db)):
+async def create_folder(folder_in: FolderCreate, db: Client = Depends(get_db)):
     """Yeni bir klasör (örn: Kuzey, Animals) oluşturur."""
     data = folder_in.model_dump()
     if not data.get("user_id"):
@@ -38,7 +38,7 @@ def create_folder(folder_in: FolderCreate, db: Client = Depends(get_db)):
 
 
 @router.delete("/{folder_id}", status_code=status.HTTP_200_OK)
-def delete_folder(folder_id: str, db: Client = Depends(get_db)):
+async def delete_folder(folder_id: str, db: Client = Depends(get_db)):
     """Klasörü siler; içindeki desteler silinmez, sadece klasörsüz kalır."""
     db.table("decks").update({"folder_id": None}).eq("folder_id", folder_id).execute()
     res = db.table("folders").delete().eq("id", folder_id).execute()

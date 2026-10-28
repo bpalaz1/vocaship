@@ -12,6 +12,7 @@ from app.schemas.flashcard import (
 
 
 from app.schemas.gamification import AwardXPRequest, UserProfileResponse
+from app.schemas.speaking import SpeakingRespondRequest, SpeakingRespondResponse, ScenarioMetadata
 
 
 class HealthCheck(BaseModel):
@@ -19,3 +20,4 @@ class HealthCheck(BaseModel):
     project_name: str
     api_version: str
     database_connected: Optional[bool] = None
+

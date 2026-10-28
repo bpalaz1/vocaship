@@ -27,13 +27,17 @@ function GoldQuestContent() {
         const res = await fetch(`${API_BASE}/decks`);
         if (res.ok) {
           const data = await res.json();
-          setDecks(data || []);
+          setDecks(Array.isArray(data) ? data : []);
           if (!selectedDeckId && data && data.length > 0) {
             setSelectedDeckId(data[0].id);
           }
+        } else {
+          console.warn(`[fetchDecks] HTTP ${res.status}: Boş deste listesi kullanılıyor.`);
+          setDecks([]);
         }
       } catch (err) {
-        console.error("Desteler yüklenemedi:", err);
+        console.warn("Desteler yüklenemedi (sunucu kapalı veya ağ hatası), boş liste kullanılıyor:", err);
+        setDecks([]);
       } finally {
         setLoadingDecks(false);
       }

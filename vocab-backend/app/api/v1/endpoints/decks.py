@@ -25,7 +25,7 @@ class CardUpdatePayload(BaseModel):
 
 @router.get("", response_model=List[DeckResponse])
 @router.get("/", response_model=List[DeckResponse])
-def list_decks(folder_id: Optional[str] = None, db: Client = Depends(get_db)):
+async def list_decks(folder_id: Optional[str] = None, db: Client = Depends(get_db)):
     """Tüm desteleri ve bağlı oldukları folder_id bilgisini net olarak döner."""
     query = db.table("decks").select("id, title, description, folder_id, user_id, created_at").order("created_at")
     if folder_id:
@@ -45,7 +45,7 @@ def list_decks(folder_id: Optional[str] = None, db: Client = Depends(get_db)):
 
 @router.post("", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
-def create_deck(deck_in: DeckCreate, db: Client = Depends(get_db)):
+async def create_deck(deck_in: DeckCreate, db: Client = Depends(get_db)):
     data = deck_in.model_dump()
     if not data.get("user_id"):
         user_res = db.table("users").select("id").limit(1).execute()
@@ -63,7 +63,7 @@ def create_deck(deck_in: DeckCreate, db: Client = Depends(get_db)):
 
 
 @router.patch("/{deck_id}/folder", status_code=status.HTTP_200_OK)
-def update_deck_folder(deck_id: str, payload: DeckUpdateFolder, db: Client = Depends(get_db)):
+async def update_deck_folder(deck_id: str, payload: DeckUpdateFolder, db: Client = Depends(get_db)):
     """Destenin bağlı olduğu klasörü günceller."""
     f_id = str(payload.folder_id) if payload.folder_id else None
     res = db.table("decks").update({"folder_id": f_id}).eq("id", deck_id).execute()
@@ -73,13 +73,13 @@ def update_deck_folder(deck_id: str, payload: DeckUpdateFolder, db: Client = Dep
 
 
 @router.get("/{deck_id}/cards")
-def get_all_cards_in_deck(deck_id: str, db: Client = Depends(get_db)):
+async def get_all_cards_in_deck(deck_id: str, db: Client = Depends(get_db)):
     res = db.table("flashcards").select("*").eq("deck_id", deck_id).order("created_at").execute()
     return res.data or []
 
 
 @router.post("/cards", status_code=status.HTTP_201_CREATED)
-def add_card_to_deck(card_in: FlashcardCreate, db: Client = Depends(get_db)):
+async def add_card_to_deck(card_in: FlashcardCreate, db: Client = Depends(get_db)):
     data = card_in.model_dump()
     db_payload = {
         "deck_id": data["deck_id"],
@@ -101,7 +101,7 @@ def add_card_to_deck(card_in: FlashcardCreate, db: Client = Depends(get_db)):
 
 
 @router.patch("/cards/{card_id}", status_code=status.HTTP_200_OK)
-def update_deck_card(card_id: str, payload: CardUpdatePayload, db: Client = Depends(get_db)):
+async def update_deck_card(card_id: str, payload: CardUpdatePayload, db: Client = Depends(get_db)):
     """Deste içindeyken mevcut bir kartın anlamını, kelimesini veya örnek cümlesini günceller."""
     data = payload.model_dump(exclude_unset=True)
     if not data:
@@ -114,7 +114,7 @@ def update_deck_card(card_id: str, payload: CardUpdatePayload, db: Client = Depe
 
 
 @router.delete("/cards/{card_id}", status_code=status.HTTP_200_OK)
-def remove_card_from_deck(card_id: str, db: Client = Depends(get_db)):
+async def remove_card_from_deck(card_id: str, db: Client = Depends(get_db)):
     res = db.table("flashcards").delete().eq("id", card_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Kart bulunamadı veya zaten silinmiş.")
@@ -122,7 +122,7 @@ def remove_card_from_deck(card_id: str, db: Client = Depends(get_db)):
 
 
 @router.delete("/{deck_id}", status_code=status.HTTP_200_OK)
-def delete_deck(deck_id: str, db: Client = Depends(get_db)):
+async def delete_deck(deck_id: str, db: Client = Depends(get_db)):
     db.table("flashcards").delete().eq("deck_id", deck_id).execute()
     res = db.table("decks").delete().eq("id", deck_id).execute()
     if not res.data:

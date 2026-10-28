@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Volume2, Plus, Check, X, Loader2, ArrowLeft, Languages } from "lucide-react";
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
+import PronunciationCoach from "../PronunciationCoach";
 
 interface Deck {
     id: string;
@@ -356,10 +357,23 @@ export default function WordCardModal({
                                 </div>
                             )}
                         </div>
-                        {contextSentence && (
-                            <div className="p-3 bg-slate-800/40 rounded-xl text-xs text-slate-300 italic border border-slate-700/30 line-clamp-3">
-                                "{contextSentence}"
+                        {contextSentence ? (
+                            <div className="space-y-2">
+                                <div className="p-3 bg-slate-800/40 rounded-xl text-xs text-slate-300 italic border border-slate-700/30 line-clamp-3">
+                                    "{contextSentence}"
+                                </div>
+                                <PronunciationCoach
+                                    targetSentence={contextSentence}
+                                    compact
+                                    className="w-full"
+                                />
                             </div>
+                        ) : (
+                            <PronunciationCoach
+                                targetSentence={word}
+                                compact
+                                className="w-full"
+                            />
                         )}
                     </div>
                 )}
