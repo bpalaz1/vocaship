@@ -13,17 +13,13 @@ from app.core.config import settings
 load_dotenv()
 
 # Hızlı ve düşük gecikmeli (low latency) model önceliği
-# 1. gemini-2.5-flash
-# 2. gemini-1.5-flash
-# Fallback modeller: gemini-flash-lite-latest, gemini-flash-latest, gemini-3.8-flash, gemini-2.5-pro
 FALLBACK_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
     "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite",
     "gemini-flash-latest",
     "gemini-3.8-flash",
-    "gemini-2.5-pro",
+    "gemini-2.5-flash",
 ]
 
 LANG_MAP = {

@@ -55,11 +55,15 @@ class LeaderboardEntry(BaseModel):
     badge: str
     streak_days: int
     is_current_user: bool = False
+    weekly_xp: Optional[int] = None
+    all_time_xp: Optional[int] = None
 
 
 class LeaderboardResponse(BaseModel):
     timeframe: str
     current_user_rank: int
+    current_user_weekly_xp: Optional[int] = 0
+    current_user_all_time_xp: Optional[int] = 0
     total_participants: int
     entries: List[LeaderboardEntry]
 
@@ -118,4 +122,21 @@ class ShopResponse(BaseModel):
     chests: List[Chest]
     user_coins: int
     active_avatar: str
+
+
+class UnlockCharacterRequest(BaseModel):
+    character_id: str
+    user_id: Optional[str] = None
+    user_level: Optional[str] = "A1"
+    completed_stories_count: Optional[int] = 0
+    language: Optional[str] = "tr"
+
+
+class UnlockCharacterResponse(BaseModel):
+    success: bool
+    character_id: str
+    remaining_coins: int
+    unlocked_characters: List[str] = []
+    message: str
+    unlock_quote: str = ""
 

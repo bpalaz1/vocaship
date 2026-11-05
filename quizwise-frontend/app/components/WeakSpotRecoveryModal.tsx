@@ -270,79 +270,162 @@ export default function WeakSpotRecoveryModal({
                 />
               </div>
 
-              {/* Tıklanabilir Çift Yüzlü Kart */}
-              <div
-                onClick={() => setIsFlipped(!isFlipped)}
-                className="w-full min-h-[260px] sm:min-h-[300px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border-2 border-rose-500/30 hover:border-rose-400/60 rounded-3xl p-6 sm:p-8 flex flex-col justify-between cursor-pointer select-none transition-all duration-300 shadow-xl relative group"
-              >
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span className="uppercase tracking-wider font-bold text-rose-400 flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5" />
-                    {isFlipped ? "TANIM & ANLAM" : t("label_target_word", "HEDEF KELİME")}
-                  </span>
-                  <span className="text-[11px] bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-400 font-medium">
-                    {t("click_to_flip", "Çevirmek için tıkla / Boşluk")}
-                  </span>
-                </div>
+              {/* Tıklanabilir 3D Çift Yüzlü Kart - CSS 3D Flip Hiyerarşisi & Güvenli Veri Bağlaması */}
+              {(() => {
+                const cardWord = currentCard?.word || (currentCard as any)?.front || "";
+                const cardPhonetic = currentCard?.phonetic || "";
+                const cardMeaning =
+                  (currentCard as any)?.meaning ||
+                  (currentCard as any)?.translation ||
+                  (currentCard as any)?.definition ||
+                  (currentCard as any)?.back ||
+                  currentCard?.meanings?.[0]?.translation ||
+                  currentCard?.meanings?.[0]?.definition ||
+                  (currentCard as any)?.turkish_meaning ||
+                  "Tanım bulunamadı";
 
-                <div className="text-center py-6 flex flex-col items-center justify-center">
-                  {!isFlipped ? (
-                    <>
-                      <div className="flex items-center justify-center space-x-3 mb-2">
-                        <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-                          {currentCard.word}
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={(e) => speakText(currentCard.word, "en", e)}
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-rose-300 hover:text-white transition shadow-sm"
-                          title="Seslendir"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {currentCard.phonetic && (
-                        <span className="text-xs sm:text-sm font-mono text-rose-300/80">
-                          {currentCard.phonetic}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <div className="space-y-3 max-w-md">
-                      <div className="flex items-center justify-center space-x-3">
-                        <h3 className="text-2xl sm:text-3xl font-black text-emerald-400">
-                          {currentCard.meanings?.[0]?.translation || currentCard.meanings?.[0]?.definition || "Tanım"}
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={(e) =>
-                            speakText(currentCard.meanings?.[0]?.translation || "", "tr", e)
-                          }
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-emerald-600 text-emerald-300 hover:text-white transition"
-                          title="Seslendir"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                const cardExEn =
+                  currentCard?.example_sentences?.[0]?.target ||
+                  currentCard?.example_sentences?.[0]?.en ||
+                  (currentCard as any)?.example_sentence ||
+                  (currentCard as any)?.example ||
+                  (currentCard as any)?.context_sentence ||
+                  "";
 
-                      {currentCard.example_sentences && currentCard.example_sentences.length > 0 && (
-                        <div className="pt-2 text-left bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
-                          <p className="text-xs text-slate-200 italic mb-0.5">
-                            &quot;{currentCard.example_sentences[0].target || currentCard.example_sentences[0].en}&quot;
-                          </p>
-                          <p className="text-[11px] text-slate-400">
-                            {currentCard.example_sentences[0].native || currentCard.example_sentences[0].tr}
-                          </p>
+                const cardExTr =
+                  currentCard?.example_sentences?.[0]?.native ||
+                  currentCard?.example_sentences?.[0]?.tr ||
+                  (currentCard?.example_sentences?.[0] as any)?.source ||
+                  (currentCard as any)?.example_sentence_tr ||
+                  (currentCard as any)?.example_translation ||
+                  "";
+
+                return (
+                  <div
+                    onClick={() => setIsFlipped(!isFlipped)}
+                    className="w-full min-h-[260px] sm:min-h-[300px] cursor-pointer select-none [perspective:1000px] group"
+                    style={{ perspective: "1000px" }}
+                  >
+                    <div
+                      className="relative w-full h-full min-h-[260px] sm:min-h-[300px] rounded-3xl shadow-xl transition-transform"
+                      style={{
+                        transformStyle: "preserve-3d",
+                        transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                        transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                      }}
+                    >
+                      {/* ÖN YÜZ (card-front) */}
+                      <div
+                        className={`absolute inset-0 w-full h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border-2 border-rose-500/30 hover:border-rose-400/60 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-xl transition-colors ${
+                          isFlipped ? "pointer-events-none z-0 opacity-0" : "z-10 opacity-100"
+                        }`}
+                        style={{
+                          position: "absolute",
+                          width: "100%",
+                          height: "100%",
+                          backfaceVisibility: "hidden",
+                          WebkitBackfaceVisibility: "hidden",
+                        }}
+                      >
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span className="uppercase tracking-wider font-bold text-rose-400 flex items-center gap-1.5">
+                            <Flame className="w-3.5 h-3.5" />
+                            {t("label_target_word", "HEDEF KELİME")}
+                          </span>
+                          <span className="text-[11px] bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-400 font-medium">
+                            {t("click_to_flip", "Çevirmek için tıkla / Boşluk")}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                <div className="text-center text-[11px] text-slate-500">
-                  {isFlipped ? t("evaluate_word", "Kelimeni değerlendir ↓") : t("flip_to_see_answer", "Cevabı görmek için kartı çevir")}
-                </div>
-              </div>
+                        <div className="text-center py-6 flex flex-col items-center justify-center my-auto">
+                          <div className="flex items-center justify-center space-x-3 mb-2">
+                            <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+                              {cardWord}
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={(e) => speakText(cardWord, "en", e)}
+                              className="p-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-rose-300 hover:text-white transition shadow-sm"
+                              title="Seslendir"
+                            >
+                              <Volume2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          {cardPhonetic && (
+                            <span className="text-xs sm:text-sm font-mono text-rose-300/80">
+                              {cardPhonetic}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-center text-[11px] text-slate-500">
+                          {t("flip_to_see_answer", "Cevabı görmek için kartı çevir")}
+                        </div>
+                      </div>
+
+                      {/* ARKA YÜZ (card-back with transform: rotateY(180deg)) */}
+                      <div
+                        className={`absolute inset-0 w-full h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-xl transition-colors ${
+                          isFlipped ? "z-20 opacity-100 ring-1 ring-emerald-500/30" : "pointer-events-none z-0 opacity-0"
+                        }`}
+                        style={{
+                          position: "absolute",
+                          width: "100%",
+                          height: "100%",
+                          backfaceVisibility: "hidden",
+                          WebkitBackfaceVisibility: "hidden",
+                          transform: "rotateY(180deg)",
+                        }}
+                      >
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span className="uppercase tracking-wider font-bold text-emerald-400 flex items-center gap-1.5">
+                            <Flame className="w-3.5 h-3.5" />
+                            TANIM & ANLAM
+                          </span>
+                          <span className="text-[11px] bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-400 font-medium">
+                            Ön Yüze Dön
+                          </span>
+                        </div>
+
+                        <div className="text-center py-4 flex flex-col items-center justify-center my-auto w-full">
+                          <div className="space-y-3 max-w-md w-full">
+                            <div className="flex items-center justify-center space-x-3">
+                              <h3 className="text-2xl sm:text-3xl font-black text-emerald-400 break-words">
+                                {cardMeaning}
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={(e) => speakText(cardMeaning, "tr", e)}
+                                className="p-2 rounded-xl bg-slate-800 hover:bg-emerald-600 text-emerald-300 hover:text-white transition"
+                                title="Seslendir"
+                              >
+                                <Volume2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {cardExEn && (
+                              <div className="pt-2 text-left bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
+                                <p className="text-xs text-slate-200 italic mb-0.5">
+                                  &quot;{cardExEn}&quot;
+                                </p>
+                                {cardExTr && (
+                                  <p className="text-[11px] text-slate-400">
+                                    {cardExTr}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-center text-[11px] text-slate-500">
+                          {t("evaluate_word", "Kelimeni değerlendir ↓")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Butonlar */}
               {isFlipped ? (

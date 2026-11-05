@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE } from "../config";
 import { useLanguage } from "../context/LanguageContext";
+import ChestShop from "../components/shop/ChestShop";
 import {
   Sparkles,
   Coins,
@@ -358,7 +359,7 @@ export default function ShopPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-20 selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-20 selection:bg-indigo-500 selection:text-white">
       {/* Üst Arkaplan Işık Efektleri */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-6xl h-96 bg-gradient-to-b from-indigo-900/20 via-purple-900/10 to-transparent pointer-events-none blur-3xl -z-10" />
 
@@ -550,135 +551,29 @@ export default function ShopPage() {
         </section>
 
         {/* ============================================================== */}
-        {/* 3. BÖLÜM: KARAKTER KOLEKSİYONUM (ENVANTER)                    */}
+        {/* 3. BÖLÜM: KARAKTER KOLEKSİYONUM & DİNAMİK YERELLEŞTİRME        */}
         {/* ============================================================== */}
         <section className="space-y-6 pt-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center space-x-2.5">
-              <Crown className="w-6 h-6 text-indigo-400" />
-              <h2 className="text-2xl font-black text-white">{t("collection_label")}</h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-bold font-mono">
-                {totalUnlocked}/{characters.length}
-              </span>
-            </div>
-
-            {/* Filtreleme Sekmeleri */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-              {[
-                { id: "all", label: t("filter_all") },
-                { id: "unlocked", label: t("filter_unlocked") },
-                { id: "legendary", label: t("rarity_legendary", "Efsanevi") },
-                { id: "epic", label: t("rarity_epic", "Destansı") },
-                { id: "rare", label: t("rarity_rare", "Nadir") },
-                { id: "common", label: t("rarity_common", "Yaygın") },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setSelectedFilter(tab.id as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all duration-150 hover:scale-[1.02] active:scale-95 ${
-                    selectedFilter === tab.id
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                      : "bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center space-x-2.5">
+            <Crown className="w-6 h-6 text-indigo-400" />
+            <h2 className="text-2xl font-black text-white">{t("collection_label")}</h2>
           </div>
 
-          {/* Karakter Kartları Izgarası */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {filteredCharacters.map((char) => {
-              const rarityStyle = rarityColorMap[char.rarity] || rarityColorMap.common;
-              const isActive = activeAvatarId === char.id;
-
-              return (
-                <div
-                  key={char.id}
-                  className={`group relative rounded-2xl p-4 flex flex-col items-center justify-between border transition-all duration-200 ${
-                    char.is_unlocked
-                      ? `${rarityStyle.bg} ${rarityStyle.border} ${rarityStyle.glow} hover:-translate-y-1 cursor-pointer`
-                      : "bg-slate-950/70 border-slate-800/80 opacity-60 grayscale hover:grayscale-0"
-                  }`}
-                  onClick={() => char.is_unlocked && handleSetAvatar(char)}
-                >
-                  {/* Aktif Avatar Rozeti */}
-                  {isActive && (
-                    <div className="absolute top-2 left-2 z-10">
-                      <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-emerald-500 text-slate-950 text-[9px] font-black uppercase shadow-sm">
-                        <Check className="w-3 h-3" />
-                        <span>{t("active_label", "Aktif")}</span>
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Rarity Rozeti */}
-                  <div className="absolute top-2 right-2">
-                    <span
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${rarityStyle.badge}`}
-                    >
-                      {t(rarityStyle.titleKey, rarityStyle.title)}
-                    </span>
-                  </div>
-
-                  {/* Karakter İkonu */}
-                  <div className="my-5 relative flex items-center justify-center">
-                    <div className="text-5xl group-hover:scale-110 transition-transform select-none">
-                      {char.icon}
-                    </div>
-                    {!char.is_unlocked && (
-                      <div className="absolute inset-0 bg-slate-950/80 rounded-xl flex items-center justify-center backdrop-blur-[2px]">
-                        <Lock className="w-5 h-5 text-slate-400" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* İsim ve Açıklama */}
-                  <div className="w-full text-center space-y-1">
-                    <h4 className="text-xs font-black text-white truncate px-1">
-                      {getCharacterName(char)}
-                    </h4>
-                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-tight h-6">
-                      {char.is_unlocked
-                        ? char.description
-                        : `${t(char.chest_theme ? `chest_${char.chest_theme}_title` : "vault_section_title", "Sandıktan")} ${t("from_chest_suffix", "çıkar.")}`}
-                    </p>
-                  </div>
-
-                  {/* Alt İşlem Butonu */}
-                  <div className="mt-3 w-full">
-                    {char.is_unlocked ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSetAvatar(char);
-                        }}
-                        disabled={isActive || settingAvatarId === char.id}
-                        className={`w-full py-1.5 rounded-xl text-[11px] font-extrabold transition-all duration-150 ${
-                          isActive
-                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default"
-                            : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm"
-                        }`}
-                      >
-                        {isActive
-                          ? `✓ ${t("btn_active_avatar", "Aktif Avatar")}`
-                          : settingAvatarId === char.id
-                          ? t("saving", "Kaydediliyor...")
-                          : t("btn_set_as_avatar", "Avatarım Yap")}
-                      </button>
-                    ) : (
-                      <div className="py-1 text-center">
-                        <span className="text-[10px] font-bold text-slate-400">
-                          🔒 {t("locked", "Kilitli")}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <ChestShop
+            userCoins={userCoins}
+            userLevel="B1"
+            completedStoriesCount={11}
+            unlockedCharacterIds={characters.filter((c) => c.is_unlocked).map((c) => c.id)}
+            activeAvatarId={activeAvatarId}
+            onCoinsChange={(newCoins) => setUserCoins(newCoins)}
+            onSetAvatar={(charId, icon) => {
+              setActiveAvatarId(charId);
+              setActiveAvatar(icon);
+            }}
+            onCharacterUnlocked={() => {
+              fetchShopData();
+            }}
+          />
         </section>
       </main>
 

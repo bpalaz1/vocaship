@@ -32,9 +32,13 @@ import {
   Briefcase,
   CheckCircle2,
   MessageSquare,
+  Camera,
+  Flag,
+  Archive,
 } from "lucide-react";
 import { API_BASE } from "../config";
 import { useLanguage } from "../context/LanguageContext";
+import { useAuth } from "../context/AuthContext";
 import {
   usePersona,
   PersonaId,
@@ -42,8 +46,21 @@ import {
   PERSONAS,
   CORE_PERSONAS,
 } from "../context/PersonaContext";
-import { speakPersonaText, stopSpeech, getActiveVoiceDisplay } from "../utils/tts";
+import { speakPersonaText, stopSpeech, getActiveVoiceDisplay, getCalibratedRateForPersona } from "../utils/tts";
+import LiveTranscript from "../components/speaking/LiveTranscript";
+import SpeakingScorecard from "../components/speaking/SpeakingScorecard";
+import SpeakingTranscript from "../components/speaking/SpeakingTranscript";
+import SpeakingSidebar, { DeckItem, DeckQuestionItem } from "../components/speaking/SpeakingSidebar";
+import SpeakingLounge from "../components/speaking/SpeakingLounge";
+import SpeakingArchiveModal from "../components/speaking/SpeakingArchiveModal";
+import { saveSpeakingArchiveSession } from "../actions/speakingArchive";
+import {
+  generateStoryDebateQuestions,
+  StoryDebateQuestionItem,
+} from "../actions/speakingAI";
 import AvatarDisplay from "../components/avatar/AvatarDisplay";
+import CustomAvatarModal, { CustomUserAvatarData } from "../components/avatar/CustomAvatarModal";
+import Transform3DModal, { Transform3DAvatarMeta } from "../components/avatar/Transform3DModal";
 import {
   ConversationMode,
   ConversationModeConfig,
@@ -309,10 +326,13 @@ export const PROJECT_CONTROL_PILLS: TopicPill[] = [
 
 export interface ActiveStoryContext {
   id?: string;
+  storyId?: string;
   title: string;
   level?: string;
   topic?: string;
-  content: string;
+  content?: string;
+  snippet?: string;
+  targetWords?: string[];
   target_vocabulary?: string[];
 }
 
@@ -368,8 +388,16 @@ export default function SpeakingPage() {
     setPersona,
     selectedKidsCharacter,
     setSelectedKidsCharacter,
+    customAvatar,
+    saveCustomAvatar,
+    user3DAvatarUrl,
+    user3DAvatarMeta,
+    saveUser3DAvatar,
   } = usePersona();
+  const { user } = useAuth();
 
+  const [isCustomAvatarModalOpen, setIsCustomAvatarModalOpen] = useState<boolean>(false);
+  const [isTransform3DModalOpen, setIsTransform3DModalOpen] = useState<boolean>(false);
   const [activeMode, setActiveMode] = useState<ConversationMode>("interview");
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("project_control");
   const [targetLevel, setTargetLevel] = useState<"B2" | "C1">("C1");
@@ -404,6 +432,7 @@ export default function SpeakingPage() {
   const [isThinking, setIsThinking] = useState(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState(true);
   const [speakingAudioIndex, setSpeakingAudioIndex] = useState<number | null>(null);
+  const [activeWordIndex, setActiveWordIndex] = useState<number | null>(null);
   const [speechSpeedMode, setSpeechSpeedMode] = useState<"0.8x" | "1.0x">("0.8x");
   const [activeVoiceBadge, setActiveVoiceBadge] = useState<string>("");
   const [permissionError, setPermissionError] = useState<string | null>(null);
@@ -417,6 +446,7 @@ export default function SpeakingPage() {
 
   // Okuma Odası Hikaye Bağlantısı & Aynı Başlıkta Yeni Hikaye Üretimi State'i
   const [activeStory, setActiveStory] = useState<ActiveStoryContext | null>(null);
+  const [storyDebateQuestions, setStoryDebateQuestions] = useState<StoryDebateQuestionItem[]>([]);
   const [isGeneratingNewStory, setIsGeneratingNewStory] = useState(false);
 
   // Akıllı Konuşma Gezgini - Kategori & Dinamik 4 Soru Döngüsü State'leri
@@ -451,6 +481,50 @@ export default function SpeakingPage() {
     "What did you have for breakfast this morning?"
   );
 
+  // Dinamik Takip Sorusu Motoru (Dynamic Follow-up Question Engine)
+  const [currentFollowUpQuestion, setCurrentFollowUpQuestion] = useState<string | null>(
+    "What did you have for breakfast this morning?"
+  );
+
+  // 📚 Aktif Destemden Sorular State ve Entegrasyonu
+  const PRESET_DECKS: DeckItem[] = [
+    {
+      id: "preset_c1_pro",
+      title: "💼 C1 Profesyonel İş & Kariyer",
+      description: "Proje Kontrol, FIDIC ve Yönetim terminolojisi",
+      card_count: 50,
+    },
+    {
+      id: "preset_core3000",
+      title: "🌐 En Sık Çıkan 3000 Temel Kelime",
+      description: "A1-B1 Başlangıç ve günlük yaşam için temel kelimeler",
+      card_count: 50,
+    },
+    {
+      id: "preset_academic",
+      title: "🎓 Akademik Sınav Paketi (YDS & IELTS)",
+      description: "Akademik makalelerde ve sınavlarda en sık çıkan kritik kelimeler",
+      card_count: 45,
+    },
+  ];
+
+  const PRESET_DECK_WORDS: Record<string, string[]> = {
+    preset_c1_pro: ["allocate", "mitigate", "variance", "critical path", "demurrage", "contingency"],
+    preset_core3000: ["routine", "efficient", "adventure", "relaxing", "habit", "favorite"],
+    preset_academic: ["substantiate", "coherent", "detrimental", "ubiquitous", "resilient", "synthesize"],
+  };
+
+  const [decks, setDecks] = useState<DeckItem[]>(PRESET_DECKS);
+  const [selectedDeck, setSelectedDeck] = useState<DeckItem | null>(PRESET_DECKS[0]);
+  const [deckWords, setDeckWords] = useState<string[]>(PRESET_DECK_WORDS["preset_c1_pro"]);
+  const [deckQuestions, setDeckQuestions] = useState<DeckQuestionItem[]>([]);
+  const [loadingDecks, setLoadingDecks] = useState(false);
+  const [generatingDeckQuestions, setGeneratingDeckQuestions] = useState(false);
+
+  // 🗂️ Konuşma Arşivim State
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isSavingArchive, setIsSavingArchive] = useState(false);
+
   // Kategori bazlı serbest konu inputları (5. seçenek)
   const [categoryCustomInputs, setCategoryCustomInputs] = useState<Record<string, string>>({});
 
@@ -463,29 +537,54 @@ export default function SpeakingPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Okuma Odası sessionStorage kontrolü
+    // Okuma Odası sessionStorage & URL parametresi karşılama (Story-to-Speaking Bridge)
     if (typeof window !== "undefined") {
       try {
-        const stored = sessionStorage.getItem("vocaship_active_story_context");
+        const urlParams = new URLSearchParams(window.location.search);
+        const isFromStory = urlParams.get("from_story") === "true";
+        const stored =
+          sessionStorage.getItem("active_story_context") ||
+          sessionStorage.getItem("vocaship_active_story_context");
+
         if (stored) {
           const parsed: ActiveStoryContext = JSON.parse(stored);
           if (parsed && parsed.title) {
             setActiveStory(parsed);
+            setActiveMode("story_debate");
             setActiveTopicTitle(`📖 ${parsed.title}`);
-            const storyIntro = `Welcome to our speaking session on "${parsed.title}". In your opinion, what was the primary operational oversight that triggered this crisis?`;
-            setDialogue([
-              {
-                role: "assistant",
-                message: `AI Mentor: ${storyIntro}`,
-                timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              },
-            ]);
-            if (parsed.target_vocabulary?.length) {
+
+            const targetWords = parsed.targetWords || parsed.target_vocabulary || [];
+            if (targetWords.length) {
               setScorecard((prev) => ({
                 ...prev,
-                vocabulary_highlight: parsed.target_vocabulary!.slice(0, 3),
+                vocabulary_highlight: targetWords.slice(0, 5),
               }));
             }
+
+            // Karakter açılış sorusu ve 3-4 dinamik analitik tartışma sorusunu üret
+            generateStoryDebateQuestions(parsed).then((res) => {
+              if (res.questions && res.questions.length > 0) {
+                setStoryDebateQuestions(res.questions);
+              }
+              const opening =
+                res.opening_question ||
+                `In '${parsed.title}', looking at the central dilemma, what would you have done differently?`;
+
+              setDialogue([
+                {
+                  role: "assistant",
+                  message: `AI Mentor: ${opening}`,
+                  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                },
+              ]);
+              setCurrentFollowUpQuestion(opening);
+
+              if (isFromStory) {
+                setTimeout(() => {
+                  speakPersonaText(opening, persona);
+                }, 700);
+              }
+            });
           }
         }
       } catch (err) {
@@ -513,7 +612,19 @@ export default function SpeakingPage() {
   const [recordingSeconds, setRecordingSeconds] = useState(84);
   const timerIntervalRef = useRef<any>(null);
 
-  // C1 Değerlendirme Karnesi State'i (%100 Görsel Referans Uyumu)
+  // C1 Değerlendirme Karnesi State'i (Başlangıçta sıfırlanmış - Analyze butonuna basılınca hesaplanır)
+  const [hasAnalyzed, setHasAnalyzed] = useState<boolean>(false);
+  const [pendingScorecard, setPendingScorecard] = useState<{
+    grammar_feedback: string | null;
+    improvement_original: string;
+    improvement_suggestion: string;
+    better_alternative: string;
+    vocabulary_highlight: string[];
+    jargon_score: number;
+    fluency_score: number;
+    idiomatic_phrase?: string;
+  } | null>(null);
+
   const [scorecard, setScorecard] = useState<{
     grammar_feedback: string | null;
     improvement_original: string;
@@ -525,20 +636,21 @@ export default function SpeakingPage() {
     idiomatic_phrase?: string;
   }>({
     grammar_feedback: null,
-    improvement_original: "to catch cost overrun early",
-    improvement_suggestion: "Suggesting to mitigate potential cost overruns proactively",
-    better_alternative:
-      "We were compelled to fast-track key deliverables to mitigate variances across the critical path baseline.",
-    vocabulary_highlight: ["variance", "mitigate", "critical path"],
-    jargon_score: 86,
-    fluency_score: 86,
-    idiomatic_phrase: "keep on a tight rein for idiomatic tight management",
+    improvement_original: "",
+    improvement_suggestion: "",
+    better_alternative: "",
+    vocabulary_highlight: [],
+    jargon_score: 0,
+    fluency_score: 0,
+    idiomatic_phrase: "",
   });
 
   const [copiedAlt, setCopiedAlt] = useState(false);
 
   // Referanslar
   const recognitionRef = useRef<any>(null);
+  const spokenBufferRef = useRef<string>("");
+  const autoSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Otomatik aşağı kaydır
@@ -591,6 +703,8 @@ export default function SpeakingPage() {
   const stopAudio = () => {
     stopSpeech();
     setSpeakingAudioIndex(null);
+    setActiveWordIndex(null);
+    setSpeakingAudioIndex(null);
   };
 
   const playSpeech = (text: string, index: number, overridePersona?: PersonaInfo) => {
@@ -607,14 +721,12 @@ export default function SpeakingPage() {
 
     const targetRate = isKidsChar
       ? speechSpeedMode === "0.8x"
-        ? targetP.ttsSettings.rate * 0.92
+        ? 0.78
         : targetP.ttsSettings.rate
       : speechSpeedMode === "0.8x"
-      ? targetP.gender === "female"
-        ? 0.84
-        : targetP.id === "mr_harrison"
+      ? targetP.id === "mr_harrison"
         ? 0.82
-        : 0.85
+        : 0.86
       : 1.0;
 
     // TTS konuşmaya başladığı anda avatarState anında 'speaking' olsun
@@ -623,31 +735,47 @@ export default function SpeakingPage() {
     speakPersonaText(clean, targetP, {
       pitch: targetP.ttsSettings.pitch,
       rate: targetRate,
+      onBoundary: (wIdx) => setActiveWordIndex(wIdx),
       onStart: () => setSpeakingAudioIndex(index),
-      onEnd: () => setSpeakingAudioIndex(null),
+      onEnd: () => {
+        setSpeakingAudioIndex(null);
+        setActiveWordIndex(null);
+      },
       onError: () => setSpeakingAudioIndex(null),
     });
   };
 
-  // Çocuk Modu Karakter Seçici (Sparky / Chuck) Tıklandığında Anında Maskot, Ses Tonu ve Karşılama Cümlesini Değiştirir
-  const handleSelectKidsCharacter = (charId: "sparky" | "chuck") => {
+  // Karakter Seçici (Sparky / Chuck / Alex / Özel Avatar / 3D Benim Avatarım) Tıklandığında Anında Sahne, Tema, Ses Tonu ve Karşılama Cümlesini Değiştirir
+  const handleSelectStageCharacter = (
+    charId: "sparky" | "chuck" | "alex" | "sandy" | "custom" | "my_avatar"
+  ) => {
     stopAudio();
     if (isRecording) stopRecording();
     setUserTranscript("");
     setInterimText("");
 
-    setSelectedKidsCharacter(charId);
+    if (charId === "sparky" || charId === "chuck") {
+      setSelectedKidsCharacter(charId);
+      const kidsCat = SPEAKING_CATEGORIES.find((c) => c.id === "kids");
+      if (kidsCat) {
+        setActiveCategory(kidsCat);
+        setOpenCategoryId("kids");
+      }
+      setActiveMode("casual");
+      setSelectedScenarioId("casual_sparky");
+    } else if (charId === "alex") {
+      const advCat = SPEAKING_CATEGORIES.find((c) => c.id === "adventure");
+      if (advCat) {
+        setActiveCategory(advCat);
+        setOpenCategoryId("adventure");
+      }
+      setActiveMode("casual");
+      setSelectedScenarioId("casual_travel");
+    }
+
     setPersona(charId);
 
-    const kidsCat = SPEAKING_CATEGORIES.find((c) => c.id === "kids");
-    if (kidsCat) {
-      setActiveCategory(kidsCat);
-      setOpenCategoryId("kids");
-    }
-    setActiveMode("casual");
-    setSelectedScenarioId("casual_sparky");
-
-    const targetPersona = PERSONAS[charId];
+    const targetPersona = PERSONAS[charId] || persona;
     setActiveVoiceBadge(getActiveVoiceDisplay(targetPersona));
     setActiveTopicTitle(`${targetPersona.avatarIcon} ${targetPersona.name} (${targetPersona.title})`);
 
@@ -665,9 +793,71 @@ export default function SpeakingPage() {
     );
 
     if (autoPlayAudio) {
+      playSpeech(targetPersona.greeting, 0, targetPersona);
+    }
+  };
+
+  // 3D Poligon Avatar Oluşturulduğunda Anında Sahneye ve "3D Avatarım" Sekmesine Geç
+  const handle3DAvatarCreated = (url: string, meta: Transform3DAvatarMeta) => {
+    stopAudio();
+    if (isRecording) stopRecording();
+    setUserTranscript("");
+    setInterimText("");
+
+    const updatedPersona = saveUser3DAvatar(url, meta);
+    setActiveVoiceBadge(getActiveVoiceDisplay(updatedPersona));
+    setActiveTopicTitle(`🧊 ${updatedPersona.name} (3D Poligon Avatar)`);
+
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setDialogue([
+      {
+        role: "assistant",
+        message: `AI Mentor: ${updatedPersona.greeting}`,
+        timestamp: now,
+      },
+    ]);
+
+    setToastNotice("🧊 3D Poligon Avatarın Başarıyla Oluşturuldu!");
+
+    if (autoPlayAudio) {
       setTimeout(() => {
-        playSpeech(targetPersona.greeting, 0, targetPersona);
-      }, 120);
+        playSpeech(updatedPersona.greeting, 0, updatedPersona);
+      }, 180);
+    }
+  };
+
+  // Özel Avatar Kaydedildiğinde Anında Sahneye ve Cinsiyet Ses Tonuna Geç
+  const handleSaveCustomAvatar = (data: CustomUserAvatarData) => {
+    stopAudio();
+    if (isRecording) stopRecording();
+    setUserTranscript("");
+    setInterimText("");
+
+    const updatedPersona = saveCustomAvatar(data);
+    setActiveVoiceBadge(getActiveVoiceDisplay(updatedPersona));
+    setActiveTopicTitle(`${updatedPersona.avatarIcon} ${updatedPersona.name} (Kişisel Mentor)`);
+
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setDialogue([
+      {
+        role: "assistant",
+        message: `AI Mentor: ${updatedPersona.greeting}`,
+        timestamp: now,
+      },
+    ]);
+
+    const voiceLabel =
+      data.gender === "female"
+        ? "Kadın Nöral Ses (Pitch: 1.05)"
+        : data.gender === "male"
+        ? "Tok Erkek Nöral Ses (Pitch: 0.92)"
+        : "Çocuk Sesi (Pitch: 1.20)";
+    setToastNotice(`✨ ${updatedPersona.name} kaydedildi! (${voiceLabel})`);
+
+    if (autoPlayAudio) {
+      setTimeout(() => {
+        playSpeech(updatedPersona.greeting, 0, updatedPersona);
+      }, 150);
     }
   };
 
@@ -698,25 +888,190 @@ export default function SpeakingPage() {
     setToastNotice(`🎯 Mesleki Konu Seçildi: ${pill.title}`);
 
     if (autoPlayAudio) {
+      playSpeech(pill.initialQuestion, 0);
+    }
+  };
+
+  // =========================================================================
+  // 📚 AKTİF DESTEMDEN SORULAR ENTEGRASYONU & STATE YÖNETİMİ
+  // =========================================================================
+  const generateDeckQuestionsForWords = async (deck: DeckItem, words: string[]) => {
+    try {
+      setGeneratingDeckQuestions(true);
+      const res = await fetch(`${API_BASE}/api/v1/speaking/generate-deck-questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deck_id: deck.id,
+          deck_title: deck.title,
+          target_words: words.slice(0, 8),
+          target_level: targetLevel,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.questions) && data.questions.length > 0) {
+          setDeckQuestions(data.questions);
+          return;
+        }
+      }
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.warn("Deste soruları backend'den üretilemedi, şablon sorular kullanılıyor:", err);
+      const fallbackList: DeckQuestionItem[] = words.slice(0, 4).map((w, idx) => {
+        const tpls = [
+          `Proje süreçlerinde kaynakları ve görevleri daha iyi yönetmek için '${w}' stratejisini nasıl uygularsınız?`,
+          `Beklenmedik bir risk veya kriz karşısında durumu '${w}' etmek için ilk adımınız ne olurdu?`,
+          `Günlük iş veya çalışma temponuzda '${w}' kavramının başarınıza etkisi nedir?`,
+          `Geçmiş tecrübelerinizden yola çıkarak '${w}' ile ilgili somut bir örnek verebilir misiniz?`,
+        ];
+        return {
+          question: tpls[idx % tpls.length],
+          target_word_hint: w,
+        };
+      });
+      setDeckQuestions(fallbackList);
+    } finally {
+      setGeneratingDeckQuestions(false);
+    }
+  };
+
+  const handleSelectDeck = async (deck: DeckItem) => {
+    setSelectedDeck(deck);
+    let words: string[] = [];
+
+    if (!deck.id.startsWith("preset_")) {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/decks/${deck.id}/cards`);
+        if (res.ok) {
+          const cards = await res.json();
+          if (Array.isArray(cards) && cards.length > 0) {
+            words = cards.map((c: any) => c.word).filter(Boolean);
+          }
+        }
+      } catch (err) {
+        console.warn("Deste kartları çekilemedi:", err);
+      }
+    }
+
+    if (words.length === 0) {
+      words = PRESET_DECK_WORDS[deck.id] || ["allocate", "mitigate", "variance", "strategy", "efficient"];
+    }
+
+    setDeckWords(words);
+    await generateDeckQuestionsForWords(deck, words);
+  };
+
+  const handleSelectDeckQuestion = (question: string, targetWordHint: string) => {
+    stopAudio();
+    if (isRecording) stopRecording();
+    setUserTranscript("");
+    setInterimText("");
+
+    setActiveQuestionText(question);
+    setCurrentFollowUpQuestion(question);
+    setActiveTopicTitle(`📚 ${selectedDeck?.title || "Deste"}: ${targetWordHint}`);
+
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const nextTurn: DialogueTurn = {
+      role: "assistant",
+      message: `AI Mentor: ${question}`,
+      timestamp: now,
+      feedback: {
+        grammar_feedback: null,
+        better_alternative: "",
+        vocabulary_highlight: [targetWordHint],
+        jargon_score: 85,
+        fluency_score: 85,
+      },
+    };
+
+    setDialogue((prev) => [...prev, nextTurn]);
+    setToastNotice(`🎯 Hedef Kelime: "${targetWordHint}" kullanmanız bekleniyor!`);
+
+    if (autoPlayAudio) {
       setTimeout(() => {
-        const targetRate =
-          speechSpeedMode === "0.8x"
-            ? persona.gender === "female"
-              ? 0.84
-              : persona.id === "mr_harrison"
-              ? 0.82
-              : 0.85
-            : 1.0;
-        setSpeakingAudioIndex(0);
-        speakPersonaText(pill.initialQuestion, persona, {
-          rate: targetRate,
-          onStart: () => setSpeakingAudioIndex(0),
-          onEnd: () => setSpeakingAudioIndex(null),
-          onError: () => setSpeakingAudioIndex(null),
-        });
+        playSpeech(question, dialogue.length);
       }, 200);
     }
   };
+
+  const handleRefreshDeckQuestions = () => {
+    if (selectedDeck && deckWords.length > 0) {
+      generateDeckQuestionsForWords(selectedDeck, deckWords);
+    }
+  };
+
+  const handleSelectStoryQuestion = (question: string) => {
+    stopAudio();
+    if (isRecording) stopRecording();
+    setUserTranscript("");
+    setInterimText("");
+
+    setActiveQuestionText(question);
+    setCurrentFollowUpQuestion(question);
+    setActiveTopicTitle(`📖 ${activeStory?.title || "Hikaye Tartışması"}`);
+
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const targetWords = activeStory?.targetWords || activeStory?.target_vocabulary || [];
+    const nextTurn: DialogueTurn = {
+      role: "assistant",
+      message: `AI Mentor: ${question}`,
+      timestamp: now,
+      feedback: {
+        grammar_feedback: null,
+        better_alternative: "",
+        vocabulary_highlight: targetWords.slice(0, 3),
+        jargon_score: 85,
+        fluency_score: 85,
+      },
+    };
+
+    setDialogue((prev) => [...prev, nextTurn]);
+    setToastNotice(`📖 Hikaye Tartışma Sorusu Aktif Edildi`);
+
+    if (autoPlayAudio) {
+      setTimeout(() => {
+        playSpeech(question, dialogue.length);
+      }, 200);
+    }
+  };
+
+  const handleClearStoryContext = () => {
+    setActiveStory(null);
+    setStoryDebateQuestions([]);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("active_story_context");
+      sessionStorage.removeItem("vocaship_active_story_context");
+    }
+  };
+
+  useEffect(() => {
+    async function loadInitialDecks() {
+      try {
+        setLoadingDecks(true);
+        const res = await fetch(`${API_BASE}/api/v1/decks`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setDecks(data);
+            await handleSelectDeck(data[0]);
+            return;
+          }
+        }
+        setDecks(PRESET_DECKS);
+        await handleSelectDeck(PRESET_DECKS[0]);
+      } catch (err) {
+        console.warn("Deste API hatası, presetler yüklendi:", err);
+        setDecks(PRESET_DECKS);
+        await handleSelectDeck(PRESET_DECKS[0]);
+      } finally {
+        setLoadingDecks(false);
+      }
+    }
+    loadInitialDecks();
+  }, []);
 
   // Akıllı Konuşma Gezgini - Kategori Aç/Kapat (Accordion Toggle)
   const handleToggleCategory = (cat: SpeakingCategory) => {
@@ -742,14 +1097,12 @@ export default function SpeakingPage() {
         },
       ]);
       if (autoPlayAudio) {
-        setTimeout(() => {
-          playSpeech(targetP.greeting, 0, targetP);
-        }, 150);
+        playSpeech(targetP.greeting, 0, targetP);
       }
     }
   };
 
-  // 4 Sorudan Birine Tıklandığında Diyaloğu Başlat
+  // Sohbet Açıcı Fikir / Öneri Hapına Tıklandığında Diyaloğa Doğal Olarak Ekle veya Başlat
   const handleSelectQuestion = (qText: string, cat: SpeakingCategory, slotIndex: number) => {
     stopAudio();
     if (isRecording) stopRecording();
@@ -759,6 +1112,7 @@ export default function SpeakingPage() {
     setActiveCategory(cat);
     setOpenCategoryId(cat.id);
     setActiveQuestionText(qText);
+    setCurrentFollowUpQuestion(qText);
     setActiveTopicTitle(`${cat.icon} ${cat.title}`);
 
     const targetPersonaId =
@@ -769,22 +1123,22 @@ export default function SpeakingPage() {
     setSelectedScenarioId(cat.scenarioId);
 
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    setDialogue([
-      {
-        role: "assistant",
-        message: `AI Mentor: ${qText}`,
-        timestamp: now,
-      },
-    ]);
+    const nextTurn: DialogueTurn = {
+      role: "assistant",
+      message: `AI Mentor: ${qText}`,
+      timestamp: now,
+    };
+
+    // Mevcut sohbet devam ediyorsa geçmişi silmeden akışa ekle; yeni başlıyorsa ilk mesaj yap
+    const nextIdx = dialogue.length > 1 ? dialogue.length : 0;
+    setDialogue((prev) => (prev.length > 1 ? [...prev, nextTurn] : [nextTurn]));
 
     const targetP = PERSONAS[targetPersonaId] || persona;
     if (autoPlayAudio) {
-      setTimeout(() => {
-        playSpeech(qText, 0, targetP);
-      }, 200);
+      playSpeech(qText, nextIdx, targetP);
     }
 
-    setToastNotice(`Soru seçildi. Mikrofonla veya yazarak yanıt verebilirsiniz.`);
+    setToastNotice(`💡 Sohbet fikri eklendi. Dilediğiniz gibi konuşabilir veya konuyu değiştirebilirsiniz.`);
   };
 
   // Dinamik Soru Yenileme (Slot Replenish)
@@ -804,10 +1158,10 @@ export default function SpeakingPage() {
       ...prev,
       [cat.id]: nextIdx + 1,
     }));
-    setToastNotice("Yeni soru eklendi.");
+    setToastNotice("Yeni sohbet fikri getirildi.");
   };
 
-  // 5. Seçenek: Kategoriye Özel Serbest Konu Başlatma (Strict Topic Guardrails)
+  // 5. Seçenek: Kategoriye Özel Serbest Sohbet Başlatma (Esnek & Doğal Akış)
   const handleCustomCategoryTopicSubmit = async (e: React.FormEvent, cat: SpeakingCategory) => {
     e.preventDefault();
     const topic = (categoryCustomInputs[cat.id] || "").trim();
@@ -834,8 +1188,8 @@ export default function SpeakingPage() {
         body: JSON.stringify({
           scenario_id: cat.scenarioId,
           conversation_mode: activeMode,
-          history: [],
-          user_transcript: `Let's discuss: "${topic}". As ${persona.title} (${persona.name}), ask me a concise, engaging opening question strictly within the scope of ${cat.title} (${cat.allowedScope}).`,
+          history: dialogue.slice(-20).map((t) => ({ role: t.role, message: t.message })),
+          user_transcript: `Let's talk about: "${topic}". As my friendly mentor ${persona.name} (${persona.title}), respond warmly and ask me a natural, open-ended question to get our conversation flowing.`,
           story_context: activeStory?.content || undefined,
           target_level: targetLevel,
           active_category: cat.title,
@@ -863,6 +1217,10 @@ export default function SpeakingPage() {
       ]);
 
       setActiveQuestionText(openingQuestion);
+      setCurrentFollowUpQuestion(data.follow_up_question || openingQuestion);
+
+      setActiveQuestionText(openingQuestion);
+      setCurrentFollowUpQuestion(data.follow_up_question || openingQuestion);
       setCategoryCustomInputs((prev) => ({ ...prev, [cat.id]: "" }));
 
       if (autoPlayAudio) {
@@ -928,6 +1286,9 @@ export default function SpeakingPage() {
         },
       ]);
 
+      setActiveQuestionText(openingQuestion);
+      setCurrentFollowUpQuestion(data.follow_up_question || openingQuestion);
+
       if (data.vocabulary_highlight?.length) {
         setScorecard((prev) => ({
           ...prev,
@@ -943,7 +1304,7 @@ export default function SpeakingPage() {
           const targetRate =
             speechSpeedMode === "0.8x"
               ? persona.gender === "female"
-                ? 0.84
+                ? 0.86
                 : persona.id === "mr_harrison"
                 ? 0.82
                 : 0.85
@@ -951,8 +1312,12 @@ export default function SpeakingPage() {
           setSpeakingAudioIndex(0);
           speakPersonaText(openingQuestion, persona, {
             rate: targetRate,
+      onBoundary: (wIdx) => setActiveWordIndex(wIdx),
             onStart: () => setSpeakingAudioIndex(0),
-            onEnd: () => setSpeakingAudioIndex(null),
+            onEnd: () => {
+        setSpeakingAudioIndex(null);
+        setActiveWordIndex(null);
+      },
             onError: () => setSpeakingAudioIndex(null),
           });
         }, 200);
@@ -973,7 +1338,10 @@ export default function SpeakingPage() {
           speakPersonaText(fallbackQuestion, persona, {
             rate: 0.84,
             onStart: () => setSpeakingAudioIndex(0),
-            onEnd: () => setSpeakingAudioIndex(null),
+            onEnd: () => {
+        setSpeakingAudioIndex(null);
+        setActiveWordIndex(null);
+      },
             onError: () => setSpeakingAudioIndex(null),
           });
         }, 200);
@@ -1126,7 +1494,7 @@ export default function SpeakingPage() {
         const targetRate =
           speechSpeedMode === "0.8x"
             ? targetP.gender === "female"
-              ? 0.84
+              ? 0.86
               : targetP.id === "mr_harrison"
               ? 0.82
               : 0.85
@@ -1134,17 +1502,46 @@ export default function SpeakingPage() {
         setSpeakingAudioIndex(0);
         speakPersonaText(targetSc.initial_greeting, targetP, {
           rate: targetRate,
+      onBoundary: (wIdx) => setActiveWordIndex(wIdx),
           onStart: () => setSpeakingAudioIndex(0),
-          onEnd: () => setSpeakingAudioIndex(null),
+          onEnd: () => {
+        setSpeakingAudioIndex(null);
+        setActiveWordIndex(null);
+      },
           onError: () => setSpeakingAudioIndex(null),
         });
       }, 200);
     }
   };
 
-  // Konuşma Tanıma (STT)
-  const startRecording = () => {
+  // Faz 3: Söz Kesme (Barge-in / Interruption) & Konuşma Tanıma (STT)
+  const startListening = () => {
+    // 1. Çalmakta olan TTS sesini ve HTML5 audio akışlarını milisaniyelik gecikme olmadan anında durdur
+    if (typeof window !== "undefined") {
+      if ("speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {}
+      }
+      try {
+        document.querySelectorAll("audio").forEach((audio) => {
+          if (!audio.paused) audio.pause();
+        });
+      } catch {}
+    }
+
+    // 2. Kelime parlatma animasyonunu ve konuşma indeksini anında sonlandır
     stopAudio();
+    setActiveWordIndex(null);
+    setSpeakingAudioIndex(null);
+
+    // 3. Karakter durumunu milisaniyelik gecikme olmadan doğrudan avatarState = 'listening' moduna geçir
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+    spokenBufferRef.current = "";
+    setIsRecording(true);
     setPermissionError(null);
     setUserTranscript("");
     setInterimText("");
@@ -1155,13 +1552,13 @@ export default function SpeakingPage() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setPermissionError("Tarayıcınız ses tanımayı desteklemiyor. Chrome veya Edge önerilir.");
+      // Tarayıcı STT desteklemese bile Barge-in ile 'listening' modunda kalır (yazılı/manuel girişe izin verir)
       return;
     }
 
     try {
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = "en-US";
 
@@ -1183,41 +1580,92 @@ export default function SpeakingPage() {
         }
 
         if (finalStr) {
-          setUserTranscript((prev) => (prev ? `${prev} ${finalStr}` : finalStr));
+          spokenBufferRef.current = spokenBufferRef.current
+            ? `${spokenBufferRef.current} ${finalStr.trim()}`.trim()
+            : finalStr.trim();
+          setUserTranscript(spokenBufferRef.current);
         }
         setInterimText(interimStr);
+
+        // Kullanıcı cümlesini tamamladığında Gönder butonunu beklemeden otomatik fırlat
+        if (autoSendTimerRef.current) {
+          clearTimeout(autoSendTimerRef.current);
+        }
+        const candidateText = (
+          spokenBufferRef.current
+            ? `${spokenBufferRef.current} ${interimStr}`.trim()
+            : interimStr.trim()
+        ).trim();
+        if (candidateText) {
+          autoSendTimerRef.current = setTimeout(() => {
+            const finalToSend = (
+              spokenBufferRef.current || candidateText
+            ).trim();
+            if (finalToSend) {
+              spokenBufferRef.current = "";
+              try {
+                recognition.stop();
+              } catch {}
+              setIsRecording(false);
+              sendMessage(finalToSend);
+            }
+          }, 1100);
+        }
       };
 
       recognition.onerror = (event: any) => {
         console.warn("Speech recognition error:", event.error);
         if (event.error === "not-allowed" || event.error === "permission-denied") {
           setPermissionError("Mikrofon izni verilmedi. Lütfen tarayıcı ayarlarından mikrofona izin verin.");
+          setIsRecording(false);
         }
-        setIsRecording(false);
       };
 
       recognition.onend = () => {
+        if (autoSendTimerRef.current) {
+          clearTimeout(autoSendTimerRef.current);
+          autoSendTimerRef.current = null;
+        }
         setIsRecording(false);
+        const autoText = spokenBufferRef.current.trim();
+        if (autoText) {
+          spokenBufferRef.current = "";
+          sendMessage(autoText);
+        }
       };
 
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err: any) {
-      setPermissionError(err?.message || "Mikrofon başlatılamadı.");
-      setIsRecording(false);
+      console.warn("SpeechRecognition start warning:", err?.message);
     }
   };
 
+  const startRecording = startListening;
+
   const stopRecording = () => {
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
     }
     setIsRecording(false);
+    const pendingText = (
+      spokenBufferRef.current ||
+      userTranscript.trim() ||
+      interimText.trim()
+    ).trim();
     if (interimText.trim()) {
       setUserTranscript((prev) => (prev ? `${prev} ${interimText.trim()}` : interimText.trim()));
       setInterimText("");
+    }
+    if (pendingText) {
+      spokenBufferRef.current = "";
+      sendMessage(pendingText);
     }
   };
 
@@ -1225,17 +1673,27 @@ export default function SpeakingPage() {
     if (isRecording) {
       stopRecording();
     } else {
-      startRecording();
+      startListening();
     }
   };
 
-  // Yanıtı Backend'e Gönder ve Değerlendir
-  const handleSubmitResponse = async (explicitText?: string) => {
-    const textToSend = explicitText || userTranscript.trim() || interimText.trim();
+  // Yanıtı Backend'e Gönder ve Değerlendir (Canlı Sohbet Geçmişi & Bağlam ile)
+  const sendMessage = async (explicitText?: string) => {
+    const textToSend = (explicitText || userTranscript.trim() || interimText.trim()).trim();
     if (!textToSend || isThinking) return;
 
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+    spokenBufferRef.current = "";
     if (isRecording) {
-      stopRecording();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsRecording(false);
     }
 
     const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -1253,14 +1711,17 @@ export default function SpeakingPage() {
     setToastNotice(null);
 
     // 2. DİNAMİK SORU DÖNGÜSÜ (Interactive Question Replenish):
-    // Kullanıcı 4 sorudan birini seçip cevap verdiğinde soru tamamlandı işaretlenir ve yerine yeni soru gelir
+    // Kullanıcı mevcut soruyu cevapladığında tamamlandı işaretlenir
     if (activeQuestionText) {
       setAnsweredQuestions((prev) => (prev.includes(activeQuestionText) ? prev : [...prev, activeQuestionText]));
+    }
+    if (currentFollowUpQuestion) {
+      setAnsweredQuestions((prev) => (prev.includes(currentFollowUpQuestion) ? prev : [...prev, currentFollowUpQuestion]));
 
       const currentCat = activeCategory;
       if (currentCat) {
         const currentQuestions = categoryActiveQuestions[currentCat.id] || currentCat.questionPool.slice(0, 4);
-        const slotIdx = currentQuestions.findIndex((q) => q === activeQuestionText);
+        const slotIdx = currentQuestions.findIndex((q) => q === activeQuestionText || q === currentFollowUpQuestion);
         if (slotIdx !== -1) {
           const nextIdx = categoryPoolIndex[currentCat.id] ?? 4;
           const nextQ = currentCat.questionPool[nextIdx % currentCat.questionPool.length];
@@ -1279,7 +1740,12 @@ export default function SpeakingPage() {
     }
 
     try {
-      const historyPayload = updatedDialogue.map((turn) => ({
+      const conversationHistory = dialogue.map((m) => ({
+        role: m.role,
+        content: m.message.replace(/^(AI Mentor:|User:)\s*/i, "").trim(),
+      }));
+
+      const historyPayload = dialogue.slice(-20).map((turn) => ({
         role: turn.role,
         message: turn.message,
       }));
@@ -1290,7 +1756,8 @@ export default function SpeakingPage() {
         body: JSON.stringify({
           scenario_id: selectedScenarioId,
           conversation_mode: activeMode,
-          history: historyPayload.slice(-4),
+          conversation_history: conversationHistory,
+          history: historyPayload,
           user_transcript: textToSend,
           story_context: activeStory?.content || undefined,
           target_level: targetLevel,
@@ -1304,54 +1771,118 @@ export default function SpeakingPage() {
       }
 
       const data = await res.json();
+      const fb = data.feedback || {};
+      const grammarCorrection = fb.grammar_correction ?? data.grammar_feedback ?? null;
+      const betterAlt =
+        fb.better_alternative ||
+        data.better_alternative ||
+        "We were compelled to fast-track key deliverables to mitigate variances across the critical path baseline.";
+      const storyWords = activeStory?.targetWords || activeStory?.target_vocabulary || [];
+      const lowerInput = textToSend.toLowerCase();
+      const detectedStoryWords = storyWords.filter((w) => lowerInput.includes(w.toLowerCase()));
+      const rawVocab: string[] =
+        Array.isArray(fb.used_vocabulary) && fb.used_vocabulary.length > 0
+          ? fb.used_vocabulary
+          : Array.isArray(data.vocabulary_highlight) && data.vocabulary_highlight.length > 0
+          ? data.vocabulary_highlight
+          : ["variance", "mitigate", "critical path"];
+      const usedVocab: string[] = Array.from(new Set([...rawVocab, ...detectedStoryWords]));
+      const fluencyVal = data.metrics?.fluency ?? (fb.fluency_score ?? data.fluency_score ?? 86);
+      const vocabScore = data.metrics?.vocabulary ?? (data.jargon_score ?? fluencyVal);
+
+      // Dinamik Takip Sorusu Güncelleme (Dynamic Follow-up Question Engine)
+      const nextFollowUp =
+        data.follow_up_question ||
+        (data.assistant_reply && data.assistant_reply.includes("?")
+          ? data.assistant_reply.split("?").slice(-2)[0]?.trim() + "?"
+          : null) ||
+        activeCategory?.questionPool[(updatedDialogue.length + 1) % (activeCategory?.questionPool.length || 1)] ||
+        "What was the most memorable aspect of that experience for you?";
+
+      setCurrentFollowUpQuestion(nextFollowUp);
+      setActiveQuestionText(nextFollowUp);
 
       const assistantTurn: DialogueTurn = {
         role: "assistant",
-        message: `AI Mentor: ${data.assistant_reply}`,
+        message: `AI Mentor: ${data.assistant_reply || data.reply_message}`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         feedback: {
-          grammar_feedback: data.grammar_feedback || null,
-          better_alternative: data.better_alternative,
-          vocabulary_highlight: data.vocabulary_highlight || [],
-          jargon_score: data.jargon_score ?? 86,
-          fluency_score: data.fluency_score ?? 86,
+          grammar_feedback: grammarCorrection,
+          better_alternative: betterAlt,
+          vocabulary_highlight: usedVocab,
+          jargon_score: vocabScore,
+          fluency_score: fluencyVal,
         },
       };
 
-      setDialogue([...updatedDialogue, assistantTurn]);
-      setScorecard({
-        grammar_feedback: data.grammar_feedback || null,
-        improvement_original: "to catch cost overrun early",
-        improvement_suggestion: data.grammar_feedback || "Suggesting to mitigate potential cost overruns proactively",
-        better_alternative:
-          data.better_alternative ||
-          "We were compelled to fast-track key deliverables to mitigate variances across the critical path baseline.",
-        vocabulary_highlight:
-          data.vocabulary_highlight && data.vocabulary_highlight.length > 0
-            ? data.vocabulary_highlight
-            : ["variance", "mitigate", "critical path"],
-        jargon_score: data.jargon_score ?? 86,
-        fluency_score: data.fluency_score ?? 86,
-        idiomatic_phrase: "keep on a tight rein for idiomatic tight management",
-      });
+      const computedScorecard = {
+        grammar_feedback: grammarCorrection,
+        improvement_original: textToSend,
+        improvement_suggestion:
+          grammarCorrection || "Cümlenizde gramer hatası yok — doğal ve akıcı yapı!",
+        better_alternative: betterAlt,
+        vocabulary_highlight: usedVocab,
+        jargon_score: vocabScore,
+        fluency_score: fluencyVal,
+        idiomatic_phrase: "",
+      };
 
-      if (autoPlayAudio && data.assistant_reply) {
+      setDialogue([...updatedDialogue, assistantTurn]);
+      setPendingScorecard(computedScorecard);
+      if (hasAnalyzed) {
+        setScorecard(computedScorecard);
+      }
+
+      if (autoPlayAudio && (data.assistant_reply || data.reply_message)) {
         const nextIdx = updatedDialogue.length;
-        setTimeout(() => playSpeech(data.assistant_reply, nextIdx), 250);
+        setTimeout(() => playSpeech(data.assistant_reply || data.reply_message, nextIdx), 250);
       }
     } catch (err: any) {
-      console.warn("Backend response failed, using fast fallback simulation:", err);
-      let fallbackReply = "Could you elaborate on how you propose to mitigate this?";
-      if (activeMode === "casual") {
-        fallbackReply = "That sounds really fun! What do you like to do most when you have free time?";
+      console.warn("Backend response failed, using adaptive infinite fallback simulation:", err);
+      const lowerInput = textToSend.toLowerCase();
+      const isSmallTalk = ["rain", "weather", "coffee", "tea", "tired", "morning", "day", "weekend", "traffic"].some(
+        (w) => lowerInput.includes(w)
+      );
+      const turnIdx = updatedDialogue.length;
+
+      let fallbackReply = "That's a really good point! How did things unfold from there, and what are you thinking of doing next?";
+      if (isSmallTalk && activeCategory?.section === "professional") {
+        const bridgeReplies = [
+          "I totally hear you—days like that really set the mood! Speaking of the weather and daily pace, did conditions like rain or traffic affect the outdoor activities on the jobsite today?",
+          "Nothing beats a quick coffee and breather when the day gets busy! Once you settle in, how is the team feeling about our current schedule milestones on-site?",
+        ];
+        fallbackReply = bridgeReplies[turnIdx % bridgeReplies.length];
+      } else if (activeMode === "casual" || isSmallTalk) {
+        const casualReplies = [
+          "That sounds really nice! What do you enjoy most about moments like that, and how is the rest of your day looking?",
+          "I completely get that! Sometimes switching up the routine feels great. Have you got anything fun planned for the weekend?",
+        ];
+        fallbackReply = casualReplies[turnIdx % casualReplies.length];
       } else if (activeMode === "problem_solving") {
-        fallbackReply = "That's a quick fix, but what happens if the main supplier delays further? What is your backup plan?";
+        const problemReplies = [
+          "That's a practical immediate step, but what happens if our main supplier delays further? What backup plan should we keep ready?",
+          "Good call—acting early gives us breathing room. How should we update the project stakeholders so they stay confident in our plan?",
+        ];
+        fallbackReply = problemReplies[turnIdx % problemReplies.length];
       } else if (activeMode === "story_debate") {
-        fallbackReply = "That's an intriguing take on the story. Do you think the protagonist had any other moral choice?";
+        fallbackReply = "That's an intriguing take on the story. If you were in the protagonist's shoes on that day, what would you have done differently?";
       } else {
-        fallbackReply =
-          "Reallocating subcontractor teams could compress the critical path by several weeks. How will this expedite our delivery without incurring substantial acceleration claims?";
+        const mentorReplies = [
+          "I see where you're coming from—reallocating the crew could really help us recover the critical path. How is the site team feeling about shifting priorities this week?",
+          "That sounds like a solid approach. By the way, did any external factors on-site—like weather or material deliveries—affect the crew's progress today?",
+        ];
+        fallbackReply = mentorReplies[turnIdx % mentorReplies.length];
       }
+
+      // Akıllı Fallback: Ağ gecikmesi veya bağlantı hatasında konuşmayı asla kilitleme, konu havuzundan devam et
+      const pool = activeCategory?.questionPool || [];
+      const fallbackFollowUp =
+        (fallbackReply.includes("?") ? fallbackReply.split("?").slice(-2)[0]?.trim() + "?" : null) ||
+        pool[(turnIdx + 1) % (pool.length || 1)] ||
+        "What are your next thoughts on that, and how do you see it progressing?";
+
+      setCurrentFollowUpQuestion(fallbackFollowUp);
+      setActiveQuestionText(fallbackFollowUp);
 
       const assistantTurn: DialogueTurn = {
         role: "assistant",
@@ -1360,10 +1891,25 @@ export default function SpeakingPage() {
       };
 
       setDialogue([...updatedDialogue, assistantTurn]);
-      setScorecard((prev) => ({
-        ...prev,
-        fluency_score: activeMode === "casual" ? 92 : 86,
-      }));
+      const fallbackScorecard = {
+        grammar_feedback: null,
+        improvement_original: textToSend,
+        improvement_suggestion: "Doğal ve akıcı cümle yapısı tespit edildi.",
+        better_alternative:
+          "We proactively reallocated key resources along the critical path to safeguard project milestones.",
+        vocabulary_highlight:
+          activeStory?.targetWords &&
+          activeStory.targetWords.some((w) => lowerInput.includes(w.toLowerCase()))
+            ? activeStory.targetWords.filter((w) => lowerInput.includes(w.toLowerCase()))
+            : activeScenario.target_vocabulary.slice(0, 3),
+        jargon_score: activeMode === "casual" ? 92 : 88,
+        fluency_score: activeMode === "casual" ? 92 : 88,
+        idiomatic_phrase: "",
+      };
+      setPendingScorecard(fallbackScorecard);
+      if (hasAnalyzed) {
+        setScorecard(fallbackScorecard);
+      }
 
       if (autoPlayAudio) {
         const nextIdx = updatedDialogue.length;
@@ -1374,12 +1920,128 @@ export default function SpeakingPage() {
     }
   };
 
+  const handleSubmitResponse = sendMessage;
+
+  // Kullanıcı yeşil 'Analyze' butonuna bastığında gerçek konuşma analizini karneye yansıt
+  const handleAnalyzeConversation = async () => {
+    if (userTranscript.trim() || interimText.trim()) {
+      await sendMessage();
+    }
+    setHasAnalyzed(true);
+
+    const lastUserTurn = [...dialogue]
+      .reverse()
+      .find((t) => t.role === "user");
+    const lastAssistantWithFb = [...dialogue]
+      .reverse()
+      .find((t) => t.role === "assistant" && t.feedback);
+
+    if (pendingScorecard) {
+      setScorecard(pendingScorecard);
+    } else if (lastAssistantWithFb?.feedback) {
+      const fb = lastAssistantWithFb.feedback;
+      setScorecard({
+        grammar_feedback: fb.grammar_feedback ?? null,
+        improvement_original:
+          lastUserTurn?.message.replace(/^User:\s*/i, "") || "",
+        improvement_suggestion:
+          fb.grammar_feedback ||
+          "Cümlenizde gramer hatası yok — doğal ve akıcı yapı!",
+        better_alternative:
+          fb.better_alternative ||
+          "We proactively fast-tracked critical path activities to mitigate budget variances.",
+        vocabulary_highlight:
+          fb.vocabulary_highlight && fb.vocabulary_highlight.length > 0
+            ? fb.vocabulary_highlight
+            : activeScenario.target_vocabulary.slice(0, 3),
+        jargon_score: fb.jargon_score ?? 86,
+        fluency_score: fb.fluency_score ?? 86,
+        idiomatic_phrase: "",
+      });
+    } else {
+      const cleanUserMsg =
+        lastUserTurn?.message.replace(/^User:\s*/i, "") || "";
+      const detectedWords = activeScenario.target_vocabulary.filter((w) =>
+        cleanUserMsg.toLowerCase().includes(w.toLowerCase())
+      );
+      setScorecard({
+        grammar_feedback: null,
+        improvement_original: cleanUserMsg,
+        improvement_suggestion:
+          "Akıcı ve anlaşılır konuşma yapısı — C1 düzeyinde terim kullanımı başarılı!",
+        better_alternative:
+          "In our previous phase, we encountered critical path slippage and fast-tracked key activities to mitigate the budget variance.",
+        vocabulary_highlight:
+          detectedWords.length > 0
+            ? detectedWords
+            : activeScenario.target_vocabulary.slice(0, 3),
+        jargon_score: 88,
+        fluency_score: 88,
+        idiomatic_phrase: "",
+      });
+    }
+    setToastNotice("📊 Konuşma analizi tamamlandı ve karne güncellendi!");
+  };
+
+  // =========================================================================
+  // 🏁 PRATİĞİ BİTİR & ARŞİVE KAYDET (+30 XP)
+  // =========================================================================
+  const handleFinishAndSavePractice = async () => {
+    const userTurns = dialogue.filter((t) => t.role === "user");
+    if (userTurns.length === 0) {
+      setToastNotice("⚠️ Henüz konuşma yapılmadı. Arşivlemek için önce mikrofona basıp pratik yapın.");
+      return;
+    }
+
+    try {
+      setIsSavingArchive(true);
+      const transcriptPayload = dialogue.map((turn) => ({
+        sender: (turn.role === "user" ? "user" : "ai") as "user" | "ai",
+        text: turn.message,
+        timestamp: turn.timestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        feedback: turn.feedback || undefined,
+      }));
+
+      const fluency = scorecard.fluency_score || 85;
+      const vocabulary = scorecard.jargon_score || 80;
+      const grammar = scorecard.grammar_feedback ? 78 : 92;
+      const overall = Math.round((fluency + vocabulary + grammar) / 3);
+
+      const metricsPayload = {
+        fluency,
+        vocabulary,
+        grammar,
+        overall_score: overall,
+        level: targetLevel,
+      };
+
+      const sessionTitle =
+        activeTopicTitle || selectedDeck?.title || activeScenario.title || "Speaking Lounge Seansı";
+
+      await saveSpeakingArchiveSession({
+        session_title: sessionTitle,
+        transcript: transcriptPayload,
+        metrics: metricsPayload,
+        user_id: user?.id,
+      });
+
+      setToastNotice("🎉 Konuşmanız arşivinize kaydedildi! (+30 XP)");
+    } catch (err: any) {
+      console.error("Arşivleme başarısız:", err);
+      setToastNotice("Arşiv kaydedilirken bir hata oluştu, lütfen tekrar deneyin.");
+    } finally {
+      setIsSavingArchive(false);
+    }
+  };
+
   // Diyaloğu Baştan Başlat
   const handleResetDialogue = () => {
     stopAudio();
     if (isRecording) stopRecording();
     setUserTranscript("");
     setInterimText("");
+    setHasAnalyzed(false);
+    setPendingScorecard(null);
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     setDialogue([
       {
@@ -1390,418 +2052,54 @@ export default function SpeakingPage() {
     ]);
     setScorecard({
       grammar_feedback: null,
-      improvement_original: "to catch cost overrun early",
-      improvement_suggestion: "Suggesting to mitigate potential cost overruns proactively",
-      better_alternative:
-        "We were compelled to fast-track key deliverables to mitigate variances across the critical path baseline.",
-      vocabulary_highlight: ["variance", "mitigate", "critical path"],
-      jargon_score: 86,
-      fluency_score: 86,
-      idiomatic_phrase: "keep on a tight rein for idiomatic tight management",
+      improvement_original: "",
+      improvement_suggestion: "",
+      better_alternative: "",
+      vocabulary_highlight: [],
+      jargon_score: 0,
+      fluency_score: 0,
+      idiomatic_phrase: "",
     });
     setToastNotice("Pratik oturumu sıfırlandı.");
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200 overflow-x-hidden">
-      {/* 3 SÜTUNLU ANA DÜZEN (GRID & FLEX) - Doğrudan Ana Navbar Altında Ferah Boşluk */}
-      <main className="max-w-[1720px] mx-auto px-4 sm:px-6 pt-6 pb-8 flex flex-col lg:flex-row gap-5 items-start w-full overflow-x-hidden flex-1">
-        {/* ========================================================================= */}
-        {/* A) SOL SÜTUN - BUGÜN NE KONUŞMAK İSTERSİN? & MESLEKİ ÖNERİLER (w-80)      */}
-        {/* ========================================================================= */}
-        <aside className="w-full lg:w-80 flex-shrink-0 space-y-4">
-          {/* ========================================================================= */}
-          {/* 1. AKILLI KONUŞMA GEZGİNİ (SMART CONVERSATION EXPLORER ACCORDION)         */}
-          {/* Reading Room ile birebir aynı görsel stil: 🌍 GENEL KÜLTÜR + 💼 MESLEKLER */}
-          {/* ========================================================================= */}
-          <div className="p-3.5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl backdrop-blur-md space-y-4">
-            {/* Üst Başlık & Rozet */}
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800/80 px-1">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-xs font-black uppercase tracking-wider text-white">
-                  {t("speaking_explorer_title", "Akıllı Konuşma Gezgini")}
-                </h2>
-              </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                8 Kategori
-              </span>
-            </div>
-
-            {/* Kategori Grupları */}
-            <div className="space-y-4">
-              {/* BÖLÜM 1: 🌍 GENERAL CULTURE */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <Globe2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{t("speaking_cat_general_culture", "🌍 GENERAL CULTURE")}</span>
-                </div>
-
-                <div className="space-y-2">
-                  {generalCultureCats.map((cat) => {
-                    const isOpen = openCategoryId === cat.id;
-                    const isCatActive = activeCategory.id === cat.id;
-                    const activeQuestions =
-                      categoryActiveQuestions[cat.id] || cat.questionPool.slice(0, 4);
-
-                    return (
-                      <div
-                        key={cat.id}
-                        className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
-                          isCatActive
-                            ? "border-emerald-500/70 bg-slate-950/90 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30"
-                            : isOpen
-                            ? "border-slate-700/80 bg-slate-950/70"
-                            : "border-slate-800/80 bg-slate-950/40 hover:bg-slate-950/70 hover:border-slate-700/60"
-                        }`}
-                      >
-                        {/* Klasör Başlığı (Akordeon Butonu) */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleCategory(cat)}
-                          className="w-full flex items-center justify-between p-3 text-left transition-colors cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="text-base shrink-0 p-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                              {cat.icon}
-                            </span>
-                            <div className="min-w-0">
-                              <h3
-                                className={`text-xs font-bold truncate transition-colors ${
-                                  isCatActive
-                                    ? "text-emerald-300"
-                                    : "text-slate-200 group-hover:text-white"
-                                }`}
-                              >
-                                {cat.title}
-                              </h3>
-                              <p className="text-[10px] text-slate-400 truncate">
-                                {cat.subTitle}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                            <span
-                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-                                isCatActive
-                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                                  : "bg-slate-800 text-slate-400 border-slate-700/50"
-                              }`}
-                            >
-                              {cat.levelBadge}
-                            </span>
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                isOpen
-                                  ? "rotate-180 text-emerald-400"
-                                  : "text-slate-500 group-hover:text-slate-300"
-                              }`}
-                            />
-                          </div>
-                        </button>
-
-                        {/* Akordeon Açılır Alanı: 4 Dinamik Soru + 5. Serbest Konu */}
-                        {isOpen && (
-                          <div className="px-3 pb-3 pt-1 border-t border-slate-800/80 space-y-2 animate-in fade-in duration-150">
-                            {/* 4 Dinamik Soru */}
-                            <div className="space-y-1.5">
-                              {activeQuestions.map((qText, qIdx) => {
-                                const isAnswered = answeredQuestions.includes(qText);
-                                const isSelected = activeQuestionText === qText;
-
-                                return (
-                                  <div
-                                    key={qIdx}
-                                    onClick={() => handleSelectQuestion(qText, cat, qIdx)}
-                                    className={`p-2.5 rounded-xl border text-left transition-all duration-150 relative group cursor-pointer ${
-                                      isSelected
-                                        ? "bg-emerald-950/50 border-emerald-500/80 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/40"
-                                        : isAnswered
-                                        ? "bg-slate-900/60 border-slate-800/60 opacity-80"
-                                        : "bg-slate-900/40 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700"
-                                    }`}
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex items-start gap-2 min-w-0">
-                                        <span
-                                          className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded mt-0.5 shrink-0 ${
-                                            isAnswered
-                                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                              : isSelected
-                                              ? "bg-emerald-500 text-slate-950 font-black"
-                                              : "bg-slate-800 text-slate-400"
-                                          }`}
-                                        >
-                                          {isAnswered ? "✓" : `Q${qIdx + 1}`}
-                                        </span>
-                                        <p
-                                          className={`text-[11px] leading-snug line-clamp-2 ${
-                                            isSelected
-                                              ? "text-emerald-200 font-semibold"
-                                              : isAnswered
-                                              ? "text-slate-400 line-through"
-                                              : "text-slate-300 group-hover:text-white"
-                                          }`}
-                                        >
-                                          {qText}
-                                        </p>
-                                      </div>
-
-                                      <button
-                                        type="button"
-                                        title="Sıradaki Soruyla Tazele"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleReplenishQuestionSlot(cat, qIdx);
-                                        }}
-                                        className="p-1 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition shrink-0 opacity-40 group-hover:opacity-100"
-                                      >
-                                        <RefreshCw className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            {/* 5. Seçenek: ✍️ Bugün ne konuşmak istersin? */}
-                            <div className="pt-2 border-t border-slate-800/70">
-                              <div className="flex items-center gap-1.5 pb-1.5 text-[10px] font-bold text-slate-400">
-                                <span>✍️</span>
-                                <span>
-                                  {t("speaking_what_to_talk_today", "Bugün ne konuşmak istersin?")}
-                                </span>
-                              </div>
-                              <form
-                                onSubmit={(e) => handleCustomCategoryTopicSubmit(e, cat)}
-                                className="relative flex items-center"
-                              >
-                                <input
-                                  type="text"
-                                  value={categoryCustomInputs[cat.id] || ""}
-                                  onChange={(e) =>
-                                    setCategoryCustomInputs((prev) => ({
-                                      ...prev,
-                                      [cat.id]: e.target.value,
-                                    }))
-                                  }
-                                  placeholder="Örn: Hafta sonu kahvaltısı, seyahat planı..."
-                                  disabled={isGeneratingTopic}
-                                  className="w-full pl-2.5 pr-14 py-1.5 rounded-lg bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-[11px] text-white placeholder-slate-500 outline-none transition"
-                                />
-                                <button
-                                  type="submit"
-                                  disabled={!categoryCustomInputs[cat.id]?.trim() || isGeneratingTopic}
-                                  className="absolute right-1 top-1 bottom-1 px-2 rounded-md bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px] flex items-center gap-1 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-                                  title="Bu konuda oturumu başlat"
-                                >
-                                  {isGeneratingTopic && activeCategory.id === cat.id ? (
-                                    <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <span>{t("speaking_start_short", "Başlat")}</span>
-                                      <ArrowRight className="w-2.5 h-2.5" />
-                                    </>
-                                  )}
-                                </button>
-                              </form>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* BÖLÜM 2: 💼 PROFESSIONAL & SPECIALIZED */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <Briefcase className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{t("speaking_cat_professional", "💼 PROFESSIONAL & SPECIALIZED")}</span>
-                </div>
-
-                <div className="space-y-2">
-                  {professionalCats.map((cat) => {
-                    const isOpen = openCategoryId === cat.id;
-                    const isCatActive = activeCategory.id === cat.id;
-                    const activeQuestions =
-                      categoryActiveQuestions[cat.id] || cat.questionPool.slice(0, 4);
-
-                    return (
-                      <div
-                        key={cat.id}
-                        className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
-                          isCatActive
-                            ? "border-emerald-500/70 bg-slate-950/90 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30"
-                            : isOpen
-                            ? "border-slate-700/80 bg-slate-950/70"
-                            : "border-slate-800/80 bg-slate-950/40 hover:bg-slate-950/70 hover:border-slate-700/60"
-                        }`}
-                      >
-                        {/* Klasör Başlığı (Akordeon Butonu) */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleCategory(cat)}
-                          className="w-full flex items-center justify-between p-3 text-left transition-colors cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="text-base shrink-0 p-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                              {cat.icon}
-                            </span>
-                            <div className="min-w-0">
-                              <h3
-                                className={`text-xs font-bold truncate transition-colors ${
-                                  isCatActive
-                                    ? "text-emerald-300"
-                                    : "text-slate-200 group-hover:text-white"
-                                }`}
-                              >
-                                {cat.title}
-                              </h3>
-                              <p className="text-[10px] text-slate-400 truncate">
-                                {cat.subTitle}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                            <span
-                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-                                isCatActive
-                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                                  : "bg-slate-800 text-slate-400 border-slate-700/50"
-                              }`}
-                            >
-                              {cat.levelBadge}
-                            </span>
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                isOpen
-                                  ? "rotate-180 text-emerald-400"
-                                  : "text-slate-500 group-hover:text-slate-300"
-                              }`}
-                            />
-                          </div>
-                        </button>
-
-                        {/* Akordeon Açılır Alanı: 4 Dinamik Soru + 5. Serbest Konu */}
-                        {isOpen && (
-                          <div className="px-3 pb-3 pt-1 border-t border-slate-800/80 space-y-2 animate-in fade-in duration-150">
-                            {/* 4 Dinamik Soru */}
-                            <div className="space-y-1.5">
-                              {activeQuestions.map((qText, qIdx) => {
-                                const isAnswered = answeredQuestions.includes(qText);
-                                const isSelected = activeQuestionText === qText;
-
-                                return (
-                                  <div
-                                    key={qIdx}
-                                    onClick={() => handleSelectQuestion(qText, cat, qIdx)}
-                                    className={`p-2.5 rounded-xl border text-left transition-all duration-150 relative group cursor-pointer ${
-                                      isSelected
-                                        ? "bg-emerald-950/50 border-emerald-500/80 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/40"
-                                        : isAnswered
-                                        ? "bg-slate-900/60 border-slate-800/60 opacity-80"
-                                        : "bg-slate-900/40 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700"
-                                    }`}
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex items-start gap-2 min-w-0">
-                                        <span
-                                          className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded mt-0.5 shrink-0 ${
-                                            isAnswered
-                                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                              : isSelected
-                                              ? "bg-emerald-500 text-slate-950 font-black"
-                                              : "bg-slate-800 text-slate-400"
-                                          }`}
-                                        >
-                                          {isAnswered ? "✓" : `Q${qIdx + 1}`}
-                                        </span>
-                                        <p
-                                          className={`text-[11px] leading-snug line-clamp-2 ${
-                                            isSelected
-                                              ? "text-emerald-200 font-semibold"
-                                              : isAnswered
-                                              ? "text-slate-400 line-through"
-                                              : "text-slate-300 group-hover:text-white"
-                                          }`}
-                                        >
-                                          {qText}
-                                        </p>
-                                      </div>
-
-                                      <button
-                                        type="button"
-                                        title="Sıradaki Soruyla Tazele"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleReplenishQuestionSlot(cat, qIdx);
-                                        }}
-                                        className="p-1 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition shrink-0 opacity-40 group-hover:opacity-100"
-                                      >
-                                        <RefreshCw className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            {/* 5. Seçenek: ✍️ Bugün ne konuşmak istersin? */}
-                            <div className="pt-2 border-t border-slate-800/70">
-                              <div className="flex items-center gap-1.5 pb-1.5 text-[10px] font-bold text-slate-400">
-                                <span>✍️</span>
-                                <span>
-                                  {t("speaking_what_to_talk_today", "Bugün ne konuşmak istersin?")}
-                                </span>
-                              </div>
-                              <form
-                                onSubmit={(e) => handleCustomCategoryTopicSubmit(e, cat)}
-                                className="relative flex items-center"
-                              >
-                                <input
-                                  type="text"
-                                  value={categoryCustomInputs[cat.id] || ""}
-                                  onChange={(e) =>
-                                    setCategoryCustomInputs((prev) => ({
-                                      ...prev,
-                                      [cat.id]: e.target.value,
-                                    }))
-                                  }
-                                  placeholder="Örn: Gecikme analizi, EVM kriz toplantısı..."
-                                  disabled={isGeneratingTopic}
-                                  className="w-full pl-2.5 pr-14 py-1.5 rounded-lg bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-[11px] text-white placeholder-slate-500 outline-none transition"
-                                />
-                                <button
-                                  type="submit"
-                                  disabled={!categoryCustomInputs[cat.id]?.trim() || isGeneratingTopic}
-                                  className="absolute right-1 top-1 bottom-1 px-2 rounded-md bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px] flex items-center gap-1 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-                                  title="Bu konuda oturumu başlat"
-                                >
-                                  {isGeneratingTopic && activeCategory.id === cat.id ? (
-                                    <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <span>{t("speaking_start_short", "Başlat")}</span>
-                                      <ArrowRight className="w-2.5 h-2.5" />
-                                    </>
-                                  )}
-                                </button>
-                              </form>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+      {/* 3 SÜTUNLU KÜRESEL STANDART YERLEŞİM (SpeakingLounge / PlatformStandardLayout) */}
+      <SpeakingLounge
+        sidebar={
+        <SpeakingSidebar
+          decks={decks}
+          selectedDeck={selectedDeck}
+          deckWords={deckWords}
+          deckQuestions={deckQuestions}
+          loadingDecks={loadingDecks}
+          generatingQuestions={generatingDeckQuestions}
+          activeQuestionText={activeQuestionText}
+          answeredQuestions={answeredQuestions}
+          onSelectDeck={handleSelectDeck}
+          onSelectDeckQuestion={handleSelectDeckQuestion}
+          onRefreshDeckQuestions={handleRefreshDeckQuestions}
+          activeStoryContext={activeStory}
+          storyDebateQuestions={storyDebateQuestions}
+          onSelectStoryQuestion={handleSelectStoryQuestion}
+          onClearStoryContext={handleClearStoryContext}
+          generalCultureCats={generalCultureCats}
+          professionalCats={professionalCats}
+          openCategoryId={openCategoryId}
+          activeCategory={activeCategory}
+          categoryActiveQuestions={categoryActiveQuestions}
+          onToggleCategory={handleToggleCategory}
+          onSelectCategoryQuestion={handleSelectQuestion}
+          onGenerateCustomTopic={(cat) => handleCustomCategoryTopicSubmit({ preventDefault: () => {} } as any, cat)}
+          categoryCustomInputs={categoryCustomInputs}
+          onCustomInputChange={(catId, val) =>
+            setCategoryCustomInputs((prev) => ({ ...prev, [catId]: val }))
+          }
+          isGeneratingTopic={isGeneratingTopic}
+          onOpenArchive={() => setIsArchiveModalOpen(true)}
+          t={t}
+        >
           {/* 3. AYNI BAŞLIKTA YENİ HİKAYE ÜRETİMİ (Story Pivot Bridge) */}
           {activeStory ? (
             <div className="p-4 rounded-3xl bg-indigo-950/30 border border-indigo-500/40 shadow-xl space-y-3 backdrop-blur-md relative overflow-hidden">
@@ -1856,6 +2154,7 @@ export default function SpeakingPage() {
             </div>
           )}
 
+
           {/* Aktif Konuşma Odağı Özeti */}
           <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs space-y-1">
             <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
@@ -1865,8 +2164,46 @@ export default function SpeakingPage() {
               {activeTopicTitle}
             </p>
           </div>
-        </aside>
-
+        </SpeakingSidebar>
+        }
+        scorecard={
+          <SpeakingScorecard
+            userName={user?.fullName || user?.username || "Öğrenci"}
+            mascotImage={persona.image || "/avatars/sparky.png"}
+            mascotName={persona.name || "Sparky"}
+            isKidsMode={isKidsMode}
+            targetLevel={targetLevel}
+            avatarState={avatarState}
+            activeMode={activeMode}
+            hasAnalyzed={hasAnalyzed}
+            scorecard={scorecard}
+            scorecardTitle={CONVERSATION_MODES[activeMode]?.scorecardTitle || "C1 DEĞERLENDİRME KARNESİ"}
+            onAnalyze={handleAnalyzeConversation}
+            metrics={{
+              spoken: dialogue.some(
+                (turn) => turn.role === "user" && turn.message?.trim().length > 0
+              ),
+              usedTargetWord: scorecard.vocabulary_highlight.length > 0,
+              sentenceComplete:
+                scorecard.fluency_score >= 50 ||
+                dialogue.some(
+                  (turn) =>
+                    turn.role === "user" &&
+                    turn.message?.trim().split(/\s+/).length >= 3
+                ),
+            }}
+            copiedAlt={copiedAlt}
+            onCopyAlt={() => {
+              if (scorecard.better_alternative) {
+                navigator.clipboard.writeText(scorecard.better_alternative);
+                setCopiedAlt(true);
+                setTimeout(() => setCopiedAlt(false), 2000);
+              }
+            }}
+            t={t}
+          />
+        }
+      >
         {/* ========================================================================= */}
         {/* B) ORTA SÜTUN - CANLI DİYALOG & MİKROFON SAHNESİ (flex-1)                 */}
         {/* ========================================================================= */}
@@ -1907,6 +2244,34 @@ export default function SpeakingPage() {
                   <span className="font-mono text-emerald-400 font-bold">{targetLevel}</span>
                 </button>
 
+                {/* Hız Seçici Toggle: [ 0.8x | 1.0x ] */}
+                <div className="hidden sm:inline-flex items-center p-0.5 bg-slate-950 rounded-xl border border-slate-800 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setSpeechSpeedMode("0.8x")}
+                    className={`px-2 py-0.5 rounded-lg transition font-bold cursor-pointer ${
+                      speechSpeedMode === "0.8x"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Sakin mülakat temposu (0.86x)"
+                  >
+                    0.8x
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpeechSpeedMode("1.0x")}
+                    className={`px-2 py-0.5 rounded-lg transition font-bold cursor-pointer ${
+                      speechSpeedMode === "1.0x"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Normal konuşma temposu (1.0x)"
+                  >
+                    1.0x
+                  </button>
+                </div>
+
                 {/* + Practice Butonu */}
                 <button
                   type="button"
@@ -1916,6 +2281,31 @@ export default function SpeakingPage() {
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span className="hidden sm:inline">Practice</span>
+                </button>
+
+                {/* 🏁 Pratiği Bitir & Kaydet Butonu */}
+                <button
+                  type="button"
+                  data-testid="finish-and-save-practice-btn"
+                  onClick={handleFinishAndSavePractice}
+                  disabled={isSavingArchive}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-[10px] shadow-sm transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  title="Oturumu Tamamla ve Arşivime Kaydet (+30 XP)"
+                >
+                  <Flag className="w-3 h-3 text-amber-300" />
+                  <span>{isSavingArchive ? "Kaydediliyor..." : "🏁 Bitir & Kaydet"}</span>
+                </button>
+
+                {/* 🗂️ Arşivim Butonu */}
+                <button
+                  type="button"
+                  data-testid="header-speaking-archive-btn"
+                  onClick={() => setIsArchiveModalOpen(true)}
+                  className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-indigo-500/50 text-[10px] font-semibold text-slate-300 hover:text-white transition cursor-pointer"
+                  title="Konuşma Arşivimi Görüntüle"
+                >
+                  <Archive className="w-3 h-3 text-indigo-400" />
+                  <span>Arşivim</span>
                 </button>
 
                 <button
@@ -1936,194 +2326,59 @@ export default function SpeakingPage() {
               </div>
             </div>
 
-            {/* 1. CANLI & ANİMASYONLU AVATAR MOTORU + KOMPAKT ÇOCUK KARAKTER SEÇİCİ */}
-            <div className="flex flex-col items-center justify-center pt-1 pb-1 z-10 relative space-y-2.5">
-              {/* Çocuk Modu Aktifken (veya Hızlı Geçiş İçin) Avatarın Hemen Üstünde Kompakt Karakter Seçici */}
+            {/* 2. MESAJ DÖKÜM ALANI (Top-Center Modern Chat Stream UI Balonları) */}
+            <SpeakingTranscript
+              dialogue={dialogue}
+              userTranscript={userTranscript}
+              interimText={interimText}
+              isThinking={isThinking}
+              speakingAudioIndex={speakingAudioIndex}
+              activeWordIndex={activeWordIndex}
+              isKidsMode={isKidsMode}
+              rate={getCalibratedRateForPersona(persona)}
+              personaName={persona.name}
+              onPlayAudio={(msg, idx) => playSpeech(msg, idx)}
+            />
+
+            {/* 3. DİNAMİK TAKİP SORUSU YÖNLENDİRME KARTI (Dynamic Follow-up Question Card) */}
+            {currentFollowUpQuestion && (
               <div
-                data-testid="kids-character-selector"
-                className={`inline-flex items-center gap-1.5 p-1 rounded-2xl border transition-all duration-200 shadow-lg ${
-                  isKidsMode
-                    ? "bg-slate-950/95 border-amber-500/40 shadow-amber-500/10"
-                    : "bg-slate-950/80 border-slate-800/80"
-                }`}
+                data-testid="dynamic-followup-card"
+                className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-indigo-950/60 border border-emerald-500/30 shadow-lg backdrop-blur-md z-10 relative animate-in fade-in slide-in-from-bottom-2 duration-300"
               >
-                <button
-                  type="button"
-                  data-testid="select-mascot-sparky"
-                  onClick={() => handleSelectKidsCharacter("sparky")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-150 cursor-pointer active:scale-95 ${
-                    persona.id === "sparky"
-                      ? "bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md shadow-amber-500/30 ring-2 ring-amber-300/60"
-                      : "text-slate-300 hover:text-amber-300 hover:bg-slate-900/90"
-                  }`}
-                >
-                  <span className="text-base leading-none">🦊</span>
-                  <span>Sparky</span>
-                </button>
-
-                <button
-                  type="button"
-                  data-testid="select-mascot-chuck"
-                  onClick={() => handleSelectKidsCharacter("chuck")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-150 cursor-pointer active:scale-95 ${
-                    persona.id === "chuck"
-                      ? "bg-gradient-to-r from-yellow-400 to-amber-400 text-slate-950 shadow-md shadow-yellow-400/30 ring-2 ring-yellow-200/70"
-                      : "text-slate-300 hover:text-yellow-300 hover:bg-slate-900/90"
-                  }`}
-                >
-                  <span className="text-base leading-none">🐔</span>
-                  <span>Chuck (Tavuk)</span>
-                </button>
-              </div>
-
-              <AvatarDisplay
-                personaId={persona.id}
-                avatarState={avatarState}
-                size="xl"
-                showBadges={true}
-              />
-            </div>
-
-            {/* 2. MESAJ DÖKÜM ALANI (Orta Kısım) */}
-            <div
-              ref={chatScrollRef}
-              className="flex-1 min-h-[220px] max-h-[300px] overflow-y-auto space-y-3 px-1 sm:px-2 py-2 rounded-2xl bg-slate-950/50 border border-slate-800/80 scrollbar-thin z-10 relative"
-            >
-              {dialogue.map((turn, idx) => {
-                const isAssistant = turn.role === "assistant";
-                return isAssistant ? (
-                  // AI Konuşma Balonu
-                  <div
-                    key={idx}
-                    className="flex flex-col sm:flex-row items-start justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/95 border border-slate-800 shadow-md transition"
-                  >
-                    <div className="flex items-start space-x-2.5 min-w-0 flex-1">
-                      <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                        <Sparkles className="w-4 h-4" />
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">
+                          💡 Sıradaki Soru / Konuşma Fırsatı:
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          {targetLevel} • Dinamik Akış
+                        </span>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                            AI Mentor
-                          </span>
-                          {turn.timestamp && (
-                            <span className="text-[10px] text-slate-500 font-mono">
-                              {turn.timestamp}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
-                          {turn.message.replace(/^\[.*?\]:\s*/, "").replace(/^AI Mentor:\s*/i, "")}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Sağ Üst / Aksiyon Kontrolleri: Hız Seçici, Ses/Aksan İndikatörü ve Dinle Butonu */}
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0 self-end sm:self-start">
-                      {/* Ses/Aksan İndikatörü */}
-                      <span
-                        suppressHydrationWarning
-                        className="inline-flex items-center px-2 py-1 rounded-xl text-[10px] font-mono font-bold bg-slate-950 text-emerald-400 border border-emerald-500/30 shadow-inner whitespace-nowrap"
-                        title="Seçili karaktere göre aktif doğal nöral ses"
-                      >
-                        {!mounted
-                          ? t("speaking_voice_loading", "🎙️ Ses Yükleniyor...")
-                          : activeVoiceBadge || getActiveVoiceDisplay(persona)}
-                      </span>
-
-                      {/* Hız Seçici Toggle: [ 0.8x (Sakin) | 1.0x (Normal) ] */}
-                      <div className="inline-flex items-center p-0.5 bg-slate-950 rounded-xl border border-slate-800 text-[10px] font-mono">
-                        <button
-                          type="button"
-                          onClick={() => setSpeechSpeedMode("0.8x")}
-                          className={`px-2 py-0.5 rounded-lg transition font-bold cursor-pointer ${
-                            speechSpeedMode === "0.8x"
-                              ? "bg-emerald-600 text-white shadow-sm"
-                              : "text-slate-400 hover:text-white"
-                          }`}
-                          title="Sakin mülakat temposu (0.84x)"
-                        >
-                          {t("speaking_speed_calm", "0.8x (Sakin)")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSpeechSpeedMode("1.0x")}
-                          className={`px-2 py-0.5 rounded-lg transition font-bold cursor-pointer ${
-                            speechSpeedMode === "1.0x"
-                              ? "bg-emerald-600 text-white shadow-sm"
-                              : "text-slate-400 hover:text-white"
-                          }`}
-                          title="Normal konuşma temposu (1.0x)"
-                        >
-                          {t("speaking_speed_normal", "1.0x (Normal)")}
-                        </button>
-                      </div>
-
-                      {/* [ 🔊 Sesli Dinle ] Butonu */}
                       <button
                         type="button"
-                        onClick={() => playSpeech(turn.message, idx)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shrink-0 transition cursor-pointer ${
-                          speakingAudioIndex === idx
-                            ? "bg-emerald-500 text-slate-950 border-emerald-400 animate-pulse font-bold"
-                            : "bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border-slate-800"
-                        }`}
-                        title={speakingAudioIndex === idx ? t("speaking_stop", "Durdur") : t("speaking_listen", "Sesli Dinle")}
+                        onClick={() => playSpeech(currentFollowUpQuestion, -1)}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-700/60 text-[10px] text-slate-300 hover:text-emerald-300 transition cursor-pointer shrink-0"
+                        title="Soruyu Dinle"
                       >
-                        <Volume2 className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">
-                          {speakingAudioIndex === idx ? t("speaking_stop", "Durdur") : t("speaking_listen", "Sesli Dinle")}
-                        </span>
+                        <Volume2 className="w-3 h-3" />
+                        <span className="hidden sm:inline">Dinle</span>
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  // Kullanıcı Baloncuğu
-                  <div
-                    key={idx}
-                    className="flex items-start space-x-2.5 p-3.5 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 shadow-md ml-4 sm:ml-8"
-                  >
-                    <div className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
-                      <Mic className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 block mb-0.5">
-                        User
-                      </span>
-                      <p className="text-xs sm:text-sm text-indigo-100 leading-relaxed font-medium">
-                        {turn.message.replace(/^User:\s*/i, "")}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Canlı Konuşma Transkripti */}
-              {(userTranscript || interimText) && (
-                <div className="flex items-start space-x-2.5 p-3 rounded-2xl bg-emerald-950/20 border border-emerald-500/40 animate-pulse ml-4 sm:ml-8">
-                  <div className="w-7 h-7 rounded-full bg-emerald-500/30 text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
-                    <Mic className="w-4 h-4 animate-bounce" />
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block mb-0.5">
-                      {t("speaking_live_transcription", "User (Canlı Deşifre)")}
-                    </span>
-                    <p className="text-xs sm:text-sm text-emerald-200 leading-relaxed">
-                      {userTranscript} <span className="opacity-60 italic">{interimText}</span>
+                    <p className="text-xs sm:text-sm font-semibold text-white leading-relaxed">
+                      {currentFollowUpQuestion}
                     </p>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {isThinking && (
-                <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-400 animate-pulse">
-                  <Sparkles className="w-4 h-4 text-emerald-400 animate-spin" />
-                  <span>{t("speaking_mentor_evaluating", "AI Mentor değerlendirme karnesini hazırlıyor...")}</span>
-                </div>
-              )}
-            </div>
-
-            {/* 3. SES DALGASI & MİKROFON KONTROLÜ (Alt Kısım) */}
+            {/* 4. SES DALGASI & MİKROFON KONTROLÜ (Alt Kısım) */}
             <div className="p-4 rounded-3xl bg-slate-950/80 border border-slate-800/90 space-y-3 z-10 relative shadow-xl">
               <div className="flex items-center justify-between gap-2 sm:gap-4">
                 {/* Sol Waveform Frekans Barları */}
@@ -2142,6 +2397,7 @@ export default function SpeakingPage() {
                   />
                   <button
                     type="button"
+                    data-testid="tap-to-speak-mic-btn"
                     onClick={toggleRecording}
                     className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-full flex flex-col items-center justify-center font-bold text-xs transition-all duration-300 cursor-pointer shadow-2xl ${
                       isRecording
@@ -2167,7 +2423,40 @@ export default function SpeakingPage() {
                 </div>
               </div>
 
-              {/* Alt Bilgi: "Analyzing Speech... • 01:24" ve Kırmızı Kare Durdurma Butonu */}
+              {/* Serbest Yazılı veya Sesli Mesaj Gönderim Çubuğu (Sonsuz Akış) */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  sendMessage();
+                }}
+                className="flex items-center gap-2 pt-1"
+              >
+                <input
+                  type="text"
+                  data-testid="speaking-chat-input"
+                  value={userTranscript}
+                  onChange={(e) => setUserTranscript(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="Mikrofona konuşun veya dilediğiniz konuda buraya yazıp sohbete devam edin..."
+                  disabled={isThinking}
+                  className="flex-1 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-800 focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/50 text-xs text-slate-100 placeholder-slate-500 outline-none transition"
+                />
+                <button
+                  type="submit"
+                  disabled={(!userTranscript.trim() && !interimText.trim()) || isThinking}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer shrink-0"
+                >
+                  <span>{t("speaking_send_btn", "Gönder")}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </form>
+
+              {/* Alt Bilgi: "Infinite Flow • 01:24" ve Kırmızı Kare Durdurma Butonu */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-850 px-1">
                 <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400">
                   <span
@@ -2176,7 +2465,7 @@ export default function SpeakingPage() {
                         ? "bg-emerald-400 animate-ping"
                         : isThinking
                         ? "bg-indigo-400 animate-spin"
-                        : "bg-slate-600"
+                        : "bg-emerald-500/60"
                     }`}
                   />
                   <span>
@@ -2184,13 +2473,13 @@ export default function SpeakingPage() {
                       ? t("speaking_analyzing_speech", "Analyzing Speech...")
                       : isRecording
                       ? t("speaking_listening_voice", "Listening to Voice...")
-                      : t("speaking_analyzing_speech", "Analyzing Speech...")}
+                      : `Sonsuz Doğal Sohbet • ${dialogue.length} Mesaj`}
                   </span>
                   <span className="text-slate-500">•</span>
                   <span className="text-emerald-400 font-bold">{formatTimer(recordingSeconds)}</span>
                 </div>
 
-                {/* Kırmızı Kare Durdurma Butonu */}
+                {/* Kırmızı Kare Durdurma ve Yeşil Analyze Butonları */}
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
@@ -2205,16 +2494,17 @@ export default function SpeakingPage() {
                     <Square className="w-3.5 h-3.5 fill-current" />
                   </button>
 
-                  {/* Konuşmayı bitirince hemen değerlendir butonu */}
-                  {(userTranscript || interimText) && (
-                    <button
-                      type="button"
-                      onClick={() => handleSubmitResponse()}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md transition cursor-pointer"
-                    >
-                      {t("speaking_analyze_btn", "Analiz Et")}
-                    </button>
-                  )}
+                  {/* Yeşil Analyze Butonu: Yalnızca basıldığında C1 karnesini hesaplar ve gösterir */}
+                  <button
+                    type="button"
+                    data-testid="analyze-conversation-btn"
+                    onClick={handleAnalyzeConversation}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center gap-1.5"
+                    title="Konuşmayı Analiz Et ve Karneyi Güncelle"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Analyze</span>
+                  </button>
                 </div>
               </div>
 
@@ -2228,295 +2518,32 @@ export default function SpeakingPage() {
             </div>
           </div>
         </section>
+      </SpeakingLounge>
 
-        {/* ========================================================================= */}
-        {/* ========================================================================= */}
-        {/* C) SAĞ SÜTUN - DEĞERLENDİRME KARNESİ / SOHBET AKICILIĞI (w-80 flex-shrink-0) */}
-        {/* ========================================================================= */}
-        <aside className="w-full lg:w-80 flex-shrink-0 space-y-4">
-          <div className="rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl p-5 space-y-4 backdrop-blur-md">
-            {/* Başlık: Moda Göre Dinamik Karne Başlığı */}
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <Award
-                  className={`w-4 h-4 ${
-                    activeMode === "casual"
-                      ? "text-amber-400"
-                      : activeMode === "problem_solving"
-                      ? "text-rose-400"
-                      : activeMode === "story_debate"
-                      ? "text-indigo-400"
-                      : "text-emerald-400"
-                  }`}
-                />
-                <span>{CONVERSATION_MODES[activeMode].scorecardTitle}</span>
-              </h2>
-            </div>
+      {/* Özel Avatar Yükleme & Dinamik Ses Seçimi Modalı */}
+      <CustomAvatarModal
+        isOpen={isCustomAvatarModalOpen}
+        onClose={() => setIsCustomAvatarModalOpen(false)}
+        initialData={customAvatar}
+        onSave={handleSaveCustomAvatar}
+      />
 
-            {/* 1. Skor Çemberi: Aktif Moda Göre Özelleştirilmiş */}
-            <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 relative">
-              <div className="relative w-28 h-28 flex items-center justify-center">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                  {/* Arka plan daire */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="40"
-                    className="stroke-slate-800"
-                    strokeWidth="8"
-                    fill="transparent"
-                  />
-                  {/* İlerleme dairesi */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="40"
-                    className={`transition-all duration-1000 ease-out ${
-                      activeMode === "casual"
-                        ? "stroke-amber-400"
-                        : activeMode === "problem_solving"
-                        ? "stroke-rose-400"
-                        : activeMode === "story_debate"
-                        ? "stroke-indigo-400"
-                        : "stroke-emerald-400"
-                    }`}
-                    strokeWidth="8"
-                    strokeDasharray="251.2"
-                    strokeDashoffset={251.2 - (251.2 * (scorecard.fluency_score || (activeMode === "casual" ? 92 : 86))) / 100}
-                    strokeLinecap="round"
-                    fill="transparent"
-                    style={{
-                      filter:
-                        activeMode === "casual"
-                          ? "drop-shadow(0 0 8px rgba(245, 158, 11, 0.6))"
-                          : activeMode === "problem_solving"
-                          ? "drop-shadow(0 0 8px rgba(244, 63, 94, 0.6))"
-                          : activeMode === "story_debate"
-                          ? "drop-shadow(0 0 8px rgba(99, 102, 241, 0.6))"
-                          : "drop-shadow(0 0 8px rgba(52, 211, 153, 0.6))",
-                    }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-black text-white tracking-tight">
-                    %{scorecard.fluency_score || (activeMode === "casual" ? 92 : 86)}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-2 text-center">
-                <span
-                  className={`text-xs font-bold ${
-                    activeMode === "casual"
-                      ? "text-amber-400"
-                      : activeMode === "problem_solving"
-                      ? "text-rose-400"
-                      : activeMode === "story_debate"
-                      ? "text-indigo-400"
-                      : "text-emerald-400"
-                  }`}
-                >
-                  {activeMode === "casual"
-                    ? "Doğal & Akıcı İletişim"
-                    : activeMode === "problem_solving"
-                    ? "Kriz Çözüm & Karar Hızı"
-                    : activeMode === "story_debate"
-                    ? "Argüman Bütünlüğü & Derinlik"
-                    : "C1 - Advanced Precision"}
-                </span>
-                <p className="text-[10px] text-slate-500 font-mono">
-                  {activeMode === "casual"
-                    ? "Stresten Uzak, Rahat Sohbet"
-                    : activeMode === "problem_solving"
-                    ? "Hızlı Eylem & Analitik Netlik"
-                    : activeMode === "story_debate"
-                    ? "Eleştirel Düşünce & Münazara"
-                    : "Executive Fluency & Precision"}
-                </p>
-              </div>
-            </div>
+      {/* Vocaship 3D Poligon Avatar Stüdyosu (Fotoğraftan 3D'ye Dönüşüm Modalı) */}
+      <Transform3DModal
+        isOpen={isTransform3DModalOpen}
+        onClose={() => setIsTransform3DModalOpen(false)}
+        initialUrl={user3DAvatarUrl}
+        initialGender={user3DAvatarMeta?.gender || "male"}
+        initialName={user3DAvatarMeta?.name || "3D Avatarım"}
+        onAvatarCreated={handle3DAvatarCreated}
+      />
 
-            {/* 2. Jargon / Hedef Kelimeler Kutusu */}
-            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <FileCheck
-                    className={`w-3.5 h-3.5 ${
-                      activeMode === "casual"
-                        ? "text-amber-400"
-                        : activeMode === "problem_solving"
-                        ? "text-rose-400"
-                        : activeMode === "story_debate"
-                        ? "text-indigo-400"
-                        : "text-emerald-400"
-                    }`}
-                  />
-                  <span>
-                    {activeMode === "casual"
-                      ? "Günlük Kalıplar & İfadeler"
-                      : activeMode === "problem_solving"
-                      ? "Kriz & Müdahale Terimleri"
-                      : activeMode === "story_debate"
-                      ? "Münazara ve Analiz Terimleri"
-                      : t("speaking_jargon_precision", "Jargon Precision / Teknik Terimler")}
-                  </span>
-                </h4>
-                <span
-                  className={`text-[10px] font-mono font-bold ${
-                    activeMode === "casual"
-                      ? "text-amber-400"
-                      : activeMode === "problem_solving"
-                      ? "text-rose-400"
-                      : activeMode === "story_debate"
-                      ? "text-indigo-400"
-                      : "text-emerald-400"
-                  }`}
-                >
-                  {scorecard.vocabulary_highlight.length} Tespit
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {scorecard.vocabulary_highlight.map((word, idx) => (
-                  <span
-                    key={idx}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold shadow-sm ${
-                      activeMode === "casual"
-                        ? "bg-amber-950 text-amber-300 border border-amber-500/40"
-                        : activeMode === "problem_solving"
-                        ? "bg-rose-950 text-rose-300 border border-rose-500/40"
-                        : activeMode === "story_debate"
-                        ? "bg-indigo-950 text-indigo-300 border border-indigo-500/40"
-                        : "bg-emerald-950 text-emerald-300 border border-emerald-500/40"
-                    }`}
-                  >
-                    [ {word} ]
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. Düzeltme & İpucu Kutusu (Casual modda yumuşak ipucu, diğerlerinde düzeltme) */}
-            <div
-              className={`p-3.5 rounded-2xl space-y-2 ${
-                activeMode === "casual"
-                  ? "bg-teal-950/20 border border-teal-500/30"
-                  : "bg-amber-950/20 border border-amber-500/30"
-              }`}
-            >
-              <div
-                className={`flex items-center space-x-1.5 ${
-                  activeMode === "casual" ? "text-teal-400" : "text-amber-400"
-                }`}
-              >
-                {activeMode === "casual" ? (
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                )}
-                <h4 className="text-[11px] font-bold uppercase tracking-wider">
-                  {activeMode === "casual"
-                    ? "Doğal Konuşma İpucu"
-                    : activeMode === "problem_solving"
-                    ? "Aksiyon Güçlendirme Önerisi"
-                    : activeMode === "story_debate"
-                    ? "Argümanı Güçlendirme İpucu"
-                    : t("speaking_improvement_needed", "Improvement Needed / Düzeltme Önerisi")}
-                </h4>
-              </div>
-              <div className="space-y-1.5 text-xs">
-                {activeMode !== "casual" && (
-                  <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800 line-through text-rose-400/90 font-mono text-[11px]">
-                    &quot;{scorecard.improvement_original}&quot;
-                  </div>
-                )}
-                <div
-                  className={`flex items-center gap-1.5 text-[11px] font-medium pl-1 ${
-                    activeMode === "casual" ? "text-teal-300" : "text-amber-300"
-                  }`}
-                >
-                  <ArrowRight
-                    className={`w-3.5 h-3.5 shrink-0 ${
-                      activeMode === "casual" ? "text-teal-400" : "text-emerald-400"
-                    }`}
-                  />
-                  <span>
-                    {scorecard.grammar_feedback ||
-                      (activeMode === "casual"
-                        ? "Cümleleriniz oldukça doğal ve anlaşılır. Samimi üslubunuzu koruyun!"
-                        : scorecard.improvement_suggestion)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. Alternatif İfade Kutusu */}
-            <div
-              className={`p-3.5 rounded-2xl space-y-2.5 ${
-                activeMode === "casual"
-                  ? "bg-amber-950/20 border border-amber-500/30"
-                  : activeMode === "problem_solving"
-                  ? "bg-rose-950/25 border border-rose-500/30"
-                  : "bg-indigo-950/30 border border-indigo-500/30"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <h4
-                  className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                    activeMode === "casual"
-                      ? "text-amber-300"
-                      : activeMode === "problem_solving"
-                      ? "text-rose-300"
-                      : "text-indigo-300"
-                  }`}
-                >
-                  <Sparkles
-                    className={`w-3.5 h-3.5 ${
-                      activeMode === "casual"
-                        ? "text-amber-400"
-                        : activeMode === "problem_solving"
-                        ? "text-rose-400"
-                        : "text-indigo-400"
-                    }`}
-                  />
-                  <span>
-                    {activeMode === "casual"
-                      ? "Doğal & Günlük Alternatif"
-                      : activeMode === "problem_solving"
-                      ? "Net Kriz Çözüm İfadesi"
-                      : activeMode === "story_debate"
-                      ? "Entelektüel Münazara Cümlesi"
-                      : t("speaking_executive_phrasing", "Executive Phrasing (C1) / Kurumsal İfade")}
-                  </span>
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(scorecard.better_alternative);
-                    setCopiedAlt(true);
-                    setTimeout(() => setCopiedAlt(false), 2000);
-                  }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-semibold text-slate-300 hover:text-white transition cursor-pointer"
-                  title="Alternatif Cümleyi Kopyala"
-                >
-                  {copiedAlt ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedAlt ? t("speaking_copied", "Kopyalandı!") : t("speaking_copy", "Kopyala")}</span>
-                </button>
-              </div>
-
-              {/* Deyimsel / Vurgulu İfade */}
-              {scorecard.idiomatic_phrase && activeMode !== "casual" && (
-                <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 italic font-serif">
-                  &ldquo;{scorecard.idiomatic_phrase}&rdquo;
-                </div>
-              )}
-
-              {/* Alternatif Cümle */}
-              <p className="text-xs text-slate-200 leading-relaxed font-medium">
-                {scorecard.better_alternative}
-              </p>
-            </div>
-          </div>
-        </aside>
-      </main>
+      {/* 🗂️ Konuşma Arşivim Modalı */}
+      <SpeakingArchiveModal
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+        userId={user?.id}
+      />
     </div>
   );
 }

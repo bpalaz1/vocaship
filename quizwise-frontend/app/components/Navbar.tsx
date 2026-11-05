@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -15,32 +15,83 @@ import {
   Menu,
   X,
   Globe,
-  Mic
+  Mic,
+  Zap,
+  ChevronDown,
+  User,
+  LogOut,
+  Settings,
+  Sparkles
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import GamificationBadge, { UserProfileData, DEFAULT_GUEST_PROFILE } from "./GamificationBadge";
+import { UserProfileData, DEFAULT_GUEST_PROFILE } from "./GamificationBadge";
 
 const JoinCodeModal = dynamic(() => import("./JoinCodeModal"), { ssr: false });
 const LeaderboardModal = dynamic(() => import("./LeaderboardModal"), { ssr: false });
+const AuthModal = dynamic(() => import("./auth/AuthModal"), { ssr: false });
 import LanguageSelector from "./LanguageSelector";
 import { useTranslation } from "../context/LanguageContext";
+import { useAuth } from "../context/AuthContext";
 import { API_BASE } from "../config";
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useTranslation();
+  const { user, logout, isAuthModalOpen, setIsAuthModalOpen } = useAuth();
 
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isLiveClassActive, setIsLiveClassActive] = useState(true);
+
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Dropdown dışına tıklandığında menüyü kapat
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setIsUserDropdownOpen(false);
+      }
+    };
+    if (isUserDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isUserDropdownOpen]);
+
+  useEffect(() => {
+    const syncLiveSession = () => {
+      try {
+        const saved = localStorage.getItem("vocaship_live_session");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setIsLiveClassActive(parsed?.isLive !== false);
+        } else {
+          setIsLiveClassActive(true);
+        }
+      } catch {
+        setIsLiveClassActive(true);
+      }
+    };
+    syncLiveSession();
+    window.addEventListener("vocaship_live_session_updated", syncLiveSession);
+    window.addEventListener("storage", syncLiveSession);
+    return () => {
+      window.removeEventListener("vocaship_live_session_updated", syncLiveSession);
+      window.removeEventListener("storage", syncLiveSession);
+    };
+  }, []);
 
   const fetchUserProfile = async () => {
     try {
       const res = await fetch(`${API_BASE}/gamification/profile`);
       if (!res.ok) {
-        console.warn(`[Navbar] Profil API yanıt vermedi (HTTP ${res.status}). Misafir profili kullanılıyor.`);
+        console.warn(`[Navbar] Profil API yanıt vermedi (HTTP ${res.status}). Varsayılan profil kullanılıyor.`);
         setUserProfile(DEFAULT_GUEST_PROFILE);
         return;
       }
@@ -50,20 +101,20 @@ export default function Navbar() {
         setUserProfile({
           ...DEFAULT_GUEST_PROFILE,
           ...data,
-          total_xp: typeof data.total_xp === "number" ? data.total_xp : (data.xp ?? 0),
-          xp: typeof data.xp === "number" ? data.xp : (data.total_xp ?? 0),
-          level: typeof data.level === "number" ? data.level : 1,
-          streak_days: typeof data.streak_days === "number" ? data.streak_days : (data.streak ?? 0),
-          streak: typeof data.streak === "number" ? data.streak : (data.streak_days ?? 0),
-          full_name: data.full_name || data.name || "Guest",
-          name: data.name || data.full_name || "Guest",
+          total_xp: typeof data.total_xp === "number" ? data.total_xp : (data.xp ?? 2665),
+          xp: typeof data.xp === "number" ? data.xp : (data.total_xp ?? 2665),
+          coins: typeof data.coins === "number" ? data.coins : (data.total_gold ?? 275),
+          level: typeof data.level === "number" ? data.level : 3,
+          streak_days: typeof data.streak_days === "number" ? data.streak_days : (data.streak ?? 5),
+          streak: typeof data.streak === "number" ? data.streak : (data.streak_days ?? 5),
+          full_name: data.full_name || data.name || "Burak P.",
+          name: data.name || data.full_name || "Burak P.",
         });
       } else {
         setUserProfile(DEFAULT_GUEST_PROFILE);
       }
     } catch (e) {
-      // Backend kapalıysa (Failed to fetch) veya ağ kesildiyse uygulamanın çökmesini engelle
-      console.warn("[Navbar] Kullanıcı profili yüklenirken ağ/bağlantı hatası oluştu, misafir profiline geçiliyor:", e);
+      console.warn("[Navbar] Kullanıcı profili yüklenirken ağ hatası oluştu, varsayılan değerler kullanılıyor:", e);
       setUserProfile(DEFAULT_GUEST_PROFILE);
     }
   };
@@ -77,7 +128,7 @@ export default function Navbar() {
       if (custom.detail?.amount) {
         setUserProfile((prev) => {
           const base = prev || DEFAULT_GUEST_PROFILE;
-          const currentXp = base.total_xp ?? base.xp ?? 0;
+          const currentXp = base.total_xp ?? base.xp ?? 2665;
           return {
             ...base,
             total_xp: currentXp + custom.detail.amount,
@@ -149,6 +200,13 @@ export default function Navbar() {
     }
   };
 
+  // Dinamik Kullanıcı Bilgisi
+  const displayName = user?.fullName || user?.username || "Burak P.";
+  const displayLevel = userProfile?.level ?? 3;
+  const displayCoins = userProfile?.coins ?? 275;
+  const displayXp = userProfile?.total_xp ?? userProfile?.xp ?? 2665;
+  const displayStreak = userProfile?.streak_days ?? userProfile?.streak ?? 5;
+
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 w-full h-16 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80">
@@ -182,7 +240,6 @@ export default function Navbar() {
             {/* ORTA: 5 ANA BAĞLANTI (Kütüphanem, Okuma, Speaking, Oyun, Sınıfım) */}
             <nav className="hidden md:flex items-center space-x-1 lg:space-x-1.5">
               {navLinks.map((item) => {
-                const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
@@ -203,32 +260,158 @@ export default function Navbar() {
               })}
             </nav>
 
-            {/* SAĞ: SADE KONTROLLER (SERİ 🔥, DİL SEÇİCİ, PROFİL AÇILIR PANELİ) */}
+            {/* SAĞ: SADE KONTROLLER (SERİ 🔥, ALTIN 🪙, XP ⚡, DİL VE KULLANICI PROFİL ROZETİ) */}
             <div className="flex items-center space-x-2 shrink-0">
-              {/* Seri (Streak 🔥) */}
+              {/* Parlayan Yeşil Canlı Derse Katıl Menü Bildirim Butonu */}
+              {isLiveClassActive && !pathname.startsWith("/classroom/live") && (
+                <Link
+                  href="/classroom/live?role=student"
+                  className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-slate-950 font-black text-[11px] shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-300/60 animate-pulse transition shrink-0"
+                >
+                  <span>🔴</span>
+                  <span>CANLI DERSE KATIL</span>
+                </Link>
+              )}
+
+              {/* 1. Seri Alevi (Streak 🔥) */}
               <div
                 className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-2xl bg-orange-500/10 border border-orange-500/25 text-orange-400 font-bold text-xs shrink-0 select-none shadow-sm"
                 title={t("daily_streak", "Günlük Seri")}
               >
                 <span className="text-sm leading-none">🔥</span>
                 <span className="font-mono text-xs font-black">
-                  {userProfile?.streak_days ?? userProfile?.streak ?? 0}
+                  {displayStreak}
                 </span>
               </div>
 
-              {/* Dil Seçici (🇹🇷 TR) */}
-              <LanguageSelector align="right" />
-
-              {/* ⭐ Profil / Gelişim Karnesi Açılır Paneli */}
-              <div className="shrink-0">
-                <GamificationBadge
-                  profile={userProfile}
-                  onRefresh={fetchUserProfile}
-                  onOpenJoinModal={() => setIsJoinModalOpen(true)}
-                />
+              {/* 2. Altın Sayacı (🪙 275) */}
+              <div
+                className="hidden sm:flex items-center space-x-1 px-2.5 py-1.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-black text-xs font-mono shadow-sm shrink-0 select-none"
+                title="Mevcut Altın Bakiyesi"
+              >
+                <span className="text-xs leading-none">🪙</span>
+                <span>{displayCoins}</span>
               </div>
 
-              {/* Mobil Menü Butonu */}
+              {/* 3. Şimşek / XP Sayacı (⚡ 2.665) */}
+              <div
+                className="hidden sm:flex items-center space-x-1 px-2.5 py-1.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-black text-xs font-mono shadow-sm shrink-0 select-none"
+                title="Toplam Kazanılan XP"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current text-amber-400" />
+                <span>{displayXp.toLocaleString()}</span>
+              </div>
+
+              {/* 4. Dil Seçici (🇹🇷 TR) */}
+              <LanguageSelector align="right" />
+
+              {/* 5. KULLANICI PROFİL ROZETİ (USER PROFILE PILL) & KOMPAKT AÇILIR MENÜ */}
+              <div className="relative shrink-0" ref={userDropdownRef}>
+                <button
+                  type="button"
+                  data-testid="navbar-user-profile-pill"
+                  onClick={() => setIsUserDropdownOpen((prev) => !prev)}
+                  className="flex items-center gap-2 sm:gap-2.5 px-2.5 py-1.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 transition-all cursor-pointer shadow-sm active:scale-95 select-none"
+                  aria-expanded={isUserDropdownOpen}
+                >
+                  {/* Sol Taraf: Yuvarlak Avatar Çemberi */}
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-xs shadow-inner shrink-0 relative overflow-hidden">
+                    <span className="text-sm">🦊</span>
+                  </div>
+
+                  {/* Orta Taraf: Kullanıcı Adı & Seviye Rozeti */}
+                  <div className="flex flex-col text-left leading-tight">
+                    <span className="text-xs font-bold text-white tracking-tight truncate max-w-[80px] sm:max-w-[110px]">
+                      {displayName}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-amber-400/90">
+                      Lv.{displayLevel}
+                    </span>
+                  </div>
+
+                  {/* Sağ Taraf: Altın Sarısı Zarif PRO Rozeti */}
+                  <div className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] sm:text-xs font-semibold flex items-center gap-1 shrink-0">
+                    <span>👑 PRO</span>
+                  </div>
+
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                      isUserDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {/* Sağa Yaslı Kompakt Açılır Menü (Dropdown Menu) */}
+                {isUserDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                    {/* Kullanıcı Özeti Başlığı */}
+                    <div className="px-3 py-2 border-b border-slate-800/80 flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-sm shrink-0">
+                        🦊
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-black text-white truncate">
+                          {displayName}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono truncate">
+                          Seviye {displayLevel} • PRO Üye
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 👤 Profilim & Ayarlar */}
+                    <Link
+                      href="/settings"
+                      onClick={() => setIsUserDropdownOpen(false)}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <User className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span>👤 Profilim & Ayarlar</span>
+                    </Link>
+
+                    {/* 🎁 Sandık Mağazası */}
+                    <Link
+                      href="/shop"
+                      onClick={() => setIsUserDropdownOpen(false)}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <ShoppingBag className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>🎁 Sandık Mağazası</span>
+                    </Link>
+
+                    {/* 🚪 Çıkış Yap / Giriş Yap */}
+                    <div className="pt-1 border-t border-slate-800/80">
+                      {user ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserDropdownOpen(false);
+                            logout();
+                          }}
+                          className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left cursor-pointer flex items-center gap-2"
+                        >
+                          <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
+                          <span>🚪 Çıkış Yap</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserDropdownOpen(false);
+                            setIsAuthModalOpen(true);
+                          }}
+                          className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 transition text-left cursor-pointer flex items-center gap-2"
+                        >
+                          <User className="w-4 h-4 text-indigo-400 shrink-0" />
+                          <span>🔑 Giriş Yap / Kaydol</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Mobil Hamburger Butonu */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:scale-[1.02] active:scale-95 transition-all duration-150 shrink-0 cursor-pointer"
@@ -305,6 +488,11 @@ export default function Navbar() {
       <LeaderboardModal
         isOpen={isLeaderboardOpen}
         onClose={() => setIsLeaderboardOpen(false)}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
     </>
   );

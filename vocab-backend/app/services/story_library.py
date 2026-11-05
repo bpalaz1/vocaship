@@ -225,7 +225,7 @@ STORY_ARCHIVE = [
         "level": "Intermediate",
         "topic": "Technology",
         "content": (
-            "Inside an underground lab in Cambridge, a startup team wrestled with heat dissipation in quantum semiconductor microchips. "
+            "Inside an underground tech research lab, a startup team wrestled with heat dissipation in quantum semiconductor microchips. "
             "Conventional copper heat sinks were simply inadequate for handling the concentrated thermal output. "
             "A young engineer proposed incorporating synthetic graphene lattices into the chip architecture. "
             "When the thermal monitors displayed a forty percent drop in operational temperatures, the team cheered with relief. "

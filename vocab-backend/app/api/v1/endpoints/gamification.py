@@ -9,6 +9,8 @@ from app.schemas.gamification import (
     OpenChestResponse,
     MyCharactersResponse,
     SetAvatarRequest,
+    UnlockCharacterRequest,
+    UnlockCharacterResponse,
 )
 from app.services.gamification_service import (
     award_xp,
@@ -18,6 +20,8 @@ from app.services.gamification_service import (
     open_chest,
     get_my_characters,
     set_active_avatar,
+    unlock_store_character,
+    rollover_weekly_league,
 )
 
 router = APIRouter(prefix="", tags=["Gamification, XP & Gacha Shop"])
@@ -66,6 +70,15 @@ async def get_leaderboard_endpoint(
     return leaderboard
 
 
+@router.post("/rollover-weekly", status_code=status.HTTP_200_OK)
+async def rollover_weekly_endpoint(user_id: Optional[str] = None):
+    """
+    Pazar gecesi döngüsü: total_xp sütununa KESİNLİKLE 'UPDATE users SET total_xp = 0' uygulamaz.
+    Sadece haftalık ilk 3'e podyum ödül rozeti tahsis eder ve yeni haftanın zaman damgasını başlatır.
+    """
+    return rollover_weekly_league(user_id=user_id)
+
+
 @router.get("/shop", response_model=ShopResponse, status_code=status.HTTP_200_OK)
 async def get_shop_endpoint(user_id: Optional[str] = None):
     """
@@ -96,5 +109,19 @@ async def set_avatar_endpoint(payload: SetAvatarRequest):
     Açılmış karakterlerden birini kullanıcının profil ve liderlik tablosundaki aktif avatarı yapar.
     """
     return set_active_avatar(character_id=payload.character_id, user_id=payload.user_id)
+
+
+@router.post("/unlock-character", response_model=UnlockCharacterResponse, status_code=status.HTTP_200_OK)
+async def unlock_character_endpoint(payload: UnlockCharacterRequest):
+    """
+    Kullanıcının altınını ve Milestone Lock (Seviye/Hikaye) gereksinimlerini anti-tamper ile doğrulayıp karakterin kilidini açar.
+    """
+    return unlock_store_character(
+        character_id=payload.character_id,
+        user_id=payload.user_id,
+        user_level=payload.user_level,
+        completed_stories_count=payload.completed_stories_count,
+        language=payload.language,
+    )
 
 

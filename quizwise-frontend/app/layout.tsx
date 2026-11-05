@@ -7,6 +7,7 @@ import { LanguageProvider } from "./context/LanguageContext";
 import { ExperienceProvider } from "./context/ExperienceContext";
 import { PersonaProvider } from "./context/PersonaContext";
 import { UserStoriesProvider } from "./context/UserStoriesContext";
+import { AuthProvider } from "./context/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,25 +34,27 @@ export default function RootLayout({
       lang="tr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased overflow-x-hidden`}
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-500 selection:text-white overflow-x-hidden w-full max-w-[100vw]">
-        <LanguageProvider>
-          <ExperienceProvider>
-            <PersonaProvider>
-              <UserStoriesProvider>
-                {/* Global Floating XP Bildirimi */}
-                <FloatingXP />
+      <body className="min-h-full flex flex-col bg-slate-50 text-slate-800 selection:bg-indigo-500 selection:text-white overflow-x-hidden w-full max-w-[100vw]">
+        <AuthProvider>
+          <LanguageProvider>
+            <ExperienceProvider>
+              <PersonaProvider>
+                <UserStoriesProvider>
+                  {/* Global Floating XP Bildirimi */}
+                  <FloatingXP />
 
-                {/* Global Ortak Navbar */}
-                <Navbar />
+                  {/* Global Ortak Navbar */}
+                  <Navbar />
 
-                {/* Sayfa İçeriği: Navbar h-16 için dikey boşluk */}
-                <div className="flex-1 flex flex-col pt-16 overflow-x-hidden w-full max-w-[100vw]">
-                  {children}
-                </div>
-              </UserStoriesProvider>
-            </PersonaProvider>
-          </ExperienceProvider>
-        </LanguageProvider>
+                  {/* Sayfa İçeriği: Navbar h-16 için dikey boşluk */}
+                  <div className="flex-1 flex flex-col pt-16 overflow-x-hidden w-full max-w-[100vw]">
+                    {children}
+                  </div>
+                </UserStoriesProvider>
+              </PersonaProvider>
+            </ExperienceProvider>
+          </LanguageProvider>
+        </AuthProvider>
       </body>
     </html>
   );

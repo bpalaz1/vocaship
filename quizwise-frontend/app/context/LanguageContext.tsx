@@ -22,6 +22,7 @@ export const AVAILABLE_LANGUAGES: LanguageOption[] = [
 export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
   tr: {
     // Modlar & Navigasyon
+    header_subtitle: "Çok Dilli Kelime Arenası & İnteraktif Okuma Odası",
     mode_academic: "Akademik",
     mode_arcade: "Oyun & Sınıf",
     library: "Kütüphanem",
@@ -525,8 +526,13 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     deck_yds_title: "YDS / YÖKDİL Kritik 500 Kelime",
     deck_yds_desc: "ÖSYM ve akademik İngilizce sınavlarında en yüksek frekansta çıkan kritik akademik fiil ve sıfatlar.",
     deck_biz_desc: "Silikon Vadisi, start-up ekosistemi ve kurumsal uluslararası toplantılarda kullanılan profesyonel terimler.",
-    deck_core_title: "Global Core 3000 Temel Kelimeler",
+    deck_core_title: "En Sık Çıkan 3000 Temel Kelime",
     deck_core_desc: "Her İngilizce öğrencisinin akıcı konuşma ve anlama için bilmesi gereken en temel 3000 kelime seçkisi.",
+    deck_adv5000_title: "İleri Düzey 5000 Kelime Dağarcığı",
+    deck_adv5000_desc: "C1-C2 düzeyinde akademik ve profesyonel akıcılık kazandıran 5000 ileri seviye kelime hazinesi.",
+    cefr_a1_a2: "A1-A2 Başlangıç & Günlük Yaşam",
+    cefr_b1_b2: "B1-B2 Bağımsız İletişim",
+    cefr_c1_c2: "C1-C2 Akademik & Profesyonel Yetkinlik",
 
     // Sihirli Konu ile Üret (Magic Topic Generator)
     label_student_level: "Öğrenci Seviyesi *",
@@ -656,6 +662,15 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     discuss_story_speaking: "Bu Hikayeyi Tartış",
     reading_duration: "Okuma Süresi",
     comprehension_questions: "Anlama Soruları",
+    shelf_mode_kids: "Çocuk (Yıldızlı Görevler)",
+    shelf_mode_academic: "Genel & CEFR (A1 - C1)",
+    shelf_mode_career: "Sektörel Vaka Hikayeleri",
+
+    badge_read_done: "Okundu",
+    action_read_now: "Oku",
+    why_wrong_title: "Neden Yanıldın?",
+    smart_error_detector: "Akıllı Hata Dedektörü",
+    default_distractor_reason: "Metindeki anahtar fiilin özneyle olan bağlamına ve cümledeki zaman belirteçlerine dikkat et.",
     all_collection: "Tüm Koleksiyon ({count})",
     my_stories_count: "Benim Hikayelerim ({count})",
     custom_library: "Özel Kütüphane",
@@ -811,6 +826,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
   en: {
     // Modes & Navigation
+    header_subtitle: "Multilingual Vocabulary Arena & Interactive Reading Room",
     mode_academic: "Academic",
     mode_arcade: "Arcade / Games",
     ui_language: "INTERFACE LANGUAGE",
@@ -1316,6 +1332,11 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     deck_biz_desc: "Professional terminology used across Silicon Valley, start-up ecosystems, and corporate meetings.",
     deck_core_title: "Global Core 3000 Essential Words",
     deck_core_desc: "The core 3,000 vocabulary selection every English learner needs for fluency and comprehension.",
+    deck_adv5000_title: "Global Advanced 5000",
+    deck_adv5000_desc: "Advanced 5,000 vocabulary selection for C1-C2 academic and professional fluency.",
+    cefr_a1_a2: "A1-A2 Elementary & Daily Life",
+    cefr_b1_b2: "B1-B2 Independent Communication",
+    cefr_c1_c2: "C1-C2 Academic & Professional Proficiency",
 
     // Magic Topic Generator
     label_student_level: "Student Level *",
@@ -1445,6 +1466,15 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     discuss_story_speaking: "Discuss in Speaking Lounge",
     reading_duration: "Reading Duration",
     comprehension_questions: "Comprehension Questions",
+    shelf_mode_kids: "Kids (Star Quests)",
+    shelf_mode_academic: "General & CEFR (A1 - C1)",
+    shelf_mode_career: "Professional Case Stories",
+
+    badge_read_done: "Read",
+    action_read_now: "Read",
+    why_wrong_title: "Why Was This Incorrect?",
+    smart_error_detector: "Smart Error Detector",
+    default_distractor_reason: "Pay close attention to the context of key verbs with the subject and tense indicators in the text.",
     all_collection: "All Collection ({count})",
     my_stories_count: "My Stories ({count})",
     custom_library: "Custom Library",
@@ -1600,6 +1630,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
   de: {
     // Modi & Navigation
+    header_subtitle: "Mehrsprachige Vokabel-Arena & Interaktiver Lesesaal",
     mode_academic: "Akademisch",
     mode_arcade: "Spiele & Klasse",
     library: "Bibliothek",
@@ -2080,6 +2111,11 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     deck_biz_desc: "Professionelle Begriffe aus dem Silicon Valley, Start-up-Ökosystem und Geschäftswelt.",
     deck_core_title: "Global Core 3000 Grundwortschatz",
     deck_core_desc: "Die 3.000 wichtigsten Wörter, die jeder Englischlerner für fließendes Verstehen benötigt.",
+    deck_adv5000_title: "Global Advanced 5000 Wortschatz",
+    deck_adv5000_desc: "Fortgeschrittener 5.000-Wortschatz für akademische und berufliche Sprachkompetenz auf C1-C2-Niveau.",
+    cefr_a1_a2: "A1-A2 Anfänger & Alltag",
+    cefr_b1_b2: "B1-B2 Selbstständige Kommunikation",
+    cefr_c1_c2: "C1-C2 Akademische & Berufliche Kompetenz",
 
     // Mit Thema generieren (Magic Topic Generator)
     label_student_level: "Schülerniveau *",
@@ -2229,6 +2265,15 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     discuss_story_speaking: "In der Speaking Lounge diskutieren",
     reading_duration: "Lesezeit",
     comprehension_questions: "Verständnisfragen",
+    shelf_mode_kids: "Kinder (Sternen-Missionen)",
+    shelf_mode_academic: "Allgemein & GER (A1 - C1)",
+    shelf_mode_career: "Berufliche Fallgeschichten",
+
+    badge_read_done: "Gelesen",
+    action_read_now: "Lesen",
+    why_wrong_title: "Warum war das falsch?",
+    smart_error_detector: "Intelligenter Fehlerdetektor",
+    default_distractor_reason: "Achte genau auf den Kontext der Schlüsselverben mit dem Subjekt und den Zeitangaben im Text.",
     all_collection: "Gesamte Kollektion ({count})",
     my_stories_count: "Meine Geschichten ({count})",
     custom_library: "Eigene Bibliothek",
@@ -2385,6 +2430,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
   es: {
     // Modos y Navegación
+    header_subtitle: "Arena de Vocabulario Multilingüe y Sala de Lectura Interactiva",
     mode_academic: "Académico",
     mode_arcade: "Juegos y Clase",
     library: "Biblioteca",
@@ -2866,6 +2912,11 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     deck_biz_desc: "Vocabulario profesional utilizado en startups y reuniones corporativas.",
     deck_core_title: "Global Core 3000 Palabras Esenciales",
     deck_core_desc: "La selección esencial de 3000 palabras para la fluidez y comprensión.",
+    deck_adv5000_title: "Global Advanced 5000",
+    deck_adv5000_desc: "Selección avanzada de 5.000 palabras para la fluidez académica y profesional C1-C2.",
+    cefr_a1_a2: "A1-A2 Principiante y Vida Diaria",
+    cefr_b1_b2: "B1-B2 Comunicación Independiente",
+    cefr_c1_c2: "C1-C2 Competencia Académica y Profesional",
 
     // Generador de Historias con Tema Mágico
     label_student_level: "Nivel del Estudiante *",
@@ -3170,6 +3221,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
   fr: {
     // Modes et Navigation
+    header_subtitle: "Arène de Vocabulaire Multilingue & Salle de Lecture Interactive",
     mode_academic: "Académique",
     mode_arcade: "Jeux & Classe",
     library: "Bibliothèque",
@@ -3651,6 +3703,11 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     deck_biz_desc: "Vocabulaire professionnel utilisé dans la Silicon Valley et le monde des affaires.",
     deck_core_title: "Global Core 3000 Mots Essentiels",
     deck_core_desc: "La sélection fondamentale de 3000 mots indispensables pour parler couramment.",
+    deck_adv5000_title: "Global Advanced 5000",
+    deck_adv5000_desc: "Sélection avancée de 5 000 mots pour la maîtrise académique et professionnelle C1-C2.",
+    cefr_a1_a2: "A1-A2 Débutant & Vie Quotidienne",
+    cefr_b1_b2: "B1-B2 Communication Indépendante",
+    cefr_c1_c2: "C1-C2 Compétence Académique & Professionnelle",
 
     // Générateur d'Histoires avec Sujet Magique
     label_student_level: "Niveau de l'Élève *",

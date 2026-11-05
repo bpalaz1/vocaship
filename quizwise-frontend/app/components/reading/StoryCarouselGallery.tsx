@@ -10,6 +10,7 @@ import {
 import { useLanguage } from "../../context/LanguageContext";
 import { useUserStories, CustomStory } from "../../context/UserStoriesContext";
 import { autoAssignCover, autoAssignGradient } from "../../utils/autoCover";
+import StoryVectorCover from "./StoryVectorCover";
 import {
   Search,
   X,
@@ -55,7 +56,6 @@ function StoryCard({
   isUserStory,
 }: StoryCardProps) {
   const { t } = useLanguage();
-  const [imageFailed, setImageFailed] = useState(false);
 
   // İlk 2 hedef kelime
   const previewWords = (story.target_vocabulary || []).slice(0, 2);
@@ -77,36 +77,23 @@ function StoryCard({
           : "border-slate-800 hover:border-indigo-500/70 hover:shadow-indigo-500/10"
       }`}
     >
-      {/* 16:9 Kapak Görseli */}
+      {/* 16:9 Sıfır Ağ Gecikmeli Modern Vektörel Kapak */}
       <div className="aspect-video relative overflow-hidden bg-slate-950">
-        {!imageFailed && story.coverImage ? (
-          <img
-            src={story.coverImage}
-            alt={story.title}
-            loading="lazy"
-            onError={() => setImageFailed(true)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-        ) : (
-          <div
-            className={`w-full h-full bg-gradient-to-br ${gradientFallback} flex items-center justify-center p-4 text-center`}
-          >
-            <div className="space-y-1">
-              <span className="text-3xl drop-shadow-md">
-                {isUserStory ? "✨" : "📖"}
-              </span>
-              <p className="text-xs font-bold text-white/90 drop-shadow line-clamp-1">
-                {story.topic || story.title}
-              </p>
-            </div>
-          </div>
-        )}
+        <StoryVectorCover
+          category={story.category}
+          topic={story.topic}
+          title={story.title}
+          level={story.level}
+          cefr={story.cefr}
+          isUserStory={isUserStory}
+          isCareerCase={story.isCareerCase}
+        />
 
         {/* Görsel Üzeri Hafif Karartma */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/30 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-black/20 pointer-events-none" />
 
         {/* Sol Üst: Seviye Rozeti */}
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-20">
           <span
             className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md backdrop-blur-sm shadow-sm ${
               isUserStory

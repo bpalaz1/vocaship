@@ -16,7 +16,7 @@ import {
 import Link from "next/link";
 import { useTranslation } from "../context/LanguageContext";
 import { API_BASE } from "../config";
-import { LeaderboardResponse, LeaderboardEntry } from "../components/LeaderboardModal";
+import { LeaderboardResponse, LeaderboardEntry } from "../actions/getLeaderboard";
 
 export default function LeaderboardPage() {
   const { t } = useTranslation();
@@ -76,23 +76,23 @@ export default function LeaderboardPage() {
             onClick={() => setTimeframe("weekly")}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               timeframe === "weekly"
-                ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/25"
+                ? "bg-gradient-to-r from-orange-600 via-amber-600 to-amber-500 text-white shadow-md shadow-orange-600/25"
                 : "text-slate-400 hover:text-white"
             }`}
           >
             <Flame className="w-3.5 h-3.5" />
-            <span>{t("timeframe_weekly")}</span>
+            <span>🔥 Bu Haftanın Yarışı</span>
           </button>
           <button
             onClick={() => setTimeframe("all_time")}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               timeframe === "all_time"
-                ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/25"
+                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/25"
                 : "text-slate-400 hover:text-white"
             }`}
           >
             <Crown className="w-3.5 h-3.5" />
-            <span>{t("timeframe_alltime")}</span>
+            <span>👑 Tüm Zamanların Efsaneleri</span>
           </button>
         </div>
       </div>
@@ -215,6 +215,50 @@ export default function LeaderboardPage() {
               ))}
             </div>
           </div>
+
+          {/* DUAL LEDGER SABİT KULLANICI ÇUBUĞU */}
+          {(() => {
+            const currentUser = entries.find((e) => e.is_current_user);
+            const userRank = data?.current_user_rank || currentUser?.rank || 1;
+            const userWeeklyXP = data?.current_user_weekly_xp ?? (currentUser?.weekly_xp || currentUser?.total_xp || 420);
+            const userAllTimeXP = data?.current_user_all_time_xp ?? (currentUser?.all_time_xp || currentUser?.total_xp || 3150);
+            const userLevel = currentUser?.level || 4;
+
+            return (
+              <div
+                data-testid="current-user-sticky-bar"
+                className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border border-slate-700/80 shadow-2xl flex flex-wrap items-center justify-between gap-3 text-xs"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="p-1.5 rounded-xl bg-emerald-500/20 text-emerald-400">
+                    <UserCheck className="w-4 h-4" />
+                  </span>
+                  <span className="text-slate-200 font-semibold">
+                    Sen:{" "}
+                    <strong className="text-emerald-400 font-mono font-extrabold">
+                      {userRank}. Sıra
+                    </strong>{" "}
+                    •{" "}
+                    <span className="text-amber-300 font-bold font-mono">
+                      {userWeeklyXP.toLocaleString()} XP (Haftalık)
+                    </span>{" "}
+                    |{" "}
+                    <span className="text-indigo-300 font-medium">
+                      Toplam:{" "}
+                      <strong className="text-white font-mono font-bold">
+                        {userAllTimeXP.toLocaleString()} XP
+                      </strong>{" "}
+                      (Lv.{userLevel})
+                    </span>
+                  </span>
+                </div>
+
+                <div className="text-[10px] text-slate-400 font-mono">
+                  ✨ Kalıcı Toplam Puan Koruma Devrede
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </main>

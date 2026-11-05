@@ -8,8 +8,10 @@ export interface TargetVocabularyItem {
 export interface ComprehensionQuestion {
   question: string;
   options: string[];
-  correct_index: number;
+  correct_index?: number;
   correct_answer_index: number;
+  explanation?: string; // Doğru cevabın metindeki kanıtı
+  distractor_reasons?: Record<number, string>; // Her yanlış şık için neden çeldirici olduğu
 }
 
 export interface CuratedStory {
@@ -28,7 +30,7 @@ export interface CuratedStory {
   categoryName: string;
   level: string;
   cefr: string;
-  coverImage: string;
+  coverImage?: string;
   readTime: string;
   wordCount: number;
   topic: string;

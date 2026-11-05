@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from typing import List
 from app.schemas.reading import StoryGenerateRequest, StoryResponse
 from app.services.ai_service import async_generate_reading_story
 from app.services.story_library import STORY_ARCHIVE, get_preset_story
+from app.services.quota_service import check_and_consume_quota
 
 router = APIRouter(prefix="/reading", tags=["Reading & Stories"])
 
@@ -12,7 +13,7 @@ async def get_library_stories():
     return STORY_ARCHIVE
 
 @router.post("/generate", response_model=StoryResponse)
-async def create_story(payload: StoryGenerateRequest):
+async def create_story(payload: StoryGenerateRequest, request: Request):
     """
     1. Kullanıcı özel bir konu veya hedef kelime istemediyse: Hazır havuzdan anında döner ($0, sıfır kota).
     2. Özel bir konu/kelime yazdıysa veya hazır havuz yetersizse: Gemini asenkron çağrı mimarisi devreye girer.
@@ -24,6 +25,8 @@ async def create_story(payload: StoryGenerateRequest):
         preset = get_preset_story(payload.level)
         if preset:
             return preset
+
+    check_and_consume_quota(request, "text")
 
     # Özel istekler için Gemini'ye asenkron git
     try:

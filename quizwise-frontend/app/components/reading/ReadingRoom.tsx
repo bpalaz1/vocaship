@@ -11,6 +11,9 @@ import { autoAssignCover } from "../../utils/autoCover";
 import { useTranslation, useLanguage, Language } from "../../context/LanguageContext";
 import { useExperience } from "../../context/ExperienceContext";
 import { ALL_CAREER_HUBS } from "../../data/careerHubs";
+import { usePersona } from "../../context/PersonaContext";
+import StoryShelfRow from "./StoryShelfRow";
+import { getShelvesForMode, ReadingShelfMode } from "../../data/storyLibrary";
 import {
     BookOpen,
     Sparkles,
@@ -28,6 +31,8 @@ import {
     Check,
     Play,
     RotateCw,
+    Search,
+    Star,
 } from "lucide-react";
 
 interface Deck {
@@ -374,6 +379,38 @@ export default function ReadingRoom({
     // 1. KÜTÜPHANE 3 ANA SEKME STATE'İ: 'explore' | 'in_progress' | 'completed'
     const [activeTab, setActiveTab] = useState<"explore" | "in_progress" | "completed">("explore");
 
+    // Kullanıcı profili ve modu ('kids' | 'academic' | 'career')
+    const { activePersona, persona } = usePersona();
+    const [shelfMode, setShelfMode] = useState<ReadingShelfMode>(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("vocaship_reading_shelf_mode");
+            if (saved === "kids" || saved === "academic" || saved === "career") {
+                return saved as ReadingShelfMode;
+            }
+        }
+        if (activePersona === "sparky" || activePersona === "chuck" || persona?.category === "kids") {
+            return "kids";
+        }
+        if (
+            persona?.category === "project_controls" ||
+            persona?.category === "legal_contracts" ||
+            (typeof activePersona === "string" && (activePersona.includes("project_controls") || activePersona.includes("legal")))
+        ) {
+            return "career";
+        }
+        return "academic";
+    });
+
+    const [searchQuery, setSearchQuery] = useState("");
+    const [viewLayout, setViewLayout] = useState<"shelves" | "grid">("shelves");
+
+    const handleShelfModeChange = (mode: ReadingShelfMode) => {
+        setShelfMode(mode);
+        if (typeof window !== "undefined") {
+            localStorage.setItem("vocaship_reading_shelf_mode", mode);
+        }
+    };
+
 
     // Okunan Hikaye State'i (null ise kütüphane gösterilir, dolu ise Dual-Reader açılır)
     const [story, setStory] = useState<any | null>(null);
@@ -437,12 +474,98 @@ export default function ReadingRoom({
     const completedStories = progressList.filter((p) => p.status === "completed");
 
     // Seçilen hikayeyi aç
-    const handleSelectStory = (item: LibraryStoryItem) => {
+    // Aktif moda ait şerit listesi ve arama filtrelemesi
+    const currentShelves = useMemo(() => {
+        const baseShelves = getShelvesForMode(shelfMode);
+        if (!searchQuery.trim()) return baseShelves;
+
+        const query = searchQuery.toLowerCase().trim();
+        return baseShelves
+            .map((shelf) => {
+                const filteredStories = shelf.stories.filter((s) => {
+                    const matchTitle = (s.title || "").toLowerCase().includes(query);
+                    const matchTopic = (s.topic || "").toLowerCase().includes(query);
+                    const matchDesc = (s.desc || "").toLowerCase().includes(query);
+                    const matchWords = (s.target_words || []).some((w) =>
+                        w.toLowerCase().includes(query)
+                    );
+                    return matchTitle || matchTopic || matchDesc || matchWords;
+                });
+                return {
+                    ...shelf,
+                    stories: filteredStories,
+                };
+            })
+            .filter((shelf) => shelf.stories.length > 0);
+    }, [shelfMode, searchQuery]);
+
+    // Kullanıcının özel ürettiği hikayeler şeridi
+    const userStoriesShelf = useMemo(() => {
+        if (!userStories || userStories.length === 0) return null;
+        let stories = userStories.map((us) => ({
+            id: us.id,
+            title: us.title,
+            category: "custom",
+            categoryName: "Özel Kütüphane",
+            level: us.level || "B1",
+            cefr: us.cefr || "B1",
+            readTime: us.readTime || "2 dk",
+            wordCount: typeof us.wordCount === "number" ? us.wordCount : parseInt(String(us.wordCount || "150"), 10) || 150,
+            topic: us.topic || "Özel Metin",
+            desc: us.desc || (us.content ? us.content.slice(0, 100) + "..." : ""),
+            content: us.content,
+            target_words: us.target_words || [],
+            target_vocabulary: us.target_vocabulary || [],
+            comprehension_questions: (us.comprehension_questions || []).map((q) => ({
+                question: q.question,
+                options: q.options,
+                correct_answer_index: q.correct_answer_index ?? q.correct_index ?? 0,
+                correct_index: q.correct_index ?? q.correct_answer_index ?? 0,
+            })),
+            isUserStory: true,
+        }));
+
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase().trim();
+            stories = stories.filter((s) =>
+                (s.title || "").toLowerCase().includes(query) ||
+                (s.topic || "").toLowerCase().includes(query)
+            );
+        }
+
+        if (stories.length === 0) return null;
+
+        return {
+            id: "user_custom_shelf",
+            mode: shelfMode,
+            title: "Özel Kütüphanem & Yapay Zekâ Üretimleri",
+            subtitle: "Kendiniz oluşturduğunuz veya yapay zekâ ile ürettiğiniz kişisel hikayeler",
+            badge: `${stories.length} Özel Metin`,
+            icon: "✨",
+            colorScheme: {
+                badgeBg: "bg-purple-500/20",
+                badgeText: "text-purple-300",
+                border: "border-purple-500/30",
+                glow: "shadow-purple-500/10",
+                gradient: "from-purple-500/20 to-indigo-500/5",
+            },
+            stories: stories as CuratedStory[],
+        };
+    }, [userStories, shelfMode, searchQuery]);
+
+    const handleSelectStory = (item: any) => {
         setStory({
             id: item.id,
             title: item.title,
             level: item.level,
             topic: item.topic,
+            cefr: item.cefr,
+            desc: item.desc,
+            wordCount: typeof item.wordCount === "number" ? `${item.wordCount} Kelime` : item.wordCount,
+            target_words: item.target_words || [],
+            isCareerCase: item.isCareerCase,
+            coverImage: item.coverImage,
+            isUserStory: item.isUserStory,
             content: item.content,
             target_vocabulary: item.target_vocabulary,
             comprehension_questions: item.comprehension_questions,
@@ -667,32 +790,157 @@ export default function ReadingRoom({
                     </div>
 
                     {/* ========================================================================= */}
-                    {/* SEKME 1: [ 📚 KEŞFET ] - 120 Statik + Kullanıcı Özel Hikayeleri            */}
+                    {/* SEKME 1: [ 📚 KEŞFET ] - DİNAMİK YATAY ŞERİTLER VİTRİNİ                   */}
                     {/* ========================================================================= */}
                     {activeTab === "explore" && (
-                        <StoryCarouselGallery
-                            onSelectStory={(curated: CuratedStory | any) => {
-                                handleSelectStory({
-                                    id: curated.id,
-                                    title: curated.title,
-                                    level: curated.level,
-                                    cefr: curated.cefr,
-                                    topic: curated.topic,
-                                    desc: curated.desc,
-                                    wordCount: typeof curated.wordCount === "number" ? `${curated.wordCount} Kelime` : curated.wordCount || "150 Kelime",
-                                    target_words: curated.target_words,
-                                    content: curated.content,
-                                    target_vocabulary: curated.target_vocabulary,
-                                    comprehension_questions: curated.comprehension_questions,
-                                    isCareerCase: curated.isCareerCase,
-                                    coverImage: curated.coverImage,
-                                    isUserStory: curated.isUserStory,
-                                });
-                            }}
-                            completedStoryIds={completedStories.map((c) => c.storyKey)}
-                            inProgressStoryIds={inProgressStories.map((p) => p.storyKey)}
-                            onCreateNewStory={() => setIsGeneratorModalOpen(true)}
-                        />
+                        <div className="space-y-6">
+                            {/* MOD SEÇİCİ TOOLBAR & ARAMA ÇUBUĞU */}
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-inner">
+                                {/* Profil Mod Butonları */}
+                                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800/80 flex-wrap">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleShelfModeChange("kids")}
+                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                            shelfMode === "kids"
+                                                ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                                                : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        <span>🧒</span>
+                                        <span>{t("shelf_mode_kids", "Çocuk (Yıldızlı Görevler)")}</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => handleShelfModeChange("academic")}
+                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                            shelfMode === "academic"
+                                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                                                : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        <span>🎓</span>
+                                        <span>{t("shelf_mode_academic", "Genel & CEFR (A1 - C1)")}</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => handleShelfModeChange("career")}
+                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                            shelfMode === "career"
+                                                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                                                : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        <span>💼</span>
+                                        <span>{t("shelf_mode_career", "Sektörel Vaka Hikayeleri")}</span>
+                                    </button>
+                                </div>
+
+                                {/* Arama & Görünüm Seçici */}
+                                <div className="flex items-center gap-2">
+                                    <div className="relative flex-1 sm:w-64">
+                                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            placeholder={t("search_stories_placeholder", "Hikaye veya konu ara...")}
+                                            className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+                                        />
+                                        {searchQuery && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setSearchQuery("")}
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center p-1 rounded-xl bg-slate-950/80 border border-slate-800 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setViewLayout("shelves")}
+                                            title="Şerit Görünümü (Horizontal Shelves)"
+                                            className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                                viewLayout === "shelves"
+                                                    ? "bg-indigo-600 text-white shadow-sm"
+                                                    : "text-slate-400 hover:text-white"
+                                            }`}
+                                        >
+                                            <span>☰</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setViewLayout("grid")}
+                                            title="Katalog Vitrin Görünümü (Grid Gallery)"
+                                            className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                                viewLayout === "grid"
+                                                    ? "bg-indigo-600 text-white shadow-sm"
+                                                    : "text-slate-400 hover:text-white"
+                                            }`}
+                                        >
+                                            <span>⊞</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Şerit Görünümü (StoryShelfRow) */}
+                            {viewLayout === "shelves" ? (
+                                <div className="space-y-8">
+                                    {/* Varsa Kullanıcı Özel Hikayeler Şeridi */}
+                                    {userStoriesShelf && (
+                                        <StoryShelfRow
+                                            shelf={userStoriesShelf}
+                                            onSelectStory={handleSelectStory}
+                                            completedStoryIds={completedStories.map((c) => c.storyKey)}
+                                            inProgressStoryIds={inProgressStories.map((p) => p.storyKey)}
+                                        />
+                                    )}
+
+                                    {/* Kullanıcı Moduna Duyarlı Şeritler */}
+                                    {currentShelves.length > 0 ? (
+                                        currentShelves.map((shelf) => (
+                                            <StoryShelfRow
+                                                key={shelf.id}
+                                                shelf={shelf}
+                                                onSelectStory={handleSelectStory}
+                                                completedStoryIds={completedStories.map((c) => c.storyKey)}
+                                                inProgressStoryIds={inProgressStories.map((p) => p.storyKey)}
+                                            />
+                                        ))
+                                    ) : (
+                                        <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
+                                            <div className="text-3xl">🔍</div>
+                                            <h3 className="text-sm font-semibold text-slate-200">
+                                                {t("no_stories_found", "Aramanıza Uygun Hikaye Bulunamadı")}
+                                            </h3>
+                                            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                                                &quot;{searchQuery}&quot; aramasıyla eşleşen metin bulunamadı. Farklı bir terim deneyebilirsiniz.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSearchQuery("")}
+                                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                                            >
+                                                Filtreyi Temizle
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <StoryCarouselGallery
+                                    onSelectStory={handleSelectStory}
+                                    completedStoryIds={completedStories.map((c) => c.storyKey)}
+                                    inProgressStoryIds={inProgressStories.map((p) => p.storyKey)}
+                                    onCreateNewStory={() => setIsGeneratorModalOpen(true)}
+                                />
+                            )}
+                        </div>
                     )}
 
                     {/* ========================================================================= */}

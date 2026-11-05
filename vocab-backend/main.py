@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1 import router as api_v1_router
 from app.api.v1.endpoints.reading import router as reading_router
 from app.api.v1.endpoints.speaking import router as speaking_router
+from app.services.quota_service import QuotaExceededException, ProRequiredException
 
 app = FastAPI(title="Vocaship Backend", version="1.0.0")
 
@@ -15,6 +16,16 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+@app.exception_handler(QuotaExceededException)
+async def quota_exceeded_handler(request: Request, exc: QuotaExceededException):
+    return JSONResponse(status_code=403, content=exc.payload)
+
+
+@app.exception_handler(ProRequiredException)
+async def pro_required_handler(request: Request, exc: ProRequiredException):
+    return JSONResponse(status_code=403, content=exc.payload)
 
 
 @app.exception_handler(Exception)
@@ -35,4 +46,4 @@ app.include_router(speaking_router, prefix="/speaking", tags=["AI Speaking Loung
 
 @app.get("/")
 async def root():
-    return {"message": "Vocaship Backend Calisiyor"}
+    return {"message": "Vocaship Backend Calisiyor"}

@@ -1,7 +1,7 @@
 /**
- * Vocaship Natural Neural TTS Engine (Prosody-Optimized)
- * Yüksek kaliteli doğal nöral sesler (Natural / Online), doğal duraklamalar
- * ve mülakat temposuna ayarlanmış konuşma hızı.
+ * Vocaship Natural Neural TTS Engine (Prosody-Optimized & Word-by-Word Vocaship Live Speaking Engine)
+ * Yüksek kaliteli doğal nöral sesler (Natural / Online), doğal nefes duraklamaları,
+ * kelime kelime (onboundary) canlı altyazı takibi ve milisaniyelik Video Loop (Talking / Idle) senkronizasyonu.
  */
 
 import { PersonaInfo } from "../context/PersonaContext";
@@ -12,9 +12,19 @@ export interface SpeakOptions {
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (err: any) => void;
+  onBoundary?: (wordIndex: number, charIndex: number) => void;
 }
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
+let activeSpeechToken = 0;
+let activeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearSpeechTimers() {
+  if (activeFallbackTimer) {
+    clearTimeout(activeFallbackTimer);
+    activeFallbackTimer = null;
+  }
+}
 
 /**
  * Ses havuzunu güvenle yükler ve önbelleğe alır.
@@ -31,16 +41,13 @@ export function getVoicesList(): SpeechSynthesisVoice[] {
 
 if (typeof window !== "undefined" && "speechSynthesis" in window) {
   cachedVoices = window.speechSynthesis.getVoices();
-  // Chrome ve Safari için asenkron ses yükleyici
   window.speechSynthesis.onvoiceschanged = () => {
     cachedVoices = window.speechSynthesis.getVoices();
   };
 }
 
 /**
- * Cümle İçi Doğal Duraklama (Prosody Optimization)
- * Noktalama işaretlerinden sonra doğal nefes duraklamaları oluşturur
- * ve sektörel kısaltmaları (EVM, SPI, EOT, FIDIC vb.) tane tane seslendirilecek hale getirir.
+ * Cümle İçi Doğal Nefes Duraklamaları (Prosody Optimization)
  */
 export function optimizeProsodyForSpeech(text: string): string {
   if (!text) return "";
@@ -53,7 +60,6 @@ export function optimizeProsodyForSpeech(text: string): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  // Kısaltmaların anlaşılır telaffuzu
   cleaned = cleaned
     .replace(/\bEVM\b/g, "E.V.M.")
     .replace(/\bSPI\b/g, "S.P.I.")
@@ -66,7 +72,6 @@ export function optimizeProsodyForSpeech(text: string): string {
     .replace(/\bROI\b/g, "R.O.I.")
     .replace(/\bSaaS\b/g, "SaaS");
 
-  // Noktalama işaretlerinin arkasına doğal nefes aralığı ekle
   cleaned = cleaned
     .replace(/([.?!])\s+/g, "$1  ")
     .replace(/([,;:])\s+/g, "$1 ")
@@ -77,8 +82,20 @@ export function optimizeProsodyForSpeech(text: string): string {
 }
 
 /**
+ * Karakter indeksinden o an okunan kelimenin (0-tabanlı) sıra numarasını hesaplar.
+ */
+function getWordIndexFromCharIndex(text: string, charIndex: number): number {
+  if (!text || charIndex <= 0) return 0;
+  const prefix = text.slice(0, charIndex);
+  const wordsBefore = prefix.trim().split(/\s+/).filter(Boolean);
+  if (prefix.endsWith(" ")) {
+    return wordsBefore.length;
+  }
+  return Math.max(0, wordsBefore.length - 1);
+}
+
+/**
  * Karakterin cinsiyetine ve profiline uygun en kaliteli Natural / Online nöral sesi seçer.
- * Mekanik sesleri eler, öncelikli nöral listeye bakar.
  */
 export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -88,7 +105,6 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
   const voices = getVoicesList();
   if (!voices || voices.length === 0) return null;
 
-  // Öncelikle İngilizce ses havuzunu al
   const englishVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
   const voicePool = englishVoices.length > 0 ? englishVoices : voices;
 
@@ -101,7 +117,6 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
   let priorityList: string[] = [];
 
   if (isFemale) {
-    // 1. Kadın Karakterler (Sarah, Dr. Evelyn, Mia, Ruby)
     priorityList = [
       "Microsoft Jenny Online (Natural)",
       "Microsoft Aria Online (Natural)",
@@ -113,7 +128,6 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
       "Zira",
     ];
   } else if (isSeniorMale) {
-    // 3. Kıdemli / Otoriter Erkek (Mr. Harrison, Julian, Marcus)
     priorityList = [
       "Microsoft Christopher Online (Natural)",
       "Microsoft Ryan Online (Natural)",
@@ -125,7 +139,6 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
       "Arthur",
     ];
   } else {
-    // 2. Genç / Dinamik Erkek (Leo, Alex, Sparky)
     priorityList = [
       "Microsoft Guy Online (Natural)",
       "Google US English",
@@ -136,7 +149,6 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
     ];
   }
 
-  // 1. Öncelikli listede tam veya kısmi eşleşme ara
   for (const prio of priorityList) {
     const match = voicePool.find((v) =>
       v.name.toLowerCase().includes(prio.toLowerCase())
@@ -144,7 +156,6 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
     if (match) return match;
   }
 
-  // 2. Persona'nın ttsSettings içinde belirtilen tercihleri
   if (persona.ttsSettings?.preferredVoices) {
     for (const pref of persona.ttsSettings.preferredVoices) {
       const match = voicePool.find((v) =>
@@ -154,7 +165,6 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
     }
   }
 
-  // 3. İçinde "Natural" veya "Online" geçen herhangi bir İngilizce ses
   const naturalFallback = voicePool.find(
     (v) =>
       v.name.toLowerCase().includes("natural") ||
@@ -162,26 +172,38 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
   );
   if (naturalFallback) return naturalFallback;
 
-  // 4. Standart en-US veya en-GB sesi
   const standardEn = voicePool.find(
     (v) => v.lang === "en-US" || v.lang === "en-GB"
   );
   if (standardEn) return standardEn;
 
-  // 5. Son Güvenli Fallback
   return voicePool[0] || null;
 }
 
 /**
  * Arayüzde ses/aksan adını kullanıcı dostu minik bir etiket olarak gösterir.
- * Örn: "🎙️ Jenny (Natural US)"
  */
 export function getActiveVoiceDisplay(persona: PersonaInfo): string {
+  if (persona.id === "custom") {
+    const pref = persona.ttsSettings?.preferredVoice;
+    if (pref === "female") {
+      return "🎙️ Kadın Nöral Ses (Pitch: 1.05)";
+    }
+    if (pref === "male") {
+      return "🎙️ Tok Erkek Nöral Ses (Pitch: 0.92)";
+    }
+    if (pref === "child") {
+      return "🎙️ Çocuk Nöral Ses (Pitch: 1.20)";
+    }
+  }
   if (persona.id === "sparky") {
-    return "🎙️ Sparky (Canlı Çocuksu Ton)";
+    return "🎙️ Sparky (0.78x Tane Tane)";
   }
   if (persona.id === "chuck") {
-    return "🎙️ Chuck (Eğlenceli Sempatik Ton)";
+    return "🎙️ Chuck (0.78x Tane Tane)";
+  }
+  if (persona.id === "sandy") {
+    return "🎙️ Sandy (0.86x Doğal Mentor)";
   }
 
   const isFemale = persona.gender === "female";
@@ -193,9 +215,9 @@ export function getActiveVoiceDisplay(persona: PersonaInfo): string {
   const matched = getBestVoiceForPersona(persona);
   if (matched) {
     const n = matched.name;
-    if (n.includes("Jenny")) return "🎙️ Jenny (Natural US)";
-    if (n.includes("Aria")) return "🎙️ Aria (Natural US)";
-    if (n.includes("Guy")) return "🎙️ Guy (Natural US)";
+    if (n.includes("Jenny")) return "🎙️ Jenny (Natural US • 0.86x)";
+    if (n.includes("Aria")) return "🎙️ Aria (Natural US • 0.86x)";
+    if (n.includes("Guy")) return "🎙️ Guy (Natural US • 0.86x)";
     if (n.includes("Christopher")) return "🎙️ Christopher (Natural UK)";
     if (n.includes("Ryan")) return "🎙️ Ryan (Natural UK)";
     if (n.includes("Google US English"))
@@ -218,40 +240,85 @@ export function getActiveVoiceDisplay(persona: PersonaInfo): string {
 }
 
 /**
+ * Seviyeye göre tane tane konuşma temposunu döndürür:
+ * - Çocuk profilleri (Sparky & Chuck): 0.78x
+ * - Yetişkin profilleri (Alex & Sarah / Sandy): 0.86x
+ */
+export function getCalibratedRateForPersona(persona: PersonaInfo): number {
+  const isKids =
+    persona.id === "sparky" ||
+    persona.id === "chuck" ||
+    persona.id === "ruby" ||
+    persona.id === "kids_female" ||
+    persona.category === "kids";
+
+  if (isKids) {
+    return 0.78;
+  }
+  return 0.86;
+}
+
+/**
  * Karakterin cinsiyet tonu, prosody-optimize metni, hızı ve perdesine göre seslendirir.
+ * Ses çalmaya başladığı milisaniyede onStart(), kelime geçişlerinde onBoundary(),
+ * ses bittiği milisaniyede onEnd() tetiklenir.
  */
 export function speakPersonaText(
   text: string,
   persona: PersonaInfo,
   options?: SpeakOptions
 ): SpeechSynthesisUtterance | null {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    options?.onError?.(new Error("SpeechSynthesis is not supported"));
+  clearSpeechTimers();
+  const currentToken = ++activeSpeechToken;
+
+  const optimizedText = optimizeProsodyForSpeech(text);
+  if (!optimizedText) {
     options?.onEnd?.();
     return null;
   }
 
-  try {
-    // Mevcut konuşmayı durdur
-    window.speechSynthesis.cancel();
+  const wordCount = optimizedText.split(/\s+/).filter(Boolean).length;
+  const calibratedRate = getCalibratedRateForPersona(persona);
+  const effectiveRate = options?.rate ?? persona.ttsSettings?.rate ?? calibratedRate;
+  const estimatedDurationMs = Math.min(
+    14000,
+    Math.max(2200, Math.round((wordCount * 330) / Math.max(0.65, effectiveRate)))
+  );
 
-    // Cümle içi duraklama ve kısaltma optimizasyonu
-    const optimizedText = optimizeProsodyForSpeech(text);
-    if (!optimizedText) {
-      options?.onEnd?.();
-      return null;
+  // Ses çalmaya başladığı milisaniyede anında talking moduna geçsin ve ilk kelimeyi vurgulasın
+  options?.onStart?.();
+  options?.onBoundary?.(0, 0);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("vocaship:tts-start"));
+  }
+  let hasEnded = false;
+
+  const finishSpeaking = () => {
+    if (hasEnded || currentToken !== activeSpeechToken) return;
+    hasEnded = true;
+    clearSpeechTimers();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocaship:tts-end"));
     }
+    options?.onEnd?.();
+  };
+
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    activeFallbackTimer = setTimeout(finishSpeaking, estimatedDurationMs);
+    return null;
+  }
+
+  try {
+    window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(optimizedText);
     utterance.lang = "en-US";
 
-    // 1. Doğal Nöral Ses Seçimi
     const matchedVoice = getBestVoiceForPersona(persona);
     if (matchedVoice) {
       utterance.voice = matchedVoice;
     }
 
-    // 2. Doğal Hız ve Perde Kalibrasyonu
     const isSparky = persona.id === "sparky" || persona.id === "ruby" || persona.id === "kids_female";
     const isChuck = persona.id === "chuck";
     const isKids = isSparky || isChuck || persona.category === "kids";
@@ -261,12 +328,6 @@ export function speakPersonaText(
         persona.id
       ) || persona.category === "legal_contracts";
 
-    // Belirlenen standart doğal tempolar:
-    // Sparky (Neşeli Tilki): Pitch 1.24, Rate 0.94 (Yüksek/canlı çocuksu ton)
-    // Chuck (Komik Tavuk): Pitch 1.14, Rate 0.98 (Eğlenceli/sempatik ton)
-    // Kadın (Sarah): Pitch 1.0, Rate 0.84 (Kendinden emin lider)
-    // Genç Erkek (Leo/Alex): Pitch 0.98, Rate 0.85 (Dinamik ve arkadaş canlısı)
-    // Kıdemli Erkek (Mr. Harrison): Pitch 0.88, Rate 0.82 (Tok ve otoriter)
     const calibratedPitch = isSparky
       ? 1.24
       : isChuck
@@ -274,66 +335,75 @@ export function speakPersonaText(
       : isKids
       ? 1.18
       : isFemale
-      ? 1.0
+      ? 1.02
       : isSeniorMale
       ? 0.88
       : 0.98;
-    const calibratedRate = isSparky
-      ? 0.94
-      : isChuck
-      ? 0.98
-      : isKids
-      ? 0.90
-      : isFemale
-      ? 0.84
-      : isSeniorMale
-      ? 0.82
-      : 0.85;
 
     utterance.pitch = options?.pitch ?? persona.ttsSettings?.pitch ?? calibratedPitch;
-    utterance.rate = options?.rate ?? persona.ttsSettings?.rate ?? calibratedRate;
-
-    // 3. Olay Dinleyicileri (Event Handlers)
-    let hasEnded = false;
+    utterance.rate = effectiveRate;
 
     utterance.onstart = () => {
-      options?.onStart?.();
+      if (currentToken === activeSpeechToken) {
+        options?.onStart?.();
+        options?.onBoundary?.(0, 0);
+      }
     };
 
+    utterance.onboundary = (event: SpeechSynthesisEvent) => {
+      if (currentToken !== activeSpeechToken) return;
+      if (typeof event.charIndex === "number") {
+        const wIdx = getWordIndexFromCharIndex(optimizedText, event.charIndex);
+        options?.onBoundary?.(wIdx, event.charIndex);
+      }
+    };
+
+    // Ses bittiğinde milisaniyelik gecikme olmadan anında idle moduna dönsün
     utterance.onend = () => {
-      if (!hasEnded) {
-        hasEnded = true;
-        options?.onEnd?.();
+      if (currentToken === activeSpeechToken) {
+        finishSpeaking();
       }
     };
 
-    utterance.onerror = (e) => {
-      console.warn("TTS SpeechSynthesis playback notice:", e);
-      if (!hasEnded) {
-        hasEnded = true;
-        options?.onError?.(e);
-        options?.onEnd?.();
+    utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
+      if (currentToken !== activeSpeechToken) return;
+      if (e?.error === "canceled" || e?.error === "interrupted") {
+        finishSpeaking();
+        return;
       }
+      // Tarayıcı ses motoru yanıt vermezse tahmini süre sonunda idle'a dön
+      activeFallbackTimer = setTimeout(finishSpeaking, estimatedDurationMs);
     };
 
-    // 4. Seslendirmeyi Başlat
     window.speechSynthesis.speak(utterance);
     return utterance;
-  } catch (err) {
-    console.warn("TTS speak exception:", err);
-    options?.onError?.(err);
-    options?.onEnd?.();
+  } catch {
+    finishSpeaking();
     return null;
   }
 }
 
 /**
- * Mevcut konuşmayı anında keser.
+ * Mevcut konuşmayı anında keser (Barge-in / Interruption).
+ * Hem Web Speech API (speechSynthesis.cancel) hem de aktif HTML5 Audio akışlarını (audio.pause) sıfır gecikmeyle durdurur.
  */
 export function stopSpeech() {
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  activeSpeechToken++;
+  clearSpeechTimers();
+  if (typeof window !== "undefined") {
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
     try {
-      window.speechSynthesis.cancel();
+      const audioElements = document.querySelectorAll("audio");
+      audioElements.forEach((audio) => {
+        if (!audio.paused) {
+          audio.pause();
+        }
+      });
     } catch {}
+    window.dispatchEvent(new CustomEvent("vocaship:barge-in"));
   }
 }

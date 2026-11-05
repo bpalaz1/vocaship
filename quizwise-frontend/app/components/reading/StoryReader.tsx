@@ -3,13 +3,15 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 const WordCardModal = dynamic(() => import("./WordCardModal"), { ssr: false });
+const SentenceShadowingWidget = dynamic(() => import("./SentenceShadowingWidget"), { ssr: false });
+const SentenceXRayModal = dynamic(() => import("./SentenceXRayModal"), { ssr: false });
+import ReaderToolbar from "./ReaderToolbar";
+import { formatBionicWord } from "../../utils/bionicConverter";
 import TargetVocabularyFlashcards from "./TargetVocabularyFlashcards";
-import { useLanguage, useTranslation } from "../../context/LanguageContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { useUserStories } from "../../context/UserStoriesContext";
 import { useRouter } from "next/navigation";
 import {
-    Volume2,
-    Square,
     Sparkles,
     CheckCircle,
     ArrowLeft,
@@ -30,6 +32,7 @@ import {
     Coffee,
     Sun,
     Mic,
+    Lightbulb,
 } from "lucide-react";
 import { API_BASE } from "../../config";
 
@@ -54,6 +57,8 @@ interface StoryData {
         question: string;
         options: string[];
         correct_answer_index: number;
+        explanation?: string;
+        distractor_reasons?: Record<number, string>;
     }>;
     coverImage?: string;
     wordCount?: number | string;
@@ -86,7 +91,101 @@ interface CleanQuestion {
     question: string;
     options: string[];
     correct_answer_index: number;
+    explanation?: string;
+    distractor_reasons?: Record<number, string>;
 }
+
+// Web Audio API ile sıfır gecikmeli, yerel ve tok şık tıklama sesi (Synthesized Click SFX)
+let sharedAudioContext: AudioContext | null = null;
+
+const playClickSound = () => {
+    if (typeof window === "undefined") return;
+    try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+            sharedAudioContext = new AudioContextClass();
+        }
+
+        // Mobil tarayıcılardaki AudioContext kilidini kaldırmak için resume() kontrolü
+        if (sharedAudioContext.state === "suspended") {
+            sharedAudioContext.resume().catch(() => {});
+        }
+
+        const ctx = sharedAudioContext;
+        const now = ctx.currentTime;
+        const duration = 0.035; // 35ms anlık click süresi
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        // Hafif, modern ve tok bir tıklama efekti için sinüs dalgası (400Hz -> 150Hz)
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + duration);
+
+        // Kulak tırmalamayacak şekilde sönümleme (%18 seviyesinden 0'a)
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + duration);
+    } catch {
+        // Tarayıcı ses kısıtlaması durumunda sessizce yut
+    }
+};
+
+// Web Audio API ile doğru / yanlış yanıt ses efektleri
+const playAnswerSound = (isCorrect: boolean) => {
+    if (typeof window === "undefined") return;
+    try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+            sharedAudioContext = new AudioContextClass();
+        }
+
+        if (sharedAudioContext.state === "suspended") {
+            sharedAudioContext.resume().catch(() => {});
+        }
+
+        const ctx = sharedAudioContext;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        if (isCorrect) {
+            // İki tonlu pozitif başarı zili (Do - Sol / 523Hz -> 784Hz)
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(523.25, now);
+            osc.frequency.setValueAtTime(783.99, now + 0.08);
+            gain.gain.setValueAtTime(0.14, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.24);
+        } else {
+            // Yumuşak, kırmayan hata uyarısı (300Hz -> 180Hz)
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(180, now + 0.2);
+            gain.gain.setValueAtTime(0.16, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.2);
+        }
+    } catch {
+        // Tarayıcı ses kısıtlamasında sessizce yut
+    }
+};
 
 export default function StoryReader({
     story,
@@ -103,24 +202,24 @@ export default function StoryReader({
         if (typeof window !== "undefined") {
             const vocabList = Array.isArray(story.target_vocabulary)
                 ? story.target_vocabulary.map((v) =>
-                      typeof v === "string" ? v : v.word
-                  )
+                    typeof v === "string" ? v : v.word
+                )
                 : [];
 
-            const payload = {
-                id: story.id,
+            const storyContext = {
+                storyId: story.id,
                 title: story.title,
-                level: story.level,
+                snippet: (story.content || "").slice(0, 350),
+                targetWords: vocabList,
+                level: story.level || "B1",
                 topic: story.topic || "",
-                content: story.content,
-                target_vocabulary: vocabList,
+                content: story.content || "",
                 full_vocabulary: story.target_vocabulary || [],
             };
-            sessionStorage.setItem(
-                "vocaship_active_story_context",
-                JSON.stringify(payload)
-            );
-            router.push("/speaking?mode=story_debate");
+
+            sessionStorage.setItem("active_story_context", JSON.stringify(storyContext));
+            sessionStorage.setItem("vocaship_active_story_context", JSON.stringify(storyContext));
+            router.push("/speaking?from_story=true&mode=story_debate");
         }
     };
 
@@ -210,11 +309,74 @@ export default function StoryReader({
     const [lastReadParagraph, setLastReadParagraph] = useState<number>(0);
     const [isCompleted, setIsCompleted] = useState<boolean>(false);
     const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
+    const [isShadowingOpen, setIsShadowingOpen] = useState<boolean>(false);
+    const [shadowingSentenceIdx, setShadowingSentenceIdx] = useState<number>(0);
+    const [activeKaraokeWordIdx, setActiveKaraokeWordIdx] = useState<number | null>(null);
+    const [isXRayOpen, setIsXRayOpen] = useState<boolean>(false);
+    const [xRaySentenceIdx, setXRaySentenceIdx] = useState<number>(0);
+
+    // Bilişsel Modlar: Biyonik Odak & Ghost Reader
+    const [bionicMode, setBionicMode] = useState<boolean>(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("vocaship_bionic_reading") === "true";
+        }
+        return false;
+    });
+
+    const [ghostMode, setGhostMode] = useState<boolean>(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("vocaship_ghost_mode") === "true";
+        }
+        return false;
+    });
+
+    const [activeHoverIndex, setActiveHoverIndex] = useState<number | null>(null);
+
+    const toggleBionicMode = useCallback(() => {
+        playClickSound();
+        setBionicMode((prev) => {
+            const next = !prev;
+            if (typeof window !== "undefined") {
+                localStorage.setItem("vocaship_bionic_reading", String(next));
+                localStorage.setItem("reader_focus_mode", next ? "bionic" : "normal");
+            }
+            return next;
+        });
+    }, []);
+
+    const toggleGhostMode = useCallback(() => {
+        playClickSound();
+        setGhostMode((prev) => {
+            const next = !prev;
+            if (typeof window !== "undefined") {
+                localStorage.setItem("vocaship_ghost_mode", String(next));
+                localStorage.setItem("reader_focus_mode", next ? "ghost" : "normal");
+            }
+            return next;
+        });
+    }, []);
+
+    // Mikro Telaffuz & Gölgeleme (Shadowing) tetikleyicisi
+    const handleOpenShadowing = useCallback((sentenceIdx?: number) => {
+        playClickSound();
+        const targetIdx = typeof sentenceIdx === "number" ? sentenceIdx : activeSentenceIdx;
+        setShadowingSentenceIdx(targetIdx);
+        setActiveSentenceIdx(targetIdx);
+        setIsShadowingOpen(true);
+    }, [activeSentenceIdx]);
+
+    // X-Ray Cümle Röntgeni tetikleyicisi
+    const handleOpenXRay = useCallback((sentenceIdx?: number) => {
+        playClickSound();
+        const targetIdx = typeof sentenceIdx === "number" ? sentenceIdx : activeSentenceIdx;
+        setXRaySentenceIdx(targetIdx);
+        setActiveSentenceIdx(targetIdx);
+        setIsXRayOpen(true);
+    }, [activeSentenceIdx]);
 
     // Paragraf referansları (kaldığı yere scroll yapmak için)
     const paragraphRefs = useRef<(HTMLParagraphElement | null)[]>([]);
 
-    // Hikaye ID'si (yoksa başlıktan üretelim)
     const storyKey = story.id || `story_${story.title.toLowerCase().replace(/\s+/g, "_")}`;
 
     const paragraphs = useMemo(() => {
@@ -255,7 +417,6 @@ export default function StoryReader({
 
         for (const sent of allSentences) {
             const sWords = sent.tokens.length;
-            // 85 kelimeyi geçtiyse ve bu cümle eklenince 135 kelime aşılıyorsa yeni sayfaya geç
             if (curSentences.length > 0 && curWordCount >= 85 && curWordCount + sWords > 135) {
                 result.push({
                     pageIndex: result.length,
@@ -343,7 +504,42 @@ export default function StoryReader({
             utterance.lang = "en-US";
             utterance.rate = playbackRateRef.current;
 
+            utterance.onstart = () => {
+                setActiveKaraokeWordIdx(0);
+                if (typeof document !== "undefined") {
+                    try {
+                        const el = document.querySelector(`[data-sentence-index="${index}"]`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                        }
+                    } catch {}
+                }
+            };
+
+            // Canlı Karaoke Metin Takibi (Audio Read-Along Sync)
+            utterance.onboundary = (event: any) => {
+                if (event.name === "word") {
+                    const charIndex = event.charIndex;
+                    const tokens = sentenceItem.tokens;
+                    let cumulative = 0;
+                    let matchedWordIdx = 0;
+                    for (let i = 0; i < tokens.length; i++) {
+                        const tokenLen = tokens[i].length;
+                        const searchIndex = sentenceItem.text.indexOf(tokens[i], cumulative);
+                        const tokenStart = searchIndex !== -1 ? searchIndex : cumulative;
+                        const tokenEnd = tokenStart + tokenLen;
+                        if (charIndex >= tokenStart && charIndex <= tokenEnd + 1) {
+                            matchedWordIdx = i;
+                            break;
+                        }
+                        cumulative = tokenEnd;
+                    }
+                    setActiveKaraokeWordIdx(matchedWordIdx);
+                }
+            };
+
             utterance.onend = () => {
+                setActiveKaraokeWordIdx(null);
                 if (!isPlayingRef.current) return;
                 const nextIdx = index + 1;
                 if (nextIdx < allSentences.length) {
@@ -356,6 +552,7 @@ export default function StoryReader({
             };
 
             utterance.onerror = (e) => {
+                setActiveKaraokeWordIdx(null);
                 if (e.error !== "interrupted" && e.error !== "canceled") {
                     setIsPlaying(false);
                 }
@@ -371,6 +568,7 @@ export default function StoryReader({
         if (isPlaying) {
             window.speechSynthesis.cancel();
             setIsPlaying(false);
+            setActiveKaraokeWordIdx(null);
         } else {
             setIsPlaying(true);
             speakSentence(activeSentenceIdx);
@@ -421,8 +619,9 @@ export default function StoryReader({
     // Şık ve soru temizleme algoritmaları
     const cleanOptionText = (text: string): string => {
         if (!text) return "";
-        return text
-            .replace(/^([A-D]|[1-4])\s*[\.\)\:\-]?\s*/i, "")
+        let cleaned = text
+            // SADECE arkasında nokta, parantez veya iki nokta olan şık harflerini sil (Örn: "A) ", "B. ", "1: ")
+            .replace(/^(?:(?:[A-D]|[1-4])\s*[\.\)\:\-]|option\s*[A-D1-4][\.\)\:\-]?)\s+/i, "")
             .replace(
                 /\s*[\(\[\{](?:true statement|false statement|true|false|correct answer|correct|incorrect|right|wrong|distractor|accurate|inaccurate|doğru cevap|dogru cevap|doğru ifade|dogru ifade|doğru|dogru|yanlış|yanlis|key|answer)[^\)\]\}]*[\)\]\}]/gi,
                 ""
@@ -432,6 +631,32 @@ export default function StoryReader({
                 ""
             )
             .trim();
+
+        // Daha önceden belleğe/veritabanına ilk harfi eksik kaydedilmiş kelimeleri kurtarma sözlüğü
+        const fixMap: Record<string, string> = {
+            "erries": "Berries",
+            "erry": "Berry",
+            "pples": "Apples",
+            "pple": "Apple",
+            "eer": "Deer",
+            "utterfly": "Butterfly",
+            "utterflies": "Butterflies",
+            "ird": "Bird",
+            "irds": "Birds",
+            "ear": "Bear",
+            "ears": "Bears",
+            "at": "Cat",
+            "ats": "Cats",
+            "og": "Dog",
+            "ogs": "Dogs",
+        };
+
+        const lowerCleaned = cleaned.toLowerCase();
+        if (fixMap[lowerCleaned]) {
+            cleaned = fixMap[lowerCleaned];
+        }
+
+        return cleaned;
     };
 
     const cleanQuestionText = (text: string): string => {
@@ -474,6 +699,7 @@ export default function StoryReader({
             const mapped = (q.options || []).map((opt: string, idx: number) => ({
                 text: cleanOptionText(opt),
                 isCorrect: idx === origCorrectIdx,
+                originalIdx: idx,
             }));
 
             const shuffled = [...mapped];
@@ -484,10 +710,24 @@ export default function StoryReader({
 
             const newCorrectIdx = shuffled.findIndex((item) => item.isCorrect);
 
+            // Shuffled pozisyonlarına göre distractor_reasons haritasını yeniden eşleştir
+            const newDistractorReasons: Record<number, string> = {};
+            if (q.distractor_reasons && typeof q.distractor_reasons === "object") {
+                shuffled.forEach((item, newIdx) => {
+                    const reason = q.distractor_reasons[item.originalIdx];
+                    if (reason) {
+                        newDistractorReasons[newIdx] = reason;
+                    }
+                });
+            }
+
             return {
                 question: cleanQuestionText(q.question || ""),
                 options: shuffled.map((item) => item.text),
                 correct_answer_index: newCorrectIdx >= 0 ? newCorrectIdx : 0,
+                explanation: q.explanation,
+                distractor_reasons:
+                    Object.keys(newDistractorReasons).length > 0 ? newDistractorReasons : q.distractor_reasons,
             };
         });
     };
@@ -601,6 +841,7 @@ export default function StoryReader({
         if (userAnswers[qIdx] !== undefined) return;
 
         const isCorrect = optIdx === correctIdx;
+        playAnswerSound(isCorrect);
         setUserAnswers((prev) => ({
             ...prev,
             [qIdx]: optIdx,
@@ -771,9 +1012,9 @@ export default function StoryReader({
                         <span>
                             {readerView === "book"
                                 ? t("page_counter", "Sayfa {cur} / {total}", {
-                                      cur: currentPage + 1,
-                                      total: totalPages,
-                                  })
+                                    cur: currentPage + 1,
+                                    total: totalPages,
+                                })
                                 : `${t("reading_paragraph", "Paragraf")}: ${lastReadParagraph + 1} / ${paragraphs.length}`}
                         </span>
                         <span>•</span>
@@ -793,11 +1034,10 @@ export default function StoryReader({
                                 setReaderView("book");
                                 localStorage.setItem("vocaship_reader_view", "book");
                             }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                readerView === "book"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${readerView === "book"
                                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                                     : "text-slate-400 hover:text-white"
-                            }`}
+                                }`}
                         >
                             <span>📖</span>
                             <span className="hidden sm:inline">{t("mode_book", "Kitap Modu")}</span>
@@ -808,16 +1048,24 @@ export default function StoryReader({
                                 setReaderView("focus");
                                 localStorage.setItem("vocaship_reader_view", "focus");
                             }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                readerView === "focus"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${readerView === "focus"
                                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                                     : "text-slate-400 hover:text-white"
-                            }`}
+                                }`}
                         >
                             <span>📄</span>
                             <span className="hidden sm:inline">{t("mode_focus", "Odak Modu")}</span>
                         </button>
                     </div>
+
+                    {/* BİYONİK ODAK & GHOST READER ARAÇ ÇUBUĞU */}
+                    <ReaderToolbar
+                        bionicMode={bionicMode}
+                        onToggleBionic={toggleBionicMode}
+                        ghostMode={ghostMode}
+                        onToggleGhost={toggleGhostMode}
+                        className="hidden sm:flex"
+                    />
 
                     {/* 2. APPLE BOOKS STİLİ [Aa] TİPOGRAFİ VE TEMA MENÜSÜ */}
                     <div className="relative" ref={typoMenuRef}>
@@ -825,11 +1073,10 @@ export default function StoryReader({
                             type="button"
                             onClick={() => setIsTypoMenuOpen(!isTypoMenuOpen)}
                             title={t("reading_appearance", "Görünüm & Tipografi")}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition shadow-sm cursor-pointer ${
-                                isTypoMenuOpen
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition shadow-sm cursor-pointer ${isTypoMenuOpen
                                     ? "bg-indigo-600 text-white border-indigo-500 shadow-indigo-600/30"
                                     : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
-                            }`}
+                                }`}
                         >
                             <span className="font-serif font-black text-sm tracking-tight">Aa</span>
                         </button>
@@ -848,11 +1095,10 @@ export default function StoryReader({
                                                 setReaderTheme("dark");
                                                 localStorage.setItem("vocaship_reader_theme", "dark");
                                             }}
-                                            className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition text-xs font-semibold cursor-pointer ${
-                                                readerTheme === "dark"
+                                            className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition text-xs font-semibold cursor-pointer ${readerTheme === "dark"
                                                     ? "bg-slate-950 text-white border-indigo-500 ring-2 ring-indigo-500/40"
                                                     : "bg-slate-800 text-slate-400 border-slate-700 hover:text-white"
-                                            }`}
+                                                }`}
                                         >
                                             <Moon className="w-4 h-4" />
                                             <span>{t("theme_dark", "Koyu")}</span>
@@ -864,11 +1110,10 @@ export default function StoryReader({
                                                 setReaderTheme("sepia");
                                                 localStorage.setItem("vocaship_reader_theme", "sepia");
                                             }}
-                                            className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition text-xs font-semibold cursor-pointer ${
-                                                readerTheme === "sepia"
+                                            className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition text-xs font-semibold cursor-pointer ${readerTheme === "sepia"
                                                     ? "bg-[#fbf0d9] text-[#382e25] border-amber-600 ring-2 ring-amber-500/40 shadow-sm"
                                                     : "bg-[#fbf0d9]/80 text-[#382e25]/70 border-[#ecdcc0] hover:text-[#382e25]"
-                                            }`}
+                                                }`}
                                         >
                                             <Coffee className="w-4 h-4 text-amber-800" />
                                             <span>{t("theme_sepia", "Krem / Sepia")}</span>
@@ -880,11 +1125,10 @@ export default function StoryReader({
                                                 setReaderTheme("light");
                                                 localStorage.setItem("vocaship_reader_theme", "light");
                                             }}
-                                            className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition text-xs font-semibold cursor-pointer ${
-                                                readerTheme === "light"
+                                            className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition text-xs font-semibold cursor-pointer ${readerTheme === "light"
                                                     ? "bg-white text-slate-900 border-indigo-500 ring-2 ring-indigo-500/40 shadow-sm"
                                                     : "bg-white/80 text-slate-700 border-slate-300 hover:text-slate-950"
-                                            }`}
+                                                }`}
                                         >
                                             <Sun className="w-4 h-4 text-amber-500" />
                                             <span>{t("theme_light", "Açık")}</span>
@@ -904,11 +1148,10 @@ export default function StoryReader({
                                                 setFontFamily("sans");
                                                 localStorage.setItem("vocaship_reader_font", "sans");
                                             }}
-                                            className={`py-2 px-3 rounded-xl border text-xs font-sans font-semibold transition cursor-pointer ${
-                                                fontFamily === "sans"
+                                            className={`py-2 px-3 rounded-xl border text-xs font-sans font-semibold transition cursor-pointer ${fontFamily === "sans"
                                                     ? "bg-indigo-600 text-white border-indigo-500 shadow-md"
                                                     : "bg-slate-800 text-slate-400 border-slate-700 hover:text-white"
-                                            }`}
+                                                }`}
                                         >
                                             {t("font_sans", "Sans-Serif")}
                                         </button>
@@ -918,11 +1161,10 @@ export default function StoryReader({
                                                 setFontFamily("serif");
                                                 localStorage.setItem("vocaship_reader_font", "serif");
                                             }}
-                                            className={`py-2 px-3 rounded-xl border text-xs font-serif font-semibold transition cursor-pointer ${
-                                                fontFamily === "serif"
+                                            className={`py-2 px-3 rounded-xl border text-xs font-serif font-semibold transition cursor-pointer ${fontFamily === "serif"
                                                     ? "bg-indigo-600 text-white border-indigo-500 shadow-md"
                                                     : "bg-slate-800 text-slate-400 border-slate-700 hover:text-white"
-                                            }`}
+                                                }`}
                                         >
                                             {t("font_serif", "Serif")}
                                         </button>
@@ -951,19 +1193,16 @@ export default function StoryReader({
 
                                         <div className="flex items-center gap-1.5">
                                             <span
-                                                className={`w-2 h-2 rounded-full ${
-                                                    fontSize === "base" ? "bg-indigo-400 scale-125" : "bg-slate-600"
-                                                }`}
+                                                className={`w-2 h-2 rounded-full ${fontSize === "base" ? "bg-indigo-400 scale-125" : "bg-slate-600"
+                                                    }`}
                                             />
                                             <span
-                                                className={`w-2.5 h-2.5 rounded-full ${
-                                                    fontSize === "lg" ? "bg-indigo-400 scale-125" : "bg-slate-600"
-                                                }`}
+                                                className={`w-2.5 h-2.5 rounded-full ${fontSize === "lg" ? "bg-indigo-400 scale-125" : "bg-slate-600"
+                                                    }`}
                                             />
                                             <span
-                                                className={`w-3 h-3 rounded-full ${
-                                                    fontSize === "xl" ? "bg-indigo-400 scale-125" : "bg-slate-600"
-                                                }`}
+                                                className={`w-3 h-3 rounded-full ${fontSize === "xl" ? "bg-indigo-400 scale-125" : "bg-slate-600"
+                                                    }`}
                                             />
                                         </div>
 
@@ -979,6 +1218,39 @@ export default function StoryReader({
                                             title="Büyüt (A+)"
                                         >
                                             A+
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Bilişsel Okuma Modları (Biyonik & Ghost) */}
+                                <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Bilişsel Odak Modları
+                                    </span>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={toggleBionicMode}
+                                            className={`p-2 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                bionicMode
+                                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm shadow-cyan-500/20"
+                                                    : "bg-slate-800/80 text-slate-400 border-slate-700 hover:text-white"
+                                            }`}
+                                        >
+                                            <span>👁️</span>
+                                            <span>Biyonik</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={toggleGhostMode}
+                                            className={`p-2 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                ghostMode
+                                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/20"
+                                                    : "bg-slate-800/80 text-slate-400 border-slate-700 hover:text-white"
+                                            }`}
+                                        >
+                                            <span>🔦</span>
+                                            <span>Ghost</span>
                                         </button>
                                     </div>
                                 </div>
@@ -1002,11 +1274,10 @@ export default function StoryReader({
                         type="button"
                         onClick={handleSaveToLibrary}
                         disabled={isSaved}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer ${
-                            isSaved
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer ${isSaved
                                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default"
                                 : "bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white border border-slate-700 hover:border-emerald-500/50 active:scale-95"
-                        }`}
+                            }`}
                         title={isSaved ? "Bu hikaye kütüphanenizde kayıtlı" : "Bu hikayeyi kütüphanenize kaydedin"}
                     >
                         <BookmarkCheck className={`w-3.5 h-3.5 ${isSaved ? "text-emerald-400" : "text-slate-400"}`} />
@@ -1039,11 +1310,10 @@ export default function StoryReader({
                             disabled={currentPage === 0}
                             aria-label={t("btn_prev_page", "Önceki Sayfa")}
                             title={t("btn_prev_page", "Önceki Sayfa")}
-                            className={`hidden sm:flex items-center justify-center w-12 shrink-0 rounded-2xl border transition-all ${
-                                currentPage === 0
+                            className={`hidden sm:flex items-center justify-center w-12 shrink-0 rounded-2xl border transition-all ${currentPage === 0
                                     ? "opacity-20 cursor-not-allowed border-transparent text-slate-500"
                                     : `${themeStyles.navBtn} shadow-md active:scale-95 cursor-pointer`
-                            }`}
+                                }`}
                         >
                             <ChevronLeft className="w-6 h-6" />
                         </button>
@@ -1067,18 +1337,35 @@ export default function StoryReader({
                                 <div className={`${fontSizeClass} space-y-4`}>
                                     {pages[currentPage]?.sentences.map((sent) => {
                                         const isSpeaking = activeSentenceIdx === sent.globalIndex && isPlaying;
+                                        const isFocused =
+                                            !ghostMode ||
+                                            (activeHoverIndex !== null
+                                                ? activeHoverIndex === sent.globalIndex
+                                                : activeSentenceIdx === sent.globalIndex);
+
                                         return (
                                             <span
                                                 key={sent.globalIndex}
-                                                className={`transition-all duration-200 inline mr-1.5 ${
-                                                    isSpeaking
+                                                data-sentence-index={sent.globalIndex}
+                                                onMouseEnter={() => {
+                                                    if (ghostMode) setActiveHoverIndex(sent.globalIndex);
+                                                }}
+                                                onMouseLeave={() => {
+                                                    if (ghostMode) setActiveHoverIndex(null);
+                                                }}
+                                                className={`transition-all duration-200 inline mr-1.5 ${isSpeaking
                                                         ? themeStyles.activeSentenceHighlight
                                                         : themeStyles.hoverSentence
-                                                }`}
+                                                    } ${ghostMode
+                                                        ? isFocused
+                                                            ? "opacity-100 scale-[1.01] transition-all duration-200 z-10 font-medium inline-block py-0.5"
+                                                            : "opacity-20 blur-[0.4px] transition-opacity duration-300 select-none inline-block"
+                                                        : ""
+                                                    }`}
                                             >
                                                 {sent.tokens.map((token, wIdx) => {
                                                     const cleaned = cleanWord(token).toLowerCase();
-                                                    const isSaved = savedWords.has(cleaned);
+                                                    const isSavedWord = savedWords.has(cleaned);
                                                     const isTargetVocab =
                                                         story.target_vocabulary?.some(
                                                             (v) => (typeof v === "string" ? v : v.word).toLowerCase() === cleaned
@@ -1086,6 +1373,7 @@ export default function StoryReader({
                                                         (story as any).target_words?.some(
                                                             (tw: any) => (typeof tw === "string" ? tw : tw.word).toLowerCase() === cleaned
                                                         );
+                                                    const isKaraokeActive = isSpeaking && activeKaraokeWordIdx === wIdx;
 
                                                     return (
                                                         <span
@@ -1094,18 +1382,43 @@ export default function StoryReader({
                                                                 e.stopPropagation();
                                                                 handleWordClick(token, sent.text, sent.paragraphIndex);
                                                             }}
-                                                            className={`cursor-pointer inline-block rounded px-0.5 transition duration-150 ${
-                                                                isSaved
+                                                            className={`cursor-pointer inline-block rounded px-0.5 transition-all duration-100 ${
+                                                                isKaraokeActive
+                                                                    ? "bg-amber-400/30 text-amber-200 ring-2 ring-amber-400/50 rounded px-1 scale-105 font-bold shadow-sm shadow-amber-500/20"
+                                                                    : isSavedWord
                                                                     ? themeStyles.wordSaved
                                                                     : isTargetVocab
                                                                     ? themeStyles.wordTarget
                                                                     : themeStyles.wordHover
                                                             }`}
                                                         >
-                                                            {token}{" "}
+                                                            {bionicMode ? formatBionicWord(token, { theme: readerTheme }) : token}{" "}
                                                         </span>
                                                     );
                                                 })}
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleOpenShadowing(sent.globalIndex);
+                                                    }}
+                                                    title="Bu Cümleyi Gölgele & Sesli Telaffuz Et (Shadowing)"
+                                                    className="inline-flex items-center justify-center p-0.5 mx-0.5 rounded-md text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/15 transition opacity-40 hover:opacity-100 align-middle cursor-pointer"
+                                                >
+                                                    <Mic className="w-3 h-3 text-indigo-400" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleOpenXRay(sent.globalIndex);
+                                                    }}
+                                                    title="Cümlenin Gramer İskeletini Aç (X-Ray Röntgeni)"
+                                                    className="inline-flex items-center gap-0.5 px-1 py-0.5 mx-0.5 rounded-md text-[10px] font-mono font-bold text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-600/30 border border-cyan-500/20 transition cursor-pointer align-middle"
+                                                >
+                                                    <span>🔬</span>
+                                                    <span className="hidden sm:inline">X-Ray</span>
+                                                </button>
                                             </span>
                                         );
                                     })}
@@ -1164,11 +1477,10 @@ export default function StoryReader({
                             disabled={currentPage >= totalPages - 1}
                             aria-label={t("btn_next_page", "Sonraki Sayfa")}
                             title={t("btn_next_page", "Sonraki Sayfa")}
-                            className={`hidden sm:flex items-center justify-center w-12 shrink-0 rounded-2xl border transition-all ${
-                                currentPage >= totalPages - 1
+                            className={`hidden sm:flex items-center justify-center w-12 shrink-0 rounded-2xl border transition-all ${currentPage >= totalPages - 1
                                     ? "opacity-20 cursor-not-allowed border-transparent text-slate-500"
                                     : `${themeStyles.navBtn} shadow-md active:scale-95 cursor-pointer`
-                            }`}
+                                }`}
                         >
                             <ChevronRight className="w-6 h-6" />
                         </button>
@@ -1202,26 +1514,42 @@ export default function StoryReader({
                                             paragraphRefs.current[pIdx] = el;
                                         }}
                                         onClick={() => handleParagraphClick(pIdx)}
-                                        className={`${fontSizeClass} transition-all p-3 rounded-2xl cursor-pointer ${
-                                            isCurrentBookmark
+                                        className={`${fontSizeClass} transition-all p-3 rounded-2xl cursor-pointer ${isCurrentBookmark
                                                 ? "bg-indigo-950/20 border border-indigo-500/20 shadow-inner"
                                                 : ""
-                                        }`}
+                                            }`}
                                     >
                                         {paraSentences.map((sent) => {
                                             const isSpeaking = activeSentenceIdx === sent.globalIndex && isPlaying;
+                                            const isFocused =
+                                                !ghostMode ||
+                                                (activeHoverIndex !== null
+                                                    ? activeHoverIndex === sent.globalIndex
+                                                    : activeSentenceIdx === sent.globalIndex);
+
                                             return (
                                                 <span
                                                     key={sent.globalIndex}
-                                                    className={`transition-all duration-200 inline mr-1.5 ${
-                                                        isSpeaking
+                                                    data-sentence-index={sent.globalIndex}
+                                                    onMouseEnter={() => {
+                                                        if (ghostMode) setActiveHoverIndex(sent.globalIndex);
+                                                    }}
+                                                    onMouseLeave={() => {
+                                                        if (ghostMode) setActiveHoverIndex(null);
+                                                    }}
+                                                    className={`transition-all duration-200 inline mr-1.5 ${isSpeaking
                                                             ? themeStyles.activeSentenceHighlight
                                                             : themeStyles.hoverSentence
-                                                    }`}
+                                                        } ${ghostMode
+                                                            ? isFocused
+                                                                ? "opacity-100 scale-[1.01] transition-all duration-200 z-10 font-medium inline-block py-0.5"
+                                                                : "opacity-20 blur-[0.4px] transition-opacity duration-300 select-none inline-block"
+                                                            : ""
+                                                        }`}
                                                 >
                                                     {sent.tokens.map((token, wIdx) => {
                                                         const cleaned = cleanWord(token).toLowerCase();
-                                                        const isSaved = savedWords.has(cleaned);
+                                                        const isSavedWord = savedWords.has(cleaned);
                                                         const isTargetVocab =
                                                             story.target_vocabulary?.some(
                                                                 (v) => (typeof v === "string" ? v : v.word).toLowerCase() === cleaned
@@ -1229,6 +1557,7 @@ export default function StoryReader({
                                                             (story as any).target_words?.some(
                                                                 (tw: any) => (typeof tw === "string" ? tw : tw.word).toLowerCase() === cleaned
                                                             );
+                                                        const isKaraokeActive = isSpeaking && activeKaraokeWordIdx === wIdx;
 
                                                         return (
                                                             <span
@@ -1237,18 +1566,43 @@ export default function StoryReader({
                                                                     e.stopPropagation();
                                                                     handleWordClick(token, sent.text, pIdx);
                                                                 }}
-                                                                className={`cursor-pointer inline-block rounded px-0.5 transition duration-150 ${
-                                                                    isSaved
+                                                                className={`cursor-pointer inline-block rounded px-0.5 transition-all duration-100 ${
+                                                                    isKaraokeActive
+                                                                        ? "bg-amber-400/30 text-amber-200 ring-2 ring-amber-400/50 rounded px-1 scale-105 font-bold shadow-sm shadow-amber-500/20"
+                                                                        : isSavedWord
                                                                         ? themeStyles.wordSaved
                                                                         : isTargetVocab
                                                                         ? themeStyles.wordTarget
                                                                         : themeStyles.wordHover
                                                                 }`}
                                                             >
-                                                                {token}{" "}
+                                                                {bionicMode ? formatBionicWord(token, { theme: readerTheme }) : token}{" "}
                                                             </span>
                                                         );
                                                     })}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenShadowing(sent.globalIndex);
+                                                        }}
+                                                        title="Bu Cümleyi Gölgele & Sesli Telaffuz Et (Shadowing)"
+                                                        className="inline-flex items-center justify-center p-0.5 mx-0.5 rounded-md text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/15 transition opacity-40 hover:opacity-100 align-middle cursor-pointer"
+                                                    >
+                                                        <Mic className="w-3 h-3 text-indigo-400" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenXRay(sent.globalIndex);
+                                                        }}
+                                                        title="Cümlenin Gramer İskeletini Aç (X-Ray Röntgeni)"
+                                                        className="inline-flex items-center gap-0.5 px-1 py-0.5 mx-0.5 rounded-md text-[10px] font-mono font-bold text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-600/30 border border-cyan-500/20 transition cursor-pointer align-middle"
+                                                    >
+                                                        <span>🔬</span>
+                                                        <span className="hidden sm:inline">X-Ray</span>
+                                                    </button>
                                                 </span>
                                             );
                                         })}
@@ -1305,9 +1659,8 @@ export default function StoryReader({
                             </div>
                             <div className="text-xs font-mono px-3 py-1.5 rounded-xl bg-slate-800/80 text-slate-300 border border-slate-700/80 flex items-center gap-1.5">
                                 <span
-                                    className={`w-2 h-2 rounded-full ${
-                                        answeredCount > 0 ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
-                                    }`}
+                                    className={`w-2 h-2 rounded-full ${answeredCount > 0 ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
+                                        }`}
                                 ></span>
                                 <span>
                                     {t(
@@ -1345,11 +1698,10 @@ export default function StoryReader({
                                             </h4>
                                             {isAnswered && (
                                                 <span
-                                                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shrink-0 ${
-                                                        isQuestionCorrect
+                                                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shrink-0 ${isQuestionCorrect
                                                             ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                                                             : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {isQuestionCorrect ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                                                     {isQuestionCorrect ? t("badge_correct", "Doğru") : t("badge_incorrect", "Yanlış")}
@@ -1358,9 +1710,8 @@ export default function StoryReader({
                                         </div>
 
                                         <div
-                                            className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 ${
-                                                isAnswered ? "pointer-events-none" : ""
-                                            }`}
+                                            className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 ${isAnswered ? "pointer-events-none" : ""
+                                                }`}
                                         >
                                             {q.options.map((opt, optIdx) => {
                                                 const isSelected = isAnswered && selectedOpt === optIdx;
@@ -1374,14 +1725,14 @@ export default function StoryReader({
                                                     if (isCorrectChoice) {
                                                         if (isSelected) {
                                                             containerStyle =
-                                                                "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-sm shadow-emerald-500/10 pointer-events-none";
+                                                                "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-sm shadow-emerald-500/10 pointer-events-none ring-1 ring-emerald-500/40";
                                                         } else {
                                                             containerStyle =
-                                                                "border-emerald-500 bg-emerald-500/10 text-emerald-300 shadow-sm pointer-events-none";
+                                                                "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 shadow-sm pointer-events-none ring-1 ring-emerald-500/30";
                                                         }
                                                     } else if (isSelected) {
                                                         containerStyle =
-                                                            "border-rose-500 bg-rose-500/20 text-rose-300 shadow-sm shadow-rose-500/10 pointer-events-none";
+                                                            "border-rose-600/60 bg-rose-950/40 text-rose-200 shadow-sm shadow-rose-500/10 pointer-events-none";
                                                     } else {
                                                         containerStyle =
                                                             "border-slate-800/60 bg-slate-900/40 text-slate-600 opacity-40 pointer-events-none";
@@ -1390,17 +1741,16 @@ export default function StoryReader({
 
                                                 const letterBadge = (
                                                     <span
-                                                        className={`w-5 h-5 rounded-md text-[11px] font-mono font-bold flex items-center justify-center shrink-0 transition-colors ${
-                                                            !isAnswered
+                                                        className={`w-5 h-5 rounded-md text-[11px] font-mono font-bold flex items-center justify-center shrink-0 transition-colors ${!isAnswered
                                                                 ? "bg-slate-800 text-slate-400 group-hover:bg-blue-500/20 group-hover:text-blue-300"
                                                                 : isCorrectChoice && isSelected
-                                                                ? "bg-emerald-500 text-slate-950 font-bold"
-                                                                : isCorrectChoice
-                                                                ? "bg-emerald-500/30 text-emerald-300 font-bold"
-                                                                : isSelected
-                                                                ? "bg-rose-500 text-white font-bold"
-                                                                : "bg-slate-800/50 text-slate-600"
-                                                        }`}
+                                                                    ? "bg-emerald-500 text-slate-950 font-bold"
+                                                                    : isCorrectChoice
+                                                                        ? "bg-emerald-500/30 text-emerald-300 font-bold"
+                                                                        : isSelected
+                                                                            ? "bg-rose-500 text-white font-bold"
+                                                                            : "bg-slate-800/50 text-slate-600"
+                                                            }`}
                                                     >
                                                         {String.fromCharCode(65 + optIdx)}
                                                     </span>
@@ -1411,9 +1761,10 @@ export default function StoryReader({
                                                         key={optIdx}
                                                         type="button"
                                                         disabled={isAnswered}
-                                                        onClick={() =>
-                                                            handleAnswerQuestion(qIdx, optIdx, correctIndex)
-                                                        }
+                                                        onClick={() => {
+                                                            playClickSound();
+                                                            handleAnswerQuestion(qIdx, optIdx, correctIndex);
+                                                        }}
                                                         className={`group p-3 sm:p-3.5 rounded-xl border text-xs sm:text-sm font-medium transition-all text-left flex items-center justify-between gap-3 shadow-sm ${containerStyle}`}
                                                     >
                                                         <div className="flex items-center gap-2.5 min-w-0">
@@ -1421,7 +1772,7 @@ export default function StoryReader({
                                                                 type="radio"
                                                                 name={`reading_q_${qIdx}`}
                                                                 checked={userAnswers[qIdx] === optIdx}
-                                                                onChange={() => {}}
+                                                                onChange={() => { }}
                                                                 disabled={isAnswered}
                                                                 className="accent-emerald-500 cursor-pointer shrink-0 pointer-events-none"
                                                             />
@@ -1447,6 +1798,29 @@ export default function StoryReader({
                                                 );
                                             })}
                                         </div>
+
+                                        {/* Akıllı Hata Dedektörü (Neden Yanlış Yaptım?) Geri Bildirim Kutusu */}
+                                        {isAnswered && !isQuestionCorrect && (
+                                            <div className="mt-3.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm shadow-amber-500/5">
+                                                <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                                <div className="space-y-0.5 min-w-0">
+                                                    <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                                                        <span>{t("why_wrong_title", "Neden Yanıldın?")}</span>
+                                                        <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-mono">
+                                                            {t("smart_error_detector", "Akıllı Hata Dedektörü")}
+                                                        </span>
+                                                    </p>
+                                                    <p className="text-slate-300 mt-0.5 leading-relaxed">
+                                                        {q.distractor_reasons?.[selectedOpt] ||
+                                                            q.explanation ||
+                                                            t(
+                                                                "default_distractor_reason",
+                                                                "Metindeki anahtar fiilin özneyle olan bağlamına ve cümledeki zaman belirteçlerine dikkat et."
+                                                            )}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -1474,18 +1848,29 @@ export default function StoryReader({
                                         </div>
                                     </div>
 
-                                    <button
-                                        onClick={handleFinishStory}
-                                        disabled={isCompleted}
-                                        className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition active:scale-95 shrink-0 ${
-                                            isCompleted
-                                                ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed"
-                                                : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25 cursor-pointer"
-                                        }`}
-                                    >
-                                        <CheckCircle className="w-4 h-4" />
-                                        <span>{isCompleted ? "Okuma Tamamlandı ✓" : "Okumayı Tamamla"}</span>
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleDebateStory}
+                                            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-indigo-600/25 transition active:scale-95 cursor-pointer"
+                                            title="Bu hikayeyi AI Speaking Lounge'da sesli tartış"
+                                        >
+                                            <Mic className="w-4 h-4 text-violet-200" />
+                                            <span>🎙️ Karakterle Tartış</span>
+                                        </button>
+
+                                        <button
+                                            onClick={handleFinishStory}
+                                            disabled={isCompleted}
+                                            className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition active:scale-95 shrink-0 ${isCompleted
+                                                    ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed"
+                                                    : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25 cursor-pointer"
+                                                }`}
+                                        >
+                                            <CheckCircle className="w-4 h-4" />
+                                            <span>{isCompleted ? "Okuma Tamamlandı ✓" : "Okumayı Tamamla"}</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-1.5">
@@ -1579,11 +1964,10 @@ export default function StoryReader({
                                 onClick={togglePlayPause}
                                 title={isPlaying ? t("audio_pause", "Duraklat") : t("audio_play", "Oynat")}
                                 aria-label={isPlaying ? t("audio_pause", "Duraklat") : t("audio_play", "Oynat")}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-md cursor-pointer ${
-                                    isPlaying
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-md cursor-pointer ${isPlaying
                                         ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
                                         : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30"
-                                }`}
+                                    }`}
                             >
                                 {isPlaying ? (
                                     <>
@@ -1609,6 +1993,28 @@ export default function StoryReader({
                             >
                                 <span className="hidden sm:inline">5s</span>
                                 <SkipForward className="w-4 h-4" />
+                            </button>
+
+                            {/* Gölgele & Oku (Shadowing) Butonu */}
+                            <button
+                                type="button"
+                                onClick={() => handleOpenShadowing(activeSentenceIdx)}
+                                title="Aktif Cümleyi Gölgele & Sesli Oku (Shadowing)"
+                                className="px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+                            >
+                                <Mic className="w-3.5 h-3.5 text-white" />
+                                <span className="hidden sm:inline">Gölgele</span>
+                            </button>
+
+                            {/* X-Ray Cümle Röntgeni Butonu */}
+                            <button
+                                type="button"
+                                onClick={() => handleOpenXRay(activeSentenceIdx)}
+                                title="Aktif Cümlenin Gramer İskeletini Aç (X-Ray Röntgeni)"
+                                className="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-cyan-600/25 transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+                            >
+                                <span>🔬</span>
+                                <span className="hidden sm:inline">X-Ray</span>
                             </button>
                         </div>
 
@@ -1644,19 +2050,18 @@ export default function StoryReader({
                     {/* Sağ: Oynatma Hızı Seçicisi (0.75x | 1.0x | 1.25x) */}
                     <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 shrink-0">
                         {[0.75, 1.0, 1.25].map((spd) => (
-                                <button
-                                    key={spd}
-                                    type="button"
-                                    onClick={() => handleSpeedChange(spd)}
-                                    title={t("playback_speed", "Hız: {rate}x", { rate: spd })}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                        playbackRate === spd
-                                            ? "bg-indigo-600 text-white shadow-sm"
-                                            : "text-slate-400 hover:text-slate-200"
+                            <button
+                                key={spd}
+                                type="button"
+                                onClick={() => handleSpeedChange(spd)}
+                                title={t("playback_speed", "Hız: {rate}x", { rate: spd })}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${playbackRate === spd
+                                        ? "bg-indigo-600 text-white shadow-sm"
+                                        : "text-slate-400 hover:text-slate-200"
                                     }`}
-                                >
-                                    {spd}x
-                                </button>
+                            >
+                                {spd}x
+                            </button>
                         ))}
                     </div>
                 </div>
@@ -1677,6 +2082,36 @@ export default function StoryReader({
                     onClose={() => setSelectedWord(null)}
                     onCardSaved={(saved) => {
                         setSavedWords((prev) => new Set(prev).add(saved));
+                    }}
+                />
+            )}
+
+            {/* Mikro Telaffuz & Gölgeleme (Shadowing) Modalı */}
+            {isShadowingOpen && (
+                <SentenceShadowingWidget
+                    sentence={allSentences[shadowingSentenceIdx]?.text || story.content.slice(0, 100)}
+                    sentenceIndex={shadowingSentenceIdx}
+                    totalSentences={allSentences.length}
+                    isOpen={isShadowingOpen}
+                    onClose={() => setIsShadowingOpen(false)}
+                    onNextSentence={() => {
+                        if (shadowingSentenceIdx < allSentences.length - 1) {
+                            const nextIdx = shadowingSentenceIdx + 1;
+                            setShadowingSentenceIdx(nextIdx);
+                            setActiveSentenceIdx(nextIdx);
+                        }
+                    }}
+                />
+            )}
+
+            {/* X-Ray Cümle Röntgeni Modalı */}
+            {isXRayOpen && (
+                <SentenceXRayModal
+                    sentence={allSentences[xRaySentenceIdx]?.text || story.content.slice(0, 100)}
+                    isOpen={isXRayOpen}
+                    onClose={() => setIsXRayOpen(false)}
+                    onOpenShadowing={() => {
+                        handleOpenShadowing(xRaySentenceIdx);
                     }}
                 />
             )}

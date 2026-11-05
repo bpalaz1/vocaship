@@ -96,3 +96,43 @@ class TeacherStoryResponse(BaseModel):
     visibility: str = "class_only"
     share_code: Optional[str] = None
     created_at: str
+
+# =========================================================================
+# 5. CANLI YARIŞMA PODYUM VE ADİL ÖDÜL MOTORU ŞEMALARI
+# =========================================================================
+
+class GameRewardClaimRequest(BaseModel):
+    session_id: str = Field(..., description="Yarışma / Oturum Benzersiz Kimliği (örn: room-10a-xxxx)")
+    user_id: Optional[str] = Field(default=None, description="Kullanıcı Kimliği")
+    rank: int = Field(..., description="Kullanıcının yarışma derecesi (1, 2, 3...)")
+    game_mode: Optional[str] = Field(default="live_arena", description="Oyun modu")
+
+class GameRewardClaimResponse(BaseModel):
+    success: bool
+    session_id: str
+    user_id: str
+    rank: int
+    awarded_xp: int
+    awarded_gold: int
+    awarded_key: Optional[str] = None
+    key_name: Optional[str] = None
+    new_total_xp: int
+    new_coins: int
+    message: str
+    already_claimed: bool = False
+
+# =========================================================================
+# 6. KOLEKTİF İNTERAKTİF HİKAYE DOKUMA MOTORU (FAZ 6)
+# =========================================================================
+
+class StoryWeaveRequest(BaseModel):
+    target_words: List[str] = Field(default=[], description="Hikayede yedirilmesi istenen hedef kelimeler")
+    story_history: List[str] = Field(default=[], description="Şu ana kadar dokunan hikaye paragrafları")
+    selected_choice: Optional[str] = Field(default=None, description="Sınıfın seçtiği son olay örgüsü hamlesi")
+    grade_level: Optional[str] = Field(default="B1-B2", description="Dil seviyesi (A2, B1, B2, C1)")
+
+class StoryWeaveResponse(BaseModel):
+    next_segment: str = Field(..., description="Yeni oluşturulan 2-4 cümlelik hikaye parçası (hedef kelimeler **bold**)")
+    used_words: List[str] = Field(default=[], description="Bu parçada kullanılan hedef kelimeler")
+    choices: List[str] = Field(default=[], description="Sınıfın oylayacağı 3 alternatif olay örgüsü seçeneği")
+

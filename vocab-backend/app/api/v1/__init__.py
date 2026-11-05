@@ -16,8 +16,11 @@ from app.api.v1.endpoints.classroom import router as classroom_router
 from app.api.v1.endpoints.cards import router as cards_router
 from app.api.v1.endpoints.speaking import router as speaking_router
 from app.api.v1.endpoints.career_hubs import router as career_hubs_router
+from app.api.v1.endpoints.auth import router as auth_router
 
 router = APIRouter()
+
+router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 
 router.include_router(ai_router, prefix="/ai", tags=["AI Flashcards"])
 router.include_router(ai_router, prefix="/dictionary", tags=["Dictionary & Instant Lookup"])

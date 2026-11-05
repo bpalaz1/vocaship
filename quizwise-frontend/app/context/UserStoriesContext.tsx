@@ -24,6 +24,8 @@ export interface CustomStoryQuestion {
   options: string[];
   correct_answer_index: number;
   correct_index?: number;
+  explanation?: string;
+  distractor_reasons?: Record<number, string>;
 }
 
 export interface CustomStory {

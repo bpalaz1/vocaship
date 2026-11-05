@@ -117,6 +117,9 @@ class QueryBuilder:
                     row_data["id"] = str(uuid.uuid4())
                 if "created_at" not in row_data or not row_data["created_at"]:
                     row_data["created_at"] = now_iso
+                if self.table == "users" and not row_data.get("email"):
+                    uname = row_data.get("username") or row_data["id"]
+                    row_data["email"] = f"{uname}@vorego.local"
 
                 # Serialize JSON fields
                 serialized = self.client.serialize_row(self.table, row_data)
@@ -277,6 +280,20 @@ class LocalDatabaseClient:
                 cursor.execute("ALTER TABLE users ADD COLUMN active_avatar TEXT DEFAULT '🌟';")
             if "active_avatar_id" not in existing_user_cols:
                 cursor.execute("ALTER TABLE users ADD COLUMN active_avatar_id TEXT DEFAULT 'char_default';")
+            if "username" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN username TEXT;")
+            if "password_hash" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN password_hash TEXT;")
+            if "role" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';")
+            if "daily_custom_texts_used" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN daily_custom_texts_used INTEGER DEFAULT 0;")
+            if "daily_speaking_sessions_used" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN daily_speaking_sessions_used INTEGER DEFAULT 0;")
+            if "last_quota_reset_date" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_quota_reset_date TEXT;")
+            if "inventory_keys" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN inventory_keys TEXT DEFAULT '{}';")
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS folders (
@@ -392,6 +409,45 @@ class LocalDatabaseClient:
                 completed_percent INTEGER DEFAULT 0,
                 created_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS session_rewards (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                rank INTEGER NOT NULL,
+                xp INTEGER NOT NULL,
+                coins INTEGER NOT NULL,
+                key_reward TEXT,
+                claimed_at TEXT,
+                UNIQUE (session_id, user_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS class_members (
+                id TEXT PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                class_code TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                joined_at TEXT,
+                UNIQUE (class_id, user_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS speaking_archives (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                session_title TEXT NOT NULL,
+                transcript TEXT NOT NULL,
+                metrics TEXT NOT NULL,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS xp_transactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                xp_amount INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                details TEXT,
+                created_at TEXT NOT NULL
+            );
             """)
 
             cursor.execute("PRAGMA table_info(unlocked_characters);")
@@ -424,6 +480,8 @@ class LocalDatabaseClient:
                     result[k] = v
             elif table == "flashcards" and k == "needs_review":
                 result[k] = 1 if v else 0
+            elif table == "users" and k in ("is_pro", "is_educator"):
+                result[k] = 1 if v else 0
             elif table == "shared_items" and k in ("payload",):
                 if isinstance(v, (list, dict)):
                     result[k] = json.dumps(v, ensure_ascii=False)
@@ -452,6 +510,8 @@ class LocalDatabaseClient:
                 else:
                     result[k] = v
             elif table == "flashcards" and k == "needs_review":
+                result[k] = bool(v)
+            elif table == "users" and k in ("is_pro", "is_educator"):
                 result[k] = bool(v)
             elif table == "shared_items" and k in ("payload",):
                 if isinstance(v, str) and v.strip():

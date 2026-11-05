@@ -106,8 +106,8 @@ interface ShowcaseDeckCard {
 const SHOWCASE_DECK_CARDS: ShowcaseDeckCard[] = [
   {
     id: "core3000",
-    deckTitle: "Global Core 3000",
-    levelBadge: "A1 - B2 Temel Dağarcık",
+    deckTitle: "En Sık Çıkan 3000 Temel Kelime",
+    levelBadge: "A1-A2 Başlangıç & Günlük Yaşam",
     icon: "🌐",
     word: "comprehensive",
     ipa: "/ˌkɒm.prɪˈhen.sɪv/",
@@ -115,6 +115,18 @@ const SHOWCASE_DECK_CARDS: ShowcaseDeckCard[] = [
     exampleEn: "We conducted a comprehensive review of the entire operational pipeline.",
     exampleTr: "Tüm operasyonel iş akışının kapsamlı bir incelemesini gerçekleştirdik.",
     cardCount: 3000,
+  },
+  {
+    id: "adv5000",
+    deckTitle: "İleri Düzey 5000 Kelime Dağarcığı",
+    levelBadge: "C1-C2 Akademik & Profesyonel Yetkinlik",
+    icon: "📚",
+    word: "ubiquitous",
+    ipa: "/juːˈbɪk.wɪ.təs/",
+    meaning: "Her yerde bulunan, çok yaygın",
+    exampleEn: "Smartphones have become ubiquitous across all sectors of society.",
+    exampleTr: "Akıllı telefonlar toplumun tüm kesimlerinde her yerde bulunur hale geldi.",
+    cardCount: 5000,
   },
   {
     id: "business",

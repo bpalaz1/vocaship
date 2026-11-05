@@ -272,6 +272,15 @@ def award_xp(
 
     try:
         db.table("users").update(update_payload).eq("id", user["id"]).execute()
+        # Çift Sayaç (Dual Ledger): Her XP kazanımını işlem günlüğüne kaydet
+        db.table("xp_transactions").insert({
+            "id": str(uuid.uuid4()),
+            "user_id": str(user["id"]),
+            "xp_amount": total_added,
+            "action": action,
+            "details": str(details or {}),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
     except Exception as e:
         logger.warning(f"Award XP DB update failed: {e}")
 
@@ -405,8 +414,11 @@ SIMULATED_CLASSMATES = [
 
 def get_leaderboard(timeframe: str = "weekly", user_id: Optional[str] = None) -> LeaderboardResponse:
     """
-    Haftalık veya tüm zamanlar için gerçek kullanıcı ve sınıf arkadaşlarını
-    içeren sıralı liderlik tablosunu döner.
+    Çift Sayaçlı (Dual Ledger) Liderlik Tablosu:
+    - all_time: Toplam puanları (total_xp) asla sıfırlamadan kalıcı şeref kürsüsünü sunar:
+      SELECT id, full_name, active_avatar, total_xp, level FROM users ORDER BY total_xp DESC LIMIT 50
+    - weekly: Puanları silmek yerine son 7 günün hareketlerini (xp_transactions) toplayarak dinamik haftalık ligi sunar:
+      SELECT user_id, SUM(xp_amount) as weekly_xp FROM xp_transactions WHERE created_at >= ? GROUP BY user_id ORDER BY weekly_xp DESC LIMIT 50
     """
     db = get_db()
     current_user = get_or_create_user(db, user_id)
@@ -416,24 +428,52 @@ def get_leaderboard(timeframe: str = "weekly", user_id: Optional[str] = None) ->
     user_name = str(current_user.get("full_name") or "Vocaship Kahramanı")
     user_uid = str(current_user.get("id"))
 
-    # Haftalık XP hesabı (kullanıcının toplam XP'siyle dinamik orantılı)
     is_weekly = timeframe.lower() != "all_time"
-    if is_weekly:
-        user_xp = min(user_total_xp, max(80, int(user_total_xp * 0.55))) if user_total_xp > 0 else 0
-    else:
-        user_xp = user_total_xp
+
+    # Son 7 günün xp_transactions hareketlerini topla (Haftalık Dinamik Sayaç)
+    now = datetime.now(timezone.utc)
+    seven_days_ago_iso = (now - timedelta(days=7)).isoformat()
+    weekly_tx_by_user: Dict[str, int] = {}
+    try:
+        with db.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT user_id, SUM(xp_amount) as weekly_xp
+                FROM xp_transactions
+                WHERE created_at >= ?
+                GROUP BY user_id
+                """,
+                (seven_days_ago_iso,)
+            )
+            for row in cursor.fetchall():
+                weekly_tx_by_user[row["user_id"]] = int(row["weekly_xp"] or 0)
+    except Exception as e:
+        logger.warning(f"Query weekly xp_transactions failed: {e}")
+
+    # Kullanıcının haftalık XP'si
+    actual_weekly_xp = weekly_tx_by_user.get(user_uid)
+    if actual_weekly_xp is None:
+        actual_weekly_xp = min(user_total_xp, max(80, int(user_total_xp * 0.55))) if user_total_xp > 0 else 0
+
+    user_xp = actual_weekly_xp if is_weekly else user_total_xp
 
     items = []
 
     # 1. Simüle sınıf arkadaşları
     for peer in SIMULATED_CLASSMATES:
-        peer_xp = peer["weekly_xp"] if is_weekly else peer["all_time_xp"]
-        lvl_info = calculate_level_info(peer_xp)
+        p_weekly = peer["weekly_xp"]
+        p_all_time = peer["all_time_xp"]
+        peer_xp = p_weekly if is_weekly else p_all_time
+        lvl_info = calculate_level_info(p_all_time if not is_weekly else peer_xp)
         items.append({
             "user_id": peer["user_id"],
             "name": peer["name"],
             "avatar": peer["avatar"],
             "xp": peer_xp,
+            "weekly_xp": p_weekly,
+            "all_time_xp": p_all_time,
             "level": lvl_info["level"],
             "title": lvl_info["title"],
             "badge": lvl_info["badge"],
@@ -442,12 +482,14 @@ def get_leaderboard(timeframe: str = "weekly", user_id: Optional[str] = None) ->
         })
 
     # 2. Gerçek kullanıcıyı listeye ekle
-    user_lvl_info = calculate_level_info(user_xp)
+    user_lvl_info = calculate_level_info(user_total_xp)
     items.append({
         "user_id": user_uid,
         "name": f"{user_name} (Sen)",
         "avatar": current_user.get("active_avatar") or "🌟",
         "xp": user_xp,
+        "weekly_xp": actual_weekly_xp,
+        "all_time_xp": user_total_xp,
         "level": user_lvl_info["level"],
         "title": user_lvl_info["title"],
         "badge": user_lvl_info["badge"],
@@ -478,15 +520,40 @@ def get_leaderboard(timeframe: str = "weekly", user_id: Optional[str] = None) ->
                 badge=item["badge"],
                 streak_days=item["streak_days"],
                 is_current_user=item["is_current_user"],
+                weekly_xp=item.get("weekly_xp", item["xp"]),
+                all_time_xp=item.get("all_time_xp", item["xp"]),
             )
         )
 
     return LeaderboardResponse(
         timeframe="weekly" if is_weekly else "all_time",
         current_user_rank=current_user_rank,
+        current_user_weekly_xp=actual_weekly_xp,
+        current_user_all_time_xp=user_total_xp,
         total_participants=len(entries),
         entries=entries,
     )
+
+
+def rollover_weekly_league(user_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Pazar Gecesi Döngüsü (Puan Silmeme Kuralı):
+    - total_xp sütununa KESİNLİKLE 'UPDATE users SET total_xp = 0' UYGULAMAZ.
+    - Sadece haftalık ilk 3'e podyum ödül rozeti tahsis eder ve yeni haftanın zaman damgasını başlatır.
+    """
+    logger.info("Pazar Gecesi Döngüsü başlatıldı. total_xp KESİNLİKLE silinmez, kalıcı şeref kürsüsü korunur.")
+    leaderboard = get_leaderboard(timeframe="weekly", user_id=user_id)
+    top3 = leaderboard.entries[:3]
+    podium_results = [
+        {"rank": e.rank, "name": e.name, "weekly_xp": e.total_xp, "badge": "🥇" if e.rank == 1 else "🥈" if e.rank == 2 else "🥉"}
+        for e in top3
+    ]
+    return {
+        "status": "success",
+        "message": "Pazar Gecesi Döngüsü: Toplam puanlar KORUNDU. Haftalık podyum rozetleri dağıtıldı.",
+        "podium": podium_results,
+        "rollover_time": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # -------------------------------------------------------------
@@ -985,6 +1052,176 @@ def set_active_avatar(character_id: str, user_id: Optional[str] = None) -> Dict[
         "message": f"Aktif avatarınız '{target_char['name']}' ({target_char['icon']}) olarak güncellendi!",
         "active_avatar": target_char["icon"],
         "active_avatar_id": target_char["id"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 🏰 Hak Edilmiş Seviye Kilidi & Çok Dilli Karakter Satın Alma (Milestone Locks)
+# ---------------------------------------------------------------------------
+
+STORE_CHARACTERS_DATA: Dict[str, Dict[str, Any]] = {
+    "char_squire": {
+        "price": 100,
+        "req_level": "A1",
+        "req_stories": 0,
+        "quotes": {
+            "tr": "Kılıcım kelimelerim kadar keskin olacak! Başlıyoruz!",
+            "en": "My blade shall be as sharp as my vocabulary! Let us begin!",
+            "de": "Meine Klinge wird so scharf sein wie mein Wortschatz! Auf geht's!",
+        },
+    },
+    "char_archer": {
+        "price": 250,
+        "req_level": "A2",
+        "req_stories": 3,
+        "quotes": {
+            "tr": "Hedefim daima mükemmel telaffuz ve tam isabet!",
+            "en": "My arrow always finds its mark, just like precise phrasing!",
+            "de": "Mein Pfeil trifft immer ins Schwarze, genau wie das treffende Wort!",
+        },
+    },
+    "char_cadet": {
+        "price": 350,
+        "req_level": "A2",
+        "req_stories": 5,
+        "quotes": {
+            "tr": "Frekanslar ayarlandı! Evrensel iletişim kanalı açıldı!",
+            "en": "Frequencies aligned! Universal transmission channel is open!",
+            "de": "Frequenzen kalibriert! Der interstellare Kommunikationskanal steht!",
+        },
+    },
+    "char_alchemist": {
+        "price": 500,
+        "req_level": "B1",
+        "req_stories": 8,
+        "quotes": {
+            "tr": "Doğru kelimeleri birleştirdiğinde zihin saf altına dönüşür!",
+            "en": "When the right words transmute together, intellect turns to pure gold!",
+            "de": "Wenn sich die richtigen Worte verbinden, wird Wissen zu reinem Gold!",
+        },
+    },
+    "char_paladin": {
+        "price": 700,
+        "req_level": "B1",
+        "req_stories": 10,
+        "quotes": {
+            "tr": "Bilgi kalkanım, cesaret rehberimdir. Hiçbir sınav beni yıldıramaz!",
+            "en": "Knowledge is my aegis, truth is my light. No debate shall break my resolve!",
+            "de": "Wissen ist mein Schild, Klarheit mein Schwert. Keine Debatte wird mich brechen!",
+        },
+    },
+    "char_cyber_ninja": {
+        "price": 950,
+        "req_level": "B2",
+        "req_stories": 15,
+        "quotes": {
+            "tr": "Sessizce öğrenir, kusursuzca konuşurum. Gölgeler benden yana!",
+            "en": "I learn in silence, I speak with zero latency. The shadows obey my code!",
+            "de": "Ich lerne in der Stille und spreche ohne Latenz. Der Cyberspace folgt meinem Code!",
+        },
+    },
+    "char_dragon_rider": {
+        "price": 2000,
+        "req_level": "C1",
+        "req_stories": 20,
+        "quotes": {
+            "tr": "Ejderhanın aleviyle konuşur, kelimelerimle gökleri fethederim! Zirve bizim!",
+            "en": "I speak with dragonfire and command the skies with words! The summit is ours!",
+            "de": "Ich spreche mit dem Feuer des Drachen und erobere den Himmel mit Worten!",
+        },
+    },
+}
+
+CEFR_RANK_MAP = {"A1": 1, "A2": 2, "B1": 3, "B2": 4, "C1": 5, "C2": 6}
+
+
+def unlock_store_character(
+    character_id: str,
+    user_id: Optional[str] = None,
+    user_level: Optional[str] = "A1",
+    completed_stories_count: Optional[int] = 0,
+    language: Optional[str] = "tr",
+) -> Dict[str, Any]:
+    """
+    Sunucu tarafında anti-tamper doğrulaması yaparak mağaza karakterinin kilidini açar.
+    Kullanıcının yeterli altına ve hak edilmiş seviye veya tamamlanan hikaye barajına sahip olduğunu doğrular.
+    """
+    char_data = STORE_CHARACTERS_DATA.get(character_id)
+    if not char_data:
+        raise HTTPException(status_code=404, detail="Karakter bulunamadı!")
+
+    db = get_db()
+    user = get_or_create_user(db, user_id)
+    u_id = str(user.get("id"))
+
+    # 1. Anti-Tamper Seviye & Başarı Kilidi Kontrolü (Milestone Lock Verification)
+    user_cefr_rank = CEFR_RANK_MAP.get((user_level or "A1").upper(), 1)
+    req_cefr_rank = CEFR_RANK_MAP.get(char_data["req_level"], 1)
+
+    level_met = user_cefr_rank >= req_cefr_rank
+    stories_met = (completed_stories_count or 0) >= char_data["req_stories"]
+
+    if not (level_met or stories_met):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Anti-Tamper Hatası: Bu karakter kilitli! Açmak için {char_data['req_level']} seviyesi veya {char_data['req_stories']} hikaye tamamlamış olmalısınız.",
+        )
+
+    # 2. Bakiye Kontrolü
+    user_coins = int(user.get("coins") if user.get("coins") is not None else 300)
+    price = int(char_data["price"])
+
+    # 3. Zaten açık mı kontrol et
+    unlocked_list: List[str] = []
+    try:
+        res = db.table("unlocked_characters").select("character_id").eq("user_id", u_id).execute()
+        unlocked_list = [row["character_id"] for row in (res.data or [])]
+    except Exception as e:
+        logger.warning(f"Error fetching unlocked characters: {e}")
+
+    if character_id in unlocked_list:
+        lang_key = (language or "tr").lower()
+        quote = char_data["quotes"].get(lang_key) or char_data["quotes"].get("en", "")
+        return {
+            "success": True,
+            "character_id": character_id,
+            "remaining_coins": user_coins,
+            "unlocked_characters": unlocked_list,
+            "message": "Bu karakter zaten kütüphanenizde açık!",
+            "unlock_quote": quote,
+        }
+
+    if user_coins < price:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Yetersiz Altın! Gereken: {price} 🪙, Mevcut bakiyeniz: {user_coins} 🪙",
+        )
+
+    # 4. Altın düş ve karaktere kilit aç
+    new_coins = user_coins - price
+    try:
+        db.table("users").update({"coins": new_coins}).eq("id", u_id).execute()
+        db.table("unlocked_characters").insert({
+            "id": str(uuid.uuid4()),
+            "user_id": u_id,
+            "character_id": character_id,
+            "unlocked_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+        unlocked_list.append(character_id)
+    except Exception as e:
+        logger.error(f"Failed to record character unlock: {e}")
+        raise HTTPException(status_code=500, detail="Karakter açma işlemi veritabanına kaydedilemedi.")
+
+    lang_key = (language or "tr").lower()
+    quote = char_data["quotes"].get(lang_key) or char_data["quotes"].get("en", "")
+
+    return {
+        "success": True,
+        "character_id": character_id,
+        "remaining_coins": new_coins,
+        "unlocked_characters": unlocked_list,
+        "message": "Karakter başarıyla açıldı ve envanterinize eklendi!",
+        "unlock_quote": quote,
     }
 
 

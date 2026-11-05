@@ -27,6 +27,7 @@ export interface GameOverScreenProps {
   streakCount?: number;
   onPlayAgain: () => void;
   onBackToArena: () => void;
+  onViewPodium?: () => void;
 }
 
 export default function GameOverScreen({
@@ -40,6 +41,7 @@ export default function GameOverScreen({
   streakCount = 0,
   onPlayAgain,
   onBackToArena,
+  onViewPodium,
 }: GameOverScreenProps) {
   // Patlama ve XP Kaydı
   useEffect(() => {
@@ -148,24 +150,37 @@ export default function GameOverScreen({
         )}
 
         {/* Eylem Butonları: Tekrar Oyna & Arenaya Dön */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 border-t border-slate-800/80">
-          <button
-            type="button"
-            onClick={onPlayAgain}
-            className="w-full sm:w-auto flex-1 py-3 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>Tekrar Oyna</span>
-          </button>
+        <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-800/80">
+          {onViewPodium && (
+            <button
+              type="button"
+              onClick={onViewPodium}
+              className="w-full py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition active:scale-95 cursor-pointer"
+            >
+              <Trophy className="w-4 h-4 fill-current" />
+              <span>🏆 Sınıf Podyumunu & Ödülleri Gör</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={onBackToArena}
-            className="w-full sm:w-auto flex-1 py-3 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 transition active:scale-95 cursor-pointer"
-          >
-            <Home className="w-4 h-4" />
-            <span>Arenaya Dön</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={onPlayAgain}
+              className="w-full sm:w-auto flex-1 py-3 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Tekrar Oyna</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onBackToArena}
+              className="w-full sm:w-auto flex-1 py-3 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 transition active:scale-95 cursor-pointer"
+            >
+              <Home className="w-4 h-4" />
+              <span>Arenaya Dön</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
