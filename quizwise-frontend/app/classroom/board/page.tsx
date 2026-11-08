@@ -61,6 +61,7 @@ function SmartBoardConsoleContent() {
   const [isColdCalling, setIsColdCalling] = useState(false);
 
   // Arka Plan Dinleme Tamponu (Web Speech API)
+  const [spokenTranscript, setSpokenTranscript] = useState<string>("");
   const spokenBufferRef = useRef<string>("");
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -88,6 +89,7 @@ function SmartBoardConsoleContent() {
         }
         if (chunk) {
           spokenBufferRef.current += chunk;
+          setSpokenTranscript((prev) => prev + chunk);
         }
       };
 
@@ -420,7 +422,7 @@ function SmartBoardConsoleContent() {
         onClose={() => setIsSummaryModalOpen(false)}
         className={activeClassName}
         pdfFileName={pdfFileName}
-        spokenTranscript={spokenBufferRef.current}
+        spokenTranscript={spokenTranscript}
       />
     </div>
   );
