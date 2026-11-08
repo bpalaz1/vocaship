@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import confetti from "canvas-confetti";
 import { Zap, Clock, X, Trophy, Flame, Check, AlertCircle } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
+import { saveArenaMistake } from "../../utils/arenaMistakes";
 
 export interface SpeedRecallGameProps {
   cards: Array<{ word: string; meaning: string }>;
@@ -75,6 +76,14 @@ export default function SpeedRecallGame({
     setIsAnswered(true);
     setCombo(0);
 
+    if (activeCard) {
+      saveArenaMistake({
+        word: activeCard.word,
+        meaning: activeCard.meaning,
+        gameType: "speed_recall",
+      });
+    }
+
     setTimeout(() => {
       advanceRound();
     }, 900);
@@ -103,6 +112,13 @@ export default function SpeedRecallGame({
       }
     } else {
       setCombo(0);
+      if (activeCard) {
+        saveArenaMistake({
+          word: activeCard.word,
+          meaning: activeCard.meaning,
+          gameType: "speed_recall",
+        });
+      }
     }
 
     setTimeout(() => {

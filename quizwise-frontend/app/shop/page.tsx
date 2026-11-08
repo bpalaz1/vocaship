@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { API_BASE } from "../config";
 import { useLanguage } from "../context/LanguageContext";
 import ChestShop from "../components/shop/ChestShop";
+import ChestOpenModal from "../components/shop/ChestOpenModal";
 import {
   Sparkles,
   Coins,
@@ -135,6 +136,7 @@ export default function ShopPage() {
   const [totalUnlocked, setTotalUnlocked] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
   const [settingAvatarId, setSettingAvatarId] = useState<string | null>(null);
+  const [is50ChestModalOpen, setIs50ChestModalOpen] = useState<boolean>(false);
 
   // Karakter ismi çeviri yardımcısı (Örn: "Köy Okçusu" -> "char_village_archer")
   const getCharacterName = (char: CharacterItem) => {
@@ -430,6 +432,16 @@ export default function ShopPage() {
                   </span>
                 </div>
               </div>
+
+              {/* 50 Parçalık Gacha & Sandık Butonu */}
+              <button
+                type="button"
+                onClick={() => setIs50ChestModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/25 ring-2 ring-amber-400/50 transition active:scale-95 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 fill-current" />
+                <span>🎁 50 Parçalık Gacha & Sandık Açılışı ➔</span>
+              </button>
             </div>
           </div>
         </section>
@@ -707,6 +719,13 @@ export default function ShopPage() {
           </div>
         </div>
       )}
+      {/* 50 Parçalık Gacha & Sandık Açılış Modalı */}
+      <ChestOpenModal
+        isOpen={is50ChestModalOpen}
+        onClose={() => setIs50ChestModalOpen(false)}
+        userGold={userCoins}
+        onGoldChange={(g) => setUserCoins(g)}
+      />
     </div>
   );
 }

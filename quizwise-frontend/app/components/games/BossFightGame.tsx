@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import confetti from "canvas-confetti";
 import {
   Flame,
@@ -9,17 +9,13 @@ import {
   Zap,
   Trophy,
   X,
-  RotateCcw,
   Volume2,
   VolumeX,
   Sparkles,
-  Key,
-  Coins,
-  CheckCircle2,
-  AlertTriangle
 } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
 import ClassroomPodiumModal from "./ClassroomPodiumModal";
+import { saveArenaMistake } from "../../utils/arenaMistakes";
 
 export interface BossFightGameProps {
   cards: Array<{ word: string; meaning: string; phonetic?: string }>;
@@ -144,13 +140,13 @@ export default function BossFightGame({
     return all;
   }, [currentRound, cards, activeCard.meaning]);
 
-  // Uçan Hasar Sayısı Tetikleyici
+  // Uçan Hasar Sayısı Tetikleyici (Floating Damage Numbers)
   const triggerDamage = (text: string, isCrit: boolean) => {
     const id = `dmg_${Date.now()}_${Math.random()}`;
     setDamageIndicators((prev) => [...prev, { id, text, isCrit }]);
     setTimeout(() => {
       setDamageIndicators((prev) => prev.filter((d) => d.id !== id));
-    }, 900);
+    }, 1100);
   };
 
   // Cevap Verme İşlemi
@@ -174,12 +170,12 @@ export default function BossFightGame({
         playSoundEffect(isCrit ? "crit" : "hit");
       }
 
-      // Ejderha darbe animasyonu
+      // Ejderha darbe animasyonu (350ms darbe sarsıntısı & parlama)
       setBossState("hit");
-      setTimeout(() => setBossState("idle"), 450);
+      setTimeout(() => setBossState("idle"), 350);
 
-      // Hasar yazısı
-      triggerDamage(isCrit ? `💥 KRİTİK -${dmg} HP!` : `-${dmg} HP`, isCrit);
+      // Uçan hasar yazısı (-100 HP! 💥 veya -220 HP KRİTİK! 🔥)
+      triggerDamage(isCrit ? `💥 -${dmg} HP CRIT!` : `-${dmg} HP! 💥`, isCrit);
 
       setPlayerScore((prev) => prev + (isCrit ? 250 : 100));
 
@@ -203,12 +199,21 @@ export default function BossFightGame({
       setFeedback("wrong");
       setCombo(0);
 
+      if (activeCard) {
+        saveArenaMistake({
+          word: activeCard.word,
+          meaning: activeCard.meaning,
+          phonetic: activeCard.phonetic,
+          gameType: "boss_fight",
+        });
+      }
+
       if (soundEnabled) {
         playSoundEffect("boss_attack");
       }
 
       setBossState("attack");
-      setTimeout(() => setBossState("idle"), 600);
+      setTimeout(() => setBossState("idle"), 500);
 
       triggerDamage("ISKALANDI! 🔥", false);
 
@@ -287,17 +292,74 @@ export default function BossFightGame({
   }
 
   return (
-    <div className={`fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col justify-between overflow-hidden select-none ${bossState === "attack" ? "bg-rose-950/20" : ""}`}>
-      {/* Arka Plan Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-80 bg-gradient-to-b from-rose-600/20 via-purple-600/10 to-transparent blur-3xl pointer-events-none -z-10" />
+    <div className={`fixed inset-0 z-50 bg-[#0B0F19] text-slate-100 flex flex-col justify-between overflow-hidden select-none transition-colors duration-300 ${bossState === "attack" ? "bg-rose-950/30" : ""}`}>
+      {/* Özel RPG Animasyon Stilleri */}
+      <style jsx>{`
+        @keyframes dragonFloat {
+          0%, 100% {
+            transform: translateY(0px) scale(1);
+          }
+          50% {
+            transform: translateY(-8px) scale(1.02);
+          }
+        }
+        @keyframes hitShakeEffect {
+          0%, 100% {
+            transform: translateX(0);
+            filter: brightness(1.7) saturate(1.8) drop-shadow(0 0 25px rgba(244, 63, 94, 0.8));
+          }
+          20% {
+            transform: translateX(-10px) rotate(-2deg);
+          }
+          40% {
+            transform: translateX(10px) rotate(2deg);
+          }
+          60% {
+            transform: translateX(-6px) rotate(-1deg);
+          }
+          80% {
+            transform: translateX(6px) rotate(1deg);
+          }
+        }
+        @keyframes damageFloatAnim {
+          0% {
+            opacity: 0;
+            transform: translateY(15px) scale(0.85);
+          }
+          20% {
+            opacity: 1;
+            transform: translateY(-5px) scale(1.25);
+          }
+          80% {
+            opacity: 1;
+            transform: translateY(-35px) scale(1.1);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-60px) scale(0.9);
+          }
+        }
+        .animate-dragon-idle {
+          animation: dragonFloat 4s ease-in-out infinite;
+        }
+        .animate-dragon-hit {
+          animation: hitShakeEffect 0.35s ease-in-out;
+        }
+        .animate-damage-float {
+          animation: damageFloatAnim 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+      `}</style>
+
+      {/* Arka Plan Atmosferik Kırmızı Parıltı */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-96 bg-gradient-to-b from-rose-600/15 via-red-900/10 to-transparent blur-3xl pointer-events-none -z-10" />
 
       {/* ========================================================================= */}
       {/* 1. ÜST HEADER: ÇIKIŞ, DESTE BAŞLIĞI, SKOR & SES                            */}
       {/* ========================================================================= */}
-      <header className="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center justify-between border-b border-slate-800/80">
+      <header className="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center justify-between border-b border-slate-800/80 shrink-0">
         <button
           onClick={onClose}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-300 transition active:scale-95 cursor-pointer"
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-300 transition active:scale-95 cursor-pointer shadow-sm"
         >
           <X className="w-4 h-4 text-rose-400" />
           <span>Arenaya Dön</span>
@@ -314,7 +376,7 @@ export default function BossFightGame({
 
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
-          className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+          className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer shadow-sm"
           title={soundEnabled ? "Sesi Kapat" : "Sesi Aç"}
         >
           {soundEnabled ? (
@@ -326,73 +388,80 @@ export default function BossFightGame({
       </header>
 
       {/* ========================================================================= */}
-      {/* 2. ORTA SAVAŞ ALANI: ANTİK EJDERHA, CAN BARI VE HASAR SAYILARI              */}
+      {/* 2. ORTA SAVAŞ ALANI: EPİK SİNEMATİK BOSS SAHNESİ, CAN BARI VE HASAR SAYISI */}
       {/* ========================================================================= */}
-      <main className="w-full max-w-4xl mx-auto px-4 py-3 flex-1 flex flex-col items-center justify-center text-center relative">
-        {/* Uçan Hasar Sayıları */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30">
-          {damageIndicators.map((dmg) => (
-            <div
-              key={dmg.id}
-              className={`animate-bounce text-2xl sm:text-4xl font-black drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)] ${
-                dmg.isCrit
-                  ? "text-amber-300 scale-125"
-                  : dmg.text.includes("ISKALANDI")
-                  ? "text-rose-400 text-xl"
-                  : "text-white"
-              }`}
-            >
-              {dmg.text}
-            </div>
-          ))}
-        </div>
+      <main className="w-full max-w-4xl mx-auto px-4 py-2 flex-1 flex flex-col items-center justify-center text-center relative gap-3">
+        {/* Sahne Çerçevesi (Stage Container) */}
+        <div className="w-full max-w-md h-56 mx-auto relative flex items-center justify-center rounded-3xl overflow-hidden bg-slate-900/80 border border-rose-500/30 backdrop-blur-md shadow-[0_0_40px_rgba(244,63,94,0.2)]">
+          {/* Arkasında Hafif Kızıl-Kehribar Ortam Parıltısı */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(circle at center, rgba(225,29,72,0.25) 0%, rgba(245,158,11,0.1) 40%, transparent 70%)",
+            }}
+          />
 
-        {/* Ejderha Görseli (Hafif Vektörel SVG & CSS Animasyonu) */}
-        <div
-          className={`relative transition-transform duration-300 ${
-            bossState === "hit"
-              ? "scale-90 rotate-2 brightness-150 filter"
-              : bossState === "attack"
-              ? "scale-110 -rotate-2"
-              : "scale-100"
-          }`}
-        >
-          {/* Alev Efekti (Attack Modunda) */}
-          {bossState === "attack" && (
-            <div className="absolute -inset-4 bg-rose-500/30 rounded-full blur-2xl animate-pulse pointer-events-none" />
-          )}
+          {/* Uçan Hasar Sayıları (Floating Damage Numbers) */}
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-40">
+            {damageIndicators.map((dmg) => (
+              <div
+                key={dmg.id}
+                className={`animate-damage-float font-black tracking-wider drop-shadow-[0_4px_16px_rgba(0,0,0,1)] ${
+                  dmg.isCrit
+                    ? "text-amber-300 text-3xl sm:text-4xl filter drop-shadow-[0_0_12px_rgba(251,191,36,0.8)]"
+                    : dmg.text.includes("ISKALANDI")
+                    ? "text-rose-400 text-xl font-bold"
+                    : "text-rose-200 text-2xl sm:text-3xl"
+                }`}
+              >
+                {dmg.text}
+              </div>
+            ))}
+          </div>
 
-          {/* Vektörel Ejderha Rozeti */}
-          <div className="w-36 h-36 sm:w-44 sm:h-44 rounded-3xl bg-gradient-to-br from-rose-950/70 via-purple-950/80 to-slate-900 border-2 border-rose-500/40 flex items-center justify-center shadow-2xl shadow-rose-950/60 relative overflow-hidden backdrop-blur-md">
-            {/* Arka Plan Alev Parıltısı */}
-            <div className="absolute inset-0 bg-gradient-to-t from-rose-600/20 via-transparent to-transparent" />
+          {/* Boss Görseli (Idle Süzülme ve Hit Sarsıntı Efekti) */}
+          <div
+            className={`relative z-10 w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center transition-all ${
+              bossState === "hit"
+                ? "animate-dragon-hit"
+                : bossState === "attack"
+                ? "scale-110 brightness-125"
+                : "animate-dragon-idle"
+            }`}
+          >
+            {/* Gerçek Ejderha Görseli */}
+            <img
+              src="/bosses/dragon_ignis.png"
+              alt="Antik Volkanik Ejderha Ignis"
+              className="w-full h-full object-contain filter drop-shadow-[0_12px_24px_rgba(225,29,72,0.45)]"
+              onError={(e) => {
+                // Fallback: Yüksek kaliteli şık SVG illüstrasyonu
+                (e.target as HTMLImageElement).style.display = "none";
+                const fallbackEl = document.getElementById("boss-svg-fallback");
+                if (fallbackEl) fallbackEl.style.display = "block";
+              }}
+            />
 
-            {/* Vektörel Ejderha İllüstrasyonu */}
-            <svg
-              className="w-24 h-24 sm:w-28 sm:h-28 text-rose-400 drop-shadow-[0_8px_16px_rgba(244,63,94,0.4)]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2C6.5 2 2 6.5 2 12c0 2.5 1 5 2.5 6.5L4 22l3.5-.5C9 22.5 10.5 23 12 23c5.5 0 10-4.5 10-10S17.5 2 12 2z" />
-              <path d="M8 10h.01M16 10h.01" strokeWidth="3" />
-              <path d="M12 14c-1.5 0-3 .5-3 1.5s1.5 1.5 3 1.5 3-.5 3-1.5-1.5-1.5-3-1.5z" />
-              <path d="M6 3l2 4M18 3l-2 4M2 12l3-1M22 12l-3-1" />
-            </svg>
-
-            {/* Alev İkonu */}
-            <div className="absolute bottom-2 right-2">
-              <Flame className="w-6 h-6 text-amber-400 animate-pulse" />
+            {/* SVG Fallback (Görsel gecikirse veya yüklenemezse devreye girer) */}
+            <div id="boss-svg-fallback" style={{ display: "none" }} className="w-full h-full">
+              <svg
+                viewBox="0 0 200 200"
+                className="w-full h-full filter drop-shadow-[0_8px_20px_rgba(244,63,94,0.5)]"
+              >
+                <circle cx="100" cy="100" r="80" fill="#1e1017" stroke="#e11d48" strokeWidth="2" />
+                <path d="M40 70 Q 100 20 160 70 Q 100 120 40 70 Z" fill="#9f1239" />
+                <polygon points="100,50 85,90 115,90" fill="#fbbf24" />
+                <polygon points="75,85 85,100 80,105" fill="#f59e0b" />
+                <polygon points="125,85 115,100 120,105" fill="#f59e0b" />
+              </svg>
             </div>
           </div>
         </div>
 
         {/* Ejderha Adı & Ünvanı */}
-        <div className="mt-3 space-y-0.5">
-          <div className="flex items-center justify-center gap-1.5">
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-center gap-2">
             <h2 className="text-base sm:text-lg font-black text-white tracking-wide">
               🐉 Antik Volkanik Ejderha Ignis
             </h2>
@@ -400,28 +469,23 @@ export default function BossFightGame({
               BOSS
             </span>
           </div>
-          <p className="text-[11px] text-slate-400">Magma ve kül efendisi hazineyi savunuyor!</p>
+          <p className="text-[11px] text-slate-400 font-medium">
+            Magma ve kül efendisi hazineyi savunuyor!
+          </p>
         </div>
 
-        {/* DEV CAN BARI */}
-        <div className="w-full max-w-md mt-3 space-y-1">
+        {/* DİNAMİK LAV CAN BARI (HP BAR) */}
+        <div className="w-full max-w-md mx-auto space-y-1.5">
           <div className="flex items-center justify-between text-xs font-mono font-bold">
-            <span className="text-rose-400 flex items-center gap-1">
-              <Flame className="w-3.5 h-3.5" /> Can: {bossHp} / {MAX_BOSS_HP} HP
+            <span className="text-rose-400 flex items-center gap-1.5">
+              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              <span>Can: {bossHp} / {MAX_BOSS_HP} HP</span>
             </span>
-            <span className={hpPercent > 50 ? "text-emerald-400" : hpPercent > 25 ? "text-amber-400" : "text-rose-400"}>
-              %{hpPercent}
-            </span>
+            <span className="text-amber-300 font-black">%{hpPercent}</span>
           </div>
-          <div className="w-full h-3 bg-slate-900 rounded-full border border-slate-800 overflow-hidden shadow-inner p-0.5">
+          <div className="w-full h-3.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60 p-0.5 shadow-inner">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                hpPercent > 50
-                  ? "bg-gradient-to-r from-emerald-500 to-teal-400"
-                  : hpPercent > 25
-                  ? "bg-gradient-to-r from-amber-500 to-yellow-400"
-                  : "bg-gradient-to-r from-rose-600 to-red-500"
-              }`}
+              className="h-full rounded-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 transition-all duration-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]"
               style={{ width: `${hpPercent}%` }}
             />
           </div>
@@ -429,8 +493,8 @@ export default function BossFightGame({
 
         {/* Kombo Rozeti */}
         {combo > 1 && (
-          <div className="mt-2 flex items-center gap-1.5 text-xs font-black text-amber-300 animate-pulse">
-            <Zap className="w-4 h-4 fill-amber-400" />
+          <div className="flex items-center gap-1.5 text-xs font-black text-amber-300 animate-pulse bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30 shadow-sm">
+            <Zap className="w-3.5 h-3.5 fill-amber-400" />
             <span>{combo}x Kombo Çarpanı!</span>
           </div>
         )}
@@ -439,39 +503,42 @@ export default function BossFightGame({
       {/* ========================================================================= */}
       {/* 3. ALT SALDIRI PANELİ: KELİME SORUSU VE 4 SEÇENEK                           */}
       {/* ========================================================================= */}
-      <footer className="w-full max-w-2xl mx-auto px-4 pb-6 space-y-3">
-        {/* Hedef Kelime */}
-        <div className="text-center py-2 px-4 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-md">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-            Saldırı Kelimesi
+      <footer className="w-full max-w-2xl mx-auto px-4 pb-6 space-y-3 shrink-0">
+        {/* Hedef Kelime (Antrasit RPG Saldırı Kartı) */}
+        <div className="text-center py-3 px-6 rounded-3xl bg-slate-900/90 border border-slate-800 backdrop-blur-md shadow-xl">
+          <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-mono">
+            SALDIRI KELİMESİ
           </span>
-          <div className="flex items-center justify-center gap-2 mt-0.5">
-            <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+          <div className="flex items-center justify-center gap-3 mt-1">
+            <h3 className="text-2xl sm:text-3xl font-black text-white tracking-wide">
               {activeCard.word}
             </h3>
             {activeCard.phonetic && (
-              <span className="text-xs text-indigo-400 font-mono">
+              <span className="text-xs text-indigo-400 font-mono font-bold bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-500/20">
                 {activeCard.phonetic}
               </span>
             )}
           </div>
         </div>
 
-        {/* 4 Şık */}
+        {/* 4 Şık (A, B, C, D Anlık Geri Bildirimli Butonlar) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {options.map((option, idx) => {
             const isSelected = answeredIndex === idx;
             const isCorrectOption = option === activeCard.meaning;
 
-            let btnStyle = "bg-slate-900 border-slate-800 text-slate-200 hover:border-rose-500/50 hover:bg-slate-800/80";
+            let btnStyle =
+              "bg-slate-900 border-slate-800 text-slate-200 hover:border-rose-500/50 hover:bg-slate-800/80 shadow-md";
 
             if (feedback !== null) {
               if (isCorrectOption) {
-                btnStyle = "bg-emerald-600/30 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-500/20";
+                btnStyle =
+                  "bg-emerald-600/30 border-emerald-500 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.4)] ring-1 ring-emerald-400";
               } else if (isSelected && !isCorrectOption) {
-                btnStyle = "bg-rose-600/30 border-rose-500 text-rose-200 shadow-lg shadow-rose-500/20";
+                btnStyle =
+                  "bg-rose-600/30 border-rose-500 text-rose-200 shadow-[0_0_15px_rgba(244,63,94,0.4)] ring-1 ring-rose-400 animate-shake";
               } else {
-                btnStyle = "bg-slate-900/50 border-slate-800 text-slate-500 opacity-50";
+                btnStyle = "bg-slate-900/50 border-slate-800 text-slate-500 opacity-40";
               }
             }
 
@@ -481,10 +548,10 @@ export default function BossFightGame({
                 type="button"
                 disabled={feedback !== null}
                 onClick={() => handleAnswer(option, idx)}
-                className={`py-3 px-4 rounded-xl border text-xs sm:text-sm font-bold text-left transition-all active:scale-95 flex items-center justify-between cursor-pointer ${btnStyle}`}
+                className={`py-3.5 px-4 rounded-2xl border text-xs sm:text-sm font-bold text-left transition-all active:scale-95 flex items-center justify-between cursor-pointer ${btnStyle}`}
               >
-                <span className="truncate">{option}</span>
-                <span className="text-[10px] font-mono opacity-40 ml-2">
+                <span className="truncate mr-2">{option}</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-950/80 text-slate-400 border border-slate-800 shrink-0 font-bold">
                   {String.fromCharCode(65 + idx)}
                 </span>
               </button>
@@ -495,4 +562,3 @@ export default function BossFightGame({
     </div>
   );
 }
-

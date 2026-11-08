@@ -1,64 +1,56 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Sparkles,
   Mic,
   Volume2,
+  Sparkles,
+  Lightbulb,
+  CheckCircle2,
+  ArrowRight,
+  X,
   VolumeX,
-  RotateCcw,
-  GraduationCap,
 } from "lucide-react";
-import SpeakingTranscript from "./SpeakingTranscript";
-import { ConversationMode, CONVERSATION_MODES } from "../../types/speaking";
-import { PersonaInfo } from "../../context/PersonaContext";
-import { getCalibratedRateForPersona } from "../../utils/tts";
-
-export interface DialogueTurn {
-  role: "assistant" | "user";
-  message: string;
-  timestamp?: string;
-}
 
 export interface SpeakingCenterStageProps {
-  dialogue: DialogueTurn[];
-  activeMode: ConversationMode;
-  persona: PersonaInfo;
-  targetLevel: string;
-  autoPlayAudio: boolean;
+  latestMentorMessage: string;
+  latestUserMessage: string;
+  followUpQuestion?: string | null;
   isRecording: boolean;
   isThinking: boolean;
-  interimText: string;
+  isAiSpeaking: boolean;
   userTranscript: string;
-  speakingAudioIndex: number | null;
-  activeWordIndex: number | null;
-  isKidsMode: boolean;
-  avatarState?: "idle" | "listening" | "speaking" | "thinking";
-  currentFollowUpQuestion?: string | null;
+  interimText: string;
+  targetLevel: string;
+  targetWords: string[];
+  capturedWords: string[];
+  whisperPrompt: string;
+  onCycleWhisper: () => void;
+  onSelectWhisper: (phrase: string) => void;
   toggleRecording: () => void;
-  handleResetDialogue: () => void;
-  setTargetLevel: (level: string) => void;
-  setAutoPlayAudio: (val: boolean) => void;
-  stopAudio: () => void;
-  playDialogueSpeech: (text: string, index: number) => void;
-  t?: (key: string, fallback: string) => string;
+  onPlayMentorSpeech: () => void;
+  onSendMessage: (text?: string) => void;
+  setUserTranscript: (val: string) => void;
 }
 
+// Akıcı Canlı Frekans Dalga Formu
 function NeonWaveform({ active }: { active: boolean }) {
-  const bars = [14, 28, 42, 22, 54, 32, 60, 24, 46, 20, 36, 16];
+  const bars = [14, 28, 48, 24, 62, 36, 70, 30, 52, 22, 40, 18];
   return (
-    <div className="flex items-center gap-1 h-10 px-2">
+    <div className="flex items-center gap-1 sm:gap-1.5 h-12 px-2">
       {bars.map((height, i) => (
         <span
           key={i}
-          className={`w-1 rounded-full transition-all duration-150 ${
+          className={`w-1 sm:w-1.5 rounded-full transition-all duration-150 ${
             active
-              ? "bg-gradient-to-t from-emerald-500 to-teal-300 animate-pulse"
-              : "bg-slate-800"
+              ? "bg-gradient-to-t from-emerald-500 via-teal-400 to-indigo-400 animate-pulse"
+              : "bg-slate-800/80"
           }`}
           style={{
-            height: active ? `${Math.max(10, (height * (i % 2 === 0 ? 1 : 0.7)))}%` : "20%",
-            animationDelay: `${i * 70}ms`,
+            height: active
+              ? `${Math.max(15, height * (i % 2 === 0 ? 1 : 0.7))}%`
+              : "20%",
+            animationDelay: `${i * 65}ms`,
           }}
         />
       ))}
@@ -67,194 +59,303 @@ function NeonWaveform({ active }: { active: boolean }) {
 }
 
 export default function SpeakingCenterStage({
-  dialogue,
-  activeMode,
-  persona,
-  targetLevel,
-  autoPlayAudio,
+  latestMentorMessage,
+  latestUserMessage,
+  followUpQuestion,
   isRecording,
   isThinking,
-  interimText,
+  isAiSpeaking,
   userTranscript,
-  speakingAudioIndex,
-  activeWordIndex,
-  isKidsMode,
-  avatarState = "idle",
-  currentFollowUpQuestion,
+  interimText,
+  targetLevel,
+  targetWords,
+  capturedWords,
+  whisperPrompt,
+  onCycleWhisper,
+  onSelectWhisper,
   toggleRecording,
-  handleResetDialogue,
-  setTargetLevel,
-  setAutoPlayAudio,
-  stopAudio,
-  playDialogueSpeech,
-  t = (_key, fallback) => fallback,
+  onPlayMentorSpeech,
+  onSendMessage,
+  setUserTranscript,
 }: SpeakingCenterStageProps) {
-  return (
-    <section className="flex-1 w-full min-w-0">
-      <div className="rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl p-5 sm:p-6 flex flex-col justify-between space-y-4 min-h-[660px] relative overflow-hidden backdrop-blur-md">
-        {/* Arka Plan Neon Parıltısı */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+  const [showWhisper, setShowWhisper] = useState(false);
 
-        {/* Kart Başlığı */}
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 z-10 relative">
-          <div className="flex items-center space-x-2.5 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)] shrink-0" />
-            <h1 className="text-sm font-black uppercase tracking-wider text-white truncate">
-              AI Speaking Lounge
-            </h1>
+  // Doğal Kesme (Barge-in): Kullanıcı konuşurken veya kelime yakalandığında yapay zeka sesini kes
+  useEffect(() => {
+    if ((isRecording || interimText.trim() || userTranscript.trim()) && isAiSpeaking) {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    }
+  }, [isRecording, interimText, userTranscript, isAiSpeaking]);
+
+  return (
+    <div className="flex-1 flex flex-col justify-between space-y-6 my-auto w-full">
+      {/* 1. ÜST MERKEZ: AI DİYALOG KARTI */}
+      <div className="rounded-3xl bg-slate-900/90 border border-slate-800/90 shadow-2xl p-6 sm:p-7 relative backdrop-blur-md transition-all hover:border-slate-750">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800/60 mb-4">
+          <div className="flex items-center gap-2.5">
             <span
-              className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                CONVERSATION_MODES[activeMode]?.badgeColor || "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+              className={`w-2.5 h-2.5 rounded-full ${
+                isAiSpeaking
+                  ? "bg-emerald-400 animate-ping shadow-[0_0_10px_rgba(52,211,153,0.9)]"
+                  : isThinking
+                  ? "bg-indigo-400 animate-spin"
+                  : "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"
               }`}
-            >
-              <span>{CONVERSATION_MODES[activeMode]?.icon}</span>
-              <span>{CONVERSATION_MODES[activeMode]?.label}</span>
+            />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300">
+              {isAiSpeaking ? "AI Konuşuyor..." : isThinking ? "Düşünüyor..." : "AI Mentor Sorusu"}
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+              {targetLevel} Odak
             </span>
           </div>
 
+          <button
+            type="button"
+            onClick={onPlayMentorSpeech}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+              isAiSpeaking
+                ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm"
+                : "bg-slate-950/80 hover:bg-slate-800 border-slate-700/60 text-slate-300 hover:text-white"
+            }`}
+            title="Soruyu Sesli Dinle"
+          >
+            {isAiSpeaking ? (
+              <>
+                <VolumeX className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[11px] font-medium hidden sm:inline">Durdur</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-[11px] font-medium hidden sm:inline">Dinle</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* AI Sorusu Metni */}
+        <p className="text-lg sm:text-2xl font-medium text-slate-100 leading-relaxed font-sans">
+          {latestMentorMessage || "Hello! Ready to practice speaking?"}
+        </p>
+
+        {/* Dinamik Takip Sorusu (Varsa ve farklıysa) */}
+        {followUpQuestion && followUpQuestion !== latestMentorMessage && (
+          <div className="mt-4 pt-3.5 border-t border-slate-800/60 flex items-start gap-2.5">
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs sm:text-sm text-slate-300 italic leading-relaxed">
+              <span className="font-semibold text-amber-300 not-italic">Takip Sorusu: </span>
+              {followUpQuestion}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* 2. ORTA MERKEZ: KULLANICI TRANSKRİPTİ */}
+      <div className="rounded-3xl bg-slate-900/90 border border-slate-800/90 shadow-xl p-6 sm:p-7 relative backdrop-blur-md transition-all hover:border-slate-750">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800/60 mb-4">
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-              {persona.name} • {persona.level}
-            </span>
-
-            {/* Akademik Seviye Modu Toggle */}
-            <button
-              type="button"
-              onClick={() => setTargetLevel(targetLevel === "C1" ? "B2" : "C1")}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-[10px] font-semibold text-slate-300 transition cursor-pointer"
-              title="Akademik Seviye Modunu Değiştir"
-            >
-              <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-mono text-emerald-400 font-bold">{targetLevel}</span>
-            </button>
-
-            {/* + Practice Butonu */}
-            <button
-              type="button"
-              onClick={handleResetDialogue}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px] shadow-sm transition cursor-pointer active:scale-95"
-              title="Yeni Oturum Başlat"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span className="hidden sm:inline">Practice</span>
-            </button>
-
-            {/* Otomatik TTS Aç/Kapat */}
-            <button
-              type="button"
-              onClick={() => {
-                if (autoPlayAudio) stopAudio();
-                setAutoPlayAudio(!autoPlayAudio);
-              }}
-              className={`p-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${
-                autoPlayAudio
-                  ? "bg-slate-950 border-emerald-500/40 text-emerald-400 shadow-sm"
-                  : "bg-slate-950 border-slate-800 text-slate-500"
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                isRecording
+                  ? "bg-emerald-400 animate-ping shadow-[0_0_10px_rgba(52,211,153,0.8)]"
+                  : "bg-indigo-400/60"
               }`}
-              title="Otomatik TTS Aç/Kapat"
+            />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              {isRecording ? "Konuşmanız Algılanıyor..." : "Senin Cevabın"}
+            </span>
+          </div>
+
+          {isRecording && (
+            <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Canlı Web Speech API
+            </span>
+          )}
+        </div>
+
+        {/* Canlı dökülen sesli metin (indigo / zümrüt neon vurgusu) */}
+        <div className="min-h-[72px] flex items-center">
+          {isRecording ? (
+            <p className="text-base sm:text-xl font-medium text-emerald-300 leading-relaxed drop-shadow-[0_0_12px_rgba(52,211,153,0.3)] animate-pulse">
+              {userTranscript || interimText || "Konuşmaya başlayın, sesiniz anında dökülüyor..."}
+            </p>
+          ) : latestUserMessage ? (
+            <p className="text-base sm:text-xl text-slate-200 leading-relaxed">
+              {latestUserMessage}
+            </p>
+          ) : (
+            <p className="text-sm text-slate-500 italic">
+              Henüz bir cevap vermediniz. Konuşmaya başlamak için aşağıdaki mikrofona dokunun.
+            </p>
+          )}
+        </div>
+
+        {/* Hızlı Yazılı Gönderim Alanı */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSendMessage();
+          }}
+          className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-800/60"
+        >
+          <input
+            type="text"
+            value={userTranscript}
+            onChange={(e) => setUserTranscript(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                onSendMessage();
+              }
+            }}
+            placeholder="Dilerseniz buraya yazarak da cevap verebilirsiniz..."
+            disabled={isThinking}
+            className="flex-1 px-4 py-2 rounded-xl bg-slate-950/70 border border-slate-800 focus:border-indigo-500/60 text-xs text-slate-100 placeholder-slate-500 outline-none transition"
+          />
+          <button
+            type="submit"
+            disabled={(!userTranscript.trim() && !interimText.trim()) || isThinking}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
+          >
+            <span>Gönder</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </form>
+      </div>
+
+      {/* 3. ALT MERKEZ: BÜYÜK MİKROFON, WAVEFORM, KELİME AVCISI & FISILTI KOÇU */}
+      <div className="flex flex-col items-center justify-center pt-2">
+        <div className="flex items-center justify-center gap-4 sm:gap-8 w-full max-w-lg">
+          {/* Sol Waveform Frekans Barları */}
+          <div className="flex-1 flex justify-end">
+            <NeonWaveform active={isRecording || isAiSpeaking} />
+          </div>
+
+          {/* Merkezde Büyük Yuvarlak Parlayan Mikrofon Butonu */}
+          <div className="relative group shrink-0">
+            <div
+              className={`absolute -inset-3.5 rounded-full transition duration-500 ${
+                isRecording
+                  ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 opacity-90 blur-xl animate-pulse"
+                  : "bg-gradient-to-r from-emerald-500/20 to-teal-500/20 opacity-40 blur-md group-hover:opacity-75"
+              }`}
+            />
+            <button
+              type="button"
+              data-testid="tap-to-speak-mic-btn"
+              onClick={toggleRecording}
+              className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full flex flex-col items-center justify-center font-bold text-xs transition-all duration-300 cursor-pointer shadow-2xl ${
+                isRecording
+                  ? "bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 ring-4 ring-emerald-300/80 scale-105 shadow-[0_0_35px_rgba(52,211,153,0.6)]"
+                  : "bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 border-2 border-emerald-500/50 text-white hover:border-emerald-400 hover:scale-102 hover:shadow-[0_0_20px_rgba(52,211,153,0.3)]"
+              }`}
+              title={isRecording ? "Kaydı Durdur ve Gönder" : "Bas ve Konuş"}
             >
-              {autoPlayAudio ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              <Mic
+                className={`w-8 h-8 mb-1.5 transition-transform ${
+                  isRecording ? "text-slate-950 animate-bounce scale-110" : "text-emerald-400 group-hover:scale-110"
+                }`}
+              />
+              <span className="text-[10px] sm:text-[11px] tracking-wider font-black uppercase text-center px-1">
+                {isRecording ? "Dinliyor" : "TAP TO SPEAK"}
+              </span>
             </button>
+          </div>
+
+          {/* Sağ Waveform Frekans Barları */}
+          <div className="flex-1 flex justify-start">
+            <NeonWaveform active={isRecording || isAiSpeaking} />
           </div>
         </div>
 
-        {/* ===================================================================== */}
-        {/* MESAJ DÖKÜM ALANI (Top-Center Modern Chat Stream UI Balonları)         */}
-        {/* ===================================================================== */}
-        <SpeakingTranscript
-          dialogue={dialogue}
-          userTranscript={userTranscript}
-          interimText={interimText}
-          isThinking={isThinking}
-          speakingAudioIndex={speakingAudioIndex}
-          activeWordIndex={activeWordIndex}
-          isKidsMode={isKidsMode}
-          rate={getCalibratedRateForPersona(persona)}
-          personaName={persona.name}
-          onPlayAudio={playDialogueSpeech}
-        />
-
-        {/* ===================================================================== */}
-        {/* DİNAMİK TAKİP SORUSU YÖNLENDİRME KARTI                                */}
-        {/* ===================================================================== */}
-        {currentFollowUpQuestion && (
-          <div
-            data-testid="dynamic-followup-card"
-            className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-indigo-950/60 border border-emerald-500/30 shadow-lg backdrop-blur-md z-10 relative animate-in fade-in slide-in-from-bottom-2 duration-300"
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">
-                      💡 Sıradaki Soru / Konuşma Fırsatı:
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      {targetLevel} • Dinamik Akış
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => playDialogueSpeech(currentFollowUpQuestion, -1)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-700/60 text-[10px] text-slate-300 hover:text-emerald-300 transition cursor-pointer shrink-0"
-                    title="Soruyu Dinle"
-                  >
-                    <Volume2 className="w-3 h-3" />
-                    <span className="hidden sm:inline">Dinle</span>
-                  </button>
+        {/* 🎯 GÖRÜNMEZ KELİME AVCISI (Invisible Word Catcher): 3 Hedef Kelime Hapı */}
+        {targetWords && targetWords.length > 0 && (
+          <div className="flex items-center justify-center gap-2.5 mt-5 flex-wrap">
+            {targetWords.slice(0, 3).map((word) => {
+              const isCaptured = capturedWords.some(
+                (c) => c.toLowerCase() === word.toLowerCase()
+              );
+              return (
+                <div
+                  key={word}
+                  className={`px-3 py-1.5 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 border transition-all duration-300 select-none ${
+                    isCaptured
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/80 shadow-[0_0_14px_rgba(16,185,129,0.5)] scale-105 animate-in zoom-in-95"
+                      : "bg-slate-900/80 text-slate-400 border-slate-800"
+                  }`}
+                  title={isCaptured ? `Tebrikler! "${word}" kelimesini kullandınız.` : `Hedef kelime: ${word}`}
+                >
+                  {isCaptured ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 animate-in spin-in-90 duration-300" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                  )}
+                  <span>{word}</span>
                 </div>
-                <p className="text-xs sm:text-sm font-semibold text-white leading-relaxed">
-                  {currentFollowUpQuestion}
-                </p>
-              </div>
-            </div>
+              );
+            })}
           </div>
         )}
 
-        {/* ===================================================================== */}
-        {/* SES DALGASI & MİKROFON KONTROLÜ (Alt Bar)                              */}
-        {/* ===================================================================== */}
-        <div className="p-4 rounded-3xl bg-slate-950/80 border border-slate-800/90 space-y-3 z-10 relative shadow-xl">
-          <div className="flex items-center justify-between gap-2 sm:gap-4">
-            <div className="flex-1 flex justify-start">
-              <NeonWaveform active={isRecording || avatarState === "speaking"} />
-            </div>
+        {/* 💡 FISILTI KOÇU BUTONU & BALONU */}
+        <div className="mt-4 flex flex-col items-center">
+          <button
+            type="button"
+            onClick={() => setShowWhisper((prev) => !prev)}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border shadow-sm ${
+              showWhisper
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/60"
+                : "bg-slate-900/80 hover:bg-slate-850 text-slate-400 hover:text-amber-300 border-slate-800 hover:border-amber-500/40"
+            }`}
+          >
+            <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+            <span>💡 Ne Diyebilirim? (Fısıltı Koçu)</span>
+          </button>
 
-            <div className="relative group shrink-0">
-              <div
-                className={`absolute -inset-2 rounded-full transition duration-500 ${
-                  isRecording
-                    ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 opacity-80 blur-md animate-pulse"
-                    : "bg-gradient-to-r from-emerald-500/30 to-teal-500/30 opacity-40 blur-sm group-hover:opacity-75"
-                }`}
-              />
-              <button
-                type="button"
-                data-testid="tap-to-speak-mic-btn"
-                onClick={toggleRecording}
-                className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-full flex flex-col items-center justify-center font-bold text-xs transition-all duration-300 cursor-pointer shadow-2xl ${
-                  isRecording
-                    ? "bg-gradient-to-br from-rose-500 to-red-600 text-white animate-pulse ring-4 ring-rose-400/50"
-                    : "bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-emerald-500/30"
-                }`}
-              >
-                <Mic className={`w-7 h-7 sm:w-8 sm:h-8 mb-1 ${isRecording ? "animate-bounce text-white" : "text-slate-950"}`} />
-                <span className="text-[10px] tracking-tight uppercase font-black">
-                  {isRecording ? "Listening" : "Speak"}
-                </span>
-              </button>
-            </div>
+          {showWhisper && (
+            <div className="mt-2.5 p-3.5 rounded-2xl bg-slate-900/95 border border-amber-500/40 shadow-2xl max-w-md w-full animate-in fade-in slide-in-from-top-1 text-xs space-y-2">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-amber-400 font-bold uppercase tracking-wider text-[11px]">
+                <span>💡 Cümle Başlatıcı Kalıp ({targetLevel}):</span>
+                <button
+                  type="button"
+                  onClick={() => setShowWhisper(false)}
+                  className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-            <div className="flex-1 flex justify-end">
-              <NeonWaveform active={isRecording || avatarState === "speaking"} />
+              <p className="text-slate-200 italic leading-relaxed bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80 font-medium">
+                "{whisperPrompt}"
+              </p>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={onCycleWhisper}
+                  className="text-[11px] text-amber-400 hover:underline cursor-pointer"
+                >
+                  Farklı bir kalıp fısılda ↻
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectWhisper(whisperPrompt);
+                    setShowWhisper(false);
+                  }}
+                  className="text-[11px] font-semibold text-emerald-400 hover:underline cursor-pointer"
+                >
+                  Metne Ekle ✍️
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
-

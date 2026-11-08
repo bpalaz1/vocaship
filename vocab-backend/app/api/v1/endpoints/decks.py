@@ -47,6 +47,13 @@ async def list_decks(folder_id: Optional[str] = None, db: Client = Depends(get_d
 @router.post("/", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
 async def create_deck(deck_in: DeckCreate, db: Client = Depends(get_db)):
     data = deck_in.model_dump()
+    # Supabase UUID syntax hatasını önle: boş string veya geçersiz değerleri kesinlikle None yap
+    raw_fid = data.get("folder_id")
+    if not raw_fid or str(raw_fid).strip() in ("", "null", "none", "undefined"):
+        data["folder_id"] = None
+    else:
+        data["folder_id"] = str(raw_fid).strip()
+
     if not data.get("user_id"):
         user_res = db.table("users").select("id").limit(1).execute()
         if user_res.data:
@@ -65,7 +72,11 @@ async def create_deck(deck_in: DeckCreate, db: Client = Depends(get_db)):
 @router.patch("/{deck_id}/folder", status_code=status.HTTP_200_OK)
 async def update_deck_folder(deck_id: str, payload: DeckUpdateFolder, db: Client = Depends(get_db)):
     """Destenin bağlı olduğu klasörü günceller."""
-    f_id = str(payload.folder_id) if payload.folder_id else None
+    raw_fid = payload.folder_id
+    if not raw_fid or str(raw_fid).strip() in ("", "null", "none", "undefined"):
+        f_id = None
+    else:
+        f_id = str(raw_fid).strip()
     res = db.table("decks").update({"folder_id": f_id}).eq("id", deck_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Deste bulunamadı.")

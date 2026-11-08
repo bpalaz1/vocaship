@@ -37,11 +37,18 @@ import {
   BookOpen,
   Edit3,
   Volume2,
-  Languages
+  Languages,
+  Palette
 } from "lucide-react";
 import ReadingRoom from "./components/reading/ReadingRoom";
-
-const API_BASE = "http://localhost:8000/api/v1";
+import AvatarStudioModal from "./components/avatar/AvatarStudioModal";
+import { API_BASE } from "./config";
+import {
+  getArenaMistakes,
+  saveArenaMistake,
+  clearArenaMistakes,
+  ArenaMistakeItem,
+} from "./utils/arenaMistakes";
 
 // Desteklenen Diller
 const SUPPORTED_LANGUAGES = [
@@ -122,6 +129,23 @@ export default function Home() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
+
+  // Oyun Arenası Hatalarım (Hatırlatma Destesi)
+  const [arenaMistakes, setArenaMistakes] = useState<ArenaMistakeItem[]>([]);
+
+  useEffect(() => {
+    const loadMistakes = () => {
+      setArenaMistakes(getArenaMistakes());
+    };
+    loadMistakes();
+
+    window.addEventListener("vocaship:arena_mistakes_updated", loadMistakes);
+    window.addEventListener("storage", loadMistakes);
+    return () => {
+      window.removeEventListener("vocaship:arena_mistakes_updated", loadMistakes);
+      window.removeEventListener("storage", loadMistakes);
+    };
+  }, []);
 
   // Oturum puan takibi
   const [cardRatings, setCardRatings] = useState<Record<string, number>>({});
@@ -213,6 +237,23 @@ export default function Home() {
     exampleTr: string;
   } | null>(null);
   const [isUpdatingCard, setIsUpdatingCard] = useState(false);
+
+  // Profil & Avatar Stüdyosu State'leri
+  const [userAvatar, setUserAvatar] = useState<string>("/avatars/sparky.png");
+  const [isAvatarStudioOpen, setIsAvatarStudioOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("vocaship_custom_avatar");
+      if (saved) setUserAvatar(saved);
+
+      const onAvatarUpdate = (e: any) => {
+        if (e.detail?.url) setUserAvatar(e.detail.url);
+      };
+      window.addEventListener("vocaship:avatar-updated", onAvatarUpdate);
+      return () => window.removeEventListener("vocaship:avatar-updated", onAvatarUpdate);
+    }
+  }, []);
 
   // İleri / Geri Navigasyon
   const handlePrevCard = () => {
@@ -340,6 +381,17 @@ export default function Home() {
       animationFrame = setInterval(() => {
         setAsteroidTop((prev) => {
           if (prev >= 82) {
+            if (currentGravityCard) {
+              saveArenaMistake({
+                word: currentGravityCard.word,
+                meaning:
+                  currentGravityCard.meanings?.[0]?.translation ||
+                  currentGravityCard.meanings?.[0]?.definition ||
+                  "",
+                phonetic: currentGravityCard.phonetic,
+                gameType: "gravity",
+              });
+            }
             setGravityLives((l) => {
               if (l <= 1) {
                 setIsGravityOver(true);
@@ -433,9 +485,13 @@ export default function Home() {
         setNewFolderName("");
         setIsCreateFolderModalOpen(false);
         await fetchFolders();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Klasör oluşturulamadı: ${err.detail || err.message || "Sunucu hatası"}`);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Klasör oluşturma hatası:", err);
+      alert("Klasör oluşturulurken sunucuya ulaşılamadı. Lütfen ağ bağlantınızı kontrol edin.");
     }
   };
 
@@ -611,6 +667,17 @@ export default function Home() {
       setQuizCorrectCount((prev) => prev + 1);
     } else {
       setQuizCombo(1);
+      if (currentQuizCard) {
+        saveArenaMistake({
+          word: currentQuizCard.word,
+          meaning:
+            currentQuizCard.meanings?.[0]?.translation ||
+            currentQuizCard.meanings?.[0]?.definition ||
+            "",
+          phonetic: currentQuizCard.phonetic,
+          gameType: "speed_quiz",
+        });
+      }
     }
 
     setTimeout(() => {
@@ -712,6 +779,32 @@ export default function Home() {
       if (newMatched.length === tiles.length / 2) setIsGameFinished(true);
     } else {
       setWrongTileIds([selectedTile.tileId, tile.tileId]);
+
+      const cardA = allDeckCards.find((c) => c.id === selectedTile.id);
+      const cardB = allDeckCards.find((c) => c.id === tile.id);
+      if (cardA) {
+        saveArenaMistake({
+          word: cardA.word,
+          meaning:
+            cardA.meanings?.[0]?.translation ||
+            cardA.meanings?.[0]?.definition ||
+            "",
+          phonetic: cardA.phonetic,
+          gameType: "match",
+        });
+      }
+      if (cardB && cardB.id !== cardA?.id) {
+        saveArenaMistake({
+          word: cardB.word,
+          meaning:
+            cardB.meanings?.[0]?.translation ||
+            cardB.meanings?.[0]?.definition ||
+            "",
+          phonetic: cardB.phonetic,
+          gameType: "match",
+        });
+      }
+
       setTimeout(() => {
         setWrongTileIds([]);
         setSelectedTile(null);
@@ -758,13 +851,17 @@ export default function Home() {
     if (!newTitle.trim()) return;
     setIsSubmitting(true);
     try {
+      const cleanFolderId = (newDeckFolderId && newDeckFolderId.trim() && newDeckFolderId !== "none")
+        ? newDeckFolderId.trim()
+        : null;
+
       const res = await fetch(`${API_BASE}/decks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newTitle.trim(),
           description: newDescription.trim(),
-          folder_id: newDeckFolderId || null
+          folder_id: cleanFolderId,
         }),
       });
       if (res.ok) {
@@ -774,7 +871,13 @@ export default function Home() {
         setIsCreateModalOpen(false);
         await fetchDecks();
         await fetchFolders();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Deste oluşturulamadı: ${err.detail || err.message || "Sunucu hatası"}`);
       }
+    } catch (err) {
+      console.error("Deste oluşturma hatası:", err);
+      alert("Deste oluşturulurken sunucuya ulaşılamadı. Lütfen ağ bağlantınızı kontrol edin.");
     } finally {
       setIsSubmitting(false);
     }
@@ -927,12 +1030,21 @@ export default function Home() {
   const startStudy = async (deck: Deck) => {
     setActiveDeck(deck);
     setSelectedDeckForWord(deck.id);
-    setLoading(true);
     setSessionCompleted(false);
     setCurrentIndex(0);
     setIsFlipped(false);
     setCardRatings({});
     setCurrentMode("study");
+
+    if (deck.id === "arena_mistakes") {
+      const currentMistakes = getArenaMistakes();
+      setAllDeckCards(currentMistakes as unknown as Flashcard[]);
+      setCards(currentMistakes as unknown as Flashcard[]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/decks/${deck.id}/cards`);
       if (res.ok) {
@@ -945,6 +1057,16 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const startStudyMistakes = (mistakesList: ArenaMistakeItem[]) => {
+    const mistakeDeck: Deck = {
+      id: "arena_mistakes",
+      title: "🎯 Oyun Arenası Hatalarım",
+      description: "Oyunlarda takıldığın kelimeler burada toplanır. Tekrar et ve pekiştir!",
+      card_count: mistakesList.length,
+    };
+    startStudy(mistakeDeck);
   };
 
   // SEÇENEKLİ TEKRAR ÇALIŞTIRMA
@@ -1002,6 +1124,7 @@ export default function Home() {
 
   const forgottenCardsCount = allDeckCards.filter((c) => cardRatings[c.id] === 1).length;
   const hardCardsCount = allDeckCards.filter((c) => cardRatings[c.id] === 1 || cardRatings[c.id] === 3).length;
+  const totalCardsCount = decks.reduce((acc, d) => acc + (d.card_count || 0), 0);
 
   const filteredDecks = decks.filter((d) => {
     const matchesFolder = selectedFolderId
@@ -1017,25 +1140,30 @@ export default function Home() {
   const activeFolderName = folders.find((f) => String(f.id).toLowerCase() === String(selectedFolderId).toLowerCase())?.name;
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center p-4 md:p-10 font-sans relative selection:bg-indigo-500 selection:text-white">
-      {/* Header */}
-      <header className="w-full max-w-5xl flex flex-wrap gap-4 items-center justify-between pb-6 border-b border-slate-200">
-        <div className="flex items-center space-x-3.5">
-          <div className="p-3 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-2xl shadow-lg shadow-indigo-500/25 ring-1 ring-white/20">
-            <BrainCircuit className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-              <span>Quizwise</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">PRO</span>
-            </h1>
-            <p className="text-xs text-slate-500">Çok Dilli Kelime Arenası & İnteraktif Okuma Odası</p>
-          </div>
-        </div>
-
-        {activeDeck ? (
+    <main className="bg-[#0B0F19] min-h-screen text-slate-100 selection:bg-indigo-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+      {/* Yalnızca Bir Deste Açıkken Görünen Şık Deste Üst Kontrol Çubuğu */}
+      {activeDeck && (
+        <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between pb-4 mb-4 border-b border-slate-800 animate-in fade-in duration-150">
           <div className="flex items-center space-x-3">
             <button
+              type="button"
+              onClick={() => {
+                setActiveDeck(null);
+                setCurrentMode("study");
+              }}
+              className="flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-medium text-xs sm:text-sm transition shadow-sm cursor-pointer active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4 text-indigo-400" />
+              <span>← Destelere Dön</span>
+            </button>
+            <h2 className="font-black text-base sm:text-lg text-white truncate max-w-xs sm:max-w-md">
+              {activeDeck.title}
+            </h2>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
               onClick={() => {
                 setSelectedDeckForWord(activeDeck.id);
                 setEnrichedData(null);
@@ -1043,102 +1171,215 @@ export default function Home() {
                 setSuggestions([]);
                 setIsAddWordModalOpen(true);
               }}
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/50 hover:bg-indigo-600/30 font-medium text-xs sm:text-sm text-indigo-300 transition"
+              className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium shadow-md shadow-indigo-500/20 text-xs sm:text-sm transition cursor-pointer active:scale-95"
             >
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span>Desteye Kelime Ekle</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveDeck(null);
-                setCurrentMode("study");
-              }}
-              className="flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 text-xs sm:text-sm font-semibold transition shadow-sm"
-            >
-              <ArrowLeft className="w-4 h-4 text-indigo-400" />
-              <span>Destelere Dön</span>
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>✨ Desteye Kelime Ekle</span>
             </button>
           </div>
-        ) : (
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            <button
-              onClick={() => setIsCreateFolderModalOpen(true)}
-              className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-850 font-medium text-xs sm:text-sm text-slate-300 transition"
-            >
-              <FolderPlus className="w-4 h-4 text-amber-400" />
-              <span>Klasör Aç</span>
-            </button>
-            <button
-              onClick={() => {
-                if (decks.length > 0 && !selectedDeckForWord) setSelectedDeckForWord(decks[0].id);
-                setEnrichedData(null);
-                setCorrectionNotice(null);
-                setSuggestions([]);
-                setIsAddWordModalOpen(true);
-              }}
-              className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-indigo-500/30 hover:border-indigo-500/60 font-medium text-xs sm:text-sm text-indigo-300 transition"
-            >
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span>Kelime Ekle</span>
-            </button>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs sm:text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Yeni Deste</span>
-            </button>
-          </div>
-        )}
-      </header>
+        </header>
+      )}
 
       {/* Main Content */}
-      <div className="w-full max-w-5xl mt-6 flex-1 flex flex-col items-center">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col overflow-x-hidden">
         {!activeDeck ? (
-          <div className="w-full">
-            {/* Üst Kontrol Barı */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-6 bg-slate-900/60 p-2.5 rounded-2xl border border-slate-800/80 backdrop-blur-md">
-              <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Deste ara..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
-                />
-              </div>
+          <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
+            {/* =================================================================== */}
+            {/* A) SOL SÜTUN (Kullanıcı Paneli & Sayaçlar - w-full lg:w-72 xl:w-80) */}
+            {/* =================================================================== */}
+            <aside className="w-full lg:w-72 xl:w-80 shrink-0 lg:sticky lg:top-20">
+              <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md">
+                {/* Üst Kısım - Profil Alanı */}
+                <div className="flex items-center gap-3">
+                  <img
+                    src={userAvatar || "/avatars/sparky.png"}
+                    alt="Profil Avatarı"
+                    className="w-12 h-12 rounded-xl border border-amber-400/50 object-cover shadow-md shadow-amber-500/10 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="font-bold text-slate-100 text-sm truncate">Burak P.</h3>
+                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                        Lv.3
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-medium truncate max-w-[130px] mt-0.5">
+                      Kıdemli Dil Öğr...
+                    </p>
+                  </div>
+                </div>
 
-              <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 self-end sm:self-auto">
+                {/* [ 🎨 Avatarı Değiştir ] Butonu */}
                 <button
-                  onClick={() => setViewMode("folder")}
-                  title="Klasör Görünümü"
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${viewMode === "folder" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30" : "text-slate-400 hover:text-white"
-                    }`}
+                  type="button"
+                  onClick={() => setIsAvatarStudioOpen(true)}
+                  className="w-full mt-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium text-xs py-2 rounded-xl shadow-md shadow-indigo-600/25 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center gap-1.5"
+                  title="Avatar Stüdyosunu Aç"
                 >
-                  <FolderTree className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Klasörler</span>
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>🎨 Avatarı Değiştir</span>
                 </button>
-                <button
-                  onClick={() => setViewMode("grid")}
-                  title="Kart Izgara Görünümü"
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${viewMode === "grid" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30" : "text-slate-400 hover:text-white"
-                    }`}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Kartlar</span>
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  title="Kompakt Liste Görünümü"
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${viewMode === "list" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30" : "text-slate-400 hover:text-white"
-                    }`}
-                >
-                  <ListIcon className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Liste</span>
-                </button>
+
+                {/* Ayraç */}
+                <div className="border-t border-slate-800 my-4" />
+
+                {/* Alt Kısım - 4 İstatistik Sayacı (Dikey Kompakt Liste) */}
+                <div className="space-y-2">
+                  {/* 1. Sayaç (Toplam Kelime) */}
+                  <div className="bg-gradient-to-br from-slate-950/80 to-indigo-950/30 border border-indigo-500/30 rounded-xl p-3 flex items-center justify-between hover:border-indigo-500/50 transition-all">
+                    <span className="text-xs font-semibold text-indigo-400 flex items-center gap-1.5">
+                      <span>📚</span>
+                      <span>Toplam Kelime</span>
+                    </span>
+                    <span className="text-xl font-black text-indigo-300 drop-shadow-[0_0_8px_rgba(165,180,252,0.3)] font-mono">
+                      {totalCardsCount}
+                    </span>
+                  </div>
+
+                  {/* 2. Sayaç (Okunan Hikaye) */}
+                  <div className="bg-gradient-to-br from-slate-950/80 to-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between hover:border-amber-500/50 transition-all">
+                    <span className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+                      <span>📖</span>
+                      <span>Okunan Hikaye</span>
+                    </span>
+                    <span className="text-xl font-black text-amber-300 drop-shadow-[0_0_8px_rgba(252,211,77,0.3)] font-mono">
+                      12
+                    </span>
+                  </div>
+
+                  {/* 3. Sayaç (Speaking Seansı) */}
+                  <div className="bg-gradient-to-br from-slate-950/80 to-emerald-950/30 border border-emerald-500/30 rounded-xl p-3 flex items-center justify-between hover:border-emerald-500/50 transition-all">
+                    <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <span>🎙️</span>
+                      <span>Speaking Seansı</span>
+                    </span>
+                    <span className="text-xl font-black text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)] font-mono">
+                      8
+                    </span>
+                  </div>
+
+                  {/* 4. Sayaç (Deste & Klasör) */}
+                  <div className="bg-gradient-to-br from-slate-950/80 to-cyan-950/30 border border-cyan-500/30 rounded-xl p-3 flex items-center justify-between hover:border-cyan-500/50 transition-all">
+                    <span className="text-xs font-semibold text-cyan-400 flex items-center gap-1.5">
+                      <span>🗂️</span>
+                      <span>Deste & Klasör</span>
+                    </span>
+                    <span className="text-xl font-black text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.3)] font-mono">
+                      {decks.length} <span className="text-xs text-slate-500 font-normal">/</span> {folders.length}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
+            </aside>
+
+            {/* =================================================================== */}
+            {/* B) SAĞ GENİŞ SÜTUN (Arama Konsolu, Klasörler & Deste Kartları)     */}
+            {/* =================================================================== */}
+            <main className="flex-1 min-w-0 w-full space-y-6">
+              {/* Üst Konsol Barı */}
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full bg-slate-900/85 border border-slate-800/90 p-2.5 rounded-2xl shadow-xl backdrop-blur-md">
+                {/* Arama Çubuğu */}
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Deste veya kelime ara..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex-1 w-full bg-slate-950/90 border border-slate-800 focus:border-indigo-500/70 text-slate-100 placeholder-slate-500 rounded-xl pl-9 pr-8 py-2.5 text-sm outline-none transition-all"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Aksiyon Butonları */}
+                <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end shrink-0">
+                  {/* [ 📁 Klasör Aç ] */}
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateFolderModalOpen(true)}
+                    className="bg-slate-800/90 hover:bg-slate-800 border border-amber-500/40 text-amber-300 hover:border-amber-400 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
+                    <span>📁 Klasör Aç</span>
+                  </button>
+
+                  {/* [ ✨ Kelime Ekle ] */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (decks.length > 0 && !selectedDeckForWord) setSelectedDeckForWord(decks[0].id);
+                      setEnrichedData(null);
+                      setCorrectionNotice(null);
+                      setSuggestions([]);
+                      setIsAddWordModalOpen(true);
+                    }}
+                    className="bg-slate-800/90 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 hover:border-cyan-400 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>✨ Kelime Ekle</span>
+                  </button>
+
+                  {/* [ + Yeni Deste ] */}
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs sm:text-sm font-semibold px-4 py-2 rounded-xl shadow-lg shadow-indigo-600/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Yeni Deste</span>
+                  </button>
+
+                  <div className="h-6 w-px bg-slate-800 mx-0.5 hidden sm:block" />
+
+                  {/* Görünüm Seçici */}
+                  <div className="flex items-center bg-slate-950/80 border border-slate-800 rounded-xl p-1">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("folder")}
+                      title="Klasör Görünümü"
+                      className={`p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        viewMode === "folder"
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <FolderTree className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      title="Izgara Görünümü"
+                      className={`p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        viewMode === "grid"
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("list")}
+                      title="Liste Görünümü"
+                      className={`p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        viewMode === "list"
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <ListIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
 
             {/* Seçili Klasör Uyarısı */}
             {selectedFolderId && (
@@ -1159,6 +1400,57 @@ export default function Home() {
               </div>
             )}
 
+            {/* =================================================================== */}
+            {/* 🎯 ÖZEL AKILLI KART: Oyun Arenası Hatalarım (Hatırlatma Destesi)    */}
+            {/* =================================================================== */}
+            {arenaMistakes.length > 0 && !selectedFolderId && (
+              <div className="mb-6 p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-rose-950/60 via-slate-900/90 to-purple-950/50 border-2 border-rose-500/40 shadow-xl shadow-rose-950/30 backdrop-blur-md relative overflow-hidden group">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-4 min-w-0">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-rose-600/20 border border-rose-500/50 text-rose-400 flex items-center justify-center text-2xl sm:text-3xl shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+                      🎯
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                          🎯 Oyun Arenası Hatalarım
+                        </h3>
+                        <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
+                          {arenaMistakes.length} Kelime
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                        Oyunlarda takıldığın kelimeler burada toplanır. Tekrar et ve pekiştir!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Oyun arenası hatalarını temizlemek istediğinize emin misiniz?")) {
+                          clearArenaMistakes();
+                        }
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-rose-400 hover:bg-slate-800/60 transition cursor-pointer"
+                      title="Hataları Temizle"
+                    >
+                      Temizle
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startStudyMistakes(arenaMistakes)}
+                      className="px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-rose-600/30 transition cursor-pointer active:scale-95"
+                    >
+                      <RotateCw className="w-4 h-4" />
+                      <span>Hatalarımı Çalış (SM-2) ➔</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 1. KLASÖR GÖRÜNÜMÜ */}
             {viewMode === "folder" && !selectedFolderId && (
               <div className="space-y-6">
@@ -1167,7 +1459,7 @@ export default function Home() {
                     <FolderTree className="w-4 h-4 text-amber-400" />
                     <span>Klasörler</span>
                   </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                     {folders.map((f) => {
                       const isHovered = dragOverFolderId === f.id;
                       return (
@@ -1177,14 +1469,15 @@ export default function Home() {
                           onDragOver={(e) => handleDragOver(e, f.id)}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDropOnFolder(e, f.id)}
-                          className={`group cursor-pointer p-4 rounded-2xl border transition-all duration-200 relative flex flex-col justify-between select-none ${isHovered
-                              ? "bg-indigo-600/30 border-dashed border-indigo-400 scale-105 shadow-xl shadow-indigo-600/20"
-                              : "bg-slate-900/70 border-slate-800 hover:border-amber-400/50 hover:bg-slate-900 shadow-md"
-                            }`}
+                          className={`bg-slate-900/85 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-400/60 rounded-2xl p-4 shadow-lg shadow-amber-950/20 hover:shadow-amber-500/10 transition-all cursor-pointer group flex flex-col justify-between select-none relative ${
+                            isHovered
+                              ? "border-dashed border-amber-400 scale-105 shadow-xl shadow-amber-500/20"
+                              : ""
+                          }`}
                         >
                           <div className="flex items-center justify-between mb-3">
-                            <div className="p-2.5 rounded-xl bg-amber-400/10 text-amber-400 group-hover:bg-amber-400 group-hover:text-slate-950 transition">
-                              <Folder className="w-5 h-5" />
+                            <div className="p-2 rounded-xl bg-amber-400/10 text-amber-400 group-hover:scale-110 transition-transform">
+                              <Folder className="w-5 h-5 text-amber-400" />
                             </div>
                             <button
                               onClick={(e) => {
@@ -1198,8 +1491,12 @@ export default function Home() {
                             </button>
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition truncate">{f.name}</h4>
-                            <p className="text-[11px] text-slate-400 mt-0.5">{f.deck_count || 0} Deste Bağlı</p>
+                            <h4 className="font-bold text-slate-100 text-sm group-hover:text-amber-300 transition-colors truncate">{f.name}</h4>
+                            <div className="mt-2">
+                              <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs px-2 py-0.5 rounded-lg font-medium inline-block">
+                                {f.deck_count || 0} Deste
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1212,7 +1509,7 @@ export default function Home() {
                     <BookOpen className="w-4 h-4 text-indigo-400" />
                     <span>Genel & Bağımsız Desteler</span>
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {decks
                       .filter((d) => !d.folder_id)
                       .map((deck) => (
@@ -1221,23 +1518,32 @@ export default function Home() {
                           draggable
                           onDragStart={(e) => handleDragStart(e, deck.id)}
                           onClick={() => startStudy(deck)}
-                          className="group cursor-grab active:cursor-grabbing bg-slate-900/70 border border-slate-800 hover:border-indigo-500/60 p-5 rounded-2xl transition flex flex-col justify-between shadow-lg"
+                          className="bg-slate-900/90 hover:bg-slate-850 border border-slate-800/90 hover:border-indigo-500/60 rounded-2xl p-5 shadow-xl hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none"
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-1.5 text-slate-500 text-[11px]">
-                              <GripVertical className="w-3.5 h-3.5" />
-                              <span>Sürükleyip Klasöre Bırak</span>
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-1.5 text-slate-500 group-hover:text-slate-400 text-[11px]">
+                                <GripVertical className="w-3.5 h-3.5" />
+                                <span>Sürükle</span>
+                              </div>
+                              <button
+                                onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
+                                title="Desteyi Sil"
+                                className="text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
-                            <button onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)} className="p-1 rounded-lg text-slate-500 hover:text-rose-400">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <h4 className="text-base font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">{deck.title}</h4>
+                            <p className="text-slate-400 text-xs line-clamp-2 mt-1 mb-4">{deck.description || "Açıklama yok."}</p>
+                            <span className="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
+                              {deck.card_count} Kart
+                            </span>
                           </div>
-                          <h4 className="text-base font-bold group-hover:text-indigo-400 transition">{deck.title}</h4>
-                          <p className="text-xs text-slate-400 line-clamp-2 mt-1">{deck.description || "Açıklama yok."}</p>
                           <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                            <span>{deck.card_count} Kart</span>
-                            <span className="flex items-center space-x-1 text-indigo-400 font-semibold">
-                              <span>Çalış</span>
+                            <span className="text-slate-400 text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
+                            <span className="text-indigo-400 group-hover:text-indigo-300 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
+                              <span>Çalış & Oyna →</span>
                               <ChevronRight className="w-3.5 h-3.5" />
                             </span>
                           </div>
@@ -1252,13 +1558,36 @@ export default function Home() {
             {(viewMode === "grid" || selectedFolderId) && (
               <div>
                 {filteredDecks.length === 0 ? (
-                  <div className="text-center p-12 bg-slate-900/40 border border-slate-800/60 rounded-3xl">
-                    <Folder className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                    <h4 className="text-base font-bold text-slate-300">Bu bölümde deste bulunamadı</h4>
-                    <p className="text-xs text-slate-500 mt-1">"Yeni Deste" butonuna tıklayarak ilk destenizi ekleyin.</p>
+                  <div className="text-center p-8 sm:p-14 bg-gradient-to-b from-indigo-950/20 via-slate-900/60 to-slate-950/80 border-2 border-dashed border-indigo-500/40 rounded-3xl shadow-xl shadow-indigo-500/5 relative overflow-hidden group">
+                    <div className="w-16 h-16 rounded-3xl bg-indigo-600/20 border border-indigo-400/40 text-indigo-400 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-600/20 group-hover:scale-110 transition-transform">
+                      <Sparkles className="w-8 h-8 text-indigo-300 animate-pulse" />
+                    </div>
+                    <h4 className="text-lg font-black text-white">Bu Bölümde Deste Bulunamadı</h4>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto mt-1.5 leading-relaxed">
+                      Kendi kelime destenizi hemen oluşturabilir veya platformdaki zengin okuma odası ve hazır desteleri inceleyebilirsiniz.
+                    </p>
+
+                    <div className="flex items-center justify-center flex-wrap gap-3 mt-6">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs flex items-center gap-2 shadow-lg shadow-purple-600/30 transition active:scale-95 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ İlk Desteni Oluştur</span>
+                      </button>
+
+                      <Link
+                        href="/reading"
+                        className="px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-850 border border-slate-700/80 hover:border-slate-600 text-slate-200 font-bold text-xs flex items-center gap-2 transition active:scale-95 cursor-pointer shadow-sm"
+                      >
+                        <BookOpen className="w-4 h-4 text-amber-400" />
+                        <span>📖 Hazır Deste İncele</span>
+                      </Link>
+                    </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filteredDecks.map((deck) => {
                       const parentFolder = folders.find((f) => String(f.id).toLowerCase() === String(deck.folder_id).toLowerCase());
                       const isBeingDragged = draggedDeckId === deck.id;
@@ -1269,40 +1598,49 @@ export default function Home() {
                           draggable
                           onDragStart={(e) => handleDragStart(e, deck.id)}
                           onClick={() => startStudy(deck)}
-                          className={`group cursor-grab active:cursor-grabbing bg-slate-900/70 border p-6 rounded-2xl transition-all duration-200 flex flex-col justify-between relative select-none ${isBeingDragged
+                          className={`${
+                            isBeingDragged
                               ? "opacity-40 border-indigo-500 border-dashed scale-95"
-                              : "border-slate-800 hover:border-indigo-500/60 hover:scale-[1.01] shadow-lg"
-                            }`}
+                              : "bg-slate-900/90 hover:bg-slate-850 border border-slate-800/90 hover:border-indigo-500/60"
+                          } rounded-2xl p-5 shadow-xl hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none`}
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-1.5 text-slate-500 group-hover:text-slate-400">
-                              <GripVertical className="w-4 h-4" />
-                              <span className="text-[11px]">Sürükle</span>
-                            </div>
-                            <button
-                              onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
-                              title="Desteyi Sil"
-                              className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
                           <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-1.5 text-slate-500 group-hover:text-slate-400">
+                                <GripVertical className="w-4 h-4" />
+                                <span className="text-[11px]">Sürükle</span>
+                              </div>
+                              <button
+                                onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
+                                title="Desteyi Sil"
+                                className="text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
                             {parentFolder && (
-                              <span className="inline-flex items-center space-x-1 text-[11px] font-semibold text-amber-400/90 bg-amber-400/10 px-2.5 py-0.5 rounded-lg mb-2">
-                                <Folder className="w-3 h-3" />
-                                <span>{parentFolder.name}</span>
+                              <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-lg text-xs font-medium inline-flex items-center space-x-1 mb-2">
+                                📁 {parentFolder.name}
                               </span>
                             )}
-                            <h3 className="text-lg font-bold group-hover:text-indigo-400 transition">{deck.title}</h3>
-                            <p className="text-sm text-slate-400 mt-1 line-clamp-2">{deck.description || "Açıklama yok."}</p>
+                            <h3 className="text-base font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                              {deck.title}
+                            </h3>
+                            <p className="text-slate-400 text-xs line-clamp-2 mt-1 mb-4">
+                              {deck.description || "Açıklama yok."}
+                            </p>
+
+                            <span className="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
+                              {deck.card_count} Kart
+                            </span>
                           </div>
-                          <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                            <span>{deck.card_count} Kart Kayıtlı</span>
-                            <span className="flex items-center space-x-1 text-indigo-400 font-medium">
-                              <span>Çalış & Oyna</span>
-                              <ChevronRight className="w-4 h-4" />
+
+                          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                            <span className="text-slate-400 text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
+                            <span className="text-indigo-400 group-hover:text-indigo-300 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
+                              <span>Çalış & Oyna →</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
                             </span>
                           </div>
                         </div>
@@ -1317,8 +1655,25 @@ export default function Home() {
             {viewMode === "list" && !selectedFolderId && (
               <div className="space-y-2">
                 {filteredDecks.length === 0 ? (
-                  <div className="text-center p-8 bg-slate-900/40 border border-slate-800 rounded-2xl text-slate-500 text-xs">
-                    Aradığınız kriterde deste bulunamadı.
+                  <div className="text-center p-8 bg-gradient-to-b from-indigo-950/20 via-slate-900/60 to-slate-950/80 border-2 border-dashed border-indigo-500/40 rounded-3xl shadow-sm text-center space-y-3">
+                    <p className="text-xs text-slate-300 font-bold">Aradığınız kriterde deste bulunamadı.</p>
+                    <div className="flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ İlk Desteni Oluştur</span>
+                      </button>
+                      <Link
+                        href="/reading"
+                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                        <span>📖 Hazır Deste İncele</span>
+                      </Link>
+                    </div>
                   </div>
                 ) : (
                   filteredDecks.map((deck) => {
@@ -1329,19 +1684,19 @@ export default function Home() {
                         draggable
                         onDragStart={(e) => handleDragStart(e, deck.id)}
                         onClick={() => startStudy(deck)}
-                        className="group cursor-pointer bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 px-4 py-3 rounded-xl transition flex items-center justify-between shadow-sm"
+                        className="group cursor-pointer bg-slate-900/80 hover:bg-slate-850 border border-slate-800/90 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/20 px-4 py-3 rounded-xl transition flex items-center justify-between"
                       >
                         <div className="flex items-center space-x-3.5 min-w-0">
                           <GripVertical className="w-4 h-4 text-slate-600 group-hover:text-slate-400 shrink-0 cursor-grab" />
                           <div className="min-w-0">
-                            <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 truncate">{deck.title}</h4>
+                            <h4 className="text-sm font-bold text-slate-100 group-hover:text-indigo-300 transition-colors truncate">{deck.title}</h4>
                             <p className="text-xs text-slate-400 truncate">{deck.description || "Açıklama yok"}</p>
                           </div>
                         </div>
 
                         <div className="flex items-center space-x-4 shrink-0">
                           {parentFolder ? (
-                            <span className="hidden sm:inline-flex items-center space-x-1 text-[11px] font-semibold text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-md">
+                            <span className="hidden sm:inline-flex items-center space-x-1 text-[11px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-md">
                               <Folder className="w-3 h-3" />
                               <span>{parentFolder.name}</span>
                             </span>
@@ -1349,11 +1704,11 @@ export default function Home() {
                             <span className="hidden sm:inline text-[11px] text-slate-500">(Genel)</span>
                           )}
 
-                          <span className="text-xs text-slate-400 font-mono">{deck.card_count} Kart</span>
+                          <span className="text-xs text-slate-400 font-medium">{deck.card_count} Kart</span>
 
                           <button
                             onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
-                            className="p-1 rounded-lg text-slate-500 hover:text-rose-400"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1364,8 +1719,9 @@ export default function Home() {
                 )}
               </div>
             )}
-          </div>
-        ) : loading ? (
+          </main>
+        </div>
+      ) : loading ? (
           <div className="flex flex-col items-center justify-center my-auto space-y-3">
             <RotateCw className="w-8 h-8 text-indigo-400 animate-spin" />
             <p className="text-sm text-slate-400">Yükleniyor...</p>
@@ -1381,57 +1737,20 @@ export default function Home() {
                   setEnrichedData(null);
                   setIsAddWordModalOpen(true);
                 }}
-                className="px-5 py-2.5 bg-indigo-600 rounded-xl text-sm font-medium hover:bg-indigo-500 transition"
+                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium shadow-md shadow-indigo-500/20 rounded-xl text-sm transition cursor-pointer"
               >
-                Hemen Kelime Ekle
+                ✨ Desteye Kelime Ekle
               </button>
-              <button onClick={() => setActiveDeck(null)} className="px-5 py-2.5 bg-slate-800 rounded-xl text-sm font-medium">Destelere Dön</button>
+              <button
+                onClick={() => setActiveDeck(null)}
+                className="px-5 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-medium rounded-xl text-sm transition cursor-pointer"
+              >
+                ← Destelere Dön
+              </button>
             </div>
           </div>
         ) : (
           <div className="w-full flex flex-col items-center">
-            {/* Üst Mod Çubuğu (Sadeleştirilmiş Temel Pedagojik Araçlar) */}
-            <div className="flex items-center justify-between w-full max-w-xl bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 mb-8 shadow-sm">
-              <div className="flex items-center space-x-1.5">
-                <button
-                  type="button"
-                  onClick={() => setCurrentMode("study")}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-                    currentMode === "study"
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                  }`}
-                >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  <span>Kart Çalış (SM-2)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrentMode("reading")}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-                    currentMode === "reading"
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Okuma Odası</span>
-                </button>
-              </div>
-
-              {/* Sağ: Zarif ve Minimalist Oyun Arenası Bağlantısı */}
-              <Link
-                href="/games"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-amber-300 hover:bg-slate-800/60 transition group"
-                title="Oyun Arenası ve Alıştırmalar"
-              >
-                <Gamepad2 className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-                <span className="hidden sm:inline">Oyun Arenası'na Git</span>
-                <span className="text-slate-500 group-hover:text-amber-300 transition-colors">→</span>
-              </Link>
-            </div>
-
             {/* MOD: OKUMA ODASI */}
             {currentMode === "reading" && (
               <div className="w-full">
@@ -1833,8 +2152,11 @@ export default function Home() {
                         <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
                         <span>Hızlı Test Çöz</span>
                       </button>
-                      <button onClick={() => setActiveDeck(null)} className="text-xs text-slate-400 hover:text-white transition">
-                        Destelere Dön
+                      <button
+                        onClick={() => setActiveDeck(null)}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-medium text-xs transition cursor-pointer"
+                      >
+                        ← Destelere Dön
                       </button>
                     </div>
                   </div>
@@ -2454,6 +2776,13 @@ export default function Home() {
           </div>
         </div>
       )}
+      {/* Avatar Stüdyosu Modalı */}
+      <AvatarStudioModal
+        isOpen={isAvatarStudioOpen}
+        onClose={() => setIsAvatarStudioOpen(false)}
+        currentAvatarUrl={userAvatar}
+        onAvatarChanged={(url) => setUserAvatar(url)}
+      />
     </main>
   );
 }

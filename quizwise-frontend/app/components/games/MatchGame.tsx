@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Shuffle, Clock, X, Trophy, Sparkles, Check, RotateCcw } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
+import { saveArenaMistake } from "../../utils/arenaMistakes";
 
 export interface MatchPairItem {
   id: string;
@@ -119,6 +120,13 @@ export default function MatchGame({
         // HATALI EŞLEŞME: Kırmızı Titreme (Shake)
         setMismatchedIds(newSelected);
         setCombos(0);
+
+        if (first?.word) {
+          saveArenaMistake({ word: first.word, gameType: "match" });
+        }
+        if (item.word && item.word !== first?.word) {
+          saveArenaMistake({ word: item.word, gameType: "match" });
+        }
 
         setTimeout(() => {
           setSelectedIds([]);

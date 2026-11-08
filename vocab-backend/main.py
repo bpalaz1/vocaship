@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1 import router as api_v1_router
 from app.api.v1.endpoints.reading import router as reading_router
 from app.api.v1.endpoints.speaking import router as speaking_router
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.services.quota_service import QuotaExceededException, ProRequiredException
 
 app = FastAPI(title="Vocaship Backend", version="1.0.0")
@@ -18,6 +19,15 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+
 @app.exception_handler(QuotaExceededException)
 async def quota_exceeded_handler(request: Request, exc: QuotaExceededException):
     return JSONResponse(status_code=403, content=exc.payload)
@@ -30,6 +40,12 @@ async def pro_required_handler(request: Request, exc: ProRequiredException):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, StarletteHTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None),
+        )
     return JSONResponse(
         status_code=500,
         content={"detail": f"Sunucu hatası: {str(exc)}"},

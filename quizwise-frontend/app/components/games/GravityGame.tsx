@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
 import { Flame, Heart, X, Zap, Target, Sparkles, Send } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
+import RespawnModal from "./RespawnModal";
 
 export interface GravityGameProps {
   cards: Array<{ word: string; meaning: string }>;
@@ -26,6 +27,7 @@ export default function GravityGame({
   const [isExploding, setIsExploding] = useState(false);
   const [isImpact, setIsImpact] = useState(false);
   const [gameOver, setGameOver] = useState(false);
+  const [isRespawnOpen, setIsRespawnOpen] = useState(false);
   const [typedInput, setTypedInput] = useState("");
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +69,8 @@ export default function GravityGame({
     setLives((prevLives) => {
       const nextLives = prevLives - 1;
       if (nextLives <= 0) {
-        setTimeout(() => setGameOver(true), 600);
+        // Can bitti: Sıfır Eleme Kurtarma Odası açılır!
+        setTimeout(() => setIsRespawnOpen(true), 400);
       } else {
         setTimeout(() => {
           setIsImpact(false);
@@ -274,6 +277,24 @@ export default function GravityGame({
           onBackToArena={onClose}
         />
       )}
+
+      {/* 5. Sıfır Eleme / Kurtarma Odası (Respawn Engine) */}
+      <RespawnModal
+        isOpen={isRespawnOpen}
+        cards={cards}
+        onRespawn={() => {
+          setIsRespawnOpen(false);
+          setLives(1);
+          setIsImpact(false);
+          setAsteroidY(10);
+          setTypedInput("");
+          setCurrentIdx((idx) => (idx + 1) % cards.length);
+        }}
+        onGiveUp={() => {
+          setIsRespawnOpen(false);
+          setGameOver(true);
+        }}
+      />
     </div>
   );
 }

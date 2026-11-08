@@ -1,47 +1,51 @@
+/**
+ * Vocaship Okuma Odası (/reading) Hikaye Veri Tipleri
+ */
+
+export type ReadingLevel = "A" | "B" | "C" | "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | string;
+
 export interface TargetVocabularyItem {
   word: string;
-  phonetic: string;
-  turkish_meaning: string;
-  context_sentence: string;
+  phonetic?: string;
+  meaning?: string;
+  turkish_meaning?: string;
+  context_sentence?: string;
+  example?: string;
+  translation?: string;
+  part_of_speech?: string;
 }
 
 export interface ComprehensionQuestion {
   question: string;
   options: string[];
-  correct_index?: number;
   correct_answer_index: number;
-  explanation?: string; // Doğru cevabın metindeki kanıtı
-  distractor_reasons?: Record<number, string>; // Her yanlış şık için neden çeldirici olduğu
+  correct_index?: number;
+  explanation?: string;
+  distractor_reasons?: Record<number, string>;
 }
 
-export interface CuratedStory {
+export interface Story {
   id: string;
   title: string;
-  category:
-    | "kids"
-    | "adult_basic"
-    | "adult_intermediate"
-    | "adult_advanced"
-    | "project_controls"
-    | "legal_contracts"
-    | "medical_clinical"
-    | "finance_accounting"
-    | string;
-  categoryName: string;
-  level: string;
-  cefr: string;
-  coverImage?: string;
+  category: string;
+  categoryName?: string;
+  level: ReadingLevel;
+  cefr?: string;
   readTime: string;
   wordCount: number;
-  topic: string;
+  coverImage?: string;
   desc: string;
-  content: string;
+  topic?: string;
   target_words: string[];
+  content: string;
   target_vocabulary: TargetVocabularyItem[];
   comprehension_questions: ComprehensionQuestion[];
   isCareerCase?: boolean;
   isUserStory?: boolean;
 }
+
+// Geriye dönük uyumluluk için CuratedStory takma adı
+export type CuratedStory = Story;
 
 export interface StoryCategoryMeta {
   id: string;

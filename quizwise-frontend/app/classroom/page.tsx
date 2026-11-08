@@ -1,1278 +1,490 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useLiveSession } from "../hooks/useLiveSession";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   GraduationCap,
-  Users,
-  KeyRound,
-  Sparkles,
-  BookOpen,
-  Layers,
-  CheckCircle2,
-  Clock,
-  Copy,
-  Check,
   Plus,
-  Trash2,
-  ArrowRight,
-  RefreshCw,
-  Award,
-  AlertCircle,
-  FileText,
-  Calendar,
-  Send,
-  UserCheck,
-  FolderOpen,
-  X,
-  Wand2,
+  Tv,
+  KeyRound,
+  Archive,
+  BookOpen,
   HelpCircle,
-  CheckCircle,
-  Eye,
+  Sparkles,
+  Calendar,
+  X,
+  Trash2,
+  CheckCircle2,
   School,
-  Maximize2,
-  QrCode
+  FileText,
+  Search,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { useLanguage } from "../context/LanguageContext";
-import { useAuth } from "../context/AuthContext";
-import ProUpgradeModal from "../components/classroom/ProUpgradeModal";
-import ClassCard from "../components/classroom/ClassCard";
-import ClassPinModal from "../components/classroom/ClassPinModal";
-import ClassLiveQRModal from "../components/classroom/ClassLiveQRModal";
-import StudentAssignments from "../components/classroom/StudentAssignments";
-import { API_BASE } from "../config";
-
-export interface ClassroomItem {
-  id: string;
-  name: string;
-  code: string;
-  student_count: number;
-  grade_level?: string;
-  created_at?: string;
-}
-
-export interface ExtractedTargetWord {
-  word: string;
-  meaning: string;
-  phonetic?: string;
-  example?: string;
-}
-
-export interface ExtractedQuestion {
-  question: string;
-  options: string[];
-  correct_index: number;
-  explanation?: string;
-}
-
-export interface ClassroomAssignment {
-  id: string;
-  classroom_id: string;
-  class_code: string;
-  title: string;
-  story_content?: string;
-  target_words: ExtractedTargetWord[];
-  questions: ExtractedQuestion[];
-  due_date: string;
-  completed_percent: number;
-  created_at?: string;
-}
-
-export interface StudentProgressRow {
-  studentName: string;
-  avatar: string;
-  status: "completed" | "in_progress" | "not_started";
-  scoreText: string;
-  scorePercent: number;
-  lastActive: string;
-}
+import ClassCard, { ClassroomItem } from "../components/classroom/ClassCard";
+import ClassPinModal, { generateClassPin } from "../components/classroom/ClassPinModal";
+import { BoardLessonSummaryData } from "./board/components/BoardSummaryModal";
 
 const DEFAULT_CLASSES: ClassroomItem[] = [
   {
     id: "cls-1",
-    name: "C1 Advanced Business & Engineering English",
-    code: "VRG-2535",
-    student_count: 18,
-    grade_level: "C1 Pro",
+    name: "10-A İngilizce",
+    code: "7A2-5K9",
+    student_count: 24,
     created_at: "2026-10-20T10:00:00Z",
   },
   {
     id: "cls-2",
-    name: "FIDIC & EPC Project Control Lab",
-    code: "VRG-8492",
-    student_count: 12,
-    grade_level: "C1-C2 Executive",
+    name: "Genel Pratik Grubu",
+    code: "3M8-2B1",
+    student_count: 16,
     created_at: "2026-10-22T14:30:00Z",
   },
+  {
+    id: "cls-3",
+    name: "9-B Dil Sınıfı",
+    code: "9T4-6A0",
+    student_count: 19,
+    created_at: "2026-10-25T11:00:00Z",
+  },
 ];
 
-const DEFAULT_ASSIGNMENTS: ClassroomAssignment[] = [
+const DEFAULT_ARCHIVES: BoardLessonSummaryData[] = [
   {
-    id: "assign-1",
-    classroom_id: "cls-1",
-    class_code: "VRG-2535",
-    title: "The Architecture of Deep Focus",
-    story_content:
-      "Deep focus is the ability to concentrate without distraction on a demanding task. Cultivating resilience against superficial interruptions is essential for mastering complex problem-solving in engineering and business.",
-    target_words: [
-      { word: "resilience", meaning: "Direnç, toparlanma gücü", phonetic: "/rɪˈzɪl.jənt/" },
-      { word: "cognitive", meaning: "Bilişsel, zihinsel", phonetic: "/ˈkɒɡ.nə.tɪv/" },
-      { word: "superficial", meaning: "Yüzeysel", phonetic: "/ˌsuː.pəˈfɪʃ.əl/" },
-      { word: "mitigate", meaning: "Hafifletmek, etkisini azaltmak", phonetic: "/ˈmɪt.ɪ.ɡeɪt/" },
-      { word: "substantiate", meaning: "Doğrulamak, somutlaştırmak", phonetic: "/səbˈstæn.ʃi.eɪt/" },
+    id: "arch-1",
+    className: "10-A İngilizce",
+    lessonTitle: "Etkileşimli Okuma & Cümle Analizi",
+    date: "8 Kasım 2026 • 14:30",
+    summaryPoints: [
+      "Okuma materyali sınıf tahtasında incelendi ve ana bölümler analiz edildi.",
+      "Öğrencilerle rastgele söz hakkı eşliğinde soru-cevap turları yapıldı.",
+      "Temel çıkarımlar ve cümle kalıpları özetlendi.",
     ],
+    keyConcepts: ["Okuduğunu Anlama", "Kelime Dağarcığı", "Cümle Yapısı", "Telaffuz", "Özet"],
     questions: [
-      {
-        question: "What is the primary definition of deep focus according to the text?",
-        options: [
-          "Concentrating without distraction on a demanding task",
-          "Multitasking multiple social feeds at once",
-          "Ignoring all communications permanently",
-          "Studying only after midnight",
-        ],
-        correct_index: 0,
-        explanation: "Metnin ilk cümlesinde açıkça tanımlanmıştır.",
-      },
-      {
-        question: "Why is cultivating resilience against distractions important?",
-        options: [
-          "To protect cognitive energy from interruptions",
-          "To reduce internet data usage",
-          "To avoid attending technical briefings",
-          "To eliminate computer usage",
-        ],
-        correct_index: 0,
-        explanation: "Zihinsel enerjiyi korumak için gereklidir.",
-      },
-      {
-        question: "What kind of tasks require deep focus?",
-        options: [
-          "Cognitively demanding tasks",
-          "Routine administrative checks",
-          "Casual chat browsing",
-          "Automatic inbox cleaning",
-        ],
-        correct_index: 0,
-        explanation: "Zihinsel efor gerektiren işlerde şarttır.",
-      },
+      { question: "Ders boyunca işlenen parçanın ana fikri neydi?" },
+      { question: "Öğrendiğiniz yeni kelimeleri birer cümlede nasıl kullanırsınız?" },
+      { question: "Bu konuyu kendi kelimelerinizle nasıl özetlersiniz?" },
     ],
-    due_date: "Bu Cuma, 18:00",
-    completed_percent: 88,
   },
   {
-    id: "assign-2",
-    classroom_id: "cls-1",
-    class_code: "VRG-2535",
-    title: "FIDIC Sözleşmeleri & Delay Claims",
-    story_content:
-      "Under FIDIC Clause 20.1, the Contractor must give notice of any claim within 28 days of becoming aware of the event. Proper substantiation and contingency tracking are critical.",
-    target_words: [
-      { word: "mitigate", meaning: "Zararı hafifletmek", phonetic: "/ˈmɪt.ɪ.ɡeɪt/" },
-      { word: "contingency", meaning: "Yedek akçe, beklenmedik durum payı", phonetic: "/kənˈtɪn.dʒən.si/" },
-      { word: "substantiate", meaning: "Delillerle ispatlamak", phonetic: "/səbˈstæn.ʃi.eɪt/" },
-      { word: "clause", meaning: "Sözleşme maddesi", phonetic: "/klɔːz/" },
-      { word: "dispute", meaning: "Uyuşmazlık, ihtilaf", phonetic: "/dɪˈspjuːt/" },
+    id: "arch-2",
+    className: "Genel Pratik Grubu",
+    lessonTitle: "Günlük Diyalog & Dinleme Egzersizleri",
+    date: "7 Kasım 2026 • 10:15",
+    summaryPoints: [
+      "Günlük yaşam senaryoları üzerinden konuşma pratikleri yapıldı.",
+      "Dinleme parçalarındaki kilit ifadeler tahtaya aktarıldı.",
+      "Öğrencilerin akıcı konuşma refleksleri geliştirildi.",
     ],
+    keyConcepts: ["Günlük Dil", "Dinleme Becerisi", "Rol Paylaşımı", "Soru Kalıpları", "Geri Bildirim"],
     questions: [
-      {
-        question: "Within how many days must notice of claim be provided?",
-        options: ["28 days", "14 days", "60 days", "90 days"],
-        correct_index: 0,
-        explanation: "Clause 20.1 uyarınca 28 günlük süre zorunludur.",
-      },
+      { question: "Diyalogda geçen en önemli kalıp ifade hangisiydi?" },
+      { question: "Benzer bir durumda kendinizi nasıl ifade ederdiniz?" },
     ],
-    due_date: "Pazar, 23:59",
-    completed_percent: 100,
   },
 ];
 
-const DEMO_STUDENT_PROGRESS: StudentProgressRow[] = [
-  {
-    studentName: "Ahmet Yılmaz",
-    avatar: "👨‍💻",
-    status: "completed",
-    scoreText: "3 / 3 Doğru",
-    scorePercent: 100,
-    lastActive: "15 dk önce",
-  },
-  {
-    studentName: "Zeynep Kaya",
-    avatar: "👩‍🎓",
-    status: "completed",
-    scoreText: "3 / 3 Doğru",
-    scorePercent: 100,
-    lastActive: "1 saat önce",
-  },
-  {
-    studentName: "Can Demir",
-    avatar: "🧑‍🚀",
-    status: "completed",
-    scoreText: "2 / 3 Doğru",
-    scorePercent: 66,
-    lastActive: "3 saat önce",
-  },
-  {
-    studentName: "Defne Arslan",
-    avatar: "👩‍🔬",
-    status: "in_progress",
-    scoreText: "1 / 3 Çözüldü",
-    scorePercent: 33,
-    lastActive: "Dün",
-  },
-  {
-    studentName: "Emir Çelik",
-    avatar: "🧑‍🏫",
-    status: "not_started",
-    scoreText: "Başlanmadı",
-    scorePercent: 0,
-    lastActive: "2 gün önce",
-  },
-];
-
-const PRESET_SAMPLE_TEXTS = [
-  {
-    title: "Derin Odaklanma & Zihinsel Dayanıklılık",
-    content:
-      "Deep focus is the ability to concentrate without distraction on a demanding task. Cultivating cognitive resilience against superficial interruptions is essential for mastering complex problem-solving. In today's hyper-connected environment, learners must actively protect their attention to synthesize intricate ideas.",
-  },
-  {
-    title: "FIDIC Sözleşme Yönetimi & Riskler",
-    content:
-      "Under international construction contracts like FIDIC Red Book, notice requirements are strictly enforced. The contractor must give prompt notice of any claim within 28 days of becoming aware of the event. Proper substantiation and objective documentation are required to prevent liquidated damages.",
-  },
-  {
-    title: "Yapay Zeka & Dil Edinimi Stratejisi",
-    content:
-      "Modern cognitive linguistics substantiates that spaced repetition algorithms significantly mitigate vocabulary attrition. By engaging in contextual reading and active recall, learners achieve higher linguistic fluency and retain specialized C1 terminology much faster.",
-  },
-];
-
-export default function ClassroomPage() {
-  const { t } = useLanguage();
+function ClassroomContent() {
   const router = useRouter();
-  const { isLiveActive, liveSession, startLive } = useLiveSession();
-  const { user, token } = useAuth();
-  const [showProUpgradeModal, setShowProUpgradeModal] = useState(false);
-  const [proModalReason, setProModalReason] = useState<string | null>(null);
-  const isProOrAdmin = Boolean(user?.isPro || user?.role === "admin");
+  const searchParams = useSearchParams();
 
-  // Aktif Sekme: 'teacher' | 'student'
-  const [activeRole, setActiveRole] = useState<"teacher" | "student">("teacher");
+  // Aktif Sekme: 'classes' | 'archive'
+  const initialTab = searchParams.get("tab") === "archive" ? "archive" : "classes";
+  const [activeTab, setActiveTab] = useState<"classes" | "archive">(initialTab);
 
-  // SINIF & EĞİTMEN VERİLERİ
+  // Sınıf Listesi
   const [classrooms, setClassrooms] = useState<ClassroomItem[]>(DEFAULT_CLASSES);
-  const [assignments, setAssignments] = useState<ClassroomAssignment[]>(DEFAULT_ASSIGNMENTS);
   const [selectedClassId, setSelectedClassId] = useState<string>("cls-1");
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // Yeni Sınıf Açma Mini Formu
+  // PIN Modalı
+  const [pinModalClass, setPinModalClass] = useState<ClassroomItem | null>(null);
+
+  // Yeni Sınıf Açma Modalı
   const [showCreateClassModal, setShowCreateClassModal] = useState(false);
   const [newClassName, setNewClassName] = useState("");
-  const [newClassGrade, setNewClassGrade] = useState("C1 Pro");
 
-  // YENİ ÖDEV HAZIRLA MODALI (AI DESTEKLİ)
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [assignClassroomCode, setAssignClassroomCode] = useState("VRG-2535");
-  const [assignTitle, setAssignTitle] = useState("");
-  const [assignContent, setAssignContent] = useState("");
-  const [assignLevel, setAssignLevel] = useState("Intermediate");
-  const [assignDueDate, setAssignDueDate] = useState("Bu Cuma, 18:00");
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [extractedWords, setExtractedWords] = useState<ExtractedTargetWord[]>([]);
-  const [extractedQuestions, setExtractedQuestions] = useState<ExtractedQuestion[]>([]);
-  const [extractError, setExtractError] = useState<string | null>(null);
-  const [isAssignSuccess, setIsAssignSuccess] = useState(false);
+  // Ders Arşivi Verileri
+  const [archives, setArchives] = useState<BoardLessonSummaryData[]>(DEFAULT_ARCHIVES);
+  const [archiveSearch, setArchiveSearch] = useState("");
 
-  // ÖĞRENCİ HIZLI KATILIM ALANI
-  const [studentInputPin, setStudentInputPin] = useState("");
-  const [joinedClassCode, setJoinedClassCode] = useState<string>("VRG-2535");
-  const [joinedClassInfo, setJoinedClassInfo] = useState<{
-    class_name: string;
-    student_count: number;
-    grade_level?: string;
-  } | null>({
-    class_name: "C1 Advanced Business & Engineering English",
-    student_count: 18,
-    grade_level: "C1 Pro",
-  });
-  const [studentAssignments, setStudentAssignments] = useState<ClassroomAssignment[]>(DEFAULT_ASSIGNMENTS);
-  const [isJoining, setIsJoining] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
+  // Hızlı Öğrenci PIN Girişi
+  const [showJoinPinModal, setShowJoinPinModal] = useState(false);
+  const [studentPin, setStudentPin] = useState("");
 
-  // Büyük Tahta Projeksiyon Modalı
-  const [boardProjectCode, setBoardProjectCode] = useState<string | null>(null);
-  const [qrModalClass, setQrModalClass] = useState<ClassroomItem | null>(null);
-
-  // CANLI DERS PLANLAMA & STÜDYO DURUMU (Saat 08:00 Randevu Bildirimi)
-  const [liveTitle, setLiveTitle] = useState<string>(
-    "Yarın 08:00 - Canlı Proje Vaka Analizi"
-  );
-  const [liveDate, setLiveDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
-  const [liveTime, setLiveTime] = useState<string>("08:00");
-  const [isLiveScheduled, setIsLiveScheduled] = useState<boolean>(true);
-  const [liveScheduleSavedMsg, setLiveScheduleSavedMsg] = useState<string | null>(
-    null
-  );
-
+  // 1. LocalStorage'dan Sınıfları ve Ders Arşivini Yükle
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("vocaship_live_session");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.title) {
-          setLiveTitle(parsed.title);
-          if (parsed.date) setLiveDate(parsed.date);
-          if (parsed.time) setLiveTime(parsed.time);
-          setIsLiveScheduled(parsed.isLive !== false);
+      if (typeof window !== "undefined") {
+        const savedClasses = localStorage.getItem("vocaship_classes");
+        if (savedClasses) {
+          const parsed = JSON.parse(savedClasses);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setClassrooms(parsed);
+          }
         }
-      } else {
-        const defaultSession = {
-          id: "live-10a-0800",
-          classId: "cls-1",
-          className: "10-A Sınıfı • C1 Project Controls",
-          classCode: "VRG-2535",
-          title: "Yarın 08:00 - Canlı Proje Vaka Analizi",
-          date: new Date().toISOString().split("T")[0],
-          time: "08:00",
-          isLive: true,
-          teacherName: "Eğitmen Stüdyosu",
-        };
-        localStorage.setItem("vocaship_live_session", JSON.stringify(defaultSession));
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }, []);
 
-  const handleScheduleLiveClass = (e: React.FormEvent) => {
-    e.preventDefault();
-    const activeCls =
-      classrooms.find((c) => c.id === selectedClassId) || classrooms[0];
-    const sessionPayload = {
-      id: `live-${Date.now()}`,
-      classId: activeCls?.id || "cls-1",
-      className: activeCls?.name || "10-A Sınıfı • C1 Project Controls",
-      classCode: activeCls?.code || "VRG-2535",
-      title: liveTitle.trim() || "Yarın 08:00 - Canlı Proje Vaka Analizi",
-      date: liveDate,
-      time: liveTime || "08:00",
-      isLive: true,
-      teacherName: "Eğitmen Stüdyosu",
-    };
-
-    startLive(sessionPayload);
-    setIsLiveScheduled(true);
-    setLiveScheduleSavedMsg(
-      `✅ "${sessionPayload.title}" (${sessionPayload.time}) canlı dersi başlatıldı ve tüm öğrencilerin ekranına anında yansıtıldı!`
-    );
-    setTimeout(() => setLiveScheduleSavedMsg(null), 5000);
-  };
-
-  // 1. Sınıfları ve Ödevleri Backend'den Çek
-  const fetchClassrooms = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/classroom/classes`);
-      if (res.status === 403) {
-        const errData = await res.json().catch(() => ({}));
-        setShowCreateClassModal(false);
-        setProModalReason(
-          errData?.message ||
-            "Sınıf açmak ve ödev atamak için PRO Eğitmen hesabı gereklidir."
-        );
-        setShowProUpgradeModal(true);
-        return;
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setClassrooms(data);
-          return;
+        const savedArchives = localStorage.getItem("vocaship_board_archives");
+        if (savedArchives) {
+          const parsedArch = JSON.parse(savedArchives);
+          if (Array.isArray(parsedArch) && parsedArch.length > 0) {
+            setArchives(parsedArch);
+          }
         }
       }
-    } catch (err) {
-      console.warn("Classroom API offline fallback:", err);
+    } catch (e) {
+      console.warn("Storage load error:", e);
     }
-  };
-
-  const fetchAssignmentsForCode = async (code: string) => {
-    try {
-      const studentId = user?.id || "00000000-0000-0000-0000-000000000001";
-      const res = await fetch(
-        `${API_BASE}/api/v1/classroom/assignments/${encodeURIComponent(code)}?student_id=${encodeURIComponent(studentId)}`,
-        {
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(user?.id ? { "X-User-Id": user.id } : {}),
-          },
-        }
-      );
-      if (res.status === 403) {
-        const errData = await res.json().catch(() => ({}));
-        setShowCreateClassModal(false);
-        setProModalReason(
-          errData?.message ||
-            "Sınıf açmak ve ödev atamak için PRO Eğitmen hesabı gereklidir."
-        );
-        setShowProUpgradeModal(true);
-        return;
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        const incoming = Array.isArray(data.assignments) ? data.assignments : [];
-        setStudentAssignments(incoming);
-        setJoinedClassInfo({
-          class_name: data.class_name || "Vocaship Sınıfı",
-          student_count: data.student_count || 18,
-          grade_level: data.grade_level || "C1 Pro",
-        });
-        return;
-      }
-    } catch (err) {
-      console.warn("Assignments API offline fallback:", err);
-    }
-
-    // Fallback: Yerel eşleşme (veri izolasyonu: yalnızca bu sınıf koduna ait olanlar)
-    const clean = code.replace("-", "").toUpperCase();
-    const filtered = assignments.filter(
-      (a) => a.class_code.replace("-", "").toUpperCase() === clean
-    );
-    setStudentAssignments(filtered);
-  };
-
-  useEffect(() => {
-    fetchClassrooms();
-    fetchAssignmentsForCode(joinedClassCode);
   }, []);
 
   // 2. Yeni Sınıf Açma
-  const handleCreateClass = async (e: React.FormEvent) => {
+  const handleCreateClass = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
 
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/classroom/classes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(user?.id ? { "X-User-Id": user.id } : {}),
-          "X-Is-Pro": isProOrAdmin ? "true" : "false",
-        },
-        body: JSON.stringify({
-          name: newClassName.trim(),
-          grade_level: newClassGrade,
-        }),
-      });
-
-      if (res.status === 403) {
-        const errData = await res.json().catch(() => ({}));
-        setShowCreateClassModal(false);
-        setProModalReason(
-          errData?.message ||
-            "Sınıf açmak ve ödev atamak için PRO Eğitmen hesabı gereklidir."
-        );
-        setShowProUpgradeModal(true);
-        return;
-      }
-
-      if (res.ok) {
-        const created = await res.json();
-        setClassrooms((prev) => [created, ...prev]);
-        setSelectedClassId(created.id);
-        setShowCreateClassModal(false);
-        setNewClassName("");
-        confetti({ particleCount: 40, spread: 60 });
-        return;
-      }
-    } catch (err) {
-      console.warn("Class create offline fallback:", err);
-    }
-
-    // Fallback Local Creation
-    const rndDigits = Math.floor(1000 + Math.random() * 9000);
-    const fallbackClass: ClassroomItem = {
+    const newCls: ClassroomItem = {
       id: `cls_${Date.now()}`,
       name: newClassName.trim(),
-      code: `VRG-${rndDigits}`,
+      code: generateClassPin(),
       student_count: 0,
-      grade_level: newClassGrade,
       created_at: new Date().toISOString(),
     };
-    setClassrooms((prev) => [fallbackClass, ...prev]);
-    setSelectedClassId(fallbackClass.id);
-    setShowCreateClassModal(false);
+
+    const updated = [newCls, ...classrooms];
+    setClassrooms(updated);
+    setSelectedClassId(newCls.id);
+    try {
+      localStorage.setItem("vocaship_classes", JSON.stringify(updated));
+    } catch {}
+
     setNewClassName("");
-    confetti({ particleCount: 35, spread: 50 });
+    setShowCreateClassModal(false);
+    confetti({ particleCount: 40, spread: 60 });
   };
 
-  // 3. AI ile Metinden Hedef Kelime ve 3 Soru Çıkart
-  const handleExtractWithAI = async () => {
-    if (!assignContent.trim()) {
-      setExtractError("Lütfen analiz edilecek bir okuma metni yapıştırın.");
-      return;
-    }
-
-    setIsExtracting(true);
-    setExtractError(null);
-
+  // 3. Sınıf Silme
+  const handleDeleteClass = (id: string) => {
+    const updated = classrooms.filter((c) => c.id !== id);
+    setClassrooms(updated);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/classroom/extract`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(user?.id ? { "X-User-Id": user.id } : {}),
-          "X-Is-Pro": isProOrAdmin ? "true" : "false",
-        },
-        body: JSON.stringify({
-          content: assignContent.trim(),
-          level: assignLevel,
-        }),
-      });
-
-      if (res.status === 403) {
-        const errData = await res.json().catch(() => ({}));
-        setShowCreateClassModal(false);
-        setProModalReason(
-          errData?.message ||
-            "Sınıf açmak ve ödev atamak için PRO Eğitmen hesabı gereklidir."
-        );
-        setShowProUpgradeModal(true);
-        return;
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        const words: ExtractedTargetWord[] = (data.target_words || data.target_vocabulary || []).map(
-          (w: any) => ({
-            word: w.word,
-            meaning: w.meaning || w.translation || "Kritik Terim",
-            phonetic: w.phonetic,
-            example: w.example,
-          })
-        );
-        const questions: ExtractedQuestion[] = (data.questions || data.comprehension_questions || []).map(
-          (q: any) => ({
-            question: q.question,
-            options: q.options || [],
-            correct_index: q.correct_index ?? q.correct_answer_index ?? 0,
-            explanation: q.explanation,
-          })
-        );
-
-        setExtractedWords(words);
-        setExtractedQuestions(questions);
-        if (!assignTitle.trim() && data.title) {
-          setAssignTitle(data.title);
-        }
-        confetti({ particleCount: 30, spread: 50 });
-        return;
-      }
-    } catch (err) {
-      console.warn("Extract API offline fallback:", err);
-    } finally {
-      setIsExtracting(false);
+      localStorage.setItem("vocaship_classes", JSON.stringify(updated));
+    } catch {}
+    if (selectedClassId === id && updated.length > 0) {
+      setSelectedClassId(updated[0].id);
     }
-
-    // Akıllı Yerel Fallback
-    const fallbackWords: ExtractedTargetWord[] = [
-      { word: "resilience", meaning: "Direnç, toparlanma gücü", phonetic: "/rɪˈzɪl.jənt/" },
-      { word: "cognitive", meaning: "Bilişsel, zihinsel", phonetic: "/ˈkɒɡ.nə.tɪv/" },
-      { word: "superficial", meaning: "Yüzeysel, derin olmayan", phonetic: "/ˌsuː.pəˈfɪʃ.əl/" },
-      { word: "mitigate", meaning: "Etkisini azaltmak, hafifletmek", phonetic: "/ˈmɪt.ɪ.ɡeɪt/" },
-      { word: "substantiate", meaning: "Kanıtlamak, doğrulamak", phonetic: "/səbˈstæn.ʃi.eɪt/" },
-    ];
-    const fallbackQuestions: ExtractedQuestion[] = [
-      {
-        question: "What is the core argument of the reading context?",
-        options: [
-          "Focused cognitive attention creates deep retention",
-          "Constant superficial alerts improve throughput",
-          "Written documentation is unnecessary",
-          "Only short isolated tasks matter",
-        ],
-        correct_index: 0,
-        explanation: "Metnin ana fikri odaklanmış zihinsel eforun kalıcılığı üzerinedir.",
-      },
-      {
-        question: "How can learners mitigate knowledge attrition?",
-        options: [
-          "Through contextual reading and active review",
-          "By avoiding testing mechanisms",
-          "By limiting vocabulary exposure",
-          "Through passive auditory background noise",
-        ],
-        correct_index: 0,
-        explanation: "Aralıklı tekrar ve bağlamsal okuma kalıcılığı artırır.",
-      },
-      {
-        question: "Which skill is emphasized as vital for complex problem solving?",
-        options: [
-          "Cognitive resilience against distractions",
-          "Switching tasks every 30 seconds",
-          "Ignoring verified vocabulary standards",
-          "Relying solely on intuition",
-        ],
-        correct_index: 0,
-        explanation: "Dikkat dağıtıcı unsurlara karşı bilişsel direnç esastır.",
-      },
-    ];
-
-    setExtractedWords(fallbackWords);
-    setExtractedQuestions(fallbackQuestions);
-    if (!assignTitle.trim()) {
-      setAssignTitle(assignContent.slice(0, 35).trim().concat("..."));
-    }
-    confetti({ particleCount: 25, spread: 40 });
   };
 
-  // 4. Ödevi Sınıfa Ata (Tahtaya Gönder)
-  const handleSubmitAssignment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!assignTitle.trim()) return;
-
-    const payload = {
-      classroom_id: assignClassroomCode,
-      title: assignTitle.trim(),
-      story_content: assignContent.trim(),
-      target_words: extractedWords,
-      questions: extractedQuestions,
-      due_date: assignDueDate || "Bu Cuma, 18:00",
-    };
-
+  // 4. Arşiv Silme
+  const handleDeleteArchive = (id: string) => {
+    const updated = archives.filter((a) => a.id !== id);
+    setArchives(updated);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/classroom/assignments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(user?.id ? { "X-User-Id": user.id } : {}),
-          "X-Is-Pro": isProOrAdmin ? "true" : "false",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.status === 403) {
-        const errData = await res.json().catch(() => ({}));
-        setShowCreateClassModal(false);
-        setProModalReason(
-          errData?.message ||
-            "Sınıf açmak ve ödev atamak için PRO Eğitmen hesabı gereklidir."
-        );
-        setShowProUpgradeModal(true);
-        return;
-      }
-
-      if (res.ok) {
-        const created = await res.json();
-        const item: ClassroomAssignment = {
-          id: created.id,
-          classroom_id: created.classroom_id,
-          class_code: created.class_code || assignClassroomCode,
-          title: created.title,
-          story_content: created.story_content,
-          target_words: created.target_words || extractedWords,
-          questions: created.questions || extractedQuestions,
-          due_date: created.due_date || assignDueDate,
-          completed_percent: 0,
-        };
-        setAssignments((prev) => [item, ...prev]);
-        setIsAssignSuccess(true);
-        confetti({ particleCount: 50, spread: 70 });
-        setTimeout(() => {
-          setIsAssignSuccess(false);
-          setShowAssignModal(false);
-          resetAssignModal();
-        }, 1500);
-        return;
-      }
-    } catch (err) {
-      console.warn("Assignment create offline fallback:", err);
-    }
-
-    // Fallback Local Addition
-    const localAssign: ClassroomAssignment = {
-      id: `assign_${Date.now()}`,
-      classroom_id: assignClassroomCode,
-      class_code: assignClassroomCode,
-      title: assignTitle.trim(),
-      story_content: assignContent.trim(),
-      target_words: extractedWords,
-      questions: extractedQuestions,
-      due_date: assignDueDate || "Bu Cuma, 18:00",
-      completed_percent: 0,
-    };
-    setAssignments((prev) => [localAssign, ...prev]);
-    setIsAssignSuccess(true);
-    confetti({ particleCount: 45, spread: 60 });
-    setTimeout(() => {
-      setIsAssignSuccess(false);
-      setShowAssignModal(false);
-      resetAssignModal();
-    }, 1500);
+      localStorage.setItem("vocaship_board_archives", JSON.stringify(updated));
+    } catch {}
   };
 
-  const resetAssignModal = () => {
-    setAssignTitle("");
-    setAssignContent("");
-    setExtractedWords([]);
-    setExtractedQuestions([]);
-    setExtractError(null);
-  };
-
-  // 5. Kodu Kopyala
-  const handleCopyCode = (code: string) => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(code);
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode(null), 2000);
-    }
-  };
-
-  // 6. Öğrenci PIN Girişi
+  // 5. Öğrenci PIN ile Katılım
   const handleStudentJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    setJoinError(null);
-    const clean = studentInputPin.trim().toUpperCase();
-
-    if (!clean) {
-      setJoinError("Lütfen tahtadaki 6 haneli sınıf PIN kodunu girin.");
-      return;
-    }
-
-    setIsJoining(true);
-    fetchAssignmentsForCode(clean);
-    setJoinedClassCode(clean);
-    setTimeout(() => {
-      setIsJoining(false);
-      confetti({ particleCount: 40, spread: 50 });
-    }, 400);
+    const clean = studentPin.trim().toUpperCase();
+    if (!clean) return;
+    router.push(`/reading?code=${encodeURIComponent(clean)}`);
   };
 
-  // Seçili aktif sınıf
-  const activeClass = classrooms.find((c) => c.id === selectedClassId) || classrooms[0];
+  const filteredArchives = archives.filter(
+    (a) =>
+      a.className.toLowerCase().includes(archiveSearch.toLowerCase()) ||
+      a.lessonTitle.toLowerCase().includes(archiveSearch.toLowerCase()) ||
+      a.keyConcepts.some((kc) => kc.toLowerCase().includes(archiveSearch.toLowerCase()))
+  );
 
   return (
-    <div className="flex-1 w-full min-h-[calc(100vh-4rem)] flex flex-col bg-slate-50 text-slate-800 overflow-x-hidden">
+    <div className="flex-1 w-full min-h-[calc(100vh-4rem)] flex flex-col bg-[#0B0F19] text-slate-100 selection:bg-indigo-500 selection:text-white">
       {/* ========================================================================= */}
-      {/* 1. ÜST BAR: BAŞLIK, ROL SEÇİCİ VE HIZLI PIN KATILIM GİRİŞİ                 */}
+      {/* 1. ÜST ŞERİT (TOP BAR): TEK SATIRDA BAŞLIK VE YENİ SINIF BUTONU            */}
       {/* ========================================================================= */}
-      <header className="border-b border-slate-850 bg-slate-900/80 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3.5 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-sky-500 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-indigo-600/25 shrink-0">
-              <GraduationCap className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                  {t("classroom_portal_title", "Sınıf & Eğitmen Portalı")}
-                </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                  FAZ 6 Portal
-                </span>
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-4 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* Sol: Başlık ve Sekmeler */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shrink-0 shadow-inner">
+                <GraduationCap className="w-5 h-5" />
               </div>
-              <p className="text-xs text-slate-400">
-                {t("classroom_portal_subtitle", "6 haneli PIN ile hızlı katılım, AI ile otomatik ödev çıkartma ve sınıf yönetim paneli")}
-              </p>
+              <div>
+                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
+                  <span>🎓 Sınıflarım</span>
+                </h1>
+                <p className="text-xs text-slate-400 hidden sm:block">
+                  Sınıf yönetimi, akıllı tahta konsolu ve ders arşivi
+                </p>
+              </div>
+            </div>
+
+            {/* İki Sekme: [ 🏫 Sınıflarım ] ve [ 🗂️ Ders Arşivi ] */}
+            <div className="flex items-center p-1 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveTab("classes")}
+                className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "classes"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>🏫</span>
+                <span>Sınıflarım</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">
+                  {classrooms.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("archive")}
+                className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "archive"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>🗂️</span>
+                <span>Ders Arşivi</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">
+                  {archives.length}
+                </span>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-            {/* Hızlı PIN Kutucuğu (Öğrenciler için doğrudan üst barda) */}
-            <form onSubmit={handleStudentJoin} className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800">
-              <KeyRound className="w-4 h-4 text-indigo-400 ml-2 shrink-0" />
-              <input
-                type="text"
-                maxLength={8}
-                placeholder={t("classroom_pin_placeholder", "PIN: VRG-XXXX")}
-                value={studentInputPin}
-                onChange={(e) => setStudentInputPin(e.target.value.toUpperCase())}
-                className="w-28 sm:w-32 bg-transparent text-xs font-mono font-bold text-white placeholder-slate-500 focus:outline-none uppercase px-1.5"
-              />
-              <button
-                type="submit"
-                className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
-              >
-                {t("btn_join_pin", "Katıl ➔")}
-              </button>
-            </form>
+          {/* Sağ: Eylemler */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowJoinPinModal(true)}
+              className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+              <span>PIN ile Katıl</span>
+            </button>
 
-            {/* İki Sekmeli Rol Değiştirici */}
-            <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-bold shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveRole("teacher")}
-                className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-                  activeRole === "teacher"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <span>👨‍🏫</span>
-                <span className="hidden sm:inline">{t("role_teacher", "Eğitmen")}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveRole("student")}
-                className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-                  activeRole === "student"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <span>🎓</span>
-                <span className="hidden sm:inline">{t("role_student", "Öğrenci")}</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowCreateClassModal(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Yeni Sınıf Aç</span>
+            </button>
           </div>
         </div>
       </header>
 
       {/* ========================================================================= */}
-      {/* 2. ANA ALAN: ROL İÇERİKLERİ                                                */}
+      {/* 2. ANA İÇERİK ALANI                                                       */}
       {/* ========================================================================= */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
-        {/* ========================================================================= */}
-        {/* A) EĞİTMEN ÇALIŞMA ALANI                                                  */}
-        {/* ========================================================================= */}
-        {activeRole === "teacher" && (
-          <div className="space-y-8 animate-in fade-in duration-200">
-            {/* YENİ CANLI DERS PLANLA & CANLI SINIF STÜDYOSU KARTI */}
-            <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-emerald-950/30 border border-emerald-500/30 shadow-2xl space-y-5">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-bold">
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                    <span>Canlı Sınıf Stüdyosu (Classroom Live Stream)</span>
-                  </div>
-                  <h2 className="text-lg sm:text-xl font-black text-white">
-                    Yeni Canlı Ders Planla & Anında Yayın Aç
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Tek tıkla kamera ve ekran paylaşımı yapabileceğiniz canlı ders odasını başlatın veya saat 08:00 randevusunu öğrencilere duyurun.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 shrink-0">
-                  <Link
-                    href="/classroom/board"
-                    className="px-4 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
-                  >
-                    <span>🖥️</span>
-                    <span>Akıllı Tahta Konsolu</span>
-                  </Link>
-                  <Link
-                    href="/classroom/live?role=teacher"
-                    className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/50 animate-pulse transition flex items-center gap-2"
-                  >
-                    <span>🔴</span>
-                    <span>Canlı Derse Katıl (Stüdyoyu Aç)</span>
-                  </Link>
-                </div>
-              </div>
-
-              <form
-                onSubmit={handleScheduleLiveClass}
-                className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2 border-t border-slate-800/80"
-              >
-                <div className="md:col-span-6 space-y-1">
-                  <label className="text-[11px] font-bold text-slate-300">
-                    Canlı Ders Başlığı
-                  </label>
-                  <input
-                    type="text"
-                    value={liveTitle}
-                    onChange={(e) => setLiveTitle(e.target.value)}
-                    placeholder="Örn: Yarın 08:00 - Proje Kontrol Canlı Vaka Dersi"
-                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2 space-y-1">
-                  <label className="text-[11px] font-bold text-slate-300">
-                    Tarih
-                  </label>
-                  <input
-                    type="date"
-                    value={liveDate}
-                    onChange={(e) => setLiveDate(e.target.value)}
-                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2 space-y-1">
-                  <label className="text-[11px] font-bold text-slate-300">
-                    Saat
-                  </label>
-                  <input
-                    type="time"
-                    value={liveTime}
-                    onChange={(e) => setLiveTime(e.target.value)}
-                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex items-end">
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Planla & Duyur</span>
-                  </button>
-                </div>
-              </form>
-
-              {liveScheduleSavedMsg && (
-                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-xs font-semibold">
-                  {liveScheduleSavedMsg}
-                </div>
-              )}
-            </div>
-
-            {/* 1. SINIF KARTLARI & PIN PROJEKSİYON BÖLÜMÜ */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                    <School className="w-5 h-5 text-indigo-400" />
-                    <span>{t("active_classes_title", "Aktif Sınıflarım & Tahta PIN Kodları")}</span>
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    {t("active_classes_subtitle", "Öğrencilerinizin akıllı tahtadan göreceği 6 haneli katılım kodları")}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isProOrAdmin) {
-                        setProModalReason(
-                          "Sınıf açmak ve ödev atamak için PRO Eğitmen hesabı gereklidir."
-                        );
-                        setShowProUpgradeModal(true);
-                        return;
-                      }
-                      setShowCreateClassModal(true);
-                    }}
-                    className="py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 text-indigo-400" />
-                    <span>{t("btn_new_class", "Yeni Sınıf Aç")}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const targetClass = classrooms.find((c) => c.id === selectedClassId) || classrooms[0];
-                      if (targetClass) setQrModalClass(targetClass);
-                    }}
-                    className="py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 hover:text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-md"
-                    title="Akıllı Tahtaya Dev Dinamik QR Yansıt"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    <span>Akıllı Tahta QR</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isProOrAdmin) {
-                        setProModalReason(
-                          "Sınıf açmak ve ödev atamak için PRO Eğitmen hesabı gereklidir."
-                        );
-                        setShowProUpgradeModal(true);
-                        return;
-                      }
-                      setAssignClassroomCode(activeClass?.code || "VRG-2535");
-                      setShowAssignModal(true);
-                    }}
-                    className="py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
-                  >
-                    <Wand2 className="w-4 h-4" />
-                    <span>{t("btn_new_assignment", "+ Yeni Ödev Hazırla")}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Sınıf Kartları Izgarası (Ferah & Minimalist PIN) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {classrooms.map((cls) => (
-                  <ClassCard
-                    key={cls.id}
-                    classroom={cls}
-                    isSelected={cls.id === selectedClassId}
-                    isTeacher={activeRole === "teacher"}
-                    hasActiveSession={Boolean(isLiveActive && (liveSession?.classCode === cls.code || cls.code === "VRG-2535"))}
-                    activeAssignmentsCount={assignments.filter((a) => a.class_code === cls.code).length}
-                    onSelect={() => setSelectedClassId(cls.id)}
-                    onAssignHomework={() => {
-                      setAssignClassroomCode(cls.code);
-                      setShowAssignModal(true);
-                    }}
-                    onProjectToBoard={() => setBoardProjectCode(cls.code)}
-                    onOpenLiveQR={() => setQrModalClass(cls)}
-                    onJoinLiveSession={() => router.push(`/classroom/live?role=student&classId=${cls.id}&classCode=${cls.code}`)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* 2. ATANAN ÖDEVLER VE ÖĞRENCİ İLERLEME TABLOSU */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* SOL: ATANAN ÖDEVLER (5 Kolon) */}
-              <div className="lg:col-span-5 p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                  <div className="flex items-center space-x-2">
-                    <Layers className="w-4 h-4 text-indigo-400" />
-                    <h3 className="text-sm sm:text-base font-bold text-white">
-                      Sınıfa Atanan Ödevler ({assignments.length})
-                    </h3>
-                  </div>
-                  <span className="text-xs text-indigo-400 font-mono font-bold">
-                    {activeClass?.code}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+        {/* ======================================================================= */}
+        {/* TAB 1: SINIFLARIM IZGARASI                                              */}
+        {/* ======================================================================= */}
+        {activeTab === "classes" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <span>Kayıtlı Sınıflar</span>
+                  <span className="text-xs font-normal text-slate-400">
+                    ({classrooms.length} Aktif Sınıf)
                   </span>
-                </div>
-
-                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-                  {assignments.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-indigo-500/40 transition space-y-2 group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                          📖 Okuma & Anlama
-                        </span>
-                        <span className="text-[11px] font-mono font-bold text-emerald-400">
-                          %{item.completed_percent} Teslimat
-                        </span>
-                      </div>
-
-                      <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-indigo-300 transition">
-                        {item.title}
-                      </h4>
-
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-500" />
-                          {item.due_date}
-                        </span>
-                        <span>{item.target_words?.length || 5} Kelime • {item.questions?.length || 3} Soru</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Akıllı tahtayı başlatmak veya davet kodu üretmek için sınıf kartının ••• menüsünü kullanın.
+                </p>
               </div>
 
-              {/* SAĞ: ÖĞRENCİ İLERLEME VE TEST SKORU TABLOSU (7 Kolon) */}
-              <div className="lg:col-span-7 p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                  <div className="flex items-center space-x-2">
-                    <Users className="w-4 h-4 text-indigo-400" />
-                    <h3 className="text-sm sm:text-base font-bold text-white">
-                      Öğrenci Tamamlama Durumu & Test Skorları
-                    </h3>
-                  </div>
-                  <span className="text-xs text-slate-400">Canlı Sınıf Takibi</span>
-                </div>
+              <Link
+                href="/classroom/board"
+                className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 hover:text-emerald-300 text-xs font-bold transition"
+              >
+                <Tv className="w-3.5 h-3.5" />
+                <span>Akıllı Tahta Konsoluna Git</span>
+              </Link>
+            </div>
 
-                {/* Tablo Görünümü */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
-                        <th className="pb-3 font-semibold">Öğrenci</th>
-                        <th className="pb-3 font-semibold">Durum</th>
-                        <th className="pb-3 font-semibold">Test Skoru</th>
-                        <th className="pb-3 font-semibold text-right">Son Aktivite</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {DEMO_STUDENT_PROGRESS.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-slate-950/40 transition">
-                          <td className="py-3 flex items-center space-x-2 text-white font-bold">
-                            <span className="text-base">{row.avatar}</span>
-                            <span>{row.studentName}</span>
-                          </td>
-                          <td className="py-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                row.status === "completed"
-                                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                                  : row.status === "in_progress"
-                                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                                  : "bg-slate-800 text-slate-400"
-                              }`}
-                            >
-                              {row.status === "completed"
-                                ? "✓ Tamamlandı"
-                                : row.status === "in_progress"
-                                ? "⏳ Çözüyor"
-                                : "Başlanmadı"}
-                            </span>
-                          </td>
-                          <td className="py-3 font-mono">
-                            <span
-                              className={
-                                row.scorePercent === 100
-                                  ? "text-emerald-400 font-bold"
-                                  : row.scorePercent > 50
-                                  ? "text-amber-400 font-bold"
-                                  : "text-slate-400"
-                              }
-                            >
-                              {row.scoreText}
-                            </span>
-                          </td>
-                          <td className="py-3 text-right text-slate-400 font-mono">
-                            {row.lastActive}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* Sınıf Kartları Izgarası */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {classrooms.map((cls) => (
+                <ClassCard
+                  key={cls.id}
+                  classroom={cls}
+                  isSelected={cls.id === selectedClassId}
+                  onSelect={() => setSelectedClassId(cls.id)}
+                  onOpenPinModal={() => setPinModalClass(cls)}
+                  onProjectToBoard={() => {
+                    router.push(
+                      `/classroom/board?classId=${cls.id}&className=${encodeURIComponent(cls.name)}`
+                    );
+                  }}
+                  onDeleteClass={() => handleDeleteClass(cls.id)}
+                />
+              ))}
+
+              {/* Boş Yeni Sınıf Ekleme Kartı */}
+              <button
+                type="button"
+                onClick={() => setShowCreateClassModal(true)}
+                className="p-6 rounded-3xl border-2 border-dashed border-slate-800 hover:border-indigo-500/50 bg-slate-900/40 hover:bg-slate-900/80 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px] text-slate-400 hover:text-white cursor-pointer group"
+              >
+                <div className="w-10 h-10 rounded-2xl bg-slate-800 group-hover:bg-indigo-600/20 text-slate-400 group-hover:text-indigo-400 flex items-center justify-center transition">
+                  <Plus className="w-5 h-5" />
                 </div>
-              </div>
+                <span className="text-xs font-bold">Yeni Sınıf Ekle</span>
+              </button>
             </div>
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* B) ÖĞRENCİ HIZLI KATILIM ALANI                                            */}
-        {/* ========================================================================= */}
-        {activeRole === "student" && (
-          <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in duration-200">
-            {/* AKTİF CANLI DERS BİLDİRİMİ (DİNAMİK KOŞULLU RENDER & GERÇEK ZAMANLI SYNC) */}
-            {isLiveActive && liveSession ? (
-              <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950/90 border-2 border-emerald-500/60 shadow-2xl shadow-emerald-950/60 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in zoom-in-95 duration-200">
-                <div className="space-y-1 text-center sm:text-left">
-                  <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-black uppercase tracking-wider">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span>🟢 Canlı Ders Yayında • Saat {liveSession.time || "Şimdi"}</span>
-                  </div>
-                  <h3 className="text-base sm:text-lg font-black text-white">
-                    {liveSession.title}
-                  </h3>
-                  <p className="text-xs text-slate-300">
-                    {liveSession.className || "Sınıf"} • {liveSession.teacherName} canlı yayın ve soru-cevap stüdyosu aktif.
-                  </p>
-                </div>
-
-                <Link
-                  href={`/classroom/live?role=student&classId=${liveSession.classId || "cls-1"}&sessionId=${liveSession.id || "live-1"}`}
-                  className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-emerald-500/30 ring-2 ring-emerald-300/60 animate-pulse transition flex items-center gap-2 shrink-0 cursor-pointer"
-                >
-                  <span>🟢</span>
-                  <span>Canlı Ders Yayında - Katıl</span>
-                </Link>
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-slate-400 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-slate-600" />
-                  <span>Henüz aktif bir canlı ders oturumu başlatılmadı. Ders saati bekleniyor.</span>
-                </div>
-                <span className="text-[11px] font-mono text-slate-500 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800">
-                  Öğretmen yayını açtığında buton otomatik olarak belirecektir.
-                </span>
-              </div>
-            )}
-
-            {/* 6 Haneli PIN Giriş Kutusu */}
-            <div className="p-8 sm:p-10 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl space-y-4 text-center relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
-              <div className="w-14 h-14 mx-auto rounded-3xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-2xl shadow-inner">
-                🔑
-              </div>
-
-              <div className="space-y-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white">
-                  6 Haneli PIN Koduyla Sınıfa Katıl
+        {/* ======================================================================= */}
+        {/* TAB 2: DERS ARŞİVİ (BoardSummaryModal'dan Gelen Kayıtlar)               */}
+        {/* ======================================================================= */}
+        {activeTab === "archive" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Arşiv Üst Filtre Barı */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <Archive className="w-4 h-4 text-indigo-400" />
+                  <span>Tamamlanan Ders Arşivleri</span>
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-                  Eğitmeninizin akıllı tahtaya yansıttığı kodu yazarak sınıfınıza atanan tüm ödev ve okuma parçalarına anında ulaşın.
+                <p className="text-xs text-slate-400">
+                  Akıllı tahta seansı sonunda AI tarafından üretilen pedagojik özetler ve soru setleri
                 </p>
               </div>
 
-              <form onSubmit={handleStudentJoin} className="max-w-md mx-auto space-y-3 pt-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    maxLength={8}
-                    placeholder="Örn: VRG-2535"
-                    value={studentInputPin}
-                    onChange={(e) => setStudentInputPin(e.target.value.toUpperCase())}
-                    className="flex-1 bg-slate-950 border-2 border-indigo-500/40 focus:border-indigo-400 rounded-2xl px-5 py-3 text-lg sm:text-xl font-mono font-black tracking-widest text-white text-center placeholder-slate-600 focus:outline-none uppercase shadow-inner"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isJoining}
-                    className="px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer whitespace-nowrap"
-                  >
-                    {isJoining ? "Aranıyor..." : "Sınıfa Gir ➔"}
-                  </button>
-                </div>
-
-                {joinError && (
-                  <p className="text-xs text-rose-400 font-semibold">{joinError}</p>
-                )}
-
-                {/* Hızlı Örnek Kod */}
-                <div className="flex items-center justify-center gap-2 text-xs text-slate-500 pt-1">
-                  <span>Hazır Demo Sınıf:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStudentInputPin("VRG-2535");
-                      fetchAssignmentsForCode("VRG-2535");
-                      setJoinedClassCode("VRG-2535");
-                    }}
-                    className="text-indigo-400 hover:underline font-mono font-bold cursor-pointer"
-                  >
-                    VRG-2535
-                  </button>
-                </div>
-              </form>
+              {/* Arama Kutusu */}
+              <div className="relative w-full sm:w-72">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Arşivde ders veya konu ara..."
+                  value={archiveSearch}
+                  onChange={(e) => setArchiveSearch(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
 
-            {/* Katılınan Sınıf ve İzolasyonlu Ödev Listesi / Boş Durum */}
-            {joinedClassCode ? (
-              <StudentAssignments
-                assignments={studentAssignments}
-                className={joinedClassInfo?.class_name}
-                classCode={joinedClassCode}
-                onStartAssignment={(assign) => {
-                  router.push(`/reading?code=${encodeURIComponent(assign.class_code || joinedClassCode)}`);
-                }}
-              />
+            {/* Arşiv Kartları Listesi */}
+            {filteredArchives.length === 0 ? (
+              <div className="p-12 rounded-3xl bg-slate-900/60 border border-slate-800 text-center space-y-3">
+                <Archive className="w-10 h-10 text-slate-600 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-300">Kayıtlı Ders Özeti Bulunamadı</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Akıllı Tahta Konsolunda dersi tamamlayıp "Dersi Bitir" butonuna bastığınızda ders özeti otomatik olarak buraya kaydedilecektir.
+                </p>
+                <Link
+                  href="/classroom/board"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition"
+                >
+                  <Tv className="w-3.5 h-3.5" />
+                  <span>Akıllı Tahtayı Başlat</span>
+                </Link>
+              </div>
             ) : (
-              <StudentAssignments
-                assignments={[]}
-                className="Kayıtlı Sınıf Yok"
-                onStartAssignment={(assign) => {
-                  router.push(`/reading?code=${encodeURIComponent(assign.class_code || "")}`);
-                }}
-              />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {filteredArchives.map((arch) => (
+                  <div
+                    key={arch.id}
+                    className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 shadow-xl space-y-4 group transition"
+                  >
+                    {/* Üst Satır: Sınıf Adı, Tarih ve Sil Butonu */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                            {arch.className}
+                          </span>
+                          <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-slate-500" />
+                            {arch.date}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition pt-1">
+                          {arch.lessonTitle}
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteArchive(arch.id)}
+                        className="p-1.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+                        title="Arşivi Sil"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* 3 Maddelik Özet */}
+                    <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+                      <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>3 Maddelik Ders Çıkarımı</span>
+                      </span>
+                      <ul className="space-y-1 text-xs text-slate-400">
+                        {arch.summaryPoints.map((pt, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                            <span>{pt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Kilit Kavramlar */}
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-bold text-slate-400 block">Kilit Kavramlar:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {arch.keyConcepts.map((kc, i) => (
+                          <span
+                            key={i}
+                            className="px-2.5 py-0.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-indigo-300 text-[11px] font-medium"
+                          >
+                            #{kc}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Pekiştirme Soruları */}
+                    {arch.questions && arch.questions.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                          <HelpCircle className="w-3 h-3 text-amber-400" />
+                          <span>Pekiştirme Soruları ({arch.questions.length}):</span>
+                        </span>
+                        <div className="space-y-1">
+                          {arch.questions.map((q, i) => (
+                            <p key={i} className="text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl">
+                              <b className="text-amber-400 mr-1.5">{i + 1}.</b>
+                              {q.question}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
       </main>
 
       {/* ========================================================================= */}
-      {/* 3. MODAL: YENİ SINIF AÇ                                                   */}
+      {/* 3. MODALLAR: YENİ SINIF AÇ, PIN GÖSTER, PIN İLE KATIL                     */}
       {/* ========================================================================= */}
+
+      {/* A) Yeni Sınıf Aç Modalı */}
       {showCreateClassModal && (
         <div
           onClick={() => setShowCreateClassModal(false)}
@@ -1302,306 +514,101 @@ export default function ClassroomPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Örn: C1 Advanced Business & Engineering English"
+                  placeholder="Örn: 10-A İngilizce veya Pratik Grubu"
                   value={newClassName}
                   onChange={(e) => setNewClassName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Hedef Seviye:</label>
-                <select
-                  value={newClassGrade}
-                  onChange={(e) => setNewClassGrade(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                >
-                  <option value="C1 Pro">C1 Pro (İleri Düzey Kariyer)</option>
-                  <option value="C1-C2 Executive">C1-C2 Executive (Sözleşme & FIDIC)</option>
-                  <option value="Academic YDS/IELTS">Academic (YDS & IELTS)</option>
-                  <option value="B2 Intermediate">B2 Upper Intermediate</option>
-                </select>
-              </div>
+              <p className="text-[11px] text-slate-400">
+                Sınıf açıldığında 6 haneli benzersiz bir katılım kodu (Örn: 7A2-5K9) otomatik oluşturulacaktır.
+              </p>
 
               <button
                 type="submit"
                 className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-600/30 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                <span>Sınıfı Oluştur & PIN Kodu Al</span>
+                <span>Sınıfı Oluştur</span>
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 4. MODAL: "+ YENİ ÖDEV HAZIRLA" (AI DESTEKLİ METİN & SORU ÇIKARTICI)       */}
-      {/* ========================================================================= */}
-      {showAssignModal && (
-        <div
-          onClick={() => setShowAssignModal(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-7 shadow-2xl space-y-6 my-8 animate-in zoom-in-95 duration-200"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center space-x-2">
-                <Wand2 className="w-5 h-5 text-indigo-400" />
-                <div>
-                  <h3 className="text-base font-bold text-white">
-                    Metin Yapıştır & AI ile Otomatik Ödev Çıkart
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Sınıf Kodu: <span className="font-mono text-indigo-300 font-bold">{assignClassroomCode}</span>
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAssignModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitAssignment} className="space-y-5">
-              {/* Sınıf Seçimi */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Atanacak Sınıf:</label>
-                  <select
-                    value={assignClassroomCode}
-                    onChange={(e) => setAssignClassroomCode(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {classrooms.map((c) => (
-                      <option key={c.id} value={c.code}>
-                        {c.name} ({c.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Son Teslim Tarihi:</label>
-                  <input
-                    type="text"
-                    value={assignDueDate}
-                    onChange={(e) => setAssignDueDate(e.target.value)}
-                    placeholder="Örn: Bu Cuma, 18:00"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {/* 1. ADIM: METİN ALANI & AI ÇIKART BUTONU */}
-              <div className="space-y-2 p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Okuma Parçası Metnini Yapıştırın:</span>
-                  </label>
-                  <span className="text-[10px] text-slate-500 font-mono">Gemini AI Destekli</span>
-                </div>
-
-                <textarea
-                  rows={4}
-                  required
-                  placeholder="İngilizce bir makale, sözleşme maddesi veya vaka analizi yapıştırın..."
-                  value={assignContent}
-                  onChange={(e) => setAssignContent(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed font-sans"
-                />
-
-                {/* Örnek Metin Hapları */}
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  <span className="text-[10px] text-slate-500 self-center">Hazır Örnekler:</span>
-                  {PRESET_SAMPLE_TEXTS.map((sample, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setAssignTitle(sample.title);
-                        setAssignContent(sample.content);
-                      }}
-                      className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
-                    >
-                      + {sample.title}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="pt-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">Zorluk Seviyesi:</span>
-                    <select
-                      value={assignLevel}
-                      onChange={(e) => setAssignLevel(e.target.value)}
-                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white"
-                    >
-                      <option value="Elementary">Elementary (A2)</option>
-                      <option value="Intermediate">Intermediate (B1-B2)</option>
-                      <option value="Advanced">Advanced (C1-C2)</option>
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={isExtracting || !assignContent.trim()}
-                    onClick={handleExtractWithAI}
-                    className="py-2 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-500 hover:from-indigo-500 hover:to-sky-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/25 transition active:scale-95 cursor-pointer disabled:opacity-50"
-                  >
-                    <Wand2 className="w-3.5 h-3.5" />
-                    <span>{isExtracting ? "Analiz Ediliyor..." : "Soruları & Kelimeleri Çıkart"}</span>
-                  </button>
-                </div>
-
-                {extractError && (
-                  <p className="text-xs text-rose-400 font-semibold pt-1">{extractError}</p>
-                )}
-              </div>
-
-              {/* 2. ADIM: ÇIKARTILAN KELİMELER VE SORULAR ÖNİZLEMESİ */}
-              {extractedWords.length > 0 && (
-                <div className="space-y-4 animate-in fade-in duration-300">
-                  {/* Ödev Başlığı */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Ödev Başlığı:</label>
-                    <input
-                      type="text"
-                      required
-                      value={assignTitle}
-                      onChange={(e) => setAssignTitle(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  {/* 5 Hedef Kelime */}
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Tespit Edilen Hedef Kelimeler ({extractedWords.length}):</span>
-                    </span>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {extractedWords.map((w, idx) => (
-                        <div
-                          key={idx}
-                          className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <span className="font-bold text-white">{w.word}</span>
-                            {w.phonetic && (
-                              <span className="text-[10px] text-slate-500 ml-1.5 font-mono">{w.phonetic}</span>
-                            )}
-                          </div>
-                          <span className="text-slate-400 text-[11px] truncate max-w-[130px]">{w.meaning}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 3 Çoktan Seçmeli Soru */}
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                      <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Türetilen Anlama Soruları ({extractedQuestions.length}):</span>
-                    </span>
-
-                    <div className="space-y-2.5">
-                      {extractedQuestions.map((q, qIdx) => (
-                        <div
-                          key={qIdx}
-                          className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs"
-                        >
-                          <p className="font-bold text-white">
-                            #{qIdx + 1}. {q.question}
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            {q.options.map((opt, optIdx) => (
-                              <div
-                                key={optIdx}
-                                className={`px-2.5 py-1.5 rounded-lg border text-[11px] flex items-center justify-between ${
-                                  optIdx === q.correct_index
-                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 font-bold"
-                                    : "bg-slate-900 border-slate-800 text-slate-400"
-                                }`}
-                              >
-                                <span>{String.fromCharCode(65 + optIdx)}) {opt}</span>
-                                {optIdx === q.correct_index && (
-                                  <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isAssignSuccess && (
-                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  <span>Ödev sınıfa başarıyla atandı ve PIN koduna bağlandı!</span>
-                </div>
-              )}
-
-              {/* 3. ADIM: EYLEM BUTONU */}
-              <button
-                type="submit"
-                disabled={extractedWords.length === 0}
-                className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Send className="w-4 h-4" />
-                <span>Ödevi Sınıfa Ata (Tahtaya Gönder)</span>
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 5. MODAL: AKILLI TAHTA PROJEKSİYON EKRANI (FULLSCREEN PIN)                 */}
-      <ProUpgradeModal
-        isOpen={showProUpgradeModal}
-        onClose={() => setShowProUpgradeModal(false)}
-        reasonMessage={proModalReason}
-      />
-      {/* ========================================================================= */}
-      {/* 5. MODAL: AKILLI TAHTA PROJEKSİYON EKRANI (ClassPinModal)                  */}
-      {/* ========================================================================= */}
+      {/* B) Katılım PIN Modalı (ClassPinModal) */}
       <ClassPinModal
-        isOpen={Boolean(boardProjectCode)}
-        onClose={() => setBoardProjectCode(null)}
-        classCode={boardProjectCode}
-        className={classrooms.find((c) => c.code === boardProjectCode)?.name}
-        gradeLevel={classrooms.find((c) => c.code === boardProjectCode)?.grade_level || "C1 Pro"}
-        onOpenLiveQR={() => {
-          const target = classrooms.find((c) => c.code === boardProjectCode);
-          if (target) {
-            setQrModalClass(target);
+        isOpen={Boolean(pinModalClass)}
+        onClose={() => setPinModalClass(null)}
+        classCode={pinModalClass?.code || null}
+        className={pinModalClass?.name}
+        onRegeneratePin={(newPin) => {
+          if (pinModalClass) {
+            const updated = classrooms.map((c) =>
+              c.id === pinModalClass.id ? { ...c, code: newPin } : c
+            );
+            setClassrooms(updated);
+            try {
+              localStorage.setItem("vocaship_classes", JSON.stringify(updated));
+            } catch {}
           }
-          setBoardProjectCode(null);
         }}
       />
 
-      {/* ========================================================================= */}
-      {/* 6. MODAL: AKILLI TAHTA DEV DİNAMİK QR MODALI (ClassLiveQRModal)            */}
-      {/* ========================================================================= */}
-      <ClassLiveQRModal
-        isOpen={Boolean(qrModalClass)}
-        onClose={() => setQrModalClass(null)}
-        classCode={qrModalClass?.code || null}
-        className={qrModalClass?.name}
-        gradeLevel={qrModalClass?.grade_level || "C1 Pro"}
-        activeSessionId={liveSession?.id || "live-session-1"}
-      />
+      {/* C) Öğrenci Hızlı PIN Giriş Modalı */}
+      {showJoinPinModal && (
+        <div
+          onClick={() => setShowJoinPinModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 text-center"
+          >
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xl">
+              🔑
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">PIN Kodu ile Derse Katıl</h3>
+              <p className="text-xs text-slate-400 pt-1">
+                Öğretmeninizin tahtada paylaştığı 6 haneli kodu yazın
+              </p>
+            </div>
+
+            <form onSubmit={handleStudentJoin} className="space-y-3">
+              <input
+                type="text"
+                maxLength={8}
+                placeholder="Örn: 7A2-5K9"
+                value={studentPin}
+                onChange={(e) => setStudentPin(e.target.value.toUpperCase())}
+                className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center font-mono font-bold text-lg text-white uppercase placeholder-slate-600 focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition cursor-pointer"
+              >
+                Derse Bağlan ➔
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function ClassroomPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0B0F19] text-white flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <ClassroomContent />
+    </Suspense>
   );
 }

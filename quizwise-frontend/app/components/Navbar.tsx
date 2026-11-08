@@ -21,7 +21,8 @@ import {
   User,
   LogOut,
   Settings,
-  Sparkles
+  Sparkles,
+  Headphones
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { UserProfileData, DEFAULT_GUEST_PROFILE } from "./GamificationBadge";
@@ -175,6 +176,13 @@ export default function Navbar() {
       isActive: pathname.startsWith("/speaking"),
     },
     {
+      name: t("nav_live_translator", "Toplantı Dinleyici"),
+      href: "/tools/live-translator",
+      icon: Headphones,
+      emoji: "🎧",
+      isActive: pathname.startsWith("/tools/live-translator"),
+    },
+    {
       name: t("nav_games", "Oyun Arenası"),
       href: "/games",
       icon: Gamepad2,
@@ -260,7 +268,7 @@ export default function Navbar() {
               })}
             </nav>
 
-            {/* SAĞ: SADE KONTROLLER (SERİ 🔥, ALTIN 🪙, XP ⚡, DİL VE KULLANICI PROFİL ROZETİ) */}
+            {/* SAĞ: SADE KONTROLLER (DİL VE KULLANICI PROFİL ROZETİ) */}
             <div className="flex items-center space-x-2 shrink-0">
               {/* Parlayan Yeşil Canlı Derse Katıl Menü Bildirim Butonu */}
               {isLiveClassActive && !pathname.startsWith("/classroom/live") && (
@@ -273,39 +281,10 @@ export default function Navbar() {
                 </Link>
               )}
 
-              {/* 1. Seri Alevi (Streak 🔥) */}
-              <div
-                className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-2xl bg-orange-500/10 border border-orange-500/25 text-orange-400 font-bold text-xs shrink-0 select-none shadow-sm"
-                title={t("daily_streak", "Günlük Seri")}
-              >
-                <span className="text-sm leading-none">🔥</span>
-                <span className="font-mono text-xs font-black">
-                  {displayStreak}
-                </span>
-              </div>
-
-              {/* 2. Altın Sayacı (🪙 275) */}
-              <div
-                className="hidden sm:flex items-center space-x-1 px-2.5 py-1.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-black text-xs font-mono shadow-sm shrink-0 select-none"
-                title="Mevcut Altın Bakiyesi"
-              >
-                <span className="text-xs leading-none">🪙</span>
-                <span>{displayCoins}</span>
-              </div>
-
-              {/* 3. Şimşek / XP Sayacı (⚡ 2.665) */}
-              <div
-                className="hidden sm:flex items-center space-x-1 px-2.5 py-1.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-black text-xs font-mono shadow-sm shrink-0 select-none"
-                title="Toplam Kazanılan XP"
-              >
-                <Zap className="w-3.5 h-3.5 fill-current text-amber-400" />
-                <span>{displayXp.toLocaleString()}</span>
-              </div>
-
-              {/* 4. Dil Seçici (🇹🇷 TR) */}
+              {/* Dil Seçici (🇹🇷 TR) */}
               <LanguageSelector align="right" />
 
-              {/* 5. KULLANICI PROFİL ROZETİ (USER PROFILE PILL) & KOMPAKT AÇILIR MENÜ */}
+              {/* KULLANICI PROFİL ROZETİ (USER PROFILE PILL) & KOMPAKT AÇILIR MENÜ */}
               <div className="relative shrink-0" ref={userDropdownRef}>
                 <button
                   type="button"
@@ -343,7 +322,7 @@ export default function Navbar() {
 
                 {/* Sağa Yaslı Kompakt Açılır Menü (Dropdown Menu) */}
                 {isUserDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute right-0 top-full mt-2 w-60 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 space-y-1.5 animate-in fade-in zoom-in-95 duration-150">
                     {/* Kullanıcı Özeti Başlığı */}
                     <div className="px-3 py-2 border-b border-slate-800/80 flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-sm shrink-0">
@@ -356,6 +335,25 @@ export default function Navbar() {
                         <p className="text-[10px] text-slate-400 font-mono truncate">
                           Seviye {displayLevel} • PRO Üye
                         </p>
+                      </div>
+                    </div>
+
+                    {/* Navbar'dan Taşınan 3'lü Oyun İstatistik Şeridi */}
+                    <div className="grid grid-cols-3 gap-1 p-2 bg-slate-950/70 rounded-xl border border-slate-800/80 text-center select-none">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs">🔥</span>
+                        <span className="text-[11px] font-black font-mono text-orange-400">{displayStreak}g</span>
+                        <span className="text-[9px] text-slate-500 font-medium">Seri</span>
+                      </div>
+                      <div className="flex flex-col items-center border-x border-slate-800">
+                        <span className="text-xs">🪙</span>
+                        <span className="text-[11px] font-black font-mono text-amber-300">{displayCoins}</span>
+                        <span className="text-[9px] text-slate-500 font-medium">Altın</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs">⚡</span>
+                        <span className="text-[11px] font-black font-mono text-indigo-300">{displayXp.toLocaleString()}</span>
+                        <span className="text-[9px] text-slate-500 font-medium">XP</span>
                       </div>
                     </div>
 

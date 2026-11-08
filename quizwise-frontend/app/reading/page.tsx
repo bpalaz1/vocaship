@@ -53,6 +53,7 @@ export default function ReadingPage() {
         <ReadingRoom
           decks={decks}
           selectedDeckId={decks[0]?.id || ""}
+          initialStory={null}
           onShareStory={(storyItem) => {
             setShareModalConfig({
               isOpen: true,
@@ -78,4 +79,3 @@ export default function ReadingPage() {
     </main>
   );
 }
-

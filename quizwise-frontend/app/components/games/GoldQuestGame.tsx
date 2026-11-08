@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
+import { saveArenaMistake } from "../../utils/arenaMistakes";
 
 export interface FlashcardItem {
   id: string;
@@ -392,6 +393,15 @@ export default function GoldQuestGame({
       playSound("wrong");
       setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
       setPhase("FEEDBACK_WRONG");
+
+      if (currentQuestion.card) {
+        const correctOpt = currentQuestion.options.find((o) => o.isCorrect);
+        saveArenaMistake({
+          word: currentQuestion.card.word,
+          meaning: correctOpt ? correctOpt.text : undefined,
+          gameType: "gold_quest",
+        });
+      }
 
       // Zayıf Nokta Avcısı: Yanlış cevabı zayıf havuzuna aktar
       const cardIdentifier = currentQuestion.card?.id && !currentQuestion.card.id.startsWith("fb-")

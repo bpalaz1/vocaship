@@ -108,7 +108,7 @@ export const PERSONAS: Record<string, PersonaInfo> = {
       gender: "male",
       pitch: 1.24,
       rate: 0.78,
-      preferredVoices: ["Microsoft Guy Online (Natural)", "Google US English", "Guy", "Alex", "David"],
+      preferredVoices: ["Microsoft Guy Online (Natural)", "Microsoft David Desktop", "Google UK English Male", "Guy", "Alex", "David", "male"],
     },
   },
 
@@ -135,7 +135,7 @@ export const PERSONAS: Record<string, PersonaInfo> = {
       gender: "male",
       pitch: 1.14,
       rate: 0.78,
-      preferredVoices: ["Microsoft Guy Online (Natural)", "Google US English", "Guy", "Alex", "David"],
+      preferredVoices: ["Microsoft Guy Online (Natural)", "Microsoft David Desktop", "Google UK English Male", "Guy", "Alex", "David", "male"],
     },
   },
 
@@ -160,7 +160,7 @@ export const PERSONAS: Record<string, PersonaInfo> = {
       gender: "male",
       pitch: 0.98,
       rate: 0.86,
-      preferredVoices: ["Microsoft Guy Online (Natural)", "Google US English", "Guy", "Alex", "David"],
+      preferredVoices: ["Microsoft Guy Online (Natural)", "Microsoft David Desktop", "Google UK English Male", "Guy", "Alex", "David", "Christopher", "male"],
     },
   },
 
@@ -237,7 +237,7 @@ export const PERSONAS: Record<string, PersonaInfo> = {
       gender: "male",
       pitch: 0.98,
       rate: 0.86,
-      preferredVoices: ["Microsoft Guy Online (Natural)", "Google US English", "Guy", "Alex", "David"],
+      preferredVoices: ["Microsoft Guy Online (Natural)", "Microsoft David Desktop", "Google UK English Male", "Guy", "Alex", "David", "male"],
     },
   },
 

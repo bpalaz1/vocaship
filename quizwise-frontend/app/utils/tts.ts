@@ -94,8 +94,44 @@ function getWordIndexFromCharIndex(text: string, charIndex: number): number {
   return Math.max(0, wordsBefore.length - 1);
 }
 
+const FEMALE_VOICE_KEYWORDS = [
+  "female",
+  "zira",
+  "jenny",
+  "aria",
+  "samantha",
+  "victoria",
+  "karen",
+  "susan",
+  "lisa",
+  "hazel",
+  "catherine",
+  "fiona",
+  "tessa",
+  "veena",
+  "eva",
+  "ana",
+  "helena",
+  "stephanie",
+  "zoe",
+  "kate",
+  "ayanda",
+  "julie",
+  "joana",
+  "allison",
+  "ava",
+  "steffi",
+  "monica",
+  "paulina",
+  "laura",
+  "sara",
+  "clara",
+  "google us english" // Chrome default Google US English voice is female
+];
+
 /**
  * Karakterin cinsiyetine ve profiline uygun en kaliteli Natural / Online nöral sesi seçer.
+ * Leo, Alex ve erkek karakterlerde kadın seslerinin atanması kesin olarak engellenir.
  */
 export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -109,52 +145,103 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
   const voicePool = englishVoices.length > 0 ? englishVoices : voices;
 
   const isFemale = persona.gender === "female";
+  const isMale = persona.gender === "male";
   const isSeniorMale =
     ["mr_harrison", "julian", "marcus", "legal_contracts_male", "corp_legal_contracts"].includes(
       persona.id
     ) || persona.category === "legal_contracts";
 
-  let priorityList: string[] = [];
-
-  if (isFemale) {
-    priorityList = [
-      "Microsoft Jenny Online (Natural)",
-      "Microsoft Aria Online (Natural)",
-      "Google US English",
-      "Samantha",
-      "Jenny",
-      "Aria",
-      "Victoria",
-      "Zira",
-    ];
-  } else if (isSeniorMale) {
-    priorityList = [
-      "Microsoft Christopher Online (Natural)",
-      "Microsoft Ryan Online (Natural)",
-      "Daniel",
-      "Christopher",
-      "Ryan",
-      "Oliver",
-      "George",
-      "Arthur",
-    ];
-  } else {
-    priorityList = [
-      "Microsoft Guy Online (Natural)",
-      "Google US English",
-      "Guy",
-      "Alex",
-      "David",
-      "James",
-    ];
-  }
-
-  for (const prio of priorityList) {
-    const match = voicePool.find((v) =>
-      v.name.toLowerCase().includes(prio.toLowerCase())
+  if (isMale) {
+    // KESİNLİKLE KADIN SESLERİNİ ELE (zira, jenny, aria, samantha, google us english vb.)
+    const strictlyMalePool = voicePool.filter(
+      (v) => !FEMALE_VOICE_KEYWORDS.some((fk) => v.name.toLowerCase().includes(fk))
     );
-    if (match) return match;
+
+    const maleSearchPool = strictlyMalePool.length > 0 ? strictlyMalePool : voicePool;
+
+    // Erkek ses öncelik listesi
+    const malePriorityList = isSeniorMale
+      ? [
+          "Microsoft Christopher Online (Natural)",
+          "Microsoft Ryan Online (Natural)",
+          "Microsoft David Desktop",
+          "Microsoft David",
+          "Google UK English Male",
+          "Daniel",
+          "Christopher",
+          "Ryan",
+          "Oliver",
+          "George",
+          "Arthur",
+          "David",
+          "Guy",
+          "male",
+        ]
+      : [
+          "Microsoft Guy Online (Natural)",
+          "Microsoft Christopher Online (Natural)",
+          "Microsoft Ryan Online (Natural)",
+          "Microsoft David Desktop",
+          "Microsoft David",
+          "Google UK English Male",
+          "Guy",
+          "Alex",
+          "David",
+          "Daniel",
+          "Christopher",
+          "James",
+          "Ryan",
+          "male",
+        ];
+
+    // 1. Kullanıcının özel tercih ettiği sesler
+    if (persona.ttsSettings?.preferredVoices) {
+      for (const pref of persona.ttsSettings.preferredVoices) {
+        if (FEMALE_VOICE_KEYWORDS.some((fk) => pref.toLowerCase().includes(fk))) continue;
+        const match = maleSearchPool.find((v) =>
+          v.name.toLowerCase().includes(pref.toLowerCase())
+        );
+        if (match) return match;
+      }
+    }
+
+    // 2. Erkek öncelik listesi taraması
+    for (const prio of malePriorityList) {
+      const match = maleSearchPool.find((v) =>
+        v.name.toLowerCase().includes(prio.toLowerCase())
+      );
+      if (match) return match;
+    }
+
+    // 3. İsmi içinde "male", "guy", "david" geçen herhangi bir İngilizce ses
+    const genericMale = maleSearchPool.find(
+      (v) =>
+        v.name.toLowerCase().includes("male") ||
+        v.name.toLowerCase().includes("david") ||
+        v.name.toLowerCase().includes("guy")
+    );
+    if (genericMale) return genericMale;
+
+    // 4. Kadın olmayan herhangi bir İngilizce ses
+    if (strictlyMalePool.length > 0) {
+      return strictlyMalePool[0];
+    }
+
+    // Cihazda hiç erkek ses yoksa fallback (speakPersonaText pitch: 0.88 ile toklaştıracak)
+    return voicePool[0] || null;
   }
+
+  // KADIN KARAKTERLER (Sarah, Ruby, Sandy vb.)
+  const femalePriorityList = [
+    "Microsoft Jenny Online (Natural)",
+    "Microsoft Aria Online (Natural)",
+    "Google US English",
+    "Samantha",
+    "Jenny",
+    "Aria",
+    "Victoria",
+    "Zira",
+  ];
 
   if (persona.ttsSettings?.preferredVoices) {
     for (const pref of persona.ttsSettings.preferredVoices) {
@@ -165,17 +252,19 @@ export function getBestVoiceForPersona(persona: PersonaInfo): SpeechSynthesisVoi
     }
   }
 
+  for (const prio of femalePriorityList) {
+    const match = voicePool.find((v) =>
+      v.name.toLowerCase().includes(prio.toLowerCase())
+    );
+    if (match) return match;
+  }
+
   const naturalFallback = voicePool.find(
     (v) =>
       v.name.toLowerCase().includes("natural") ||
       v.name.toLowerCase().includes("online")
   );
   if (naturalFallback) return naturalFallback;
-
-  const standardEn = voicePool.find(
-    (v) => v.lang === "en-US" || v.lang === "en-GB"
-  );
-  if (standardEn) return standardEn;
 
   return voicePool[0] || null;
 }
@@ -323,6 +412,7 @@ export function speakPersonaText(
     const isChuck = persona.id === "chuck";
     const isKids = isSparky || isChuck || persona.category === "kids";
     const isFemale = persona.gender === "female";
+    const isMale = persona.gender === "male";
     const isSeniorMale =
       ["mr_harrison", "julian", "marcus", "legal_contracts_male", "corp_legal_contracts"].includes(
         persona.id
@@ -337,10 +427,18 @@ export function speakPersonaText(
       : isFemale
       ? 1.02
       : isSeniorMale
-      ? 0.88
-      : 0.98;
+      ? 0.85
+      : isMale
+      ? 0.88 // Leo, Alex ve tüm erkek karakterlerde tok, maskülen perde garantisi
+      : 0.95;
 
-    utterance.pitch = options?.pitch ?? persona.ttsSettings?.pitch ?? calibratedPitch;
+    let targetPitch = options?.pitch ?? persona.ttsSettings?.pitch ?? calibratedPitch;
+    // Eğer erkek karakter konuşuyorsa ve cihazda kadın fallback sesine düşülmüşse sesi kalınlaştır (pitch: 0.88)
+    if (isMale && targetPitch > 0.90) {
+      targetPitch = 0.88;
+    }
+
+    utterance.pitch = targetPitch;
     utterance.rate = effectiveRate;
 
     utterance.onstart = () => {

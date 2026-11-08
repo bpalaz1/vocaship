@@ -11,6 +11,18 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${backendBase || "http://127.0.0.1:8000"}/api/:path*`,
       },
+      {
+        source: "/decks/:path*",
+        destination: `${backendBase || "http://127.0.0.1:8000"}/decks/:path*`,
+      },
+      {
+        source: "/folders/:path*",
+        destination: `${backendBase || "http://127.0.0.1:8000"}/folders/:path*`,
+      },
+      {
+        source: "/avatar/:path*",
+        destination: `${backendBase || "http://127.0.0.1:8000"}/avatar/:path*`,
+      },
     ];
   },
 };

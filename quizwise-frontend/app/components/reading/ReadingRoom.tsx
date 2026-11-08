@@ -3,1220 +3,1422 @@
 import React, { useState, useEffect, useMemo } from "react";
 import StoryReader from "./StoryReader";
 import ShareModal from "../ShareModal";
-import StoryCarouselGallery from "./StoryCarouselGallery";
 import StoryGeneratorModal from "./StoryGeneratorModal";
-import { CURATED_STORIES_CATALOG, getStoryById, CuratedStory } from "../../data/stories";
-import { useUserStories } from "../../context/UserStoriesContext";
-import { autoAssignCover } from "../../utils/autoCover";
-import { useTranslation, useLanguage, Language } from "../../context/LanguageContext";
-import { useExperience } from "../../context/ExperienceContext";
-import { ALL_CAREER_HUBS } from "../../data/careerHubs";
-import { usePersona } from "../../context/PersonaContext";
-import StoryShelfRow from "./StoryShelfRow";
-import { getShelvesForMode, ReadingShelfMode } from "../../data/storyLibrary";
+import StoryVectorCover from "./StoryVectorCover";
 import {
-    BookOpen,
-    Sparkles,
-    Loader2,
-    Clock,
-    CheckCircle2,
-    BookMarked,
-    ArrowRight,
-    Share2,
-    X,
-    FileText,
-    Layers,
-    Compass,
-    Archive,
-    Check,
-    Play,
-    RotateCw,
-    Search,
-    Star,
+  ALL_STORIES,
+  STORY_CATEGORIES,
+  getStoryById,
+  Story,
+} from "../../data/stories";
+import { useUserStories } from "../../context/UserStoriesContext";
+import { autoAssignCover, autoAssignGradient } from "../../utils/autoCover";
+import { useTranslation, useLanguage } from "../../context/LanguageContext";
+import {
+  BookOpen,
+  Sparkles,
+  Clock,
+  CheckCircle2,
+  Bookmark,
+  ArrowRight,
+  X,
+  Play,
+  RotateCw,
+  Search,
+  Check,
+  Trash2,
+  Layers,
+  Filter,
 } from "lucide-react";
 
 interface Deck {
-    id: string;
-    title: string;
+  id: string;
+  title: string;
 }
 
 interface ReadingRoomProps {
-    decks: Deck[];
-    selectedDeckId: string;
-    initialStory?: any;
-    onBack?: () => void;
-    onShareStory?: (story: any) => void;
-    onCompleteStory?: (storyId: string) => void;
+  decks: Deck[];
+  selectedDeckId: string;
+  initialStory?: any;
+  onBack?: () => void;
+  onShareStory?: (story: any) => void;
+  onCompleteStory?: (storyId: string) => void;
 }
 
 export interface ProgressItem {
-    storyKey: string;
-    title: string;
-    level: string;
-    topic: string;
-    lastParagraph: number;
-    lastPage?: number;
-    totalPages?: number;
-    status: "in_progress" | "completed";
-    updatedAt: number;
-    contentSnippet?: string;
+  storyKey: string;
+  title: string;
+  level: string;
+  topic: string;
+  lastParagraph: number;
+  lastPage?: number;
+  totalPages?: number;
+  status: "in_progress" | "completed";
+  updatedAt: number;
+  contentSnippet?: string;
 }
 
-export interface LibraryStoryItem {
-    id: string;
-    title: string;
-    level: string;
-    cefr?: string;
-    topic: string;
-    desc: string;
-    wordCount: string;
-    target_words: string[];
-    content: string;
-    coverImage?: string;
-    isUserStory?: boolean;
-    target_vocabulary: Array<{
-        word: string;
-        phonetic?: string;
-        turkish_meaning: string;
-        context_sentence?: string;
-    }>;
-    comprehension_questions: Array<{
-        question: string;
-        options: string[];
-        correct_answer_index: number;
-    }>;
-    isCareerCase?: boolean;
+// 12 Kategori İçin Yüksek Çözünürlüklü Telifsiz Tematik Kapak Görselleri
+const CATEGORY_DEFAULT_COVERS: Record<string, string> = {
+  kids: "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=800&q=80",
+  adult_basic: "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80",
+  adult_intermediate: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80",
+  adult_advanced: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80",
+  mythology: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
+  archaeology: "https://images.unsplash.com/photo-1599839575945-a9e5af0c3fa5?auto=format&fit=crop&w=800&q=80",
+  nature_miracles: "https://images.unsplash.com/photo-1511497584788-87676104235f?auto=format&fit=crop&w=800&q=80",
+  human_culture: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=800&q=80",
+  project_controls: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=800&q=80",
+  legal_contracts: "https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=800&q=80",
+  medical_clinical: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
+  finance_accounting: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=800&q=80",
+  user_custom: "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?auto=format&fit=crop&w=800&q=80",
+};
+
+/**
+ * Seviye kademesini ("A" | "B" | "C") çözer
+ */
+export function getStoryTier(story: any): "A" | "B" | "C" {
+  const lvl = String(story?.level || "").toUpperCase();
+  const cefr = String(story?.cefr || "").toUpperCase();
+
+  if (
+    lvl === "A" ||
+    cefr.startsWith("A") ||
+    lvl.startsWith("A1") ||
+    lvl.startsWith("A2") ||
+    lvl.includes("KIDS") ||
+    lvl.includes("ELEMENTARY") ||
+    lvl.includes("BASIC")
+  ) {
+    return "A";
+  }
+
+  if (
+    lvl === "C" ||
+    cefr.startsWith("C") ||
+    lvl.startsWith("C1") ||
+    lvl.startsWith("C2") ||
+    lvl.includes("ADVANCED") ||
+    lvl.includes("CORPORATE") ||
+    lvl.includes("LEGAL") ||
+    lvl.includes("CLINICAL") ||
+    lvl.includes("FINANCE")
+  ) {
+    return "C";
+  }
+
+  return "B";
 }
 
-// 15 ADET ÜCRETSİZ & KOTASIZ HAZIR HİKAYE
-const FREE_LIBRARY_STORIES: LibraryStoryItem[] = [
-    // ==================== ELEMENTARY (A1 - A2) ====================
-    {
-        id: "elem-1",
-        title: "A Sunny Day in the Park",
-        level: "Elementary",
-        cefr: "A1 - A2",
-        topic: "Daily Life",
-        desc: "Güneşli bir sabah parkta köpeğiyle yürüyüşe çıkan Leo'nun huzurlu hikayesi.",
-        wordCount: "~150 Kelime",
-        target_words: ["sunny", "bench", "squirrel", "pocket"],
-        content: (
-            "It was a warm and sunny morning in the city. Leo decided to take his small dog for a walk in the park. " +
-            "The green grass was shining with morning dew. Children were laughing and running near the colorful playground. " +
-            "Leo sat on a wooden bench and opened his favorite book. Suddenly, his dog began to bark happily at a tiny squirrel. " +
-            "The squirrel quickly climbed up an old oak tree. Leo smiled, closed his book, and took an orange from his pocket to eat."
-        ),
-        target_vocabulary: [
-            { word: "sunny", phonetic: "/ˈsʌn.i/", turkish_meaning: "güneşli" },
-            { word: "bench", phonetic: "/bentʃ/", turkish_meaning: "bank, oturak" },
-            { word: "squirrel", phonetic: "/ˈskwɪr.əl/", turkish_meaning: "sincap" },
-            { word: "pocket", phonetic: "/ˈpɒk.ɪt/", turkish_meaning: "cep" },
-        ],
-        comprehension_questions: [
-            { question: "Where did Leo go in the morning?", options: ["A) Supermarket", "B) The park", "C) School", "D) Train station"], correct_answer_index: 1 },
-            { question: "What animal did the dog bark at?", options: ["A) Cat", "B) Duck", "C) Squirrel", "D) Rabbit"], correct_answer_index: 2 },
-            { question: "What fruit did Leo eat?", options: ["A) Apple", "B) Banana", "C) Orange", "D) Peach"], correct_answer_index: 2 },
-        ],
-    },
-    {
-        id: "elem-2",
-        title: "The Baker's Secret Bread",
-        level: "Elementary",
-        cefr: "A1 - A2",
-        topic: "Food & Life",
-        desc: "Kasabanın sevilen fırıncısı Thomas'ın dağ balıyla yaptığı enfes ekmek ve küçük Maya.",
-        wordCount: "~130 Kelime",
-        target_words: ["bakery", "flour", "honey", "crispy"],
-        content: (
-            "Every morning at five o'clock, Thomas starts baking fresh bread in his quiet bakery. " +
-            "The warm smell of flour and butter fills the narrow street. Neighbors line up early outside the shop. " +
-            "His secret ingredient is a tiny spoon of organic honey from mountain bees. " +
-            "A little girl named Maya always visits to buy a warm crispy loaf for her grandmother."
-        ),
-        target_vocabulary: [
-            { word: "bakery", phonetic: "/ˈbeɪ.kər.i/", turkish_meaning: "fırın" },
-            { word: "flour", phonetic: "/flaʊər/", turkish_meaning: "un" },
-            { word: "honey", phonetic: "/ˈhʌn.i/", turkish_meaning: "bal" },
-            { word: "crispy", phonetic: "/ˈkrɪs.pi/", turkish_meaning: "çıtır, gevrek" },
-        ],
-        comprehension_questions: [
-            { question: "At what time does Thomas start baking?", options: ["A) 7:00 AM", "B) 5:00 AM", "C) 9:00 AM", "D) Midnight"], correct_answer_index: 1 },
-            { question: "What is his secret ingredient?", options: ["A) Olive oil", "B) Mountain honey", "C) Cinnamon", "D) Chocolate"], correct_answer_index: 1 },
-            { question: "Who buys the bread for her grandmother?", options: ["A) Sarah", "B) Thomas", "C) Maya", "D) Emily"], correct_answer_index: 2 },
-        ],
-    },
-    {
-        id: "elem-3",
-        title: "The Lost Key in the Library",
-        level: "Elementary",
-        cefr: "A1 - A2",
-        topic: "Mystery & Books",
-        desc: "Kütüphanede astronomi kitapları ararken antik bir bronz anahtar bulan Sam.",
-        wordCount: "~140 Kelime",
-        target_words: ["library", "bookshelf", "bronze", "curious"],
-        content: (
-            "Sam loved visiting the quiet town library every Saturday afternoon. " +
-            "He was looking for a book about planets and distant galaxies. " +
-            "Between two thick history encyclopedias on the lowest bookshelf, something metallic sparkled. " +
-            "It was a small, ornate bronze key tied to a weathered green velvet ribbon. " +
-            "Curious and excited, Sam carried the mystery key directly to the librarian's desk."
-        ),
-        target_vocabulary: [
-            { word: "library", phonetic: "/ˈlaɪ.brər.i/", turkish_meaning: "kütüphane" },
-            { word: "bookshelf", phonetic: "/ˈbʊk.ʃelf/", turkish_meaning: "kitaplık rafı" },
-            { word: "bronze", phonetic: "/brɒnz/", turkish_meaning: "bronz" },
-            { word: "curious", phonetic: "/ˈkjʊə.ri.əs/", turkish_meaning: "meraklı" },
-        ],
-        comprehension_questions: [
-            { question: "What topic was Sam looking for?", options: ["A) Cooking", "B) Planets and galaxies", "C) Cars", "D) Gardening"], correct_answer_index: 1 },
-            { question: "Where was the bronze key hidden?", options: ["A) Under the desk", "B) In his pocket", "C) Between two encyclopedias", "D) Near the door"], correct_answer_index: 2 },
-            { question: "What color was the velvet ribbon?", options: ["A) Red", "B) Green", "C) Blue", "D) Yellow"], correct_answer_index: 1 },
-        ],
-    },
+/**
+ * Okuma süresi göstergesi
+ */
+export function getStoryReadTime(story: any, tier: "A" | "B" | "C"): string {
+  if (story?.readTime && typeof story.readTime === "string" && story.readTime.trim()) {
+    return story.readTime;
+  }
+  if (tier === "A") return "2-3 dk";
+  if (tier === "B") return "4-5 dk";
+  return "5-6 dk";
+}
 
-    // ==================== INTERMEDIATE (B1 - B2) ====================
-    {
-        id: "inter-1",
-        title: "The Antique Clockmaker's Secret",
-        level: "Intermediate",
-        cefr: "B1 - B2",
-        topic: "Mystery & Craft",
-        desc: "Büyükbabanın antika saatinin gece yarısı çalmasıyla çözülen şaşırtıcı aile gizemi.",
-        wordCount: "~210 Kelime",
-        target_words: ["intricate", "mechanism", "chime", "compartment"],
-        content: (
-            "Nestled in the cobbled alleyway of old Vienna, Julian worked tirelessly inside his late grandfather's horology workshop. " +
-            "Among dozens of ticking grandfather clocks, one specific mahogany pendulum timepiece had remained silent for decades. " +
-            "One stormy midnight, the silent clock suddenly released a resonant chime that echoed across the rafters. " +
-            "Investigating the intricate brass mechanism, Julian discovered a concealed wooden compartment behind the escapement gear. " +
-            "Inside lay a hand-drawn map of the Danube valley alongside a heartfelt letter dated October 1948."
-        ),
-        target_vocabulary: [
-            { word: "intricate", phonetic: "/ˈɪn.trɪ.kət/", turkish_meaning: "karmaşık, girift" },
-            { word: "mechanism", phonetic: "/ˈmek.ə.nɪ.zəm/", turkish_meaning: "mekanizma" },
-            { word: "chime", phonetic: "/tʃaɪm/", turkish_meaning: "çan sesi, çalmak" },
-            { word: "compartment", phonetic: "/kəmˈpɑːt.mənt/", turkish_meaning: "bölme, gizli göz" },
-        ],
-        comprehension_questions: [
-            { question: "In which city is the workshop situated?", options: ["A) Berlin", "B) Vienna", "C) Zurich", "D) Prague"], correct_answer_index: 1 },
-            { question: "What happened to the mahogany clock at midnight?", options: ["A) It broke into pieces", "B) It released a resonant chime", "C) It stopped completely", "D) It caught fire"], correct_answer_index: 1 },
-            { question: "What was hidden behind the escapement gear?", options: ["A) Gold coins", "B) A hand-drawn map and letter", "C) An emerald necklace", "D) Spare clock parts"], correct_answer_index: 1 },
-        ],
-    },
-    {
-        id: "inter-2",
-        title: "Graphene: The Superconductor Frontier",
-        level: "Intermediate",
-        cefr: "B1 - B2",
-        topic: "Technology & Science",
-        desc: "Mikroçiplerdeki aşırı ısınma problemini grafen mimarisiyle çözen genç mühendisin başarısı.",
-        wordCount: "~220 Kelime",
-        target_words: ["conductive", "dissipate", "nanoscale", "thermal"],
-        content: (
-            "Modern microprocessors generate immense thermal energy as transistors shrink to atomic scales. " +
-            "Conventional copper interconnects struggle to dissipate heat efficiently, leading to thermal throttling and high failure rates. " +
-            "Dr. Elena Vance proposed integrating single-atom-thick graphene layers as nanoscale thermal heat spreaders. " +
-            "Because graphene possesses extraordinary electrical and conductive attributes, it reduced peak junction temperatures by eighteen percent. " +
-            "This breakthrough opens new frontiers for quantum computing architecture and sustainable data center operations."
-        ),
-        target_vocabulary: [
-            { word: "conductive", phonetic: "/kənˈdʌk.tɪv/", turkish_meaning: "iletken" },
-            { word: "dissipate", phonetic: "/ˈdɪs.ɪ.peɪt/", turkish_meaning: "dağıtmak, yaymak" },
-            { word: "nanoscale", phonetic: "/ˈnæn.əʊ.skeɪl/", turkish_meaning: "nano-ölçekli" },
-            { word: "thermal", phonetic: "/ˈθɜː.məl/", turkish_meaning: "termal, ısısal" },
-        ],
-        comprehension_questions: [
-            { question: "What major challenge do modern microprocessors face?", options: ["A) Low memory", "B) Immense thermal energy and heat", "C) Large physical size", "D) Lack of electricity"], correct_answer_index: 1 },
-            { question: "What material did Dr. Elena Vance integrate?", options: ["A) Titanium", "B) Graphene layers", "C) Synthetic plastic", "D) Liquid nitrogen"], correct_answer_index: 1 },
-            { question: "By what percentage did junction temperatures drop?", options: ["A) 5%", "B) 10%", "C) 18%", "D) 50%"], correct_answer_index: 2 },
-        ],
-    },
+/**
+ * Hikayenin kapak görseli URL'ini çözer (kesintisiz görsel garantisi)
+ */
+export function getStoryCover(story: any): string {
+  if (story?.coverImage && typeof story.coverImage === "string" && story.coverImage.startsWith("http")) {
+    return story.coverImage;
+  }
+  const cat = String(story?.category || "").toLowerCase();
+  return CATEGORY_DEFAULT_COVERS[cat] || CATEGORY_DEFAULT_COVERS.adult_basic;
+}
 
-    // ==================== ADVANCED (C1 - C2) ====================
-    {
-        id: "adv-1",
-        title: "The Epistemic Architecture of Machine Volition",
-        level: "Advanced",
-        cefr: "C1 - C2",
-        topic: "Cognitive Science & AI",
-        desc: "Yapay zekâ, bilinç, insan iradesi ve zihin felsefesi üzerine derin ve akademik bir okuma.",
-        wordCount: "~280 Kelime",
-        target_words: ["volition", "epistemic", "deterministic", "ubiquitous"],
-        content: (
-            "Philosophical investigations into artificial volition increasingly interrogate the boundaries between biological consciousness and algorithmic deterministic computation. " +
-            "Contemporary neural architectures display emergent heuristics that mimic intentional decision-making paradigms. " +
-            "Yet, critics argue that computational syntax alone cannot generate true epistemic comprehension or intrinsic subjective agency. " +
-            "As autonomous agentic systems become ubiquitous across clinical and financial domains, resolving whether machine intentionality constitutes genuine volition or sophisticated mimicry remains paramount."
-        ),
-        target_vocabulary: [
-            { word: "volition", phonetic: "/vəˈlɪʃ.ən/", turkish_meaning: "irade, bilinçli seçim" },
-            { word: "epistemic", phonetic: "/ˌep.ɪˈstiː.mɪk/", turkish_meaning: "bilgisel, epistemik" },
-            { word: "deterministic", phonetic: "/dɪˌtɜː.mɪˈnɪs.tɪk/", turkish_meaning: "belirlenimci, nedensel" },
-            { word: "ubiquitous", phonetic: "/juːˈbɪk.wɪ.təs/", turkish_meaning: "her yerde bulunan, çok yaygın" },
-        ],
-        comprehension_questions: [
-            { question: "What boundary does the text critically interrogate?", options: ["A) Hardware vs software speed", "B) Biological consciousness vs algorithmic computation", "C) Silicon costs vs copper", "D) Cloud servers vs edge devices"], correct_answer_index: 1 },
-            { question: "What do critics contend regarding computational syntax?", options: ["A) It is too slow", "B) It cannot alone generate true epistemic comprehension", "C) It requires no electricity", "D) It is already sentient"], correct_answer_index: 1 },
-            { question: "Why is resolving machine intentionality considered paramount?", options: ["A) Because autonomous systems are becoming ubiquitous", "B) To lower taxes", "C) To stop computing research", "D) Because robots build houses"], correct_answer_index: 0 },
-        ],
-    },
-    {
-        id: "adv-2",
-        title: "The Quantum Entanglement Paradox",
-        level: "Advanced",
-        cefr: "C1 - C2",
-        topic: "Theoretical Physics",
-        desc: "Einstein'ın 'uzaktan hayaletimsi etki' dediği kuantum dolanıklığının gerçekliği ve nedensellik algısı.",
-        wordCount: "~290 Kelime",
-        target_words: ["repudiate", "substantiate", "causality", "reverberate"],
-        content: (
-            "Einstein famously repudiated non-local physical interactions, disparaging quantum entanglement as 'spooky action at a distance'. " +
-            "Nevertheless, rigorous contemporary experiments consistently substantiate the instantaneous correlation of paired quantum states. " +
-            "This phenomenon dismantles classical assumptions of macroscopic local realism and deterministic causality. " +
-            "The epistemological repercussions reverberate beyond theoretical physics, compelling philosophers to radically interrogate our intuitive apprehension of spacetime."
-        ),
-        target_vocabulary: [
-            { word: "repudiate", phonetic: "/rɪˈpjuː.di.eɪt/", turkish_meaning: "reddetmek, tanımamak" },
-            { word: "substantiate", phonetic: "/səbˈstæn.ʃi.eɪt/", turkish_meaning: "kanıtlamak, doğrulamak" },
-            { word: "causality", phonetic: "/kɔːˈzæl.ə.ti/", turkish_meaning: "nedensellik" },
-            { word: "reverberate", phonetic: "/rɪˈvɜː.bər.eɪt/", turkish_meaning: "yankılanmak" },
-        ],
-        comprehension_questions: [
-            { question: "What phrase did Einstein use?", options: ["A) Cosmic symmetry", "B) Spooky action at a distance", "C) Universal harmony", "D) Singularity"], correct_answer_index: 1 },
-            { question: "What concept does entanglement challenge?", options: ["A) Thermodynamics", "B) Local realism and causality", "C) Charge", "D) Orbits"], correct_answer_index: 1 },
-            { question: "What do modern experiments demonstrate?", options: ["A) Illusion", "B) Instantaneous correlation of paired states", "C) Variable light", "D) Zero energy"], correct_answer_index: 1 },
-        ],
-    },
+/**
+ * Kategori eşleme kontrolü (eşanlamlı ve sektör takma adları destekli)
+ */
+export function isStoryInCategory(story: any, catId: string): boolean {
+  if (catId === "all") return true;
+  if (catId === "user_custom") return !!story.isUserStory;
+
+  const sCat = String(story.category || "").toLowerCase();
+  const target = catId.toLowerCase();
+
+  if (sCat === target) return true;
+  if (target === "project_controls" && (sCat === "projectcontrols" || sCat === "project_controls")) return true;
+  if (target === "legal_contracts" && (sCat === "legal" || sCat === "legal_contracts")) return true;
+  if (target === "medical_clinical" && (sCat === "medical" || sCat === "medical_clinical")) return true;
+  if (target === "finance_accounting" && (sCat === "corporate_finance" || sCat === "finance" || sCat === "corporatefinance" || sCat === "finance_accounting")) return true;
+
+  return false;
+}
+
+export const GENERAL_CULTURE_ITEMS = [
+  { id: "kids", label: "Kids & Masallar", icon: "🦊" },
+  { id: "adult_basic", label: "Günlük Yaşam", icon: "☕" },
+  { id: "adult_intermediate", label: "Macera & Kültür", icon: "🏔️" },
+  { id: "adult_advanced", label: "Felsefe & İleri Düşünce", icon: "🧠" },
+  { id: "mythology", label: "Mitoloji & Efsaneler", icon: "⚡" },
+  { id: "archaeology", label: "Arkeoloji & Bilim Tarihi", icon: "🏛️" },
+  { id: "nature_miracles", label: "Doğa & Biyoloji Mucizeleri", icon: "🌿" },
+  { id: "human_culture", label: "Kültür & Sıradışı İnsanlar", icon: "🏮" },
 ];
 
-// MESLEKİ VAKA ANALİZLERİNDEN ÜRETİLEN OKUMA METİNLERİ
-const CAREER_CASE_STORIES: LibraryStoryItem[] = ALL_CAREER_HUBS.map((hub) => ({
-    id: `case_${hub.key}`,
-    title: hub.readingCase.title,
-    level: "Advanced",
-    cefr: "C1 Mesleki",
-    topic: hub.titleDefault,
-    desc: hub.readingCase.snippet,
-    wordCount: `~${hub.readingCase.fullText.split(/\s+/).length} Kelime`,
-    target_words: hub.cards.slice(0, 4).map((c) => c.word),
-    content: hub.readingCase.fullText,
-    isCareerCase: true,
-    target_vocabulary: hub.cards.slice(0, 4).map((c) => ({
-        word: c.word,
-        phonetic: c.phonetic,
-        turkish_meaning: c.meaning,
-        context_sentence: c.exampleEn,
-    })),
-    comprehension_questions: [
-        {
-            question: `What is the core strategic focus of this case in ${hub.titleDefault}?`,
-            options: [
-                "A) Ad-hoc cost cutting without analysis",
-                "B) Systematic evaluation, compliance and rigorous optimization",
-                "C) Total reliance on intuition without documentation",
-                "D) Postponing stakeholder review indefinitely",
-            ],
-            correct_answer_index: 1,
-        },
-        {
-            question: "Which of the following principles is strongly emphasized in this case?",
-            options: [
-                "A) Ignoring contractual or operational variances",
-                "B) Proactive risk mitigation and evidence-based decision making",
-                "C) Discontinuing quality assurance processes",
-                "D) Bypassing audit milestones",
-            ],
-            correct_answer_index: 1,
-        },
-        {
-            question: "How does thorough terminological precision benefit professionals in this domain?",
-            options: [
-                "A) It creates unnecessary overhead",
-                "B) It ensures unambiguous cross-border communication and technical clarity",
-                "C) It replaces technical calculations",
-                "D) It eliminates the need for contracts",
-            ],
-            correct_answer_index: 1,
-        },
-    ],
-}));
-
-// TÜM METİNLERİN BİRLEŞİMİ (Genel Hikayeler + Mesleki Vaka Analizleri)
-const ALL_LIBRARY_ITEMS: LibraryStoryItem[] = [
-    ...FREE_LIBRARY_STORIES,
-    ...CAREER_CASE_STORIES,
+export const PROFESSIONAL_ITEMS = [
+  { id: "project_controls", label: "Proje Kontrol & Planlama", icon: "📊" },
+  { id: "legal_contracts", label: "Hukuk & Sözleşmeler", icon: "⚖️" },
+  { id: "medical_clinical", label: "Tıp & Sağlık Bilimleri", icon: "🩺" },
+  { id: "finance_accounting", label: "Kurumsal Finans & Ekonomi", icon: "📈" },
 ];
 
 const PRESET_SNIPPETS = [
-    {
-        label: "📰 The Economist",
-        title: "The Architecture of Deep Focus (The Economist)",
-        text: "In an era dominated by relentless digital interruptions, the ability to cultivate sustained focus has emerged as an indispensable cognitive asset. Knowledge workers worldwide struggle against fragmented attention spans, frequently falling prey to ephemeral notifications and shallow tasks. Cognitive researchers substantiate that deep focus requires deliberate friction against cognitive fatigue.",
-    },
-    {
-        label: "🌍 BBC",
-        title: "Global Supply Chains and Everyday Economy (BBC)",
-        text: "Modern international trade is undergoing a profound structural transformation. Decades of prioritizing cost efficiency over systemic resilience exposed severe bottlenecks during global disruptions. Consequently, multinational corporations are actively diversifying supplier networks, transitioning from precarious single-source dependencies to robust regionalized ecosystems.",
-    },
-    {
-        label: "🔬 Nature",
-        title: "Neuroscience of Memory & Spaced Repetition (Nature)",
-        text: "Human memory is not a static recording device; rather, it is a dynamic neural system governed by the Ebbinghaus forgetting curve. Without active reinforcement, our brains prune newly acquired vocabulary at an exponential rate within forty-eight hours. Spaced repetition algorithms strategically schedule flashcard reviews right at the critical juncture of forgetting.",
-    },
+  {
+    label: "📰 The Economist",
+    title: "The Architecture of Deep Focus (The Economist)",
+    text: "In an era dominated by relentless digital interruptions, the ability to cultivate sustained focus has emerged as an indispensable cognitive asset. Knowledge workers worldwide struggle against fragmented attention spans, frequently falling prey to ephemeral notifications and shallow tasks. Cognitive researchers substantiate that deep focus requires deliberate friction against cognitive fatigue.",
+  },
+  {
+    label: "🌍 BBC",
+    title: "Global Supply Chains and Everyday Economy (BBC)",
+    text: "Modern international trade is undergoing a profound structural transformation. Decades of prioritizing cost efficiency over systemic resilience exposed severe bottlenecks during global disruptions. Consequently, multinational corporations are actively diversifying supplier networks, transitioning from precarious single-source dependencies to robust regionalized ecosystems.",
+  },
+  {
+    label: "🔬 Nature",
+    title: "Neuroscience of Memory & Spaced Repetition (Nature)",
+    text: "Human memory is not a static recording device; rather, it is a dynamic neural system governed by the Ebbinghaus forgetting curve. Without active reinforcement, our brains prune newly acquired vocabulary at an exponential rate within forty-eight hours. Spaced repetition algorithms strategically schedule flashcard reviews right at the critical juncture of forgetting.",
+  },
 ];
 
+/**
+ * 16:9 Kapak Görselli, Rozetli ve Hedef Kelimeli Vitrin Kartı
+ */
+interface StoryCardProps {
+  story: any;
+  onSelect: (story: any) => void;
+  isCompleted?: boolean;
+  isInProgress?: boolean;
+  onDelete?: () => void;
+  isUserStory?: boolean;
+}
+
+function StoryCardItem({
+  story,
+  onSelect,
+  isCompleted,
+  isInProgress,
+  onDelete,
+  isUserStory,
+}: StoryCardProps) {
+  const { t } = useLanguage();
+  const [imgError, setImgError] = useState(false);
+
+  const tier = getStoryTier(story);
+  const readTime = getStoryReadTime(story, tier);
+  const coverUrl = getStoryCover(story);
+
+  // İlk 3 hedef kelime
+  const previewWords = (story.target_vocabulary || story.target_words || []).slice(0, 3);
+
+  // Seviye Rozet Stili
+  const tierBadgeConfig = {
+    A: {
+      label: "A Seviyesi (2-3 dk)",
+      badgeBg: "bg-emerald-500/90 text-white border-emerald-400/40",
+      dot: "🟢",
+    },
+    B: {
+      label: "B Seviyesi (4-5 dk)",
+      badgeBg: "bg-sky-500/90 text-white border-sky-400/40",
+      dot: "🔵",
+    },
+    C: {
+      label: "C Seviyesi (5-6 dk)",
+      badgeBg: "bg-purple-600/90 text-white border-purple-400/40",
+      dot: "🟣",
+    },
+  }[tier];
+
+  return (
+    <div
+      onClick={() => onSelect(story)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(story);
+        }
+      }}
+      className={`group relative w-full rounded-2xl bg-slate-900/90 border shadow-lg hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-200 cursor-pointer overflow-hidden flex flex-col focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+        isUserStory
+          ? "border-amber-500/40 hover:border-amber-400 hover:shadow-amber-500/10"
+          : "border-slate-800 hover:border-indigo-500/70 hover:shadow-indigo-500/15"
+      }`}
+    >
+      {/* 16:9 Kapak Görseli Katmanı (aspect-video) */}
+      <div className="aspect-video relative overflow-hidden bg-slate-950">
+        {!imgError && coverUrl ? (
+          <img
+            src={coverUrl}
+            alt={story.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={() => setImgError(true)}
+            loading="lazy"
+          />
+        ) : (
+          <StoryVectorCover
+            category={story.category}
+            topic={story.topic}
+            title={story.title}
+            level={story.level}
+            cefr={story.cefr}
+            isUserStory={isUserStory}
+            isCareerCase={story.isCareerCase}
+          />
+        )}
+
+        {/* Görsel Üzeri Hafif Karartma */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-black/30 pointer-events-none" />
+
+        {/* Sol Üst: Seviye Rozeti */}
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-20">
+          <span
+            className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-md shadow-md border flex items-center gap-1.5 ${tierBadgeConfig.badgeBg}`}
+          >
+            <span>{tierBadgeConfig.dot}</span>
+            <span>{story.cefr || tierBadgeConfig.label}</span>
+          </span>
+
+          {isUserStory && (
+            <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-500 text-slate-950 backdrop-blur-md shadow-md">
+              ✨ {t("badge_custom", "Özel")}
+            </span>
+          )}
+
+          {story.isCareerCase && !isUserStory && (
+            <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-cyan-600/90 text-white backdrop-blur-md shadow-md border border-cyan-400/30">
+              💼 {t("badge_case", "Vaka")}
+            </span>
+          )}
+        </div>
+
+        {/* Sağ Üst: Süre ve Kelime Sayısı */}
+        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-20">
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              title={t("delete_story_tooltip", "Hikayeyi Sil")}
+              className="p-1 rounded-lg bg-slate-950/80 hover:bg-rose-600 text-slate-400 hover:text-white transition shadow-sm cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950/85 text-slate-200 border border-slate-700/80 backdrop-blur-md text-[10px] sm:text-[11px] font-medium shadow-md">
+            <Clock className="w-3 h-3 text-amber-400" />
+            <span>{readTime}</span>
+            {story.wordCount && (
+              <span className="text-slate-400 font-mono">• {story.wordCount}k</span>
+            )}
+          </div>
+        </div>
+
+        {/* Sol Alt: Tamamlandı / Devam Ediyor Damgası */}
+        {isCompleted && (
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/95 text-slate-950 text-[10px] font-bold shadow-md z-20">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>{t("badge_read", "Okundu")}</span>
+          </div>
+        )}
+        {!isCompleted && isInProgress && (
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/95 text-slate-950 text-[10px] font-bold shadow-md z-20">
+            <Bookmark className="w-3.5 h-3.5" />
+            <span>{t("badge_bookmark", "Kaldığın Yer")}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Kart Gövdesi: Başlık, Açıklama, Hedef Kelimeler */}
+      <div className="p-4 flex flex-col justify-between flex-1 space-y-3">
+        <div className="space-y-1.5">
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider line-clamp-1 ${
+              isUserStory ? "text-amber-400" : "text-indigo-400"
+            }`}
+          >
+            {story.topic || story.categoryName || (isUserStory ? "Özel Hikaye" : "Genel Okuma")}
+          </span>
+          <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+            {story.title}
+          </h3>
+          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+            {story.desc || (story.content ? story.content.slice(0, 110) + "..." : "")}
+          </p>
+        </div>
+
+        {/* Hedef Kelime Etiketleri */}
+        {previewWords.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            {previewWords.map((v: any, idx: number) => {
+              const wordText = typeof v === "string" ? v : v.word;
+              const trMeaning = typeof v === "object" ? v.turkish_meaning : "";
+              return (
+                <span
+                  key={idx}
+                  title={trMeaning ? `${wordText}: ${trMeaning}` : wordText}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700/80 text-slate-300 group-hover:border-indigo-500/40 transition-colors"
+                >
+                  <strong className="text-indigo-300">{wordText}</strong>
+                  {trMeaning && (
+                    <span className="text-slate-400"> • {trMeaning}</span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Aksiyon Alt Çubuğu */}
+        <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs font-semibold text-slate-400 group-hover:text-indigo-300 transition-colors">
+          <span className="text-[11px] text-slate-500">
+            {isUserStory ? "Kişisel Kütüphane" : "Sıfır Bekleme (0ms)"}
+          </span>
+          <div className="flex items-center gap-1 text-indigo-400 group-hover:translate-x-1 transition-transform">
+            <span>{t("btn_read_now", "Hemen Oku")}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReadingRoom({
-    decks,
-    selectedDeckId,
-    initialStory,
-    onBack,
-    onShareStory,
-    onCompleteStory,
+  decks,
+  selectedDeckId,
+  initialStory,
+  onBack,
+  onShareStory,
+  onCompleteStory,
 }: ReadingRoomProps) {
-    const { t, currentLang } = useTranslation();
-    const { userStories } = useUserStories();
+  const { t } = useTranslation();
+  const { userStories, deleteUserStory } = useUserStories();
 
-    // 1. KÜTÜPHANE 3 ANA SEKME STATE'İ: 'explore' | 'in_progress' | 'completed'
-    const [activeTab, setActiveTab] = useState<"explore" | "in_progress" | "completed">("explore");
+  // 1. KÜTÜPHANE 3 ANA SEKME STATE'İ: 'explore' | 'in_progress' | 'completed'
+  const [activeTab, setActiveTab] = useState<"explore" | "in_progress" | "completed">("explore");
 
-    // Kullanıcı profili ve modu ('kids' | 'academic' | 'career')
-    const { activePersona, persona } = usePersona();
-    const [shelfMode, setShelfMode] = useState<ReadingShelfMode>(() => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("vocaship_reading_shelf_mode");
-            if (saved === "kids" || saved === "academic" || saved === "career") {
-                return saved as ReadingShelfMode;
-            }
+  // Filtreler: Seviye ve Kategori
+  const [selectedLevel, setSelectedLevel] = useState<"all" | "A" | "B" | "C">("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Okunan Hikaye State'i (null ise Katalog Vitrini gösterilir, dolu ise Dual-Reader açılır)
+  const [story, setStory] = useState<any | null>(null);
+  const [shareStoryModal, setShareStoryModal] = useState<any | null>(null);
+
+  // Kendi Metnini Yapıştır Modalı State'i
+  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteTitle, setPasteTitle] = useState("");
+
+  // Yapay Zekâ ile Hikaye Üret Modalı State'i
+  const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
+
+  // İlerleme Listesi (localStorage: quizwise_progress_...)
+  const [progressList, setProgressList] = useState<ProgressItem[]>([]);
+
+  const loadSavedProgress = () => {
+    try {
+      const items: ProgressItem[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("quizwise_progress_")) {
+          const val = localStorage.getItem(key);
+          if (val) {
+            try {
+              items.push(JSON.parse(val));
+            } catch {}
+          }
         }
-        if (activePersona === "sparky" || activePersona === "chuck" || persona?.category === "kids") {
-            return "kids";
-        }
-        if (
-            persona?.category === "project_controls" ||
-            persona?.category === "legal_contracts" ||
-            (typeof activePersona === "string" && (activePersona.includes("project_controls") || activePersona.includes("legal")))
-        ) {
-            return "career";
-        }
-        return "academic";
+      }
+      items.sort((a, b) => b.updatedAt - a.updatedAt);
+      setProgressList(items);
+    } catch (e) {
+      console.error("Progress yüklenemedi:", e);
+    }
+  };
+
+  useEffect(() => {
+    loadSavedProgress();
+  }, [story]);
+
+  // Initial story veya session kontrolü (Açılışta her zaman vitrin standardı)
+  useEffect(() => {
+    if (initialStory) {
+      setStory(initialStory);
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      const pendingText = sessionStorage.getItem("vocaship_pending_reading_text");
+      const pendingTitle = sessionStorage.getItem("vocaship_pending_reading_title");
+      if (pendingText) {
+        sessionStorage.removeItem("vocaship_pending_reading_text");
+        sessionStorage.removeItem("vocaship_pending_reading_title");
+        handleLaunchCustomReader(pendingText, pendingTitle || "Özel Okuma Metni");
+      }
+    }
+  }, [initialStory]);
+
+  const inProgressStories = progressList.filter((p) => p.status === "in_progress");
+  const completedStories = progressList.filter((p) => p.status === "completed");
+
+  // Kullanıcı hikayelerini de içeren birleşik koleksiyon
+  const allAvailableStories = useMemo(() => {
+    const formattedUserStories = (userStories || []).map((us) => ({
+      ...us,
+      isUserStory: true,
+      category: "user_custom",
+      categoryName: "Özel Kütüphane",
+      level: us.level || "B1",
+      cefr: us.cefr || "B1",
+      readTime: us.readTime || "2 dk",
+      wordCount: typeof us.wordCount === "number" ? us.wordCount : parseInt(String(us.wordCount || "150"), 10) || 150,
+      topic: us.topic || "Özel Metin",
+      desc: us.desc || (us.content ? us.content.slice(0, 110) + "..." : ""),
+    }));
+
+    return [...formattedUserStories, ...ALL_STORIES];
+  }, [userStories]);
+
+  // Filtrelenmiş hikayeler
+  const filteredStories = useMemo(() => {
+    let list = allAvailableStories;
+
+    // Kategori Filtresi
+    if (selectedCategory !== "all") {
+      list = list.filter((s) => isStoryInCategory(s, selectedCategory));
+    }
+
+    // Seviye Filtresi ("A" | "B" | "C")
+    if (selectedLevel !== "all") {
+      list = list.filter((s) => getStoryTier(s) === selectedLevel);
+    }
+
+    // Arama Sorgusu
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return list;
+
+    return list.filter((s) => {
+      const titleMatch = (s.title || "").toLowerCase().includes(q);
+      const topicMatch = (s.topic || "").toLowerCase().includes(q);
+      const descMatch = (s.desc || "").toLowerCase().includes(q);
+      const contentMatch = typeof s.content === "string" && s.content.toLowerCase().includes(q);
+      const vocabMatch =
+        Array.isArray(s.target_vocabulary) &&
+        s.target_vocabulary.some((v: any) => {
+          const wordStr = typeof v === "string" ? v : v.word || "";
+          const trStr = typeof v === "object" ? v.turkish_meaning || "" : "";
+          return wordStr.toLowerCase().includes(q) || trStr.toLowerCase().includes(q);
+        });
+      const wordsMatch =
+        Array.isArray(s.target_words) &&
+        s.target_words.some((w: string) => w.toLowerCase().includes(q));
+
+      return titleMatch || topicMatch || descMatch || contentMatch || vocabMatch || wordsMatch;
+    });
+  }, [allAvailableStories, selectedCategory, selectedLevel, searchQuery]);
+
+  const handleSelectStory = (item: any) => {
+    setStory({
+      id: item.id,
+      title: item.title,
+      level: item.level,
+      topic: item.topic,
+      cefr: item.cefr,
+      desc: item.desc,
+      wordCount: typeof item.wordCount === "number" ? `${item.wordCount} Kelime` : item.wordCount,
+      target_words: item.target_words || [],
+      isCareerCase: item.isCareerCase,
+      coverImage: getStoryCover(item),
+      isUserStory: item.isUserStory,
+      content: item.content,
+      target_vocabulary: item.target_vocabulary,
+      comprehension_questions: item.comprehension_questions,
+    });
+  };
+
+  const handleOpenFromProgress = (pItem: ProgressItem) => {
+    const foundCurated = getStoryById(pItem.storyKey);
+    if (foundCurated) {
+      handleSelectStory(foundCurated);
+      return;
+    }
+
+    const foundUserStory = userStories.find((s) => s.id === pItem.storyKey);
+    if (foundUserStory) {
+      handleSelectStory(foundUserStory);
+      return;
+    }
+
+    const foundInAll = ALL_STORIES.find((s) => s.id === pItem.storyKey);
+    if (foundInAll) {
+      handleSelectStory(foundInAll);
+    } else {
+      handleLaunchCustomReader(pItem.contentSnippet || "Örnek metin", pItem.title);
+    }
+  };
+
+  // Kendi metnini yapıştırıp açma
+  const handleLaunchCustomReader = (text?: string, title?: string) => {
+    const finalContent = (text || pasteText).trim();
+    const finalTitle = (title || pasteTitle).trim() || "Özel Çözümlenen Metin";
+    if (!finalContent) return;
+
+    const sampleTokens = finalContent
+      .split(/\s+/)
+      .map((w) => w.replace(/[^a-zA-Z]/g, ""))
+      .filter((w) => w.length >= 6)
+      .slice(0, 4);
+
+    const autoCoverImg = autoAssignCover({
+      title: finalTitle,
+      topic: "Özel Analiz",
+      content: finalContent,
     });
 
-    const [searchQuery, setSearchQuery] = useState("");
-    const [viewLayout, setViewLayout] = useState<"shelves" | "grid">("shelves");
-
-    const handleShelfModeChange = (mode: ReadingShelfMode) => {
-        setShelfMode(mode);
-        if (typeof window !== "undefined") {
-            localStorage.setItem("vocaship_reading_shelf_mode", mode);
-        }
+    const customStory = {
+      id: `custom_${Date.now()}`,
+      title: finalTitle,
+      level: "Advanced",
+      cefr: "C1 Serbest",
+      topic: "Özel Analiz",
+      desc: finalContent.slice(0, 120) + "...",
+      wordCount: `~${finalContent.split(/\s+/).length} Kelime`,
+      target_words: sampleTokens,
+      content: finalContent,
+      coverImage: autoCoverImg || CATEGORY_DEFAULT_COVERS.user_custom,
+      isUserStory: true,
+      target_vocabulary: sampleTokens.map((w) => ({
+        word: w.toLowerCase(),
+        phonetic: "",
+        turkish_meaning: "Detay görmek için tıklayın",
+      })),
+      comprehension_questions: [
+        {
+          question: "Bu metnin ana düşüncesi nedir?",
+          options: [
+            "A) Metinde aktarılan temel argüman ve çözümlemeler",
+            "B) Konuyla ilgisiz ikincil bir gözlem",
+            "C) Yalnızca teknik bir detay",
+            "D) Karşıt bir hipotez",
+          ],
+          correct_answer_index: 0,
+        },
+      ],
     };
 
+    setPasteText("");
+    setPasteTitle("");
+    setIsPasteModalOpen(false);
+    setStory(customStory);
+  };
 
-    // Okunan Hikaye State'i (null ise kütüphane gösterilir, dolu ise Dual-Reader açılır)
-    const [story, setStory] = useState<any | null>(null);
-    const [shareStoryModal, setShareStoryModal] = useState<any | null>(null);
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setSelectedLevel("all");
+    setSelectedCategory("all");
+  };
 
-    // Kendi Metnini Yapıştır Modalı State'i
-    const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
-    const [pasteText, setPasteText] = useState("");
-    const [pasteTitle, setPasteTitle] = useState("");
+  return (
+    <div className="w-full space-y-6 animate-in fade-in duration-200 overflow-x-hidden">
+      {!story ? (
+        /* ========================================================================= */
+        /* KATALOG VİTRİNİ GÖRÜNÜMÜ                                                  */
+        /* ========================================================================= */
+        <div className="space-y-4">
+          {/* 1. KOMPAKT VE TEK SATIRLIK ÜST ŞERİT (TOP BAR) */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl backdrop-blur-md">
+            {/* Sol: Başlık + Toplam Hikaye Rozeti */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                <span className="text-indigo-400">📖</span>
+                <span>{t("nav_reading", "Okuma Odası")}</span>
+              </h1>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                {allAvailableStories.length} Hikaye
+              </span>
+            </div>
 
-    // Yapay Zekâ ile Hikaye Üret Modalı State'i
-    const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
-
-    // İlerleme Listesi (localStorage: quizwise_progress_...)
-    const [progressList, setProgressList] = useState<ProgressItem[]>([]);
-
-    const loadSavedProgress = () => {
-        try {
-            const items: ProgressItem[] = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith("quizwise_progress_")) {
-                    const val = localStorage.getItem(key);
-                    if (val) {
-                        try {
-                            items.push(JSON.parse(val));
-                        } catch {}
-                    }
-                }
-            }
-            items.sort((a, b) => b.updatedAt - a.updatedAt);
-            setProgressList(items);
-        } catch (e) {
-            console.error("Progress yüklenemedi:", e);
-        }
-    };
-
-    useEffect(() => {
-        loadSavedProgress();
-    }, [story]);
-
-    // Initial story veya session kontrolü
-    useEffect(() => {
-        if (initialStory) {
-            setStory(initialStory);
-            return;
-        }
-
-        if (typeof window !== "undefined") {
-            const pendingText = sessionStorage.getItem("vocaship_pending_reading_text");
-            const pendingTitle = sessionStorage.getItem("vocaship_pending_reading_title");
-            if (pendingText) {
-                sessionStorage.removeItem("vocaship_pending_reading_text");
-                sessionStorage.removeItem("vocaship_pending_reading_title");
-                handleLaunchCustomReader(pendingText, pendingTitle || "Özel Okuma Metni");
-            }
-        }
-    }, [initialStory]);
-
-    const inProgressStories = progressList.filter((p) => p.status === "in_progress");
-    const completedStories = progressList.filter((p) => p.status === "completed");
-
-    // Seçilen hikayeyi aç
-    // Aktif moda ait şerit listesi ve arama filtrelemesi
-    const currentShelves = useMemo(() => {
-        const baseShelves = getShelvesForMode(shelfMode);
-        if (!searchQuery.trim()) return baseShelves;
-
-        const query = searchQuery.toLowerCase().trim();
-        return baseShelves
-            .map((shelf) => {
-                const filteredStories = shelf.stories.filter((s) => {
-                    const matchTitle = (s.title || "").toLowerCase().includes(query);
-                    const matchTopic = (s.topic || "").toLowerCase().includes(query);
-                    const matchDesc = (s.desc || "").toLowerCase().includes(query);
-                    const matchWords = (s.target_words || []).some((w) =>
-                        w.toLowerCase().includes(query)
-                    );
-                    return matchTitle || matchTopic || matchDesc || matchWords;
-                });
-                return {
-                    ...shelf,
-                    stories: filteredStories,
-                };
-            })
-            .filter((shelf) => shelf.stories.length > 0);
-    }, [shelfMode, searchQuery]);
-
-    // Kullanıcının özel ürettiği hikayeler şeridi
-    const userStoriesShelf = useMemo(() => {
-        if (!userStories || userStories.length === 0) return null;
-        let stories = userStories.map((us) => ({
-            id: us.id,
-            title: us.title,
-            category: "custom",
-            categoryName: "Özel Kütüphane",
-            level: us.level || "B1",
-            cefr: us.cefr || "B1",
-            readTime: us.readTime || "2 dk",
-            wordCount: typeof us.wordCount === "number" ? us.wordCount : parseInt(String(us.wordCount || "150"), 10) || 150,
-            topic: us.topic || "Özel Metin",
-            desc: us.desc || (us.content ? us.content.slice(0, 100) + "..." : ""),
-            content: us.content,
-            target_words: us.target_words || [],
-            target_vocabulary: us.target_vocabulary || [],
-            comprehension_questions: (us.comprehension_questions || []).map((q) => ({
-                question: q.question,
-                options: q.options,
-                correct_answer_index: q.correct_answer_index ?? q.correct_index ?? 0,
-                correct_index: q.correct_index ?? q.correct_answer_index ?? 0,
-            })),
-            isUserStory: true,
-        }));
-
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase().trim();
-            stories = stories.filter((s) =>
-                (s.title || "").toLowerCase().includes(query) ||
-                (s.topic || "").toLowerCase().includes(query)
-            );
-        }
-
-        if (stories.length === 0) return null;
-
-        return {
-            id: "user_custom_shelf",
-            mode: shelfMode,
-            title: "Özel Kütüphanem & Yapay Zekâ Üretimleri",
-            subtitle: "Kendiniz oluşturduğunuz veya yapay zekâ ile ürettiğiniz kişisel hikayeler",
-            badge: `${stories.length} Özel Metin`,
-            icon: "✨",
-            colorScheme: {
-                badgeBg: "bg-purple-500/20",
-                badgeText: "text-purple-300",
-                border: "border-purple-500/30",
-                glow: "shadow-purple-500/10",
-                gradient: "from-purple-500/20 to-indigo-500/5",
-            },
-            stories: stories as CuratedStory[],
-        };
-    }, [userStories, shelfMode, searchQuery]);
-
-    const handleSelectStory = (item: any) => {
-        setStory({
-            id: item.id,
-            title: item.title,
-            level: item.level,
-            topic: item.topic,
-            cefr: item.cefr,
-            desc: item.desc,
-            wordCount: typeof item.wordCount === "number" ? `${item.wordCount} Kelime` : item.wordCount,
-            target_words: item.target_words || [],
-            isCareerCase: item.isCareerCase,
-            coverImage: item.coverImage,
-            isUserStory: item.isUserStory,
-            content: item.content,
-            target_vocabulary: item.target_vocabulary,
-            comprehension_questions: item.comprehension_questions,
-        });
-    };
-
-    // Kaldığı yerden veya arşivden hikaye aç
-    const handleOpenFromProgress = (pItem: ProgressItem) => {
-        const foundCurated = getStoryById(pItem.storyKey);
-        if (foundCurated) {
-            handleSelectStory({
-                id: foundCurated.id,
-                title: foundCurated.title,
-                level: foundCurated.level,
-                cefr: foundCurated.cefr,
-                topic: foundCurated.topic,
-                desc: foundCurated.desc,
-                wordCount: `${foundCurated.wordCount} Kelime`,
-                target_words: foundCurated.target_words,
-                content: foundCurated.content,
-                target_vocabulary: foundCurated.target_vocabulary,
-                comprehension_questions: foundCurated.comprehension_questions,
-                isCareerCase: foundCurated.isCareerCase,
-            });
-            return;
-        }
-
-        const foundUserStory = userStories.find((s) => s.id === pItem.storyKey);
-        if (foundUserStory) {
-            handleSelectStory({
-                id: foundUserStory.id,
-                title: foundUserStory.title,
-                level: foundUserStory.level,
-                cefr: foundUserStory.cefr || foundUserStory.level || "B1",
-                topic: foundUserStory.topic,
-                desc: foundUserStory.desc || "",
-                wordCount: typeof foundUserStory.wordCount === "number" ? `${foundUserStory.wordCount} Kelime` : foundUserStory.wordCount || "150 Kelime",
-                target_words: foundUserStory.target_words || [],
-                content: foundUserStory.content,
-                coverImage: foundUserStory.coverImage,
-                isUserStory: true,
-                target_vocabulary: foundUserStory.target_vocabulary || [],
-                comprehension_questions: (foundUserStory.comprehension_questions || []).map((q) => ({
-                    question: q.question,
-                    options: q.options,
-                    correct_answer_index: q.correct_answer_index ?? q.correct_index ?? 0,
-                })),
-            });
-            return;
-        }
-
-        const found = ALL_LIBRARY_ITEMS.find((s) => s.id === pItem.storyKey);
-        if (found) {
-            handleSelectStory(found);
-        } else {
-            // Serbest metin veya fallback
-            handleLaunchCustomReader(pItem.contentSnippet || "Örnek metin", pItem.title);
-        }
-    };
-
-    // Kendi metnini yapıştırıp açma
-    const handleLaunchCustomReader = (text?: string, title?: string) => {
-        const finalContent = (text || pasteText).trim();
-        const finalTitle = (title || pasteTitle).trim() || "Özel Çözümlenen Metin";
-        if (!finalContent) return;
-
-        // Otomatik kelime çıkarma
-        const sampleTokens = finalContent
-            .split(/\s+/)
-            .map((w) => w.replace(/[^a-zA-Z]/g, ""))
-            .filter((w) => w.length >= 6)
-            .slice(0, 4);
-
-        const autoCoverImg = autoAssignCover({
-            title: finalTitle,
-            topic: "Özel Analiz",
-            content: finalContent,
-        });
-
-        const customStory: LibraryStoryItem & { coverImage?: string; isUserStory?: boolean } = {
-            id: `custom_${Date.now()}`,
-            title: finalTitle,
-            level: "Advanced",
-            cefr: "C1 Serbest",
-            topic: "Özel Analiz",
-            desc: finalContent.slice(0, 120) + "...",
-            wordCount: `~${finalContent.split(/\s+/).length} Kelime`,
-            target_words: sampleTokens,
-            content: finalContent,
-            coverImage: autoCoverImg,
-            isUserStory: true,
-            target_vocabulary: sampleTokens.map((w) => ({
-                word: w.toLowerCase(),
-                phonetic: "",
-                turkish_meaning: "Detay görmek için tıklayın",
-            })),
-            comprehension_questions: [
-                {
-                    question: "Bu metnin ana düşüncesi nedir?",
-                    options: [
-                        "A) Metinde aktarılan temel argüman ve çözümlemeler",
-                        "B) Konuyla ilgisiz ikincil bir gözlem",
-                        "C) Yalnızca teknik bir detay",
-                        "D) Karşıt bir hipotez",
-                    ],
-                    correct_answer_index: 0,
-                },
-                {
-                    question: "Metinde savunulan yaklaşımın temel gerekçesi nedir?",
-                    options: [
-                        "A) Kanıta dayalı ve analitik gerekçelendirme",
-                        "B) Rastgele varsayımlar",
-                        "C) Tarihsel bir yanılgı",
-                        "D) Yetersiz veri",
-                    ],
-                    correct_answer_index: 0,
-                },
-            ],
-        };
-
-        setPasteText("");
-        setPasteTitle("");
-        setIsPasteModalOpen(false);
-        setStory(customStory);
-    };
-
-
-    return (
-        <div className="w-full space-y-6 animate-in fade-in duration-200 overflow-x-hidden">
-            {!story ? (
-                /* ========================================================================= */
-                /* KÜTÜPHANE GÖRÜNÜMÜ                                                        */
-                /* ========================================================================= */
-                <div className="space-y-6">
-                    {/* Üst Bar: Başlık + [ ✨ Yapay Zekâ ile Hikaye Üret ] + [ ✍️ Kendi Metnini Yapıştır ] */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-                        <div className="space-y-1">
-                            <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-                                <span>📖</span>
-                                <span>{t("nav_reading", "Okuma Odası")}</span>
-                            </h1>
-                            <p className="text-xs sm:text-sm text-slate-400">
-                                {t("reading_subtitle", "Bağlamsal metin çözümleme, seviyeli okumalar ve mesleki vaka analizleri")}
-                            </p>
-                        </div>
-
-                        {/* Aksiyon Butonları */}
-                        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-                            <button
-                                type="button"
-                                onClick={() => setIsGeneratorModalOpen(true)}
-                                className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-amber-500 hover:from-indigo-500 hover:to-amber-400 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer shrink-0"
-                            >
-                                <Sparkles className="w-4 h-4 text-amber-200" />
-                                <span>{t("reading_generate_ai", "Yapay Zekâ ile Hikaye Üret")}</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setIsPasteModalOpen(true)}
-                                className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer shrink-0"
-                            >
-                                <span>✍️</span>
-                                <span>{t("reading_paste_text", "Metin Yapıştır")}</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* 1. KÜTÜPHANE 3 ANA SEKME DÜZENİ */}
-                    <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800 w-fit">
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab("explore")}
-                            className={`flex items-center space-x-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
-                                activeTab === "explore"
-                                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                                    : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                            }`}
-                        >
-                            <span>📚</span>
-                            <span>{t("reading_tab_explore", "Keşfet")}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-950/60 text-slate-300 font-bold">
-                                {CURATED_STORIES_CATALOG.length + userStories.length}
-                            </span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab("in_progress")}
-                            className={`flex items-center space-x-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
-                                activeTab === "in_progress"
-                                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                                    : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                            }`}
-                        >
-                            <span>⏳</span>
-                            <span>{t("reading_tab_in_progress", "Devam Edenler")}</span>
-                            {inProgressStories.length > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
-                                    {inProgressStories.length}
-                                </span>
-                            )}
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab("completed")}
-                            className={`flex items-center space-x-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
-                                activeTab === "completed"
-                                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                                    : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                            }`}
-                        >
-                            <span>✅</span>
-                            <span>{t("reading_tab_completed", "Arşivim")}</span>
-                            {completedStories.length > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
-                                    {completedStories.length}
-                                </span>
-                            )}
-                        </button>
-                    </div>
-
-                    {/* ========================================================================= */}
-                    {/* SEKME 1: [ 📚 KEŞFET ] - DİNAMİK YATAY ŞERİTLER VİTRİNİ                   */}
-                    {/* ========================================================================= */}
-                    {activeTab === "explore" && (
-                        <div className="space-y-6">
-                            {/* MOD SEÇİCİ TOOLBAR & ARAMA ÇUBUĞU */}
-                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-inner">
-                                {/* Profil Mod Butonları */}
-                                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800/80 flex-wrap">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleShelfModeChange("kids")}
-                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                            shelfMode === "kids"
-                                                ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                                                : "text-slate-400 hover:text-white"
-                                        }`}
-                                    >
-                                        <span>🧒</span>
-                                        <span>{t("shelf_mode_kids", "Çocuk (Yıldızlı Görevler)")}</span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => handleShelfModeChange("academic")}
-                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                            shelfMode === "academic"
-                                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                                                : "text-slate-400 hover:text-white"
-                                        }`}
-                                    >
-                                        <span>🎓</span>
-                                        <span>{t("shelf_mode_academic", "Genel & CEFR (A1 - C1)")}</span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => handleShelfModeChange("career")}
-                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                            shelfMode === "career"
-                                                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
-                                                : "text-slate-400 hover:text-white"
-                                        }`}
-                                    >
-                                        <span>💼</span>
-                                        <span>{t("shelf_mode_career", "Sektörel Vaka Hikayeleri")}</span>
-                                    </button>
-                                </div>
-
-                                {/* Arama & Görünüm Seçici */}
-                                <div className="flex items-center gap-2">
-                                    <div className="relative flex-1 sm:w-64">
-                                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                                        <input
-                                            type="text"
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            placeholder={t("search_stories_placeholder", "Hikaye veya konu ara...")}
-                                            className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
-                                        />
-                                        {searchQuery && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setSearchQuery("")}
-                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    <div className="flex items-center p-1 rounded-xl bg-slate-950/80 border border-slate-800 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => setViewLayout("shelves")}
-                                            title="Şerit Görünümü (Horizontal Shelves)"
-                                            className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                                viewLayout === "shelves"
-                                                    ? "bg-indigo-600 text-white shadow-sm"
-                                                    : "text-slate-400 hover:text-white"
-                                            }`}
-                                        >
-                                            <span>☰</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setViewLayout("grid")}
-                                            title="Katalog Vitrin Görünümü (Grid Gallery)"
-                                            className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                                viewLayout === "grid"
-                                                    ? "bg-indigo-600 text-white shadow-sm"
-                                                    : "text-slate-400 hover:text-white"
-                                            }`}
-                                        >
-                                            <span>⊞</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Şerit Görünümü (StoryShelfRow) */}
-                            {viewLayout === "shelves" ? (
-                                <div className="space-y-8">
-                                    {/* Varsa Kullanıcı Özel Hikayeler Şeridi */}
-                                    {userStoriesShelf && (
-                                        <StoryShelfRow
-                                            shelf={userStoriesShelf}
-                                            onSelectStory={handleSelectStory}
-                                            completedStoryIds={completedStories.map((c) => c.storyKey)}
-                                            inProgressStoryIds={inProgressStories.map((p) => p.storyKey)}
-                                        />
-                                    )}
-
-                                    {/* Kullanıcı Moduna Duyarlı Şeritler */}
-                                    {currentShelves.length > 0 ? (
-                                        currentShelves.map((shelf) => (
-                                            <StoryShelfRow
-                                                key={shelf.id}
-                                                shelf={shelf}
-                                                onSelectStory={handleSelectStory}
-                                                completedStoryIds={completedStories.map((c) => c.storyKey)}
-                                                inProgressStoryIds={inProgressStories.map((p) => p.storyKey)}
-                                            />
-                                        ))
-                                    ) : (
-                                        <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
-                                            <div className="text-3xl">🔍</div>
-                                            <h3 className="text-sm font-semibold text-slate-200">
-                                                {t("no_stories_found", "Aramanıza Uygun Hikaye Bulunamadı")}
-                                            </h3>
-                                            <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                                                &quot;{searchQuery}&quot; aramasıyla eşleşen metin bulunamadı. Farklı bir terim deneyebilirsiniz.
-                                            </p>
-                                            <button
-                                                type="button"
-                                                onClick={() => setSearchQuery("")}
-                                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
-                                            >
-                                                Filtreyi Temizle
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <StoryCarouselGallery
-                                    onSelectStory={handleSelectStory}
-                                    completedStoryIds={completedStories.map((c) => c.storyKey)}
-                                    inProgressStoryIds={inProgressStories.map((p) => p.storyKey)}
-                                    onCreateNewStory={() => setIsGeneratorModalOpen(true)}
-                                />
-                            )}
-                        </div>
-                    )}
-
-                    {/* ========================================================================= */}
-                    {/* SEKME 2: [ ⏳ DEVAM EDENLER ]                                             */}
-                    {/* ========================================================================= */}
-                    {activeTab === "in_progress" && (
-                        <div className="space-y-4">
-                            {inProgressStories.length === 0 ? (
-                                <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
-                                    <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
-                                        ⏳
-                                    </div>
-                                    <h3 className="text-sm font-semibold text-slate-200">
-                                        Yarım kalan bir okumanız bulunmuyor
-                                    </h3>
-                                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                                        Keşfet sekmesinden yeni bir hikaye veya vaka analizine başlayarak okuma odasında ilerleyebilirsiniz.
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab("explore")}
-                                        className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
-                                    >
-                                        <span>Metinleri Keşfet</span>
-                                        <ArrowRight className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="grid gap-3">
-                                    {inProgressStories.map((item) => {
-                                        const totalP = item.totalPages || 3;
-                                        const currentP = (item.lastPage ?? item.lastParagraph ?? 0) + 1;
-                                        const percent = Math.min(100, Math.round((currentP / totalP) * 100));
-
-                                        return (
-                                            <div
-                                                key={item.storyKey}
-                                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-indigo-500/40 transition shadow-sm"
-                                            >
-                                                <div className="space-y-2 flex-1 min-w-0">
-                                                    <div className="flex items-center space-x-2.5">
-                                                        <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold font-mono">
-                                                            {item.level || "Orta"}
-                                                        </span>
-                                                        <h3 className="text-sm sm:text-base font-bold text-white truncate">
-                                                            {item.title}
-                                                        </h3>
-                                                    </div>
-
-                                                    {/* Sayfa Göstergesi & İlerleme Barı */}
-                                                    <div className="space-y-1 max-w-md">
-                                                        <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-                                                            <span>Kaldığınız Yer: Sayfa {currentP} / {totalP}</span>
-                                                            <span className="text-indigo-400 font-mono font-bold">%{percent}</span>
-                                                        </div>
-                                                        <div className="w-full h-1.5 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
-                                                            <div
-                                                                className="h-full bg-gradient-to-r from-indigo-500 to-amber-400 rounded-full transition-all"
-                                                                style={{ width: `${percent}%` }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleOpenFromProgress(item)}
-                                                    className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer shrink-0"
-                                                >
-                                                    <Play className="w-3.5 h-3.5 fill-current" />
-                                                    <span>Okumaya Devam Et</span>
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* ========================================================================= */}
-                    {/* SEKME 3: [ ✅ ARŞİVİM ]                                                   */}
-                    {/* ========================================================================= */}
-                    {activeTab === "completed" && (
-                        <div className="space-y-4">
-                            {completedStories.length === 0 ? (
-                                <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
-                                    <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
-                                        📚
-                                    </div>
-                                    <h3 className="text-sm font-semibold text-slate-200">
-                                        Henüz tamamlanan bir metniniz yok
-                                    </h3>
-                                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                                        Bir okumayı bitirdiğinizde 'Hikayeyi Bitirdim' butonuna basarak arşive ekleyebilirsiniz.
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab("explore")}
-                                        className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
-                                    >
-                                        <span>Metinleri Keşfet</span>
-                                        <ArrowRight className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="grid gap-3">
-                                    {completedStories.map((item) => (
-                                        <div
-                                            key={item.storyKey}
-                                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-emerald-500/40 transition shadow-sm"
-                                        >
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center space-x-2.5">
-                                                    <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold font-mono flex items-center gap-1">
-                                                        <Check className="w-3 h-3" />
-                                                        <span>Tamamlandı</span>
-                                                    </span>
-                                                    <h3 className="text-sm sm:text-base font-bold text-white">
-                                                        {item.title}
-                                                    </h3>
-                                                </div>
-                                                <p className="text-xs text-slate-400">
-                                                    Kategori: {item.topic || "Genel"} • Seviye: {item.level || "C1"}
-                                                </p>
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleOpenFromProgress(item)}
-                                                className="inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition cursor-pointer shrink-0"
-                                            >
-                                                <RotateCw className="w-3.5 h-3.5" />
-                                                <span>Yeniden Oku</span>
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            ) : (
-                /* ========================================================================= */
-                /* DUAL-READER ÇALIŞMA ALANI (StoryReader)                                   */
-                /* ========================================================================= */
-                <StoryReader
-                    key={story.id || story.title}
-                    story={story}
-                    decks={decks}
-                    selectedDeckId={selectedDeckId}
-                    onShareStory={(s) => (onShareStory ? onShareStory(s) : setShareStoryModal(s))}
-                    onBackToLibrary={() => {
-                        setStory(null);
-                        loadSavedProgress();
-                        if (onBack) onBack();
-                    }}
-                    onCompleteStory={(sKey) => {
-                        loadSavedProgress();
-                        if (onCompleteStory) onCompleteStory(sKey);
-                    }}
+            {/* Orta/Sağ: Arama + Seviye Filtre Hapları + Eylem Butonları */}
+            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap flex-1 justify-end">
+              {/* Hızlı Arama Kutusu */}
+              <div className="relative flex-1 sm:flex-none sm:w-52 lg:w-60 min-w-[170px]">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Hikaye ara..."
+                  className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition shadow-inner"
                 />
-            )}
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
 
-            {/* ========================================================================= */}
-            {/* KENDİ METNİNİ YAPIŞTIR MODALI                                             */}
-            {/* ========================================================================= */}
-            {isPasteModalOpen && (
-                <div
-                    onClick={() => setIsPasteModalOpen(false)}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+              {/* Seviye Filtre Hapları: [ Tümü ] [ A (2-3 dk) ] [ B (4-5 dk) ] [ C (5-6 dk) ] */}
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/90 border border-slate-800/80 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLevel("all")}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                    selectedLevel === "all"
+                      ? "bg-indigo-600 text-white shadow-md ring-1 ring-indigo-400/40"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+                  }`}
                 >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-indigo-500/40 p-6 sm:p-7 shadow-2xl shadow-indigo-950/60 space-y-5 animate-in zoom-in-95 duration-200"
-                    >
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                            <div className="flex items-center space-x-2.5">
-                                <span className="text-xl">✍️</span>
-                                <div>
-                                    <h3 className="text-base font-bold text-white">
-                                        Kendi Metnini Yapıştır
-                                    </h3>
-                                    <p className="text-xs text-slate-400">
-                                        Makale, haber veya vaka metninizi Dual-Reader ile inceleyin
-                                    </p>
-                                </div>
-                            </div>
+                  Tümü
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLevel("A")}
+                  title="A Seviyesi (2-3 dk)"
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                    selectedLevel === "A"
+                      ? "bg-emerald-600 text-white shadow-md ring-1 ring-emerald-400/40"
+                      : "text-emerald-400 hover:text-emerald-300 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <span>🟢</span>
+                  <span className="hidden xl:inline">A (2-3 dk)</span>
+                  <span className="xl:hidden">A</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLevel("B")}
+                  title="B Seviyesi (4-5 dk)"
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                    selectedLevel === "B"
+                      ? "bg-sky-600 text-white shadow-md ring-1 ring-sky-400/40"
+                      : "text-sky-400 hover:text-sky-300 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <span>🔵</span>
+                  <span className="hidden xl:inline">B (4-5 dk)</span>
+                  <span className="xl:hidden">B</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLevel("C")}
+                  title="C Seviyesi (5-6 dk)"
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                    selectedLevel === "C"
+                      ? "bg-purple-600 text-white shadow-md ring-1 ring-purple-400/40"
+                      : "text-purple-400 hover:text-purple-300 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <span>🟣</span>
+                  <span className="hidden xl:inline">C (5-6 dk)</span>
+                  <span className="xl:hidden">C</span>
+                </button>
+              </div>
 
-                            <button
-                                type="button"
-                                onClick={() => setIsPasteModalOpen(false)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
+              {/* Eylem Butonları */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsGeneratorModalOpen(true)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-amber-500 hover:from-indigo-500 hover:to-amber-400 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition active:scale-95 cursor-pointer shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                  <span className="hidden sm:inline">{t("reading_generate_ai", "Yapay Zekâ ile Üret")}</span>
+                  <span className="sm:hidden">Üret</span>
+                </button>
 
-                        <div className="space-y-3">
-                            <input
-                                type="text"
-                                placeholder="Metin Başlığı (İsteğe Bağlı)..."
-                                value={pasteTitle}
-                                onChange={(e) => setPasteTitle(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
+                <button
+                  type="button"
+                  onClick={() => setIsPasteModalOpen(true)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs transition active:scale-95 cursor-pointer shrink-0"
+                >
+                  <span>📋</span>
+                  <span className="hidden sm:inline">{t("reading_paste_text", "Metin Yapıştır")}</span>
+                  <span className="sm:hidden">Yapıştır</span>
+                </button>
+              </div>
+            </div>
+          </div>
 
-                            <textarea
-                                rows={8}
-                                placeholder="İngilizce metninizi buraya yapıştırın..."
-                                value={pasteText}
-                                onChange={(e) => setPasteText(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none leading-relaxed"
-                            />
-
-                            {/* Örnek Parçacıklar */}
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <span className="text-[11px] text-slate-400">Örnekler:</span>
-                                {PRESET_SNIPPETS.map((snippet) => (
-                                    <button
-                                        key={snippet.label}
-                                        type="button"
-                                        onClick={() => {
-                                            setPasteText(snippet.text);
-                                            setPasteTitle(snippet.title);
-                                        }}
-                                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition cursor-pointer"
-                                    >
-                                        {snippet.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
-                            <button
-                                type="button"
-                                onClick={() => setIsPasteModalOpen(false)}
-                                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer"
-                            >
-                                İptal
-                            </button>
-                            <button
-                                type="button"
-                                disabled={!pasteText.trim()}
-                                onClick={() => handleLaunchCustomReader(pasteText, pasteTitle)}
-                                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer"
-                            >
-                                Metni Çözümle & Oku ➔
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* YAPAY ZEKÂ İLE ÖZGÜN HİKAYE ÜRET MODALI */}
-            <StoryGeneratorModal
-                isOpen={isGeneratorModalOpen}
-                onClose={() => setIsGeneratorModalOpen(false)}
-                onStoryGenerated={(newStory) => {
-                    setStory(newStory);
+          {/* MOBİL YATAY KATEGORİ MENÜSÜ (lg:hidden) */}
+          <div className="lg:hidden w-full overflow-x-auto pb-1 scrollbar-none flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("explore");
+                setSelectedCategory("all");
+              }}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                activeTab === "explore" && selectedCategory === "all"
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "bg-slate-900 border border-slate-800 text-slate-300"
+              }`}
+            >
+              <span>🌟</span>
+              <span>Keşfet ({allAvailableStories.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("in_progress")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                activeTab === "in_progress"
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "bg-slate-900 border border-slate-800 text-slate-300"
+              }`}
+            >
+              <span>⏳</span>
+              <span>Devam Edenler ({inProgressStories.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("completed")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                activeTab === "completed"
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "bg-slate-900 border border-slate-800 text-slate-300"
+              }`}
+            >
+              <span>✅</span>
+              <span>Arşivim ({completedStories.length})</span>
+            </button>
+            {userStories.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("explore");
+                  setSelectedCategory("user_custom");
                 }}
-                decks={decks}
-            />
-
-            {/* PAYLAŞIM MODALI */}
-            {shareStoryModal && (
-                <ShareModal
-                    isOpen={!!shareStoryModal}
-                    onClose={() => setShareStoryModal(null)}
-                    title={shareStoryModal.title}
-                    itemType="story"
-                    itemId={shareStoryModal.id || `story_${shareStoryModal.title}`}
-                    story={shareStoryModal}
-                />
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                  activeTab === "explore" && selectedCategory === "user_custom"
+                    ? "bg-amber-500 text-slate-950 font-bold shadow-md"
+                    : "bg-slate-900 border border-amber-500/30 text-amber-300"
+                }`}
+              >
+                <span>✨</span>
+                <span>Benim Hikayelerim ({userStories.length})</span>
+              </button>
             )}
+            {GENERAL_CULTURE_ITEMS.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab("explore");
+                  setSelectedCategory(cat.id);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
+                  activeTab === "explore" && selectedCategory === cat.id
+                    ? "bg-indigo-600 text-white font-bold shadow-md"
+                    : "bg-slate-900 border border-slate-800 text-slate-300"
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+              </button>
+            ))}
+            {PROFESSIONAL_ITEMS.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab("explore");
+                  setSelectedCategory(cat.id);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
+                  activeTab === "explore" && selectedCategory === cat.id
+                    ? "bg-indigo-600 text-white font-bold shadow-md"
+                    : "bg-slate-900 border border-slate-800 text-slate-300"
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* 2 SÜTUNLU MİZANPAJ: SOL DİKEY SIDEBAR + SAĞ GENİŞ VİTRİN */}
+          <div className="flex flex-col lg:flex-row gap-5 items-start">
+            {/* SOL DİKEY KATEGORİ MENÜSÜ (SIDEBAR) */}
+            <aside className="hidden lg:block w-64 lg:w-72 shrink-0 sticky top-20 bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-xl backdrop-blur-md max-h-[calc(100vh-6rem)] overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-slate-800">
+              {/* A) ANA RAF SEÇİCİ */}
+              <div className="space-y-1">
+                <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Ana Raf
+                </div>
+                {/* 🌟 Keşfet (Tümü) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("explore");
+                    setSelectedCategory("all");
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    activeTab === "explore" && selectedCategory === "all"
+                      ? "bg-indigo-600/90 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>🌟</span>
+                    <span>Keşfet (Tümü)</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-slate-300">
+                    {allAvailableStories.length}
+                  </span>
+                </button>
+
+                {/* ⏳ Devam Edenler */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("in_progress")}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    activeTab === "in_progress"
+                      ? "bg-indigo-600/90 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>⏳</span>
+                    <span>Devam Edenler</span>
+                  </div>
+                  {inProgressStories.length > 0 && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+                      {inProgressStories.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* ✅ Arşivim */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("completed")}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    activeTab === "completed"
+                      ? "bg-indigo-600/90 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>✅</span>
+                    <span>Arşivim</span>
+                  </div>
+                  {completedStories.length > 0 && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+                      {completedStories.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* ✨ Benim Hikayelerim */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("explore");
+                    setSelectedCategory("user_custom");
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    activeTab === "explore" && selectedCategory === "user_custom"
+                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20 ring-1 ring-amber-300"
+                      : "text-amber-400/80 hover:text-amber-300 hover:bg-slate-900/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>✨</span>
+                    <span>Benim Hikayelerim</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-amber-300">
+                    {userStories.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* B) 🌍 GENEL KÜLTÜR */}
+              <div className="space-y-1 pt-3 border-t border-slate-800/80">
+                <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <span>🌍</span>
+                  <span>Genel Kültür</span>
+                </div>
+                {GENERAL_CULTURE_ITEMS.map((cat) => {
+                  const isSelected = activeTab === "explore" && selectedCategory === cat.id;
+                  const count = allAvailableStories.filter((s) => isStoryInCategory(s, cat.id)).length;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("explore");
+                        setSelectedCategory(cat.id);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs transition cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-600/90 text-white font-semibold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-sm shrink-0">{cat.icon}</span>
+                        <span className="truncate">{cat.label}</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-slate-400 shrink-0 ml-1">
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* C) 💼 MESLEKİ & SEKTÖREL */}
+              <div className="space-y-1 pt-3 border-t border-slate-800/80">
+                <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <span>💼</span>
+                  <span>Mesleki & Sektörel</span>
+                </div>
+                {PROFESSIONAL_ITEMS.map((cat) => {
+                  const isSelected = activeTab === "explore" && selectedCategory === cat.id;
+                  const count = allAvailableStories.filter((s) => isStoryInCategory(s, cat.id)).length;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("explore");
+                        setSelectedCategory(cat.id);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs transition cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-600/90 text-white font-semibold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-sm shrink-0">{cat.icon}</span>
+                        <span className="truncate">{cat.label}</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-slate-400 shrink-0 ml-1">
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
+
+            {/* SAĞ TARAF - FERAH HİKAYE VİTRİNİ */}
+            <main className="flex-1 min-w-0 w-full space-y-4">
+              {/* ========================================================================= */}
+              {/* SEKME 1: [ 📚 KEŞFET ] - HİKAYE VİTRİNİ & GRID                             */}
+              {/* ========================================================================= */}
+              {activeTab === "explore" && (
+                <div className="space-y-4">
+                  {/* Aktif Kategori / Arama Bilgisi Çubuğu */}
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                      <span className="text-indigo-400">
+                        {selectedCategory === "all"
+                          ? "🌟 Tüm Kategoriler"
+                          : selectedCategory === "user_custom"
+                          ? "✨ Benim Hikayelerim"
+                          : (GENERAL_CULTURE_ITEMS.find((c) => c.id === selectedCategory) ||
+                             PROFESSIONAL_ITEMS.find((c) => c.id === selectedCategory))?.label || selectedCategory}
+                      </span>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-slate-400 font-normal">
+                        {filteredStories.length} {filteredStories.length === 1 ? "hikaye" : "hikaye"}
+                        {selectedLevel !== "all" && ` (${selectedLevel} Seviyesi)`}
+                      </span>
+                    </div>
+
+                    {(selectedCategory !== "all" || selectedLevel !== "all" || searchQuery) && (
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        className="text-[11px] text-indigo-400 hover:text-indigo-300 underline font-medium cursor-pointer"
+                      >
+                        Filtreleri Temizle
+                      </button>
+                    )}
+                  </div>
+
+                  {/* HİKAYE KARTLARI IZGARASI */}
+                  {filteredStories.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                      {/* "+ Yapay Zekâ ile Hikaye Üret" Kartı */}
+                      {(selectedCategory === "user_custom" || (selectedCategory === "all" && !searchQuery)) && (
+                        <div
+                          onClick={() => setIsGeneratorModalOpen(true)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setIsGeneratorModalOpen(true);
+                            }
+                          }}
+                          className="w-full rounded-2xl border-2 border-dashed border-indigo-500/30 hover:border-indigo-400 bg-indigo-950/20 hover:bg-indigo-950/40 p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all space-y-3 group min-h-[260px]"
+                        >
+                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-amber-500/20 group-hover:from-indigo-500/30 group-hover:to-amber-500/30 text-amber-300 flex items-center justify-center transition shadow-inner">
+                            <Sparkles className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition flex items-center justify-center gap-1.5">
+                              <span>+ {t("reading_generate_ai", "Yapay Zekâ ile Hikaye Üret")}</span>
+                            </h4>
+                            <p className="text-xs text-slate-400 mt-1 max-w-xs leading-relaxed">
+                              {t(
+                                "generate_custom_story_desc",
+                                "Destelerinden veya unutma eğrindeki kelimelerden sana özel hikaye oluştur"
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Hikaye Kartları */}
+                      {filteredStories.map((storyItem) => {
+                        const isCustom = !!storyItem.isUserStory;
+                        return (
+                          <StoryCardItem
+                            key={storyItem.id}
+                            story={storyItem}
+                            onSelect={handleSelectStory}
+                            isCompleted={completedStories.some((c) => c.storyKey === storyItem.id)}
+                            isInProgress={inProgressStories.some((p) => p.storyKey === storyItem.id)}
+                            isUserStory={isCustom}
+                            onDelete={
+                              isCustom
+                                ? () => {
+                                    if (confirm(`"${storyItem.title}" kütüphanenizden silinsin mi?`)) {
+                                      deleteUserStory(storyItem.id);
+                                    }
+                                  }
+                                : undefined
+                            }
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    /* Boş Durum: Arama / Filtreleme Sonucu Yok */
+                    <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center space-y-3">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
+                        🔍
+                      </div>
+                      <h3 className="text-base font-bold text-white">
+                        {t("no_stories_found", "Aramanıza veya Filtreye Uygun Hikaye Bulunamadı")}
+                      </h3>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        Seçili seviye veya kategoride eşleşen metin bulunamadı. Filtreleri temizleyerek tüm kataloğu görüntüleyebilirsiniz.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        Filtreleri Temizle
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* SEKME 2: [ ⏳ DEVAM EDENLER ]                                             */}
+              {/* ========================================================================= */}
+              {activeTab === "in_progress" && (
+                <div className="space-y-4">
+                  {inProgressStories.length === 0 ? (
+                    <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
+                        ⏳
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-200">
+                        Yarım kalan bir okumanız bulunmuyor
+                      </h3>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Keşfet sekmesinden yeni bir hikaye veya vaka analizine başlayarak okuma odasında ilerleyebilirsiniz.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab("explore");
+                          setSelectedCategory("all");
+                        }}
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        <span>Metinleri Keşfet</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3">
+                      {inProgressStories.map((item) => {
+                        const totalP = item.totalPages || 3;
+                        const currentP = (item.lastPage ?? item.lastParagraph ?? 0) + 1;
+                        const percent = Math.min(100, Math.round((currentP / totalP) * 100));
+
+                        return (
+                          <div
+                            key={item.storyKey}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-indigo-500/40 transition shadow-sm"
+                          >
+                            <div className="space-y-2 flex-1 min-w-0">
+                              <div className="flex items-center space-x-2.5">
+                                <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold font-mono">
+                                  {item.level || "Orta"}
+                                </span>
+                                <h3 className="text-sm sm:text-base font-bold text-white truncate">
+                                  {item.title}
+                                </h3>
+                              </div>
+
+                              <div className="space-y-1 max-w-md">
+                                <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+                                  <span>Kaldığınız Yer: Sayfa {currentP} / {totalP}</span>
+                                  <span className="text-indigo-400 font-mono font-bold">%{percent}</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-indigo-500 to-amber-400 rounded-full transition-all"
+                                    style={{ width: `${percent}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenFromProgress(item)}
+                              className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer shrink-0"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Okumaya Devam Et</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* SEKME 3: [ ✅ ARŞİVİM ]                                                   */}
+              {/* ========================================================================= */}
+              {activeTab === "completed" && (
+                <div className="space-y-4">
+                  {completedStories.length === 0 ? (
+                    <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
+                        📚
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-200">
+                        Henüz tamamlanan bir metniniz yok
+                      </h3>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Bir okumayı bitirdiğinizde &apos;Hikayeyi Bitirdim&apos; butonuna basarak arşive ekleyebilirsiniz.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab("explore");
+                          setSelectedCategory("all");
+                        }}
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        <span>Metinleri Keşfet</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3">
+                      {completedStories.map((item) => (
+                        <div
+                          key={item.storyKey}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-emerald-500/40 transition shadow-sm"
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex items-center space-x-2.5">
+                              <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold font-mono flex items-center gap-1">
+                                <Check className="w-3 h-3" />
+                                <span>Tamamlandı</span>
+                              </span>
+                              <h3 className="text-sm sm:text-base font-bold text-white">
+                                {item.title}
+                              </h3>
+                            </div>
+                            <p className="text-xs text-slate-400">
+                              Kategori: {item.topic || "Genel"} • Seviye: {item.level || "C1"}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenFromProgress(item)}
+                            className="inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition cursor-pointer shrink-0"
+                          >
+                            <RotateCw className="w-3.5 h-3.5" />
+                            <span>Yeniden Oku</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </main>
+          </div>
         </div>
-    );
+      ) : (
+        /* ========================================================================= */
+        /* DUAL-READER ÇALIŞMA ALANI (StoryReader)                                   */
+        /* ========================================================================= */
+        <StoryReader
+          key={story.id || story.title}
+          story={story}
+          decks={decks}
+          selectedDeckId={selectedDeckId}
+          onShareStory={(s) => (onShareStory ? onShareStory(s) : setShareStoryModal(s))}
+          onBackToLibrary={() => {
+            setStory(null);
+            loadSavedProgress();
+            if (onBack) onBack();
+          }}
+          onCompleteStory={(sKey) => {
+            loadSavedProgress();
+            if (onCompleteStory) onCompleteStory(sKey);
+          }}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* KENDİ METNİNİ YAPIŞTIR MODALI                                             */}
+      {/* ========================================================================= */}
+      {isPasteModalOpen && (
+        <div
+          onClick={() => setIsPasteModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-indigo-500/40 p-6 sm:p-7 shadow-2xl shadow-indigo-950/60 space-y-5 animate-in zoom-in-95 duration-200"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center space-x-2.5">
+                <span className="text-xl">✍️</span>
+                <div>
+                  <h3 className="text-base font-bold text-white">Kendi Metnini Yapıştır</h3>
+                  <p className="text-xs text-slate-400">
+                    Makale, haber veya vaka metninizi Dual-Reader ile inceleyin
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPasteModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Metin Başlığı (İsteğe Bağlı)..."
+                value={pasteTitle}
+                onChange={(e) => setPasteTitle(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+
+              <textarea
+                rows={8}
+                placeholder="İngilizce metninizi buraya yapıştırın..."
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none leading-relaxed"
+              />
+
+              {/* Örnek Parçacıklar */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-[11px] text-slate-400">Örnekler:</span>
+                {PRESET_SNIPPETS.map((snippet) => (
+                  <button
+                    key={snippet.label}
+                    type="button"
+                    onClick={() => {
+                      setPasteText(snippet.text);
+                      setPasteTitle(snippet.title);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition cursor-pointer"
+                  >
+                    {snippet.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsPasteModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                disabled={!pasteText.trim()}
+                onClick={() => handleLaunchCustomReader(pasteText, pasteTitle)}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer"
+              >
+                Metni Çözümle & Oku ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* YAPAY ZEKÂ İLE ÖZGÜN HİKAYE ÜRET MODALI */}
+      <StoryGeneratorModal
+        isOpen={isGeneratorModalOpen}
+        onClose={() => setIsGeneratorModalOpen(false)}
+        onStoryGenerated={(newStory) => {
+          setStory(newStory);
+        }}
+        decks={decks}
+      />
+
+      {/* PAYLAŞIM MODALI */}
+      {shareStoryModal && (
+        <ShareModal
+          isOpen={!!shareStoryModal}
+          onClose={() => setShareStoryModal(null)}
+          title={shareStoryModal.title}
+          itemType="story"
+          itemId={shareStoryModal.id || `story_${shareStoryModal.title}`}
+          story={shareStoryModal}
+        />
+      )}
+    </div>
+  );
 }

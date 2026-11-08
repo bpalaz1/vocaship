@@ -1,266 +1,338 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Trophy,
+  Crown,
   Flame,
   Zap,
-  Crown,
-  Medal,
+  ArrowLeft,
+  Users,
+  Globe2,
+  BookOpen,
+  Gamepad2,
   Sparkles,
-  RefreshCw,
-  ChevronUp,
-  UserCheck,
-  ArrowLeft
+  School,
+  KeyRound,
 } from "lucide-react";
-import Link from "next/link";
-import { useTranslation } from "../context/LanguageContext";
-import { API_BASE } from "../config";
-import { LeaderboardResponse, LeaderboardEntry } from "../actions/getLeaderboard";
+import confetti from "canvas-confetti";
+import { useAuth } from "../context/AuthContext";
+import { usePersona } from "../context/PersonaContext";
+import WeeklyLeagueBracket, {
+  LeagueTier,
+} from "../components/leaderboard/WeeklyLeagueBracket";
+import ClassroomLeaderboard, {
+  ClassroomInfo,
+} from "../components/leaderboard/ClassroomLeaderboard";
+import JoinCodeModal from "../components/games/JoinCodeModal";
+
+const DEFAULT_CLASSES: ClassroomInfo[] = [
+  {
+    id: "cls-1",
+    name: "10-A İngilizce",
+    code: "7A2-5K9",
+    studentCount: 24,
+  },
+  {
+    id: "cls-2",
+    name: "Genel Pratik Grubu",
+    code: "3M8-2B1",
+    studentCount: 16,
+  },
+  {
+    id: "cls-3",
+    name: "9-B Dil Sınıfı",
+    code: "9T4-6A0",
+    studentCount: 19,
+  },
+];
 
 export default function LeaderboardPage() {
-  const { t } = useTranslation();
-  const [timeframe, setTimeframe] = useState<"weekly" | "all_time">("weekly");
-  const [data, setData] = useState<LeaderboardResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const { user } = useAuth();
+  const { persona } = usePersona();
 
-  const fetchLeaderboard = async (tf: "weekly" | "all_time") => {
-    setLoading(true);
+  // Ana Sekme Şalteri: "league" (30 Kişilik Lig Kümesi) vs "classroom" (Sınıf İçi Sıralamam)
+  const [mainTab, setMainTab] = useState<"league" | "classroom">("league");
+
+  // Aktivite Mikro-Filtreleri: "all" | "reading" | "games"
+  const [activityFilter, setActivityFilter] = useState<"all" | "reading" | "games">("all");
+
+  // Sınıf Bilgileri
+  const [classes, setClasses] = useState<ClassroomInfo[]>(DEFAULT_CLASSES);
+  const [activeClassId, setActiveClassId] = useState<string>("cls-1");
+  const [isJoinCodeModalOpen, setIsJoinCodeModalOpen] = useState(false);
+
+  // Çift Sayaç Puanları (Dual-Ledger)
+  const [userScore, setUserScore] = useState({
+    totalXp: 2665,
+    weeklyXp: 450,
+    league: "Altın" as LeagueTier,
+    rank: 3,
+  });
+
+  // LocalStorage'dan Sınıf ve Profil Verilerini Yükle
+  useEffect(() => {
     try {
-      const res = await fetch(`${API_BASE}/gamification/leaderboard?timeframe=${tf}`);
-      if (res.ok) {
-        const json: LeaderboardResponse = await res.json();
-        setData(json);
+      if (typeof window !== "undefined") {
+        // 1. Sınıfları Yükle
+        const savedClasses = localStorage.getItem("vocaship_classes");
+        if (savedClasses) {
+          const parsed = JSON.parse(savedClasses);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setClasses(
+              parsed.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                code: c.code,
+                studentCount: c.student_count || c.studentCount || 20,
+              }))
+            );
+          }
+        }
+
+        const savedActiveId = localStorage.getItem("vocaship_active_class_id");
+        if (savedActiveId) {
+          setActiveClassId(savedActiveId);
+        }
+
+        // 2. Çift Sayaç (Dual Ledger) Puanlarını Yükle
+        const savedProfile = localStorage.getItem("vocaship_user_profile");
+        if (savedProfile) {
+          const p = JSON.parse(savedProfile);
+          setUserScore((prev) => ({
+            ...prev,
+            totalXp: p.total_xp || p.xp || prev.totalXp,
+            weeklyXp: p.weekly_xp || prev.weeklyXp,
+          }));
+        }
       }
-    } catch (err) {
-      console.error("Liderlik tablosu yüklenemedi:", err);
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      console.warn("Liderlik sayfası verileri yüklenirken hata:", e);
     }
+  }, []);
+
+  const activeClass = classes.find((c) => c.id === activeClassId) || classes[0] || null;
+
+  // Aktif Kullanıcı Kimliği (Persona ile Senkronize)
+  const currentUserData = {
+    name: user?.fullName || persona?.name || "Ahmet Kaya",
+    avatar: persona?.image || "/avatars/sparky.png",
+    weeklyXp: userScore.weeklyXp,
+    totalXp: userScore.totalXp,
+    league: userScore.league,
+    rank: userScore.rank,
+    level: Math.max(1, Math.floor(userScore.totalXp / 500)),
   };
 
-  useEffect(() => {
-    fetchLeaderboard(timeframe);
-  }, [timeframe]);
+  // Yeni Sınıfa Katılma İşlemi
+  const handleJoinClassSuccess = (code: string) => {
+    setIsJoinCodeModalOpen(false);
 
-  const entries = data?.entries || [];
-  const topThree = entries.slice(0, 3);
-  const restEntries = entries.slice(3);
+    // Var olan sınıflarda kod eşleşiyor mu kontrol et
+    const matched = classes.find((c) => c.code.toLowerCase() === code.toLowerCase());
+    if (matched) {
+      setActiveClassId(matched.id);
+      localStorage.setItem("vocaship_active_class_id", matched.id);
+    } else {
+      // Yeni sanal sınıf kaydı oluştur
+      const newClass: ClassroomInfo = {
+        id: `cls-${Date.now()}`,
+        name: `${code} İngilizce Grubu`,
+        code: code,
+        studentCount: 15,
+      };
+      const updated = [newClass, ...classes];
+      setClasses(updated);
+      setActiveClassId(newClass.id);
+      localStorage.setItem("vocaship_classes", JSON.stringify(updated));
+      localStorage.setItem("vocaship_active_class_id", newClass.id);
+    }
+
+    setMainTab("classroom");
+    try {
+      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+    } catch {}
+  };
+
+  const handleSwitchClass = (classId: string) => {
+    setActiveClassId(classId);
+    try {
+      localStorage.setItem("vocaship_active_class_id", classId);
+    } catch {}
+  };
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-      {/* ÜST BAŞLIK VE SEKME ÇUBUĞU */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center space-x-2 mb-1">
-            <Link
-              href="/"
-              className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>{t("btn_home")}</span>
-            </Link>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-3">
-            <Trophy className="w-8 h-8 text-amber-400 fill-amber-400/20" />
-            <span>{t("heading_leaderboard")}</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            {t("desc_leaderboard")}
-          </p>
-        </div>
-
-        {/* ZAMAN ARALIĞI SEÇİCİ */}
-        <div className="flex items-center bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 shadow-inner">
-          <button
-            onClick={() => setTimeframe("weekly")}
-            className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              timeframe === "weekly"
-                ? "bg-gradient-to-r from-orange-600 via-amber-600 to-amber-500 text-white shadow-md shadow-orange-600/25"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Flame className="w-3.5 h-3.5" />
-            <span>🔥 Bu Haftanın Yarışı</span>
-          </button>
-          <button
-            onClick={() => setTimeframe("all_time")}
-            className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              timeframe === "all_time"
-                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/25"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Crown className="w-3.5 h-3.5" />
-            <span>👑 Tüm Zamanların Efsaneleri</span>
-          </button>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="py-24 text-center text-slate-400 text-sm flex flex-col items-center justify-center space-y-3">
-          <RefreshCw className="w-8 h-8 animate-spin text-amber-400" />
-          <p>Liderlik sıralaması hesaplanıyor...</p>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {/* 1. LİDERLİK PODYUMU (İLK 3) */}
-          {topThree.length >= 3 && (
-            <div className="relative pt-6 pb-2">
-              <div className="grid grid-cols-3 gap-2 sm:gap-6 items-end max-w-xl mx-auto">
-                {/* 2. SIRA (GÜMÜŞ) */}
-                <div className="flex flex-col items-center order-1">
-                  <div className="relative mb-2 flex flex-col items-center">
-                    <div className="text-xl sm:text-2xl mb-1">{topThree[1].avatar}</div>
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-slate-400 to-slate-200 border-2 border-slate-300 flex items-center justify-center font-black text-slate-900 text-base sm:text-xl shadow-lg shadow-slate-400/20">
-                      2
-                    </div>
-                    <Medal className="w-5 h-5 text-slate-300 absolute -top-3" />
-                  </div>
-                  <div className="w-full bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3 text-center h-28 sm:h-32 flex flex-col justify-center">
-                    <span className="text-xs sm:text-sm font-bold text-white truncate block">
-                      {topThree[1].name}
-                    </span>
-                    <span className="text-[11px] text-amber-400 font-extrabold mt-1">
-                      {topThree[1].total_xp.toLocaleString()} XP
-                    </span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">{topThree[1].title}</span>
-                  </div>
-                </div>
-
-                {/* 1. SIRA (ALTIN ŞAMPİYON) */}
-                <div className="flex flex-col items-center order-2 -mt-4">
-                  <div className="relative mb-2 flex flex-col items-center">
-                    <Crown className="w-7 h-7 text-amber-400 absolute -top-5 animate-bounce" />
-                    <div className="text-2xl sm:text-3xl mb-1">{topThree[0].avatar}</div>
-                    <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-amber-400 via-yellow-300 to-amber-500 border-2 border-yellow-200 flex items-center justify-center font-black text-slate-950 text-xl sm:text-2xl shadow-xl shadow-amber-500/30">
-                      1
-                    </div>
-                  </div>
-                  <div className="w-full bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-900 border-2 border-amber-400/70 rounded-2xl p-3.5 text-center h-36 sm:h-40 flex flex-col justify-center shadow-lg">
-                    <span className="text-xs sm:text-base font-black text-amber-200 truncate block">
-                      {topThree[0].name}
-                    </span>
-                    <span className="text-xs sm:text-sm text-amber-400 font-black mt-1">
-                      {topThree[0].total_xp.toLocaleString()} XP
-                    </span>
-                    <span className="text-[10px] text-amber-300/80 font-bold mt-0.5">
-                      {topThree[0].title}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 3. SIRA (BRONZ) */}
-                <div className="flex flex-col items-center order-3">
-                  <div className="relative mb-2 flex flex-col items-center">
-                    <div className="text-xl sm:text-2xl mb-1">{topThree[2].avatar}</div>
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-amber-700 to-amber-600 border-2 border-amber-500 flex items-center justify-center font-black text-amber-100 text-base sm:text-xl shadow-lg shadow-amber-700/20">
-                      3
-                    </div>
-                    <Medal className="w-5 h-5 text-amber-600 absolute -top-3" />
-                  </div>
-                  <div className="w-full bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3 text-center h-24 sm:h-28 flex flex-col justify-center">
-                    <span className="text-xs sm:text-sm font-bold text-white truncate block">
-                      {topThree[2].name}
-                    </span>
-                    <span className="text-[11px] text-amber-400 font-extrabold mt-1">
-                      {topThree[2].total_xp.toLocaleString()} XP
-                    </span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">{topThree[2].title}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 2. SIRALAMA LİSTESİ TABLOSU */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-4 sm:p-6 backdrop-blur-md">
-            <div className="space-y-2">
-              {entries.map((entry) => (
-                <div
-                  key={entry.user_id}
-                  className={`flex items-center justify-between p-3 sm:p-4 rounded-2xl border transition-all ${
-                    entry.is_current_user
-                      ? "bg-indigo-600/15 border-indigo-500/50 shadow-md shadow-indigo-600/10"
-                      : "bg-slate-950/70 border-slate-800/80 hover:border-slate-700"
-                  }`}
-                >
-                  <div className="flex items-center space-x-3 sm:space-x-4">
-                    <span className="w-7 text-center font-black text-sm text-slate-400">
-                      #{entry.rank}
-                    </span>
-                    <span className="text-xl">{entry.avatar}</span>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-sm font-bold ${entry.is_current_user ? "text-indigo-300" : "text-white"}`}>
-                          {entry.name}
-                        </span>
-                        {entry.is_current_user && (
-                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-indigo-500 text-white">
-                            SEN
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-slate-400">{entry.title}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-4">
-                    <span className="text-xs text-amber-400 font-black">
-                      {entry.total_xp.toLocaleString()} XP
-                    </span>
-                    <span className="text-xs text-slate-500">Lv.{entry.level}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* DUAL LEDGER SABİT KULLANICI ÇUBUĞU */}
-          {(() => {
-            const currentUser = entries.find((e) => e.is_current_user);
-            const userRank = data?.current_user_rank || currentUser?.rank || 1;
-            const userWeeklyXP = data?.current_user_weekly_xp ?? (currentUser?.weekly_xp || currentUser?.total_xp || 420);
-            const userAllTimeXP = data?.current_user_all_time_xp ?? (currentUser?.all_time_xp || currentUser?.total_xp || 3150);
-            const userLevel = currentUser?.level || 4;
-
-            return (
-              <div
-                data-testid="current-user-sticky-bar"
-                className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border border-slate-700/80 shadow-2xl flex flex-wrap items-center justify-between gap-3 text-xs"
+    <div className="bg-[#0B0F19] min-h-screen text-slate-100 selection:bg-indigo-500 selection:text-white pb-16">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-6">
+        {/* ÜST BAŞLIK & GERİ DÖNÜŞ VE ÇİFT SAYAÇ ROZETLERİ */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-2">
+          <div>
+            <div className="flex items-center space-x-3 mb-2">
+              <Link
+                href="/"
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition"
               >
-                <div className="flex items-center gap-2.5">
-                  <span className="p-1.5 rounded-xl bg-emerald-500/20 text-emerald-400">
-                    <UserCheck className="w-4 h-4" />
-                  </span>
-                  <span className="text-slate-200 font-semibold">
-                    Sen:{" "}
-                    <strong className="text-emerald-400 font-mono font-extrabold">
-                      {userRank}. Sıra
-                    </strong>{" "}
-                    •{" "}
-                    <span className="text-amber-300 font-bold font-mono">
-                      {userWeeklyXP.toLocaleString()} XP (Haftalık)
-                    </span>{" "}
-                    |{" "}
-                    <span className="text-indigo-300 font-medium">
-                      Toplam:{" "}
-                      <strong className="text-white font-mono font-bold">
-                        {userAllTimeXP.toLocaleString()} XP
-                      </strong>{" "}
-                      (Lv.{userLevel})
-                    </span>
-                  </span>
-                </div>
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Ana Sayfa</span>
+              </Link>
+              <span className="text-slate-600">•</span>
+              <Link
+                href="/games"
+                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition font-medium"
+              >
+                <Gamepad2 className="w-3.5 h-3.5" />
+                <span>Oyun Arenası</span>
+              </Link>
+            </div>
 
-                <div className="text-[10px] text-slate-400 font-mono">
-                  ✨ Kalıcı Toplam Puan Koruma Devrede
-                </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
+              <Trophy className="w-7 h-7 text-amber-400 fill-amber-400/20" />
+              <span>Liderlik Tablosu & Lig Arenası</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              30 kişilik haftalık lig kümesinde yüksel veya sınıf arkadaşlarınla canlı podyumda yarış.
+            </p>
+          </div>
+
+          {/* ÇİFT SAYAÇ MİMARİSİ (DUAL-LEDGER HEADER BADGES) */}
+          <div className="flex items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
+            {/* Kalıcı XP (Asla Sıfırlanmaz) */}
+            <div className="px-4 py-2.5 rounded-2xl bg-indigo-950/60 border border-indigo-500/40 shadow-lg shadow-indigo-950/40 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                <Zap className="w-4 h-4 text-indigo-400" />
               </div>
-            );
-          })()}
+              <div className="text-left">
+                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider block">
+                  Kalıcı Toplam
+                </span>
+                <span className="text-sm sm:text-base font-black font-mono text-white">
+                  ⚡ {currentUserData.totalXp.toLocaleString()} XP
+                </span>
+              </div>
+            </div>
+
+            {/* Haftalık XP (Pazar Gecesi Sıfırlanır) */}
+            <div className="px-4 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 shadow-lg shadow-amber-500/10 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                <Flame className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="text-left">
+                <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                  Bu Hafta
+                </span>
+                <span className="text-sm sm:text-base font-black font-mono text-amber-300">
+                  🏆 {currentUserData.weeklyXp.toLocaleString()} XP
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-    </main>
+
+        {/* ======================================================================= */}
+        {/* ANA KONTROL BARI: 2 ANA SEKME + AKTİVİTE MİKRO-FİLTRELERİ               */}
+        {/* ======================================================================= */}
+        <div className="p-2 sm:p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xl backdrop-blur-md">
+          {/* 1. İKİ SEKMELİ ŞALTER (LİG vs SINIF) */}
+          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setMainTab("league")}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                mainTab === "league"
+                  ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/20 font-black"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Globe2 className="w-3.5 h-3.5" />
+              <span>🌍 Haftalık Ligim (30 Kişilik Küme)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMainTab("classroom")}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                mainTab === "classroom"
+                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/25 font-black"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>👥 Sınıf İçi Sıralamam</span>
+            </button>
+          </div>
+
+          {/* 2. AKTİVİTE / BECERİ MİKRO-FİLTRELERİ */}
+          <div className="flex items-center gap-1.5 self-center sm:self-auto overflow-x-auto">
+            <span className="text-[11px] font-bold text-slate-400 mr-1 hidden sm:inline">
+              Filtre:
+            </span>
+            <button
+              type="button"
+              onClick={() => setActivityFilter("all")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                activityFilter === "all"
+                  ? "bg-slate-700 text-white border border-slate-600 shadow"
+                  : "bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800"
+              }`}
+            >
+              Tüm Aktiviteler
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActivityFilter("reading")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                activityFilter === "reading"
+                  ? "bg-indigo-600 text-white border border-indigo-500 shadow-md shadow-indigo-600/20"
+                  : "bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800"
+              }`}
+            >
+              <BookOpen className="w-3 h-3 text-indigo-300" />
+              <span>Okuma Odası</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActivityFilter("games")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                activityFilter === "games"
+                  ? "bg-amber-500 text-slate-950 border border-amber-400 shadow-md shadow-amber-500/20 font-black"
+                  : "bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800"
+              }`}
+            >
+              <Gamepad2 className="w-3 h-3 text-amber-400" />
+              <span>Oyun Arenası</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ======================================================================= */}
+        {/* AKTİF İÇERİK: HAFTALIK LİG KÜMESİ VEYA SINIF İÇİ SIRALAMA               */}
+        {/* ======================================================================= */}
+        {mainTab === "league" ? (
+          <WeeklyLeagueBracket
+            currentUser={currentUserData}
+            activityFilter={activityFilter}
+          />
+        ) : (
+          <ClassroomLeaderboard
+            classInfo={activeClass}
+            currentUser={currentUserData}
+            activityFilter={activityFilter}
+            onOpenJoinCode={() => setIsJoinCodeModalOpen(true)}
+            onSwitchClass={handleSwitchClass}
+            availableClasses={classes}
+          />
+        )}
+      </main>
+
+      {/* Sınıf Katılım Modalı (JoinCodeModal) */}
+      <JoinCodeModal
+        isOpen={isJoinCodeModalOpen}
+        onClose={() => setIsJoinCodeModalOpen(false)}
+        onSuccess={handleJoinClassSuccess}
+      />
+    </div>
   );
 }
