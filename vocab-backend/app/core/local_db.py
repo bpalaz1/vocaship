@@ -294,6 +294,12 @@ class LocalDatabaseClient:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_quota_reset_date TEXT;")
             if "inventory_keys" not in existing_user_cols:
                 cursor.execute("ALTER TABLE users ADD COLUMN inventory_keys TEXT DEFAULT '{}';")
+            if "avatar_url" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT;")
+            if "email_confirmed" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN email_confirmed INTEGER DEFAULT 0;")
+            if "plan_tier" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'basic';")
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS folders (
@@ -447,6 +453,66 @@ class LocalDatabaseClient:
                 action TEXT NOT NULL,
                 details TEXT,
                 created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS payout_profiles (
+                id TEXT PRIMARY KEY,
+                user_id TEXT UNIQUE NOT NULL,
+                account_type TEXT DEFAULT 'individual',
+                legal_full_name TEXT NOT NULL,
+                identity_number TEXT NOT NULL,
+                iban TEXT NOT NULL,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS classes (
+                id TEXT PRIMARY KEY,
+                teacher_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                price REAL DEFAULT 0.0,
+                currency TEXT DEFAULT 'TRY',
+                billing_type TEXT DEFAULT 'one_time',
+                schedule_mode TEXT DEFAULT 'fixed',
+                duration_minutes INTEGER DEFAULT 60,
+                monthly_credits INTEGER DEFAULT 0,
+                invite_slug TEXT UNIQUE NOT NULL,
+                code TEXT,
+                student_count INTEGER DEFAULT 0,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS class_sessions (
+                id TEXT PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                session_date_utc TEXT NOT NULL,
+                duration_minutes INTEGER DEFAULT 60,
+                status TEXT DEFAULT 'scheduled',
+                started_at TEXT,
+                ended_at TEXT,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS session_attendees (
+                id TEXT PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                session_id TEXT,
+                user_id TEXT NOT NULL,
+                payment_status TEXT DEFAULT 'free',
+                joined_at TEXT,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS material_deliveries (
+                id TEXT PRIMARY KEY,
+                teacher_id TEXT NOT NULL,
+                class_id TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                message_body TEXT NOT NULL,
+                attachment_url TEXT,
+                sent_count INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'delivered',
+                created_at TEXT
             );
             """)
 

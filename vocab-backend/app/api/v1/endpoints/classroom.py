@@ -1,7 +1,8 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends, Request, status
+from fastapi.responses import JSONResponse
 from supabase import Client
 from app.core.database import get_db
 from app.services.quota_service import require_pro_for_classroom, check_and_consume_quota
@@ -19,26 +20,59 @@ from app.schemas.classroom import (
     GameRewardClaimRequest,
     GameRewardClaimResponse,
     StoryWeaveRequest,
-    StoryWeaveResponse
+    StoryWeaveResponse,
+    BoardSummaryRequest,
+    BoardSummaryResponse,
+    PayoutProfileUpsert,
+    ClassCreateRequest,
+    JoinClassRequest,
+    SendMaterialRequest
 )
 from app.services import classroom_service
 
 router = APIRouter()
 
 # =========================================================================
-# 1. SINIF YÖNETİMİ ENDPOINT'LERİ (FAZ 6)
+# 1. SINIF YÖNETİMİ ENDPOINT'LERİ (FAZ 2 & FAZ 6)
 # =========================================================================
 
-@router.post("/classes", response_model=ClassroomResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/classes", status_code=status.HTTP_201_CREATED)
 def create_class(
-    payload: ClassroomCreateRequest,
+    payload: Union[ClassCreateRequest, ClassroomCreateRequest],
     request: Request,
     db: Client = Depends(get_db),
 ):
     """
-    Yeni sınıf açar ve benzersiz 6 haneli kod (VRG-XXXX) üretir.
-    Yalnızca is_pro == True veya role == 'admin' kullanıcılar sınıf açabilir.
+    Yeni sınıf açar:
+    1. Faz 2: Tekil kullanıcı sınıfı, ücretli/ücretsiz biletleme, UTC takvim oturumları ve IBAN kontrolü.
+    2. Geriye dönük uyumluluk: Klasik VRG-XXXX sınıf oluşturma.
     """
+    if isinstance(payload, ClassCreateRequest):
+        if not payload.name.strip():
+            raise HTTPException(status_code=400, detail="Sınıf adı zorunludur.")
+        result = classroom_service.create_faz2_class(
+            teacher_id=payload.teacher_id,
+            name=payload.name,
+            price=payload.price,
+            currency=payload.currency,
+            billing_type=payload.billing_type,
+            schedule_mode=payload.schedule_mode,
+            scheduled_dates_utc=payload.scheduled_dates_utc,
+            duration_minutes=payload.duration_minutes,
+            monthly_credits=payload.monthly_credits,
+            db=db
+        )
+        if "error" in result and result["error"] == "IBAN_REQUIRED":
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "IBAN_REQUIRED",
+                    "message": result.get("message", "Ücretli ders açmak için önce IBAN bilgilerinizi tanımlamalısınız.")
+                }
+            )
+        return result
+
+    # Klasik ClassroomCreateRequest
     require_pro_for_classroom(request)
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Sınıf adı zorunludur.")
@@ -245,6 +279,148 @@ async def story_weave(payload: StoryWeaveRequest):
         grade_level=payload.grade_level or "B1-B2"
     )
     return result
+
+
+# =========================================================================
+# 7. AKILLI TAHTA DERS SONU YAPAY ZEKÂ ANALİZİ & SM-2 ÖDEV FIRLATMA
+# =========================================================================
+
+@router.post("/board-summary", response_model=BoardSummaryResponse)
+async def get_board_summary_endpoint(payload: BoardSummaryRequest, db: Client = Depends(get_db)):
+    """
+    Ders sonu yapay zekâ analiz servisi:
+    Öğretmenin ders anlatım transkriptini, PDF metin bağlamını ve tahtada vurgulanan
+    kelimeleri Gemini 2.5 Flash ile analiz ederek 3-4 maddelik hap özet, 5 kilit terim
+    (Türkçe anlamları ve fonetikleriyle) ve 3 anlama sorusu üretir.
+    """
+    result = await classroom_service.generate_board_summary(
+        class_id=payload.class_id,
+        transcript=payload.transcript,
+        pdf_text_context=payload.pdf_text_context,
+        highlighted_words=payload.highlighted_words,
+        db=db
+    )
+    return result
+
+
+class BoardAssignPayload(BaseModel):
+    class_id: str
+    title: str
+    summary_points: List[str]
+    key_terms: List[Dict[str, Any]]
+    quiz_questions: List[Dict[str, Any]]
+
+
+@router.post("/board-assign")
+def assign_board_lesson_endpoint(payload: BoardAssignPayload, db: Client = Depends(get_db)):
+    """
+    Tahtadan 'Sınıfa Ödev Olarak Fırlat' tıklandığında:
+    1. Sınıfa yeni interaktif ödev bağlar.
+    2. Derste işlenen 5 kilit kelimeyi sınıf öğrencilerinin SM-2 aralıklı tekrar kuyruğuna aktarır.
+    """
+    if not payload.class_id.strip():
+        raise HTTPException(status_code=400, detail="Sınıf ID'si zorunludur.")
+
+    result = classroom_service.assign_board_lesson_to_class(
+        class_id=payload.class_id,
+        title=payload.title,
+        summary_points=payload.summary_points,
+        key_terms=payload.key_terms,
+        quiz_questions=payload.quiz_questions,
+        db=db
+    )
+    return result
+
+
+# =========================================================================
+# FAZ 2: DAVET LİNKİ, KATILIM, UTC TAKVİM, ZAMAN TÜNELİ & MANUEL GÖNDERİM
+# =========================================================================
+
+@router.get("/invite/{slug}", status_code=status.HTTP_200_OK)
+def get_class_invite_details(slug: str, db: Client = Depends(get_db)):
+    """
+    invite_slug ile sınıfı ve yaklaşan oturumlarını (status='scheduled') getirir.
+    Sınıf yoksa 404 döner.
+    """
+    class_info = classroom_service.get_class_by_invite_slug(slug, db=db)
+    if not class_info:
+        raise HTTPException(status_code=404, detail="Sınıf bulunamadı.")
+    return class_info
+
+
+@router.post("/invite/{slug}/join", status_code=status.HTTP_200_OK)
+def join_class_via_invite(
+    slug: str,
+    payload: JoinClassRequest,
+    db: Client = Depends(get_db)
+):
+    """
+    Davet linki üzerinden sınıfa katılım:
+    - Sınıf price == 0 ise session_attendees tablosuna payment_status='free' olarak kaydeder ve
+      {"access_granted": True, "requires_payment": False} döner.
+    - Sınıf price > 0 ise session_attendees tablosunda payment_status IN ('paid', 'subscription_active')
+      kontrolü yapar; varsa erişim verir, yoksa {"access_granted": False, "requires_payment": True, "price": ..., "currency": ...} döner.
+    """
+    result = classroom_service.join_class_by_slug(
+        slug=slug,
+        user_id=payload.user_id,
+        selected_session_id=payload.selected_session_id,
+        db=db
+    )
+    if "error" in result and result["error"] == "NOT_FOUND":
+        raise HTTPException(status_code=404, detail="Sınıf bulunamadı.")
+    return result
+
+
+@router.get("/timeline", status_code=status.HTTP_200_OK)
+def get_classroom_timeline(
+    user_id: str,
+    db: Client = Depends(get_db)
+):
+    """
+    Tekil kullanıcı için iki liste döndürür (otomatik AI özeti veya SM-2 ödevi YOK):
+    1. teaching_sessions: teacher_id == user_id olan yaklaşan (scheduled/live) ve geçmiş (completed) dersler + kayıtlı katılımcı isimleri.
+    2. attending_sessions: kullanıcının katıldığı yaklaşan ve geçmiş dersler + öğretmen adı.
+    """
+    if not user_id or not user_id.strip():
+        raise HTTPException(status_code=400, detail="user_id parametresi zorunludur.")
+    return classroom_service.get_user_timeline(user_id=user_id.strip(), db=db)
+
+
+@router.post("/sessions/{session_id}/complete", status_code=status.HTTP_200_OK)
+def complete_session_endpoint(session_id: str, db: Client = Depends(get_db)):
+    """
+    Eğitmen dersi bitirdiğinde status='completed' ve ended_at=NOW() yapar.
+    Otomatik AI özeti veya SM-2 kart üretimi YAPILMAZ.
+    """
+    result = classroom_service.complete_session(session_id=session_id, db=db)
+    if not result:
+        raise HTTPException(status_code=404, detail="Oturum bulunamadı.")
+    return result
+
+
+@router.post("/send-material", status_code=status.HTTP_200_OK)
+def send_material_endpoint(payload: SendMaterialRequest, db: Client = Depends(get_db)):
+    """
+    Sadece öğretmenin manuel isteğiyle çalışır; ilgili sınıftaki katılımcıların listesini çeker,
+    gönderim kaydını döner ({"sent_count": len(students), "status": "delivered"}).
+    """
+    if not payload.teacher_id or not payload.class_id:
+        raise HTTPException(status_code=400, detail="teacher_id ve class_id alanları zorunludur.")
+    if not payload.subject.strip() or not payload.message_body.strip():
+        raise HTTPException(status_code=400, detail="Konu ve mesaj gövdesi boş bırakılamaz.")
+
+    result = classroom_service.send_material_to_class(
+        teacher_id=payload.teacher_id,
+        class_id=payload.class_id,
+        subject=payload.subject,
+        message_body=payload.message_body,
+        attachment_url=payload.attachment_url,
+        db=db
+    )
+    return result
+
+
 
 
 

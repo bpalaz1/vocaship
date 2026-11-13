@@ -176,3 +176,12 @@ def get_db():
         _active_client = FallbackDatabaseClient(supabase_client, local_client)
 
     return _active_client
+
+
+def get_supabase_client() -> Optional[Client]:
+    """Supabase Client nesnesini dondurur; olusturulamadiysa None dondurur."""
+    db = get_db()
+    if hasattr(db, "supabase_client"):
+        return db.supabase_client
+    return None
+

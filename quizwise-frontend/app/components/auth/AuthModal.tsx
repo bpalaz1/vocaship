@@ -1,8 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, BadgeCheck, AlertCircle, Loader2, Sparkles } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import {
+  X,
+  User,
+  Lock,
+  BadgeCheck,
+  AlertCircle,
+  Loader2,
+  Sparkles,
+  Zap,
+  Crown,
+  Check,
+} from "lucide-react";
+import { useAuth, PlanTier } from "../../context/AuthContext";
 
 export interface AuthModalProps {
   isOpen: boolean;
@@ -21,6 +32,7 @@ export default function AuthModal({
   const [fullName, setFullName] = useState<string>("");
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [selectedPlan, setSelectedPlan] = useState<PlanTier>("basic");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -54,7 +66,7 @@ export default function AuthModal({
       if (activeTab === "login") {
         await login(username, password);
       } else {
-        await register(fullName, username, password);
+        await register(fullName, username, password, undefined, selectedPlan);
       }
       setFullName("");
       setUsername("");
@@ -204,6 +216,99 @@ export default function AuthModal({
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
             />
           </div>
+
+          {/* Plan Seçimi (Sadece Kayıt Ol Sekmesinde) */}
+          {activeTab === "register" && (
+            <div className="space-y-2 pt-1">
+              <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Başlangıç Planı Seç</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  (Dilediğinde değiştirebilirsin)
+                </span>
+              </label>
+
+              <div className="grid grid-cols-3 gap-2">
+                {/* Basic Card */}
+                <button
+                  type="button"
+                  data-testid="plan-select-basic"
+                  onClick={() => setSelectedPlan("basic")}
+                  className={`relative p-2.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                    selectedPlan === "basic"
+                      ? "bg-slate-800/90 border-slate-400 shadow-md ring-1 ring-slate-400"
+                      : "bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-200">🆓 Basic</span>
+                      {selectedPlan === "basic" && <Check className="w-3 h-3 text-emerald-400" />}
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-400 mt-0.5">Ücretsiz</div>
+                    <p className="text-[9px] text-slate-400 leading-tight mt-1 line-clamp-2">
+                      1 Hikaye / 1 Seans / 50 Kart
+                    </p>
+                  </div>
+                </button>
+
+                {/* Plus Card */}
+                <button
+                  type="button"
+                  data-testid="plan-select-plus"
+                  onClick={() => setSelectedPlan("plus")}
+                  className={`relative p-2.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                    selectedPlan === "plus"
+                      ? "bg-indigo-950/60 border-indigo-400 shadow-md shadow-indigo-500/20 ring-1 ring-indigo-400"
+                      : "bg-slate-950/60 border-slate-800 hover:border-indigo-800/60 opacity-70 hover:opacity-100"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-indigo-300 flex items-center gap-0.5">
+                        <Zap className="w-3 h-3 text-indigo-400" /> Plus
+                      </span>
+                      {selectedPlan === "plus" && <Check className="w-3 h-3 text-indigo-400" />}
+                    </div>
+                    <div className="text-[10px] font-bold text-indigo-400 mt-0.5">Öğrenci</div>
+                    <p className="text-[9px] text-indigo-200/80 leading-tight mt-1 line-clamp-2">
+                      5 Hikaye / 3 Seans / 500 Kart
+                    </p>
+                  </div>
+                </button>
+
+                {/* PRO Card */}
+                <button
+                  type="button"
+                  data-testid="plan-select-pro"
+                  onClick={() => setSelectedPlan("pro")}
+                  className={`relative p-2.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                    selectedPlan === "pro"
+                      ? "bg-amber-950/60 border-amber-400 shadow-md shadow-amber-500/20 ring-1 ring-amber-400"
+                      : "bg-slate-950/60 border-slate-800 hover:border-amber-800/60 opacity-70 hover:opacity-100"
+                  }`}
+                >
+                  <div className="absolute -top-1.5 -right-1 px-1.5 py-0.2 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-[8px] font-black text-slate-950 uppercase tracking-wider shadow">
+                    PRO
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-amber-300 flex items-center gap-0.5">
+                        <Crown className="w-3 h-3 text-amber-400" /> PRO
+                      </span>
+                      {selectedPlan === "pro" && <Check className="w-3 h-3 text-amber-400" />}
+                    </div>
+                    <div className="text-[10px] font-bold text-amber-400 mt-0.5">Eğitmen</div>
+                    <p className="text-[9px] text-amber-200/80 leading-tight mt-1 line-clamp-2">
+                      Sınırsız AI + Sınıf Açma
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Gönder Butonu */}
           <div className="pt-2">

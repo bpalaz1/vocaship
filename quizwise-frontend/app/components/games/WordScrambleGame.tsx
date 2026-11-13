@@ -4,6 +4,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import confetti from "canvas-confetti";
 import { Sparkles, Trophy, X, RotateCcw, Check, HelpCircle, ArrowRight, Volume2 } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
+import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
+import { saveArenaMistake } from "../../utils/arenaMistakes";
+import {
+  calculateWordReward,
+  shouldTriggerMysteryChest,
+} from "../../utils/gamificationEngine";
+import { GameMistakeItem } from "./GameOverSummary";
 
 export interface WordScrambleGameProps {
   cards: Array<{ word: string; meaning: string; phonetic?: string }>;
@@ -27,6 +34,11 @@ export default function WordScrambleGame({
   const [isWrong, setIsWrong] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [hintRevealed, setHintRevealed] = useState(false);
+  const [streak, setStreak] = useState(0);
+  const [isMysteryOpen, setIsMysteryOpen] = useState(false);
+  const [mysteryBuff, setMysteryBuff] = useState(1.0);
+  const [mysteryBuffCount, setMysteryBuffCount] = useState(0);
+  const [sessionMistakes, setSessionMistakes] = useState<GameMistakeItem[]>([]);
 
   const totalRounds = Math.min(8, Math.max(4, cards.length));
   const activeCard = cards[currentRound % cards.length] || {
@@ -86,10 +98,33 @@ export default function WordScrambleGame({
       if (spelled === targetWordUpper) {
         // DOĞRU
         setIsAnswered(true);
-        setScore((prev) => prev + 100);
+        const nextStreak = streak + 1;
+        setStreak(nextStreak);
+
+        // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
+        const reward = calculateWordReward({
+          word: activeCard.word,
+          streak: nextStreak,
+          isCorrect: true,
+          isFinalQuestion: currentRound + 1 >= totalRounds,
+          activeBuffMultiplier: mysteryBuff,
+        });
+
+        if (mysteryBuffCount > 0) {
+          const nextRem = mysteryBuffCount - 1;
+          setMysteryBuffCount(nextRem);
+          if (nextRem <= 0) setMysteryBuff(1.0);
+        }
+
+        setScore((prev) => prev + reward.totalXP);
         confetti({ particleCount: 40, spread: 60 });
-        if (onAwardXP) onAwardXP(25, "Harf Avı Doğru Kelime");
-        if (onAwardGold) onAwardGold(10);
+        if (onAwardXP) onAwardXP(reward.totalXP, "Harf Avı Doğru Kelime");
+        if (onAwardGold) onAwardGold(reward.totalGold);
+
+        // Her 3 doğru seride 3 Gizemli Sandık Aç
+        if (shouldTriggerMysteryChest(nextStreak)) {
+          setTimeout(() => setIsMysteryOpen(true), 400);
+        }
 
         setTimeout(() => {
           if (currentRound + 1 >= totalRounds) {
@@ -104,6 +139,25 @@ export default function WordScrambleGame({
       } else {
         // YANLIŞ
         setIsWrong(true);
+        setStreak(0);
+
+        if (activeCard) {
+          setSessionMistakes((prev) => {
+            if (prev.some((m) => m.word.toLowerCase() === activeCard.word.toLowerCase())) return prev;
+            return [
+              ...prev,
+              { word: activeCard.word, meaning: activeCard.meaning, phonetic: activeCard.phonetic },
+            ];
+          });
+
+          saveArenaMistake({
+            word: activeCard.word,
+            meaning: activeCard.meaning,
+            phonetic: activeCard.phonetic,
+            gameType: "word_scramble",
+          });
+        }
+
         setTimeout(() => {
           setSelectedIndices([]);
           setIsWrong(false);
@@ -126,15 +180,19 @@ export default function WordScrambleGame({
         gameTitle="🔤 Harf Avı (Word Scramble)"
         deckTitle={deckTitle}
         score={score}
-        awardedXP={totalRounds * 25}
-        awardedGold={totalRounds * 10}
+        awardedXP={Math.max(50, score)}
+        awardedGold={Math.max(20, Math.round(score * 0.4))}
+        streakCount={streak}
+        mistakes={sessionMistakes}
         onPlayAgain={() => {
           setCurrentRound(0);
           setScore(0);
+          setStreak(0);
           setSelectedIndices([]);
           setIsAnswered(false);
           setGameOver(false);
           setHintRevealed(false);
+          setSessionMistakes([]);
         }}
         onBackToArena={onClose}
       />
@@ -268,6 +326,19 @@ export default function WordScrambleGame({
           <span>İpucu Göster</span>
         </button>
       </div>
+
+      {/* 3 Kapalı Gizemli Sandık Modalı (Pedagojik Kayıpsız) */}
+      <MysteryChestModal
+        isOpen={isMysteryOpen}
+        streak={streak}
+        onClose={() => setIsMysteryOpen(false)}
+        onClaimReward={(reward: MysteryReward) => {
+          if (reward.multiplier) {
+            setMysteryBuff(reward.multiplier);
+            setMysteryBuffCount(reward.buffQuestions || 3);
+          }
+        }}
+      />
     </div>
   );
 }

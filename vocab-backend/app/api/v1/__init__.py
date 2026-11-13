@@ -19,10 +19,13 @@ from app.api.v1.endpoints.career_hubs import router as career_hubs_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.avatar import router as avatar_router
 from app.api.v1.endpoints.translate import router as translate_router
+from app.api.v1.endpoints.tts import router as tts_router
+from app.api.v1.endpoints.payments import router as payments_router
 
 router = APIRouter()
 
 router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+router.include_router(payments_router, prefix="/payments", tags=["Payments & Payouts"])
 
 router.include_router(ai_router, prefix="/ai", tags=["AI Flashcards"])
 router.include_router(ai_router, prefix="/dictionary", tags=["Dictionary & Instant Lookup"])
@@ -37,6 +40,7 @@ router.include_router(classroom_router, prefix="/classroom", tags=["Classroom & 
 router.include_router(speaking_router, prefix="/speaking", tags=["AI Speaking Lounge"])
 router.include_router(avatar_router, prefix="/avatar", tags=["Avatar Studio"])
 router.include_router(translate_router, prefix="/translate", tags=["Live Translator"])
+router.include_router(tts_router, prefix="/tts", tags=["Neural TTS & Emotion Voice"])
 router.include_router(career_hubs_router, tags=["Specialized Career Hubs"])
 
 

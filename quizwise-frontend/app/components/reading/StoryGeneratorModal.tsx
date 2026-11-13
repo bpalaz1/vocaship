@@ -3,7 +3,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
+import { useAuth } from "../../context/AuthContext";
+import { useProfile } from "../../context/ProfileContext";
 import { autoAssignCover, autoAssignCategoryLabel } from "../../utils/autoCover";
+import { addPendingGold } from "../../utils/pendingGold";
+import {
+  getActiveDeckId,
+  setActiveDeckId,
+  fetchDecksList,
+  getActiveDeckCards,
+  subscribeToActiveDeck,
+} from "../../utils/activeDeckStore";
 import {
   Sparkles,
   X,
@@ -69,6 +79,14 @@ export default function StoryGeneratorModal({
   decks = [],
 }: StoryGeneratorModalProps) {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const { userProfile } = useProfile();
+
+  const planTier: "basic" | "plus" | "pro" =
+    user?.planTier ||
+    userProfile?.planTier ||
+    userProfile?.plan_tier ||
+    (user?.isPro ? "pro" : "basic");
 
   // 1. Kelime Kaynağı Sekmesi
   const [sourceTab, setSourceTab] = useState<SourceTab>("decks");
@@ -100,46 +118,52 @@ export default function StoryGeneratorModal({
   const [loadingStepText, setLoadingStepText] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Desteleri Yükle (Eğer props boşsa)
+  // Desteleri Yükle ve Aktif Desteyi Seç
   useEffect(() => {
     if (isOpen) {
+      const activeId = getActiveDeckId();
       if (decks.length > 0) {
         setAvailableDecks(decks);
-        if (!selectedDeckId) setSelectedDeckId(decks[0].id);
+        const match = activeId && decks.some((d) => d.id === activeId) ? activeId : decks[0].id;
+        setSelectedDeckId(match);
       } else {
-        fetch(`${API_BASE}/api/v1/decks`)
-          .then((r) => r.json())
-          .then((data) => {
-            if (Array.isArray(data) && data.length > 0) {
-              setAvailableDecks(data);
-              setSelectedDeckId(data[0].id);
-            }
-          })
-          .catch(() => {});
+        fetchDecksList().then((data) => {
+          setAvailableDecks(data);
+          const match = activeId && data.some((d) => d.id === activeId) ? activeId : data[0]?.id || "";
+          setSelectedDeckId(match);
+        });
       }
     }
   }, [isOpen, decks]);
 
-  // Seçili Destedeki Kartları Çek
+  // Global deste senkronizasyonu dinleyicisi
+  useEffect(() => {
+    const unsubscribe = subscribeToActiveDeck((newDeckId) => {
+      setSelectedDeckId(newDeckId);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Seçili Destedeki Kartları Çek ve Otomatik İlk 6'sını Hedef Olarak Seç
   useEffect(() => {
     if (!selectedDeckId) return;
     setLoadingDeckCards(true);
-    fetch(`${API_BASE}/api/v1/decks/${selectedDeckId}/cards`)
-      .then((r) => (r.ok ? r.json() : []))
+    getActiveDeckCards(selectedDeckId)
       .then((cards) => {
         if (Array.isArray(cards) && cards.length > 0) {
-          const parsedCards: CardItem[] = cards.map((c: any) => ({
+          const parsedCards: CardItem[] = cards.map((c) => ({
             id: c.id || c.word,
             word: c.word,
             phonetic: c.phonetic,
-            turkish_meaning:
-              c.meanings && c.meanings[0]
-                ? typeof c.meanings[0] === "string"
-                  ? c.meanings[0]
-                  : c.meanings[0].meaning || c.meanings[0].turkish_meaning
-                : "Detay görmek için tıklayın",
+            turkish_meaning: c.meaning || "Detay görmek için tıklayın",
           }));
           setDeckCards(parsedCards);
+          setSelectedWords((prev) => {
+            if (prev.length === 0) {
+              return parsedCards.slice(0, 6).map((c) => c.word);
+            }
+            return prev;
+          });
         } else {
           setDeckCards([]);
         }
@@ -374,6 +398,9 @@ export default function StoryGeneratorModal({
         createdAt: Date.now(),
       };
 
+      // Sessiz Altın Köprüsü: AI Hikaye üretimi ödülü (+30)
+      addPendingGold(30, "ai_story");
+
       onStoryGenerated(fullStory);
       onClose();
     } catch (err: any) {
@@ -465,10 +492,25 @@ export default function StoryGeneratorModal({
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                <span>Yapay Zekâ ile Özgün Hikaye Üret</span>
-              </h3>
-              <p className="text-xs text-slate-400">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg sm:text-xl font-black text-white">
+                  Yapay Zekâ ile Özgün Hikaye Üret
+                </h3>
+                {planTier === "pro" ? (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[11px] font-black tracking-wide flex items-center gap-1 shadow-sm">
+                    👑 PRO • Sınırsız
+                  </span>
+                ) : planTier === "plus" ? (
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[11px] font-bold tracking-wide flex items-center gap-1">
+                    ⚡ Plus • Günlük 5/5
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold tracking-wide flex items-center gap-1">
+                    🆓 Basic • Günlük 1/1
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
                 Kelime destelerinizden veya aralıklı tekrar eğrinizden beslenen kişiselleştirilmiş okuma metni
               </p>
             </div>
@@ -556,7 +598,11 @@ export default function StoryGeneratorModal({
                   <span className="text-xs text-slate-400">Aktif Deste:</span>
                   <select
                     value={selectedDeckId}
-                    onChange={(e) => setSelectedDeckId(e.target.value)}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      setSelectedDeckId(newId);
+                      setActiveDeckId(newId);
+                    }}
                     className="bg-slate-900 border border-slate-700 text-xs font-semibold text-white rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
                     {availableDecks.map((d) => (

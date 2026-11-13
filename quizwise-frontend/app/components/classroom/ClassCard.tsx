@@ -1,32 +1,34 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Users, MoreVertical, KeyRound, Tv, Trash2, Edit2 } from "lucide-react";
+import { Users, MoreVertical, KeyRound, Tv, Trash2, ClipboardList, Send } from "lucide-react";
 
 export interface ClassroomItem {
   id: string;
   name: string;
   code: string;
   student_count: number;
-  grade_level?: string;
   created_at?: string;
+  teacher_id?: string;
 }
 
 export interface ClassCardProps {
   classroom: ClassroomItem;
-  isSelected?: boolean;
-  onSelect: () => void;
+  isActiveLesson?: boolean;
   onOpenPinModal: () => void;
-  onProjectToBoard: () => void;
+  onOpenAssignments: () => void;
+  onOpenBoard: () => void;
+  onSendMaterial?: () => void;
   onDeleteClass?: () => void;
 }
 
 export default function ClassCard({
   classroom,
-  isSelected = false,
-  onSelect,
+  isActiveLesson = false,
   onOpenPinModal,
-  onProjectToBoard,
+  onOpenAssignments,
+  onOpenBoard,
+  onSendMaterial,
   onDeleteClass,
 }: ClassCardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -48,21 +50,28 @@ export default function ClassCard({
 
   return (
     <div
-      onClick={onSelect}
-      className={`p-5 sm:p-6 rounded-3xl border transition-all duration-200 cursor-pointer relative overflow-visible flex flex-col justify-between min-h-[140px] group ${
-        isSelected
-          ? "bg-slate-900 border-indigo-500 shadow-xl shadow-indigo-950/40 ring-1 ring-indigo-500/50"
-          : "bg-slate-900/80 hover:bg-slate-900 border-slate-800 hover:border-slate-700 shadow-md"
+      className={`p-6 rounded-3xl bg-white dark:bg-slate-900/90 shadow-sm dark:shadow-xl hover:shadow-md dark:hover:shadow-2xl transition-all duration-200 flex flex-col justify-between min-h-[160px] relative group ${
+        isActiveLesson
+          ? "border-2 border-emerald-500/70 ring-2 ring-emerald-500/20 bg-gradient-to-b from-emerald-50 to-white dark:from-emerald-950/20 dark:to-slate-900/90"
+          : "border border-slate-200/90 dark:border-slate-800/90 hover:border-indigo-400 dark:hover:border-slate-700"
       }`}
     >
-      {/* Üst Kısım: Sınıf Adı ve Sağ Üst ••• Menüsü */}
+      {/* 1. Üst Kısım: Sınıf Adı, Öğrenci Mevcudu ve Sağ Üst ••• Menüsü */}
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0 flex-1">
-          <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-indigo-300 transition truncate">
-            {classroom.name}
-          </h3>
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-            <Users className="w-3.5 h-3.5 text-slate-500" />
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition truncate">
+              {classroom.name}
+            </h3>
+            {isActiveLesson && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Canlı Ders</span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 font-medium">
+            <Users className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             <span>{classroom.student_count || 0} Öğrenci</span>
           </div>
         </div>
@@ -96,16 +105,30 @@ export default function ClassCard({
                 <span>Katılım Kodu / Davetiye</span>
               </button>
 
+              {onSendMaterial && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onSendMaterial();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-indigo-300 hover:bg-indigo-950/40 hover:text-indigo-200 flex items-center gap-2 transition cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Materyal & Not Gönder</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
                   setIsMenuOpen(false);
-                  onProjectToBoard();
+                  onOpenAssignments();
                 }}
                 className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition cursor-pointer"
               >
-                <Tv className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Akıllı Tahtayı Başlat</span>
+                <ClipboardList className="w-3.5 h-3.5 text-amber-400" />
+                <span>Ödevler</span>
               </button>
 
               {onDeleteClass && (
@@ -126,15 +149,20 @@ export default function ClassCard({
         </div>
       </div>
 
-      {/* Alt Durum: Yalın ve Temiz */}
-      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          <span>Aktif Sınıf Kaydı</span>
-        </span>
-        <span className="text-slate-500 group-hover:text-indigo-400 transition font-medium">
-          Ders Detayı ➔
-        </span>
+      {/* 2. Kartın Merkez Butonu: [ 🖥️ Tahtada Aç ] veya [ 🖥️ Devam Eden Derse Dön ] */}
+      <div className="pt-4">
+        <button
+          type="button"
+          onClick={onOpenBoard}
+          className={`w-full py-2.5 px-4 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-lg ${
+            isActiveLesson
+              ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black shadow-emerald-500/30 ring-2 ring-emerald-400/50"
+              : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/25"
+          }`}
+        >
+          <Tv className="w-4 h-4" />
+          <span>{isActiveLesson ? "🖥️ Devam Eden Derse Dön" : "🖥️ Tahtada Aç"}</span>
+        </button>
       </div>
     </div>
   );

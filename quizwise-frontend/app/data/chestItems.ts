@@ -196,7 +196,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 1,
     icon: "🦊",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Neşeli, meraklı ve gözlüklü akıllı tilki.",
       en: "Cheerful, curious smart fox with glasses.",
@@ -210,7 +210,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 1,
     icon: "🐔",
-    image: "/avatars/chuck.png",
+    image: "svg",
     description: {
       tr: "Enerjik, eğlenceli ve komik çiftlik kaşifi.",
       en: "Energetic and funny farm explorer.",
@@ -224,7 +224,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 1,
     icon: "🦫",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Azimli kelime barajı ustası.",
       en: "Persistent builder of word dams.",
@@ -237,7 +237,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 1,
     icon: "🐸",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Kelimeler arasında hızla zıplayan çevik dost.",
       en: "Agile friend jumping between words.",
@@ -250,7 +250,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 1,
     icon: "🦉",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Gece çalışma seanslarının bilge gözlemcisi.",
       en: "Wise observer of late study sessions.",
@@ -264,7 +264,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 1,
     icon: "🐼",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Bambu ormanlarının sevimli öğrencisi.",
       en: "Adorable student of the bamboo groves.",
@@ -277,7 +277,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 1,
     icon: "🐱",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Patisini sözlük sayfalarından ayırmayan sevimli çırak.",
       en: "Cute apprentice with paws on dictionary pages.",
@@ -290,7 +290,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 1,
     icon: "🐿️",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Kelimeleri meşe palamudu gibi toplayan çalışkan dost.",
       en: "Collects vocabulary like acorns.",
@@ -303,7 +303,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 1,
     icon: "🐢",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Ağır adımlarla sağlam öğrenen kadim doğa filozofu.",
       en: "Steady and deep learner of nature.",
@@ -316,7 +316,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 1,
     icon: "🐐",
-    image: "/avatars/sparky.png",
+    image: "svg",
     description: {
       tr: "Zorlu kelime zirvelerine korkusuzca tırmanan kaşif.",
       en: "Fearlessly climbs difficult vocabulary peaks.",
@@ -401,7 +401,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 2,
     icon: "🦁",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Cesur aslan yürekli kale muhafızı.",
       en: "Brave lion-hearted castle defender.",
@@ -415,7 +415,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 2,
     icon: "🏹",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Hedefi 12'den vuran keskin gözlü nişancı.",
       en: "Sharp-eyed marksman who hits the bullseye.",
@@ -428,7 +428,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 2,
     icon: "🐪",
-    image: "/avatars/alex.png",
+    image: "svg",
     description: {
       tr: "Kum fırtınalarına göğüs geren dayanıklı vaha yolcusu.",
       en: "Enduring oasis traveler facing sandstorms.",
@@ -441,7 +441,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "epic",
     chestTier: 2,
     icon: "🗿",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Kadim dağ taşlarından canlanmış sarsılmaz dev.",
       en: "Unshakeable giant formed from mountain stone.",
@@ -454,7 +454,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 2,
     icon: "🥷",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Karanlıkta fısıldanan kelimeleri sinsice yakalayan avcı.",
       en: "Swiftly captures words whispered in shadows.",
@@ -467,7 +467,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 2,
     icon: "⚓",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Fırtınalı denizlerde sözlük rotası çizen usta kaptan.",
       en: "Master captain charting word courses on stormy seas.",
@@ -480,7 +480,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "epic",
     chestTier: 2,
     icon: "🧙‍♂️",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Yıldız tozuyla antik parşömenleri aydınlatan büyücü.",
       en: "Illuminates ancient scrolls with stardust.",
@@ -493,7 +493,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "epic",
     chestTier: 2,
     icon: "🦄",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Bulutların üzerinde kelime avlayan efsanevi kanatlı at.",
       en: "Legendary winged steed soaring above clouds.",
@@ -506,7 +506,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 2,
     icon: "🐻",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Kutup zırhıyla kuşanmış heybetli savaşçı.",
       en: "Mighty warrior clad in arctic armor.",
@@ -519,7 +519,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "common",
     chestTier: 2,
     icon: "🧌",
-    image: "/avatars/leo.png",
+    image: "svg",
     description: {
       tr: "Karanlık mağaraları koruyan kaba ama sadık koruyucu.",
       en: "Gruff yet loyal guardian of deep caverns.",
@@ -604,7 +604,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 3,
     icon: "🦾",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Sibernetik reflekslerle saniyede binlerce harf tarayan kedi.",
       en: "Scans thousands of letters per second with cybernetics.",
@@ -617,7 +617,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 3,
     icon: "🤖",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Hatasız kelime analizi için programlanmış yapay zeka birimi.",
       en: "AI unit programmed for error-free word analysis.",
@@ -630,7 +630,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "epic",
     chestTier: 3,
     icon: "👩‍🚀",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Yıldızlararası diller araştırma enstitüsü lideri.",
       en: "Leader of interstellar linguistics research.",
@@ -643,7 +643,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "epic",
     chestTier: 3,
     icon: "🛸",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Yerçekimi savunmasında düşen meteorları avlayan usta pilot.",
       en: "Ace pilot shooting down meteors in Gravity defense.",
@@ -656,7 +656,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "rare",
     chestTier: 3,
     icon: "👽",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Telepatik dille anında iletişim kuran enerji varlığı.",
       en: "Energy being communicating through telepathic language.",
@@ -669,7 +669,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "epic",
     chestTier: 3,
     icon: "💠",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Dijital kütüphanelerin sonsuz hafızası.",
       en: "The boundless memory of digital archives.",
@@ -682,7 +682,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "legendary",
     chestTier: 3,
     icon: "⚡",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Kuantum boyutlarında aynı anda birden fazla kelimeyi çözen ajan.",
       en: "Decodes multiple words simultaneously across dimensions.",
@@ -696,7 +696,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "epic",
     chestTier: 3,
     icon: "✨",
-    image: "/avatars/sarah.png",
+    image: "svg",
     description: {
       tr: "Galaktik fırtınalarda öğrenenleri koruyan ışık rehberi.",
       en: "Guiding light protecting learners in cosmic storms.",
@@ -767,7 +767,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "legendary",
     chestTier: 4,
     icon: "🐉",
-    image: "/bosses/dragon_ignis.png",
+    image: "svg",
     description: {
       tr: "Volkanın bağrından doğan efsanevi alevlerin kadim efendisi.",
       en: "Ancient lord of flames born from the volcanic core.",
@@ -781,7 +781,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "legendary",
     chestTier: 4,
     icon: "🔥",
-    image: "/bosses/dragon_ignis.png",
+    image: "svg",
     description: {
       tr: "Küllerinden yeniden doğarak seriyi asla kaybettirmeyen ilahi kuş.",
       en: "Divine bird that preserves your streak forever.",
@@ -795,7 +795,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "legendary",
     chestTier: 4,
     icon: "⚖️",
-    image: "/avatars/mr_harrison.png",
+    image: "svg",
     description: {
       tr: "Uluslararası sözleşmeler ve C2 hukuki dilinin en yüksek mertebesi.",
       en: "Highest authority of international contracts and legal C2.",
@@ -809,7 +809,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "legendary",
     chestTier: 4,
     icon: "🌌",
-    image: "/bosses/dragon_ignis.png",
+    image: "svg",
     description: {
       tr: "Yıldız sistemlerini yutan sonsuz bilgelik ejderhası.",
       en: "Infinite wisdom dragon consuming star systems.",
@@ -822,7 +822,7 @@ export const CHEST_ITEMS: ChestItem[] = [
     rarity: "legendary",
     chestTier: 4,
     icon: "👑",
-    image: "/bosses/dragon_ignis.png",
+    image: "svg",
     description: {
       tr: "1000 kelimelik maratonu fetheden yüce şampiyon tacı.",
       en: "The crown of the champion conquering 1000 words.",

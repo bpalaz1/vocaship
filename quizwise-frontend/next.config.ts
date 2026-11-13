@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
         source: "/avatar/:path*",
         destination: `${backendBase || "http://127.0.0.1:8000"}/avatar/:path*`,
       },
+      {
+        source: "/tts/:path*",
+        destination: `${backendBase || "http://127.0.0.1:8000"}/tts/:path*`,
+      },
     ];
   },
 };

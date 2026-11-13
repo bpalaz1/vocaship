@@ -13,7 +13,19 @@ from app.schemas.flashcard import (
 
 from app.schemas.gamification import AwardXPRequest, UserProfileResponse
 from app.schemas.speaking import SpeakingRespondRequest, SpeakingRespondResponse, ScenarioMetadata
-from app.schemas.auth import RegisterRequest, LoginRequest, AuthResponse
+from app.schemas.auth import (
+    RegisterRequest,
+    LoginRequest,
+    AuthResponse,
+    UserResponse,
+    UpdateProfileRequest,
+)
+from app.schemas.classroom import (
+    PayoutProfileUpsert,
+    ClassCreateRequest,
+    JoinClassRequest,
+    SendMaterialRequest,
+)
 
 
 class HealthCheck(BaseModel):

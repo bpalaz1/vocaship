@@ -653,6 +653,7 @@ export const CATEGORY_PERSONA_PAIRS: Record<
 };
 
 export type KidsCharacterId = "sparky" | "chuck";
+export type UniversalCharacterId = "sparky_kid" | "alex_adult";
 
 interface PersonaContextType {
   activePersona: PersonaId;
@@ -660,6 +661,12 @@ interface PersonaContextType {
   setPersona: (id: PersonaId | string) => void;
   selectedKidsCharacter: KidsCharacterId;
   setSelectedKidsCharacter: (id: KidsCharacterId) => void;
+  selectedCharacter: UniversalCharacterId;
+  setSelectedCharacter: (id: UniversalCharacterId) => void;
+  characterVoice: string; // 'en-US-JennyNeural' (sparky_kid) | 'en-US-GuyNeural' (alex_adult)
+  characterAvatar: string;
+  characterName: string;
+  characterIcon: string;
   customAvatar: CustomUserAvatarData | null;
   saveCustomAvatar: (data: CustomUserAvatarData) => PersonaInfo;
   user3DAvatarUrl: string | null;
@@ -679,6 +686,7 @@ const PersonaContext = createContext<PersonaContextType | undefined>(undefined);
 export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const [activePersona, setActivePersonaState] = useState<PersonaId>("sarah");
   const [selectedKidsCharacter, setSelectedKidsCharacterState] = useState<KidsCharacterId>("sparky");
+  const [selectedCharacter, setSelectedCharacterState] = useState<UniversalCharacterId>("sparky_kid");
   const [customAvatar, setCustomAvatar] = useState<CustomUserAvatarData | null>(null);
   const [user3DAvatarUrl, setUser3DAvatarUrl] = useState<string | null>(null);
   const [user3DAvatarMeta, setUser3DAvatarMeta] = useState<Transform3DAvatarMeta | null>(null);
@@ -719,6 +727,13 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         setSelectedKidsCharacterState(savedKids);
       }
 
+      // Evrensel Karakter Kimliği (sparky_kid | alex_adult)
+      const savedUniversalChar = (localStorage.getItem("vocaship_selected_character") ||
+        localStorage.getItem("selectedCharacter")) as UniversalCharacterId | null;
+      if (savedUniversalChar === "sparky_kid" || savedUniversalChar === "alex_adult") {
+        setSelectedCharacterState(savedUniversalChar);
+      }
+
       const saved = localStorage.getItem("vocaship_active_persona") as PersonaId | null;
       if (saved && PERSONAS[saved]) {
         setActivePersonaState(saved);
@@ -728,6 +743,29 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, []);
+
+  const setSelectedCharacter = (char: UniversalCharacterId) => {
+    setSelectedCharacterState(char);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("vocaship_selected_character", char);
+        localStorage.setItem("selectedCharacter", char);
+        if (char === "sparky_kid") {
+          localStorage.setItem("vocaship_kids_character", "sparky");
+          localStorage.setItem("vocaship_active_persona", "sparky");
+          setActivePersonaState("sparky");
+        } else {
+          localStorage.setItem("vocaship_active_persona", "alex");
+          setActivePersonaState("alex");
+        }
+      } catch {}
+    }
+  };
+
+  const characterVoice = selectedCharacter === "alex_adult" ? "en-US-GuyNeural" : "en-US-JennyNeural";
+  const characterAvatar = selectedCharacter === "alex_adult" ? "/avatars/alex.png" : "/avatars/sparky.png";
+  const characterName = selectedCharacter === "alex_adult" ? "Alex" : "Sparky";
+  const characterIcon = selectedCharacter === "alex_adult" ? "🧔" : "🦊";
 
   const saveCustomAvatar = (data: CustomUserAvatarData): PersonaInfo => {
     setCustomAvatar(data);
@@ -817,6 +855,12 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         setPersona,
         selectedKidsCharacter,
         setSelectedKidsCharacter,
+        selectedCharacter,
+        setSelectedCharacter,
+        characterVoice,
+        characterAvatar,
+        characterName,
+        characterIcon,
         customAvatar,
         saveCustomAvatar,
         user3DAvatarUrl,
@@ -842,6 +886,12 @@ export function usePersona() {
       setPersona: () => {},
       selectedKidsCharacter: "sparky" as KidsCharacterId,
       setSelectedKidsCharacter: () => {},
+      selectedCharacter: "sparky_kid" as UniversalCharacterId,
+      setSelectedCharacter: () => {},
+      characterVoice: "en-US-JennyNeural",
+      characterAvatar: "/avatars/sparky.png",
+      characterName: "Sparky",
+      characterIcon: "🦊",
       customAvatar: null,
       saveCustomAvatar: (d: CustomUserAvatarData) => buildCustomPersona(d),
       user3DAvatarUrl: null,

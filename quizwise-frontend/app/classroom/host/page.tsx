@@ -26,6 +26,7 @@ import {
   Volume2,
   AlertTriangle,
   School,
+  Gamepad2,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import CoopBossArena from "../../components/games/CoopBossArena";
@@ -69,7 +70,7 @@ function HostConsoleContent() {
   // Oyun Ayarları
   const [selectedMode, setSelectedMode] = useState<HostGameMode>(initialMode);
   const [durationGoal, setDurationGoal] = useState<string>("boss_barrage"); // '3m' | '5m' | 'boss_barrage'
-  const [className, setClassName] = useState<string>("10-A İngilizce");
+  const [className, setClassName] = useState<string>("Sosyal Oyun Odası");
   const [classPin, setClassPin] = useState<string>("VRG-8421");
   const [origin, setOrigin] = useState<string>("http://localhost:3000");
 
@@ -190,7 +191,7 @@ function HostConsoleContent() {
                   Seans Tamamlandı: {className}
                 </h1>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Öğretmen Değerlendirme & Telafi Konsolu
+                  Oda Kurucusu Değerlendirme & Özet Konsolu
                 </p>
               </div>
             </div>
@@ -211,23 +212,23 @@ function HostConsoleContent() {
                 className="h-12 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition"
               >
                 <RefreshCw className="w-4 h-4" />
-                <span>Yeni Lobi Aç</span>
+                <span>Yeni Oyun Lobisi Aç</span>
               </button>
             </div>
           </div>
 
-          {/* Sınıf Kelime Röntgeni Analiz Kartı */}
+          {/* Oyun Odası Kelime Röntgeni Analiz Kartı */}
           <PostGameWeakWords className={className} isHost={true} />
 
-          {/* Sınıf Podyum Modalı */}
+          {/* Oyun Odası Podyum Modalı */}
           {showPodium && (
             <ClassroomPodiumModal
               isOpen={showPodium}
               onClose={() => setShowPodium(false)}
               sessionId={`host-${Date.now()}`}
-              gameTitle="Akıllı Tahta Canlı Seansı"
+              gameTitle="Canlı Oyun Odası Karşılaşması"
               currentUserRank={1}
-              currentUserName="10-A Şampiyonları"
+              currentUserName="Oyun Odası Şampiyonları"
             />
           )}
         </div>
@@ -249,10 +250,10 @@ function HostConsoleContent() {
               CANLI YAYIN: {className}
             </span>
             <span className="text-xs font-mono px-2.5 py-1 rounded-xl bg-slate-950 text-amber-400 border border-slate-800 font-bold">
-              PIN: {classPin}
+              KOD: {classPin}
             </span>
             <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 hidden sm:inline">
-              👥 {students.length} Öğrenci Canlı
+              👥 {students.length} Oyuncu Canlı
             </span>
           </div>
 
@@ -269,7 +270,7 @@ function HostConsoleContent() {
               }`}
             >
               {isPaused ? <Play className="w-4 h-4 fill-slate-950" /> : <Pause className="w-4 h-4" />}
-              <span>{isPaused ? "▶️ OYUNU SÜRDÜR" : "⏸️ OYUNU DONDUR (DERS MOLASI)"}</span>
+              <span>{isPaused ? "▶️ OYUNU SÜRDÜR" : "⏸️ OYUNU DONDUR (MOLA)"}</span>
             </button>
 
             {/* OYUNU BİTİR BUTONU */}
@@ -297,7 +298,7 @@ function HostConsoleContent() {
         <div className="flex-1">
           <CoopBossArena
             cards={[]}
-            deckTitle="10-A Sınıfı Kelimeleri"
+            deckTitle="Oyun Odası Kelimeleri"
             className={className}
             isHost={true}
             isPaused={isPaused}
@@ -309,28 +310,28 @@ function HostConsoleContent() {
   }
 
   // =======================================================================
-  // DURUM C: LOBİ EKRANI (ÖĞRETMEN LOBİ KONTROL MASASI)
+  // DURUM C: LOBİ EKRANI (ODA KURUCUSU OYUN LOBİSİ)
   // =======================================================================
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* 1. ÜST ŞERİT: BAŞLIK, SINIF ADI VE TAM EKRAN */}
+      {/* 1. ÜST ŞERİT: BAŞLIK, ODA ADI VE TAM EKRAN */}
       <header className="w-full bg-slate-900/90 border-b border-slate-800 px-4 sm:px-8 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            href="/classroom"
+            href="/games"
             className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1.5 text-xs font-bold"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Sınıfım Paneline Dön</span>
+            <span className="hidden sm:inline">Oyunlar Arenasına Dön</span>
           </Link>
 
           <div>
             <h1 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-              <School className="w-5 h-5 text-indigo-400" />
-              <span>Öğretmen Canlı Lobi Kontrol Masası</span>
+              <Gamepad2 className="w-5 h-5 text-indigo-400" />
+              <span>Oda Kurucusu Canlı Oyun Lobisi</span>
             </h1>
             <p className="text-xs text-slate-400">
-              Akıllı Tahta Yönetici Konsolu • {className}
+              Oyun Odası Yönetici Konsolu • {className}
             </p>
           </div>
         </div>
@@ -347,14 +348,14 @@ function HostConsoleContent() {
 
       {/* 2. ANA PANEL: SOLDA DEV PIN & QR, SAĞDA OYUN AYARLARI */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-8 grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-6 items-start">
-        {/* SOL PANEL: DEV PIN VE DİNAMİK QR KODU (AKILLI TAHTA ODAĞI) */}
+        {/* SOL PANEL: DEV PIN VE DİNAMİK QR KODU */}
         <section className="bg-slate-900 border-2 border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col items-center text-center space-y-6 shadow-2xl relative overflow-hidden">
           <div className="space-y-1">
             <span className="text-xs font-black text-amber-400 uppercase tracking-widest block">
-              KATILIM KODU (PIN)
+              KATILIM KODU (ODA KODU)
             </span>
             <p className="text-xs text-slate-400">
-              Öğrenciler cihazlarından kodu girerek lobiye bağlanır.
+              Oyuncular cihazlarından kodu girerek lobiye bağlanır.
             </p>
           </div>
 
@@ -367,7 +368,7 @@ function HostConsoleContent() {
               <button
                 type="button"
                 onClick={handleCopyPin}
-                title="PIN Kopyala"
+                title="Kodu Kopyala"
                 className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
               >
                 {copiedPin ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
@@ -375,7 +376,7 @@ function HostConsoleContent() {
               <button
                 type="button"
                 onClick={handleRegeneratePin}
-                title="Yeni PIN Üret"
+                title="Yeni Kod Üret"
                 className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -391,19 +392,19 @@ function HostConsoleContent() {
             </span>
           </div>
 
-          {/* BAĞLI ÖĞRENCİ SAYAÇ ROZETİ */}
+          {/* BAĞLI OYUNCU SAYAÇ ROZETİ */}
           <div className="w-full py-3 px-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-indigo-400" />
-              <span className="text-xs font-bold text-white">Hazır Öğrenciler:</span>
+              <span className="text-xs font-bold text-white">Hazır Oyuncular:</span>
             </div>
             <span className="text-sm font-black font-mono text-indigo-300">
-              {students.length} Öğrenci
+              {students.length} Oyuncu
             </span>
           </div>
         </section>
 
-        {/* SAĞ PANEL: OYUN AYARLARI, MOD SEÇİMİ VE BAĞLI ÖĞRENCİLER */}
+        {/* SAĞ PANEL: OYUN AYARLARI, MOD SEÇİMİ VE BAĞLI OYUNCULAR */}
         <section className="space-y-6">
           {/* A) OYUN MODU SEÇİMİ */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
@@ -427,7 +428,7 @@ function HostConsoleContent() {
                   <span className="text-2xl">🐉</span>
                   <h3 className="text-xs sm:text-sm font-black">Ortak Boss Baskını</h3>
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    Tüm sınıf tek 10.000 HP ejderhayı devirir; zayıf öğrenci dahi takıma katkı sağlar.
+                    Tüm oyuncular tek 10.000 HP ejderhayı devirir; herkes takıma katkı sağlar.
                   </p>
                 </div>
                 <span className="mt-3 text-[10px] font-bold text-rose-400 uppercase tracking-wider">
@@ -471,7 +472,7 @@ function HostConsoleContent() {
                   <span className="text-2xl">⚡</span>
                   <h3 className="text-xs sm:text-sm font-black">5s Hızlı Kombo</h3>
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    5 saniyelik seri refleks turlarıyla sınıf içi anlık hız ve dikkat yarışı.
+                    5 saniyelik seri refleks turlarıyla anlık hız ve dikkat yarışı.
                   </p>
                 </div>
                 <span className="mt-3 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
@@ -491,8 +492,8 @@ function HostConsoleContent() {
             <div className="flex flex-wrap gap-3">
               {[
                 { id: "boss_barrage", label: "🐉 10.000 HP Canavar Barajı", desc: "Canavar ölünceye kadar" },
-                { id: "3m", label: "⏱️ 3 Dakikalık Hızlı Tur", desc: "Zamana karşı sınıf sprinti" },
-                { id: "5m", label: "⏱️ 5 Dakikalık Tam Ders", desc: "Kapsamlı pratik ve yarış" },
+                { id: "3m", label: "⏱️ 3 Dakikalık Hızlı Tur", desc: "Zamana karşı hızlı sprint" },
+                { id: "5m", label: "⏱️ 5 Dakikalık Tam Karşılaşma", desc: "Kapsamlı pratik ve yarış" },
               ].map((opt) => (
                 <button
                   key={opt.id}
@@ -511,12 +512,12 @@ function HostConsoleContent() {
             </div>
           </div>
 
-          {/* C) CANLI BAĞLANAN ÖĞRENCİLER ŞERİDİ */}
+          {/* C) CANLI BAĞLANAN OYUNCULAR ŞERİDİ */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h2 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-400" />
-                <span>3. Bağlanan Öğrenciler ({students.length})</span>
+                <span>3. Bağlanan Oyuncular ({students.length})</span>
               </h2>
               <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
                 <Radio className="w-3.5 h-3.5 animate-pulse" />
@@ -524,7 +525,7 @@ function HostConsoleContent() {
               </span>
             </div>
 
-            {/* Öğrenci Avatar Rozetleri */}
+            {/* Oyuncu Avatar Rozetleri */}
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 max-h-48 overflow-y-auto pr-1">
               {students.map((st) => (
                 <div
@@ -547,7 +548,7 @@ function HostConsoleContent() {
             className="w-full h-16 rounded-3xl bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-slate-950 font-black text-base sm:text-lg flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/25 transition active:scale-98 cursor-pointer tracking-wide"
           >
             <Play className="w-6 h-6 fill-slate-950" />
-            <span>▶️ CANLI OYUNU AKILLI TAHTADA BAŞLAT</span>
+            <span>▶️ CANLI OYUNU BAŞLAT</span>
           </button>
         </section>
       </main>

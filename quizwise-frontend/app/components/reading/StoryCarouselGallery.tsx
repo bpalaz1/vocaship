@@ -617,34 +617,6 @@ export default function StoryCarouselGallery({
           {/* 3. HİKAYE KARTLARI IZGARASI (GRID - Responsive, Yatay Scroll Çubuğu Yok) */}
           {displayedStories.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {/* "+ Yeni Hikaye / Metin Ekle" Kartı (Benim Hikayelerim veya Tüm Koleksiyonda en başta) */}
-              {(selectedCategoryFilter === "user_custom" || (selectedCategoryFilter === "all" && !searchQuery)) && (
-                <div
-                  onClick={onCreateNewStory}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      if (onCreateNewStory) onCreateNewStory();
-                    }
-                  }}
-                  className="w-full rounded-2xl border-2 border-dashed border-indigo-500/30 hover:border-indigo-400 bg-indigo-950/20 hover:bg-indigo-950/40 p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all space-y-3 group min-h-[300px]"
-                >
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-amber-500/20 group-hover:from-indigo-500/30 group-hover:to-amber-500/30 text-amber-300 flex items-center justify-center transition shadow-inner">
-                    <Sparkles className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition flex items-center justify-center gap-1.5">
-                      <span>+ {t("reading_generate_ai", "Yapay Zekâ ile Hikaye Üret")}</span>
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-1 max-w-xs leading-relaxed">
-                      {t("generate_custom_story_desc", "Destelerinden veya unutma eğrindeki kelimelerden sana özel hikaye oluştur")}
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {/* Hikaye Kartları */}
               {displayedStories.map((story) => {
                 const isCustom = !!(story as any).isUserStory;

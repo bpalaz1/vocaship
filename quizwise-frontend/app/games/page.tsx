@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,22 +26,38 @@ import {
   Timer,
   Swords,
   Search,
-  KeyRound,
   ArrowRight,
-  School,
   Users,
   Crown,
+  Edit3,
 } from "lucide-react";
 import { API_BASE } from "../config";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { usePersona } from "../context/PersonaContext";
+import { useProfile } from "../context/ProfileContext";
+import AvatarPickerModal from "../components/profile/AvatarPickerModal";
 import GameCard, { GameCardItem } from "../components/games/GameCard";
 import GameModeSelectModal from "../components/games/GameModeSelectModal";
 import JoinCodeModal from "../components/games/JoinCodeModal";
 import ChestOpenModal from "../components/shop/ChestOpenModal";
 import { CHESTS } from "../data/chestItems";
 import { getArenaMistakes } from "../utils/arenaMistakes";
+import { claimPendingGold } from "../utils/pendingGold";
+import {
+  getActiveDeckId,
+  setActiveDeckId,
+  fetchDecksList,
+  getActiveDeckCards,
+  toFlashcardItems,
+  subscribeToActiveDeck,
+  DeckItem,
+  GameWordPair,
+  PRESET_DECKS,
+  DEFAULT_GAME_WORDS,
+} from "../utils/activeDeckStore";
+
+export type { DeckItem, GameWordPair };
 
 // Oyun Bileşenleri Dinamik Import
 const GoldQuestGame = dynamic(() => import("../components/games/GoldQuestGame"), { ssr: false });
@@ -56,98 +72,7 @@ const GrandmasterCelebrationModal = dynamic(() => import("../components/games/Gr
 const LeaderboardModal = dynamic(() => import("../components/LeaderboardModal"), { ssr: false });
 const ClassLeaderboardModal = dynamic(() => import("../components/games/ClassLeaderboardModal"), { ssr: false });
 
-export interface DeckItem {
-  id: string;
-  title: string;
-  description: string;
-  card_count?: number;
-}
 
-export interface GameWordPair {
-  word: string;
-  meaning: string;
-  phonetic?: string;
-  clue?: string;
-}
-
-// Zengin Varsayılan Kelime Havuzu
-const DEFAULT_GAME_WORDS: GameWordPair[] = [
-  {
-    word: "mitigate",
-    meaning: "Hafifletmek, etkisini azaltmak",
-    phonetic: "/ˈmɪt.ɪ.ɡeɪt/",
-    clue: "Zararlı bir etkinin şiddetini düşürmek",
-  },
-  {
-    word: "resilient",
-    meaning: "Dirençli, çabuk toparlanan",
-    phonetic: "/rɪˈzɪl.jənt/",
-    clue: "Zorluklar karşısında esnek ve güçlü kalabilen",
-  },
-  {
-    word: "substantiate",
-    meaning: "Kanıtlamak, somut gerekçelere dayandırmak",
-    phonetic: "/səbˈstæn.ʃi.eɪt/",
-    clue: "Bir iddiayı somut delillerle doğrulamak",
-  },
-  {
-    word: "ubiquitous",
-    meaning: "Her yerde bulunan, çok yaygın",
-    phonetic: "/juːˈbɪk.wɪ.təs/",
-    clue: "Neredeyse her ortamda karşımıza çıkan",
-  },
-  {
-    word: "coherent",
-    meaning: "Tutarlı, mantıklı ve uyumlu",
-    phonetic: "/kəʊˈhɪə.rənt/",
-    clue: "Parçaları birbiriyle mantıksal bütünlük taşıyan",
-  },
-  {
-    word: "detrimental",
-    meaning: "Zararlı, hasar verici",
-    phonetic: "/ˌdet.rɪˈmen.təl/",
-    clue: "Süreçlere ve performansa negatif etkisi olan",
-  },
-  {
-    word: "volatility",
-    meaning: "Dalgalanma, değişkenlik",
-    phonetic: "/ˌvɒl.əˈtɪl.ə.ti/",
-    clue: "Fiyatlarda veya durumlarda ani iniş çıkışlar",
-  },
-  {
-    word: "contingency",
-    meaning: "Beklenmedik durum payı, yedek akçe",
-    phonetic: "/kənˈtɪn.dʒən.si/",
-    clue: "Öngörülemeyen riskler için ayrılan yedek süre/bütçe",
-  },
-];
-
-const PRESET_DECKS: DeckItem[] = [
-  {
-    id: "preset_core3000",
-    title: "🌐 En Sık Çıkan 3000 Temel Kelime",
-    description: "A1-A2 Başlangıç ve günlük yaşam için en kritik temel kelimeler",
-    card_count: 50,
-  },
-  {
-    id: "preset_adv5000",
-    title: "📚 İleri Düzey 5000 Kelime Dağarcığı",
-    description: "C1-C2 Akademik ve profesyonel yetkinlik için ileri düzey 5000 kelime seçkisi",
-    card_count: 50,
-  },
-  {
-    id: "preset_c1_pro",
-    title: "💼 C1 Profesyonel İş & Kariyer",
-    description: "Proje Kontrol ve Yönetim terminolojisi içeren 50 ileri seviye terim",
-    card_count: 50,
-  },
-  {
-    id: "preset_academic",
-    title: "🎓 Akademik Sınav Paketi (YDS & IELTS)",
-    description: "Akademik makalelerde ve sınavlarda en sık çıkan kritik fiiller ve bağlaçlar",
-    card_count: 45,
-  },
-];
 
 export type GameMode =
   | "boss_fight"
@@ -185,8 +110,8 @@ const GAME_DETAILS: Record<GameMode, { title: string; badge: string; icon: React
     icon: <Rocket className="w-5 h-5 text-rose-400" />,
   },
   speed_recall: {
-    title: "⚡ 5s Hızlı Kombo",
-    badge: "Seri Refleks",
+    title: "⚡ Hızlı Kombo",
+    badge: "Dinamik Refleks",
     icon: <Zap className="w-5 h-5 text-cyan-400" />,
   },
   word_scramble: {
@@ -264,14 +189,14 @@ const CORE_GAMES: GameCardItem[] = [
   {
     id: "game_speed_recall",
     mode: "speed_recall",
-    title: "⚡ 5s Hızlı Kombo",
+    title: "⚡ Hızlı Kombo",
     badge: "Hızlı Kombo",
-    tag: "5 Sn Refleks",
-    description: "5 saniyede 4 şıktan doğru anlamı yakalayarak seri kombo yap!",
+    tag: "6-10 Sn Refleks",
+    description: "Seviyene göre 6-10 saniyede 4 şıktan doğru anlamı yakalayarak seri kombo yap!",
     bgGradient: "from-cyan-500 via-blue-600 to-blue-700",
     icon: <Zap className="w-6 h-6 text-cyan-100 drop-shadow" />,
     featurePills: [
-      { label: "Seri Refleks", icon: <Zap className="w-3 h-3 text-cyan-400" /> },
+      { label: "Dinamik Süre", icon: <Zap className="w-3 h-3 text-cyan-400" /> },
       { label: "Alevli Kombo", icon: <Flame className="w-3 h-3 text-amber-400" /> },
     ],
     actionText: "Komboyu Başlat",
@@ -300,6 +225,8 @@ export default function GamesPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { persona } = usePersona();
+  const { userProfile: profileData, setIsSettingsModalOpen } = useProfile();
+  const [isAvatarStudioOpen, setIsAvatarStudioOpen] = useState(false);
 
   // Modallar
   const [selectedModeForDialog, setSelectedModeForDialog] = useState<GameMode | null>(null);
@@ -314,9 +241,6 @@ export default function GamesPage() {
   const [isRevengeModalOpen, setIsRevengeModalOpen] = useState(false);
   const [isGrandmasterModalOpen, setIsGrandmasterModalOpen] = useState(false);
 
-  // Hızlı PIN Girişi
-  const [roomPin, setRoomPin] = useState("");
-
   // Kullanıcı Altın & XP Durumu
   const [userProfile, setUserProfile] = useState<{
     gold: number;
@@ -328,64 +252,114 @@ export default function GamesPage() {
     streak: 5,
   });
 
+  // Sessiz Altın Köprüsü Karşılama Bildirimi
+  const [claimedRewardBanner, setClaimedRewardBanner] = useState<{
+    total: number;
+    breakdown: Record<string, number>;
+  } | null>(null);
+
+  // Seviyeye Göre Dinamik Hızlı Kombo Süresi (A1-A2: 10s, B1+: 6s)
+  const userStudyLevel = profileData?.study_level || "B1";
+  const isBeginnerLevel = userStudyLevel === "A1" || userStudyLevel === "A2";
+  const speedRecallTimeLimit = isBeginnerLevel ? 10 : 6;
+
   const [decks, setDecks] = useState<DeckItem[]>([]);
   const [loadingDecks, setLoadingDecks] = useState(true);
 
   // Deste Seçim Modalı ve Aktif Oyun Durumu
   const [pendingGameMode, setPendingGameMode] = useState<GameMode | null>(null);
+  const [isDeckPickerOpen, setIsDeckPickerOpen] = useState(false);
   const [activeGame, setActiveGame] = useState<GameMode | null>(null);
   const [activeDeck, setActiveDeck] = useState<DeckItem | null>(null);
   const [activeCards, setActiveCards] = useState<GameWordPair[]>(DEFAULT_GAME_WORDS);
 
-  // Kullanıcı Profil Bilgisini Yükle
+  // Kullanıcı Profil Bilgisini Yükle ve Sessiz Altınları Teslim Et
   const fetchUserProfile = async () => {
+    let currentGold = 240;
+    let currentXP = 450;
+    let currentStreak = 5;
+
     try {
       const res = await fetch(`${API_BASE}/api/v1/gamification/profile`);
       if (res.ok) {
         const data = await res.json();
-        setUserProfile({
-          gold: data.total_gold ?? 240,
-          xp: data.total_xp ?? 450,
-          streak: data.streak_days ?? 5,
-        });
-        return;
-      }
-    } catch {}
-
-    // Fallback: localStorage
-    if (typeof window !== "undefined") {
-      const savedGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
-      const savedXP = parseInt(localStorage.getItem("vocaship_xp") || "450", 10);
-      const savedStreak = parseInt(localStorage.getItem("vocaship_streak") || "5", 10);
-      setUserProfile((prev) => ({
-        ...prev,
-        gold: isNaN(savedGold) ? 240 : savedGold,
-        xp: isNaN(savedXP) ? 450 : savedXP,
-        streak: isNaN(savedStreak) ? 5 : savedStreak,
-      }));
-    }
-  };
-
-  // Desteleri Yükle
-  const fetchDecks = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/decks`);
-      if (res.ok) {
-        const data = await res.json();
-        setDecks(Array.isArray(data) && data.length > 0 ? data : PRESET_DECKS);
-      } else {
-        setDecks(PRESET_DECKS);
+        currentGold = data.total_gold ?? 240;
+        currentXP = data.total_xp ?? 450;
+        currentStreak = data.streak_days ?? 5;
+      } else if (typeof window !== "undefined") {
+        const savedGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
+        const savedXP = parseInt(localStorage.getItem("vocaship_xp") || "450", 10);
+        const savedStreak = parseInt(localStorage.getItem("vocaship_streak") || "5", 10);
+        currentGold = isNaN(savedGold) ? 240 : savedGold;
+        currentXP = isNaN(savedXP) ? 450 : savedXP;
+        currentStreak = isNaN(savedStreak) ? 5 : savedStreak;
       }
     } catch {
-      setDecks(PRESET_DECKS);
-    } finally {
-      setLoadingDecks(false);
+      if (typeof window !== "undefined") {
+        const savedGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
+        const savedXP = parseInt(localStorage.getItem("vocaship_xp") || "450", 10);
+        const savedStreak = parseInt(localStorage.getItem("vocaship_streak") || "5", 10);
+        currentGold = isNaN(savedGold) ? 240 : savedGold;
+        currentXP = isNaN(savedXP) ? 450 : savedXP;
+        currentStreak = isNaN(savedStreak) ? 5 : savedStreak;
+      }
     }
+
+    // Sessiz Altın Köprüsü: Okuma ve Konuşma çalışmalarından bekleyen altınları topla
+    const claimed = claimPendingGold();
+    if (claimed.total > 0) {
+      setClaimedRewardBanner(claimed);
+      currentGold += claimed.total;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("vocaship_gold", currentGold.toString());
+      }
+    }
+
+    setUserProfile({
+      gold: currentGold,
+      xp: currentXP,
+      streak: currentStreak,
+    });
   };
 
   useEffect(() => {
     fetchUserProfile();
-    fetchDecks();
+
+    // Aktif Deste ve Kartları Başlat
+    const initDecksAndCards = async () => {
+      setLoadingDecks(true);
+      const deckList = await fetchDecksList();
+      setDecks(deckList);
+
+      const savedDeckId = getActiveDeckId();
+      let currentDeck = deckList.find((d) => d.id === savedDeckId);
+      if (!currentDeck && deckList.length > 0) {
+        currentDeck = deckList[0];
+        setActiveDeckId(currentDeck.id);
+      }
+      setActiveDeck(currentDeck || null);
+
+      if (currentDeck) {
+        const cards = await getActiveDeckCards(currentDeck.id);
+        setActiveCards(cards);
+      }
+      setLoadingDecks(false);
+    };
+
+    initDecksAndCards();
+
+    // Global Deste Değişikliklerini Dinle (Diğer sekmeler veya Okuma/Speaking modülleri)
+    const unsubscribe = subscribeToActiveDeck(async (newDeckId) => {
+      const deckList = await fetchDecksList();
+      const currentDeck = deckList.find((d) => d.id === newDeckId) || {
+        id: newDeckId,
+        title: "Aktif Deste",
+        description: "",
+      };
+      setActiveDeck(currentDeck);
+      const cards = await getActiveDeckCards(newDeckId);
+      setActiveCards(cards);
+    });
 
     // İntikam Arenası Hata Sayısını Başlat
     const updateMistakes = () => {
@@ -426,6 +400,7 @@ export default function GamesPage() {
 
     window.addEventListener("quizwise_floating_xp", handleXPUpdate);
     return () => {
+      unsubscribe();
       window.removeEventListener("quizwise_floating_xp", handleXPUpdate);
       window.removeEventListener("vocaship:arena_mistakes_updated", handleMistakesUpdated);
     };
@@ -461,32 +436,20 @@ export default function GamesPage() {
     }
   };
 
-  // Deste Seçildiğinde -> Tam Ekran Oyunu Başlat
+  // Deste Seçildiğinde -> Tam Ekran Oyunu Başlat veya Aktif Desteyi Senkronize Et
   const handleSelectDeckAndLaunch = async (deck: DeckItem) => {
     setActiveDeck(deck);
+    setActiveDeckId(deck.id);
     const modeToLaunch = pendingGameMode;
     setPendingGameMode(null);
+    setIsDeckPickerOpen(false);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/decks/${deck.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.cards && data.cards.length > 0) {
-          const mapped: GameWordPair[] = data.cards.map((c: any) => ({
-            word: c.word,
-            meaning: c.turkish_meaning || c.meaning || c.definition || "Tanım",
-            phonetic: c.phonetic,
-          }));
-          setActiveCards(mapped);
-          setActiveGame(modeToLaunch);
-          return;
-        }
-      }
-    } catch {}
+    const cards = await getActiveDeckCards(deck.id);
+    setActiveCards(cards);
 
-    // Fallback: Varsayılan kelime havuzu
-    setActiveCards(DEFAULT_GAME_WORDS);
-    setActiveGame(modeToLaunch);
+    if (modeToLaunch) {
+      setActiveGame(modeToLaunch);
+    }
   };
 
   // Oyundan Çıkış
@@ -496,27 +459,16 @@ export default function GamesPage() {
   };
 
   // GoldQuest için Flashcard formatı
-  const goldQuestCards = activeCards.map((c, i) => ({
-    id: `gq_${i}`,
-    word: c.word,
-    phonetic: c.phonetic,
-    meanings: [{ definition: c.meaning, translation: c.meaning }],
-    example_sentences: [{ en: `Example sentence for ${c.word}.` }],
-  }));
-
-  const handleRoomPinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = roomPin.trim().toUpperCase();
-    if (!clean) return;
-    router.push(`/classroom?joinCode=${encodeURIComponent(clean)}`);
-  };
+  const goldQuestCards = useMemo(() => {
+    return toFlashcardItems(activeCards);
+  }, [activeCards]);
 
   const isGrandmaster =
     learnedWordsCount >= 1000 ||
     (typeof window !== "undefined" && localStorage.getItem("vocaship_grandmaster") === "true");
 
   return (
-    <div className="flex-1 w-full min-h-[calc(100vh-4rem)] flex flex-col bg-[#0B0F19] text-slate-100 selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+    <div className="flex-1 w-full min-h-[calc(100vh-4rem)] flex flex-col bg-slate-50 dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100 selection:bg-indigo-500 selection:text-white overflow-x-hidden transition-colors duration-200">
       {/* ========================================================================= */}
       {/* SPLIT-CONSOLE WRAPPER: 1366px ve 1080p İÇİN SIFIR KAYDIRMA KONSOLU       */}
       {/* ========================================================================= */}
@@ -524,9 +476,12 @@ export default function GamesPage() {
         {/* ======================================================================= */}
         {/* SOL SÜTUN - SABİT GELİŞİM VE SANDIK KOKPİTİ                            */}
         {/* ======================================================================= */}
-        <aside className="w-full lg:w-[320px] flex-shrink-0 bg-slate-900/90 border border-slate-800 rounded-3xl p-4 flex flex-col gap-4 shadow-xl backdrop-blur-md lg:sticky lg:top-20">
+        <aside className="w-full lg:w-[320px] flex-shrink-0 bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 flex flex-col gap-4 shadow-sm dark:shadow-xl backdrop-blur-md lg:sticky lg:top-20">
           {/* 1. Profil & Aktif Avatar */}
-          <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
+          <div
+            onClick={() => setIsAvatarStudioOpen(true)}
+            className="flex items-center gap-3 pb-3 border-b border-slate-800 cursor-pointer group"
+          >
             <div
               className={`w-14 h-14 rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center shrink-0 transition-all ${
                 isGrandmaster
@@ -534,19 +489,27 @@ export default function GamesPage() {
                   : "ring-2 ring-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.25)]"
               }`}
             >
-              <img
-                src={persona?.image || "/avatars/sparky.png"}
-                alt="Avatar"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/avatars/sparky.png";
-                }}
-              />
+              {profileData?.avatar_url && (profileData.avatar_url.startsWith("http") || profileData.avatar_url.startsWith("/") || profileData.avatar_url.startsWith("data:")) ? (
+                <img
+                  src={profileData.avatar_url}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/avatars/presets/avatar_01.svg";
+                  }}
+                />
+              ) : profileData?.avatar_url ? (
+                <span className="text-2xl">{profileData.avatar_url}</span>
+              ) : (
+                <span className="text-base font-bold text-amber-300">
+                  {((profileData?.full_name || profileData?.username || "K").charAt(0)).toUpperCase()}
+                </span>
+              )}
             </div>
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h2 className="text-sm font-bold text-white truncate">
-                  {persona?.name || "Sparky"} • Lv.4
+                <h2 className="text-sm font-bold text-white truncate group-hover:text-amber-300 transition-colors">
+                  {profileData?.username ? (profileData.username.startsWith("@") ? profileData.username : `@${profileData.username}`) : (profileData?.full_name || "@kasif")} • Lv.{profileData?.study_level || "B1"}
                 </h2>
                 {isGrandmaster && (
                   <span className="px-1.5 py-0.2 rounded bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-[9px] uppercase tracking-wider flex items-center gap-0.5 shadow-sm">
@@ -556,9 +519,21 @@ export default function GamesPage() {
                 )}
               </div>
               <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {isGrandmaster ? "👑 1000+ Kelime Efsanesi" : persona?.level || "Seviye 4 Kaşif"}
+                {isGrandmaster ? "👑 1000+ Kelime Efsanesi" : (profileData?.full_name || "Seviye Kaşif")}
               </span>
             </div>
+            {/* Zarif ✏️ Düzenle Butonu */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsAvatarStudioOpen(true);
+              }}
+              title="Avatarı Değiştir"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer shrink-0"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* 2. Sayaçlar (Stat Pills) */}
@@ -677,6 +652,30 @@ export default function GamesPage() {
             </button>
           </div>
 
+          {/* 🏛️ 100 Eserlik Müze Vitrini Köprüsü */}
+          <Link
+            href="/museum"
+            className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/60 via-purple-950/40 to-slate-900 border border-amber-500/30 hover:border-amber-400 space-y-2 block transition group shadow-md"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl group-hover:scale-110 transition-transform">🏛️</span>
+                <div>
+                  <span className="text-xs font-bold text-white block group-hover:text-amber-300 transition">
+                    100 Eserlik Grand Müze
+                  </span>
+                  <span className="text-[10px] text-amber-300/80 font-mono">
+                    4 Sergi Salonu & Kelime Peteği
+                  </span>
+                </div>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition" />
+            </div>
+            <div className="w-full py-1.5 px-3 rounded-xl bg-slate-900 group-hover:bg-amber-500 group-hover:text-slate-950 text-amber-300 font-bold text-[11px] flex items-center justify-center gap-1.5 border border-amber-500/30 transition">
+              <span>🏛️ Sergi Salonlarını Gez ➔</span>
+            </div>
+          </Link>
+
           {/* 4. Lig Göstergesi & Liderlik Köprüsü */}
           <Link
             href="/leaderboard"
@@ -708,8 +707,8 @@ export default function GamesPage() {
         {/* SAĞ GENİŞ ALAN - OYUN VİTRİNİ                                          */}
         {/* ======================================================================= */}
         <section className="flex-1 min-w-0 flex flex-col gap-4">
-          {/* Üst Başlık & Hızlı Katılım Barı */}
-          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-md">
+          {/* Üst Başlık & Deste Seçici */}
+          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-3 shadow-md">
             {/* Sol: Başlık & Deste Seçici */}
             <div className="flex items-center gap-2.5 flex-wrap">
               <h2 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
@@ -720,7 +719,7 @@ export default function GamesPage() {
               {/* Aktif Deste Seçici Hapı */}
               <button
                 type="button"
-                onClick={() => setPendingGameMode("gold_raid")}
+                onClick={() => setIsDeckPickerOpen(true)}
                 className="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-850 border border-slate-800 text-xs font-semibold text-indigo-300 flex items-center gap-1.5 transition cursor-pointer"
                 title="Aktif Çalışma Destesini Seçin"
               >
@@ -732,70 +731,49 @@ export default function GamesPage() {
               </button>
             </div>
 
-            {/* Sağ: Öğretmen Host Konsolu & 6 Haneli Sınıf Oda PIN Girişi */}
-            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
-              <Link
-                href="/classroom/host"
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-sm shadow-emerald-600/20 shrink-0"
-                title="Akıllı Tahta Öğretmen Lobi Kontrol Masası"
-              >
-                <School className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Öğretmen Lobi Masası</span>
-                <span className="sm:hidden">Lobi Masası</span>
-              </Link>
-
-              <form onSubmit={handleRoomPinSubmit} className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800">
-                <KeyRound className="w-3.5 h-3.5 text-indigo-400 ml-2 shrink-0" />
-                <input
-                  type="text"
-                  maxLength={8}
-                  placeholder="PIN Kodunu Gir"
-                  value={roomPin}
-                  onChange={(e) => setRoomPin(e.target.value.toUpperCase())}
-                  className="w-24 sm:w-28 bg-transparent text-xs font-mono font-bold text-white placeholder-slate-500 focus:outline-none uppercase px-1.5 text-center"
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 transition cursor-pointer shadow-sm"
-                >
-                  <span>⚔️</span>
-                  <span>Katıl</span>
-                </button>
-              </form>
-            </div>
+            {/* Sağ: 🏛️ 100 Eserlik Grand Müze Köprüsü */}
+            <Link
+              href="/museum"
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-indigo-500/20 hover:from-amber-500/30 hover:to-indigo-500/30 border border-amber-500/40 text-xs font-bold text-amber-300 flex items-center gap-1.5 transition cursor-pointer shadow-sm group shrink-0"
+              title="100 Eserlik Bütünleşik Müze & Sergi Salonuna Git"
+            >
+              <span className="text-base group-hover:scale-110 transition-transform">🏛️</span>
+              <span className="hidden sm:inline">100 Eserlik Müzem</span>
+              <span className="sm:hidden">Müzem</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-200 font-mono">
+                4 Salon ➔
+              </span>
+            </Link>
           </div>
 
-          {/* AKILLI TAHTA 1v1 HIZLI PARMAK DÜELLOSU KARTI */}
-          <Link
-            href="/classroom/duel"
-            className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-950/50 via-slate-900 to-rose-950/50 border border-slate-800 hover:border-amber-400/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg transition group cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-600 to-rose-500 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform shrink-0">
-                <Swords className="w-6 h-6 drop-shadow" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-xs sm:text-sm font-black text-white group-hover:text-amber-300 transition">
-                    ⚔️ Akıllı Tahta 1v1 Düello (Hızlı Parmak)
-                  </h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Cihaz Gerektirmez
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                    Bölünmüş Ekran (Split-Screen)
-                  </span>
+          {/* Sessiz Altın Köprüsü Karşılama Rozeti/Bannerı */}
+          {claimedRewardBanner && claimedRewardBanner.total > 0 && (
+            <div className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 border border-amber-500/40 shadow-lg shadow-amber-500/10 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-slate-950 font-black text-xl shadow-md shrink-0 animate-bounce">
+                  🪙
                 </div>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Tahtada iki öğrencinin aynı anda doğru şıkka dokunmak için yarıştığı bölünmüş ekran modu.
-                </p>
+                <div>
+                  <h3 className="text-sm font-bold text-amber-200">
+                    🎁 Okuma ve Konuşma çalışmalarından +{claimedRewardBanner.total} Altın kazandın ve kasana eklendi!
+                  </h3>
+                  <p className="text-xs text-amber-300/80 font-medium">
+                    {claimedRewardBanner.breakdown.reading ? `Okuma: +${claimedRewardBanner.breakdown.reading} 📖 ` : ""}
+                    {claimedRewardBanner.breakdown.ai_story ? `Hikaye: +${claimedRewardBanner.breakdown.ai_story} ✨ ` : ""}
+                    {claimedRewardBanner.breakdown.speaking ? `Konuşma: +${claimedRewardBanner.breakdown.speaking} 🎙️` : ""}
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setClaimedRewardBanner(null)}
+                className="p-1.5 rounded-lg text-amber-300 hover:text-white hover:bg-amber-500/20 transition cursor-pointer"
+                aria-label="Kapat"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-
-            <span className="px-3.5 py-2 rounded-xl bg-slate-800 group-hover:bg-gradient-to-r group-hover:from-amber-500 group-hover:to-yellow-500 group-hover:text-slate-950 text-slate-200 text-xs font-black transition flex items-center gap-1 shrink-0 shadow-sm border border-slate-700 group-hover:border-amber-400">
-              <span>Düelloyu Başlat ➔</span>
-            </span>
-          </Link>
+          )}
 
           {/* 6 Çekirdek Oyun Modu (Kompakt 3x2 Grid) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
@@ -869,9 +847,12 @@ export default function GamesPage() {
       />
 
       {/* 5. Deste Seçim Modalı */}
-      {pendingGameMode && (
+      {(pendingGameMode || isDeckPickerOpen) && (
         <div
-          onClick={() => setPendingGameMode(null)}
+          onClick={() => {
+            setPendingGameMode(null);
+            setIsDeckPickerOpen(false);
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
         >
           <div
@@ -886,14 +867,19 @@ export default function GamesPage() {
                 <div>
                   <h3 className="text-base font-bold text-white">Çalışılacak Desteyi Seçin</h3>
                   <p className="text-xs text-slate-400">
-                    Oyun bu destedeki kelimelerle tam ekran başlatılacaktır
+                    {pendingGameMode
+                      ? "Oyun bu destedeki kelimelerle tam ekran başlatılacaktır"
+                      : "Seçtiğiniz deste Oyun Arenası, Okuma ve Speaking için aktifleşir"}
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setPendingGameMode(null)}
+                onClick={() => {
+                  setPendingGameMode(null);
+                  setIsDeckPickerOpen(false);
+                }}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -902,26 +888,40 @@ export default function GamesPage() {
 
             {/* Deste Listesi */}
             <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
-              {decks.map((deck) => (
-                <button
-                  key={deck.id}
-                  type="button"
-                  onClick={() => handleSelectDeckAndLaunch(deck)}
-                  className="w-full text-left p-4 rounded-2xl bg-slate-950 hover:bg-indigo-950/30 border border-slate-800 hover:border-indigo-500/50 transition-all flex items-center justify-between group cursor-pointer"
-                >
-                  <div className="space-y-1 min-w-0 pr-3">
-                    <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-indigo-300 transition truncate">
-                      {deck.title}
-                    </h4>
-                    <p className="text-[11px] text-slate-400 line-clamp-1">
-                      {deck.description || "Hazır kelime çalışma seti"}
-                    </p>
-                  </div>
-                  <span className="px-3 py-1.5 rounded-xl bg-indigo-600 group-hover:bg-indigo-500 text-white font-bold text-xs shrink-0 shadow-sm transition">
-                    Başlat ➔
-                  </span>
-                </button>
-              ))}
+              {decks.map((deck) => {
+                const isCurrent = activeDeck?.id === deck.id;
+                return (
+                  <button
+                    key={deck.id}
+                    type="button"
+                    onClick={() => handleSelectDeckAndLaunch(deck)}
+                    className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between group cursor-pointer ${
+                      isCurrent
+                        ? "bg-indigo-950/40 border-2 border-indigo-500 shadow-md"
+                        : "bg-slate-950 hover:bg-indigo-950/30 border border-slate-800 hover:border-indigo-500/50"
+                    }`}
+                  >
+                    <div className="space-y-1 min-w-0 pr-3">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-indigo-300 transition truncate">
+                          {deck.title}
+                        </h4>
+                        {isCurrent && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono font-bold">
+                            Aktif
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 line-clamp-1">
+                        {deck.description || "Hazır kelime çalışma seti"}
+                      </p>
+                    </div>
+                    <span className="px-3 py-1.5 rounded-xl bg-indigo-600 group-hover:bg-indigo-500 text-white font-bold text-xs shrink-0 shadow-sm transition">
+                      {pendingGameMode ? "Başlat ➔" : "Seç ✓"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -940,8 +940,14 @@ export default function GamesPage() {
       <GrandmasterCelebrationModal
         isOpen={isGrandmasterModalOpen}
         onClose={() => setIsGrandmasterModalOpen(false)}
-        avatarUrl={persona?.image || "/avatars/sparky.png"}
-        userName={user?.fullName || persona?.name || "Ahmet Kaya"}
+        avatarUrl={profileData?.avatar_url || "/avatars/presets/avatar_01.svg"}
+        userName={profileData?.username ? `@${profileData.username}` : (profileData?.full_name || "Kaşif")}
+      />
+
+      {/* Avatar Seçici Modal (ProfileContext Sync) */}
+      <AvatarPickerModal
+        isOpen={isAvatarStudioOpen}
+        onClose={() => setIsAvatarStudioOpen(false)}
       />
 
       {/* ========================================================================= */}
@@ -1001,11 +1007,12 @@ export default function GamesPage() {
         />
       )}
 
-      {/* 5. 5s HIZLI KOMBO (SpeedRecallGame) */}
+      {/* 5. HIZLI KOMBO (SpeedRecallGame - Dinamik Süre) */}
       {activeGame === "speed_recall" && (
         <SpeedRecallGame
           cards={activeCards}
           deckTitle={activeDeck?.title}
+          timeLimit={speedRecallTimeLimit}
           onClose={handleExitGame}
           onAwardXP={(amount) => {
             setUserProfile((prev) => ({ ...prev, xp: prev.xp + amount }));

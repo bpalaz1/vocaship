@@ -18,15 +18,43 @@ MAX_DAILY_CUSTOM_TEXTS = 1
 MAX_DAILY_SPEAKING_SESSIONS = 1
 MAX_FLASHCARD_POOL = 50
 
+PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
+    "basic": {
+        "max_daily_texts": 1,
+        "max_daily_speaking": 1,
+        "max_flashcards": 50,
+        "allow_classroom": False,
+    },
+    "plus": {
+        "max_daily_texts": 5,
+        "max_daily_speaking": 3,
+        "max_flashcards": 500,
+        "allow_classroom": False,
+    },
+    "pro": {
+        "max_daily_texts": 999999,
+        "max_daily_speaking": 999999,
+        "max_flashcards": 999999,
+        "allow_classroom": True,
+    },
+}
+
 _local_quota_db = LocalDatabaseClient()
 
 
 class QuotaExceededException(HTTPException):
-    def __init__(self, quota_type: Literal["text", "speaking", "flashcards"]):
+    def __init__(
+        self,
+        quota_type: Literal["text", "speaking", "flashcards"],
+        tier: str = "basic",
+        limit: int = 1,
+    ):
         payload = {
             "detail": "QUOTA_EXCEEDED",
             "quota_type": quota_type,
-            "message": "Bugünkü ücretsiz kullanım limitinize ulaştınız. PRO üyeliğe geçerek sınırsız erişebilirsiniz.",
+            "plan_tier": tier,
+            "limit": limit,
+            "message": f"{tier.upper()} planınızdaki günlük kullanım sınırına ulaştınız ({limit}). PRO üyeliğe geçerek sınırsız erişebilirsiniz.",
         }
         super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=payload)
         self.payload = payload
@@ -142,24 +170,38 @@ def reset_daily_quota_if_needed(user_row: Dict[str, Any]) -> Dict[str, Any]:
     return user_row
 
 
-def is_user_pro_or_admin(request: Request, user_row: Optional[Dict[str, Any]] = None) -> bool:
-    header_pro = (request.headers.get("X-Is-Pro") or "").lower()
+def get_user_plan_tier(request: Request, user_row: Optional[Dict[str, Any]] = None) -> str:
+    header_tier = (request.headers.get("X-Plan-Tier") or "").lower().strip()
+    if header_tier in ("basic", "plus", "pro"):
+        return header_tier
+
+    header_pro = (request.headers.get("X-Is-Pro") or "").lower().strip()
     if header_pro in ("true", "1", "yes"):
-        return True
+        return "pro"
 
     token_data = _extract_token_payload(request)
     if token_data:
         if token_data.get("role") == "admin" or bool(token_data.get("is_pro")):
-            return True
+            return "pro"
+        t_tier = str(token_data.get("plan_tier") or "").lower().strip()
+        if t_tier in ("basic", "plus", "pro"):
+            return t_tier
 
     if user_row is None:
         user_row = get_user_record_from_request(request)
 
     if user_row:
         if bool(user_row.get("is_pro")) or str(user_row.get("role")) == "admin":
-            return True
+            return "pro"
+        u_tier = str(user_row.get("plan_tier") or "").lower().strip()
+        if u_tier in ("basic", "plus", "pro"):
+            return u_tier
 
-    return False
+    return "basic"
+
+
+def is_user_pro_or_admin(request: Request, user_row: Optional[Dict[str, Any]] = None) -> bool:
+    return get_user_plan_tier(request, user_row) == "pro"
 
 
 def check_and_consume_quota(
@@ -168,32 +210,38 @@ def check_and_consume_quota(
     increment: bool = True,
 ) -> None:
     """
-    Kullanıcının günlük kotasını kontrol eder ve standart kullanıcı limitini aşmışsa
-    HTTP 403 QUOTA_EXCEEDED fırlatır.
+    Kullanıcının günlük kotasını plan_tier ('basic', 'plus', 'pro') bazında kontrol eder:
+    - basic: 1 AI hikaye, 1 Speaking seansı, maks. 50 kart
+    - plus: 5 AI hikaye, 3 Speaking seansı, maks. 500 kart
+    - pro: Sınırsız
     """
     user_row = get_user_record_from_request(request)
     if not user_row:
-        # Oturum açmamış / anonim isteklerde mevcut akışı bozma, oturumlu standart kullanıcıda kotayı uygula
+        # Oturum açmamış / anonim isteklerde mevcut akışı bozma
         return
 
     user_row = reset_daily_quota_if_needed(user_row)
+    tier = get_user_plan_tier(request, user_row)
 
-    if is_user_pro_or_admin(request, user_row):
+    if tier == "pro" or str(user_row.get("role")) == "admin":
         return
 
+    limits = PLAN_LIMITS.get(tier, PLAN_LIMITS["basic"])
     user_id = str(user_row.get("id") or "")
 
     if quota_type == "text":
         used = int(user_row.get("daily_custom_texts_used") or 0)
-        if used >= MAX_DAILY_CUSTOM_TEXTS:
-            raise QuotaExceededException("text")
+        max_limit = limits["max_daily_texts"]
+        if used >= max_limit:
+            raise QuotaExceededException("text", tier=tier, limit=max_limit)
         if increment and user_id:
             _update_user_fields(user_id, {"daily_custom_texts_used": used + 1})
 
     elif quota_type == "speaking":
         used = int(user_row.get("daily_speaking_sessions_used") or 0)
-        if used >= MAX_DAILY_SPEAKING_SESSIONS:
-            raise QuotaExceededException("speaking")
+        max_limit = limits["max_daily_speaking"]
+        if used >= max_limit:
+            raise QuotaExceededException("speaking", tier=tier, limit=max_limit)
         if increment and user_id:
             _update_user_fields(user_id, {"daily_speaking_sessions_used": used + 1})
 
@@ -202,8 +250,9 @@ def check_and_consume_quota(
             db = get_db()
             cards_res = db.table("flashcards").select("id", count="exact").execute()
             total_cards = cards_res.count if cards_res.count is not None else len(cards_res.data or [])
-            if total_cards >= MAX_FLASHCARD_POOL:
-                raise QuotaExceededException("flashcards")
+            max_limit = limits["max_flashcards"]
+            if total_cards >= max_limit:
+                raise QuotaExceededException("flashcards", tier=tier, limit=max_limit)
         except QuotaExceededException:
             raise
         except Exception:
@@ -213,16 +262,17 @@ def check_and_consume_quota(
 def require_pro_for_classroom(request: Request) -> Optional[Dict[str, Any]]:
     """
     POST /api/v1/classroom/classes için PRO veya admin yetkisi doğrular.
-    Sınıf açıldığında kullanıcının is_educator değerini otomatik True yapar.
+    Basic veya Plus üyeler sınıf açamaz (ProRequiredException döner).
+    Sınıf açıldığında kullanıcının is_educator ve is_pro değerini otomatik True yapar.
     """
     user_row = get_user_record_from_request(request)
-    has_pro = is_user_pro_or_admin(request, user_row)
+    tier = get_user_plan_tier(request, user_row)
 
-    if not has_pro:
+    if tier != "pro":
         raise ProRequiredException()
 
     if user_row and user_row.get("id"):
-        _update_user_fields(str(user_row["id"]), {"is_educator": True})
+        _update_user_fields(str(user_row["id"]), {"is_educator": True, "is_pro": True, "plan_tier": "pro"})
 
     return user_row
 

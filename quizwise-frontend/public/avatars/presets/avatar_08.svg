@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg8" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="60" fill="url(#bg8)"/>
+  <!-- Jacket -->
+  <path d="M25 115 C25 94 42 88 60 88 C78 88 95 94 95 115 Z" fill="#065f46"/>
+  <!-- Inner shirt -->
+  <path d="M46 88 L60 106 L74 88 Z" fill="#f8fafc"/>
+  <!-- Neck -->
+  <rect x="52" y="68" width="16" height="22" rx="4" fill="#fed7aa"/>
+  <!-- Beard back -->
+  <ellipse cx="60" cy="67" rx="17" ry="16" fill="#78350f"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="54" rx="21" ry="22" fill="#ffedd5"/>
+  <!-- Beanie -->
+  <path d="M35 44 C35 22 45 16 60 16 C75 16 85 22 85 44 Z" fill="#b91c1c"/>
+  <rect x="34" y="38" width="52" height="9" rx="3" fill="#991b1b"/>
+  <!-- Beard front & mustache -->
+  <path d="M48 64 Q60 62 72 64 C70 76 50 76 48 64 Z" fill="#78350f"/>
+  <!-- Eyes -->
+  <circle cx="51" cy="52" r="2.4" fill="#0f172a"/>
+  <circle cx="69" cy="52" r="2.4" fill="#0f172a"/>
+  <!-- Smile inside beard -->
+  <path d="M55 67 Q60 70 65 67" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+</svg>
+

@@ -4,13 +4,20 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import confetti from "canvas-confetti";
 import { Zap, Clock, X, Trophy, Flame, Check, AlertCircle } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
+import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
+import {
+  calculateWordReward,
+  shouldTriggerMysteryChest,
+} from "../../utils/gamificationEngine";
+import { GameMistakeItem } from "./GameOverSummary";
 
 export interface SpeedRecallGameProps {
   cards: Array<{ word: string; meaning: string }>;
   deckTitle?: string;
   onClose: () => void;
   onAwardXP?: (xp: number, label: string) => void;
+  timeLimit?: number;
 }
 
 export default function SpeedRecallGame({
@@ -18,9 +25,11 @@ export default function SpeedRecallGame({
   deckTitle = "Genel Deste",
   onClose,
   onAwardXP,
+  timeLimit = 6,
 }: SpeedRecallGameProps) {
+  const roundTimeLimit = Math.max(3, timeLimit);
   const [currentRound, setCurrentRound] = useState(0);
-  const [timer, setTimer] = useState(5);
+  const [timer, setTimer] = useState(roundTimeLimit);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -28,6 +37,12 @@ export default function SpeedRecallGame({
   const [isAnswered, setIsAnswered] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
+
+  // Ortak Oyunlaştırma & Gizemli Sandık & Hata Takibi
+  const [isMysteryOpen, setIsMysteryOpen] = useState(false);
+  const [mysteryBuff, setMysteryBuff] = useState(1.0);
+  const [mysteryBuffCount, setMysteryBuffCount] = useState(0);
+  const [sessionMistakes, setSessionMistakes] = useState<GameMistakeItem[]>([]);
 
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -50,11 +65,11 @@ export default function SpeedRecallGame({
     return all;
   }, [currentRound, cards]);
 
-  // 5 saniye zamanlayıcı
+  // Dinamik saniye zamanlayıcı
   useEffect(() => {
     if (gameOver || isAnswered) return;
 
-    setTimer(5);
+    setTimer(roundTimeLimit);
     countdownRef.current = setInterval(() => {
       setTimer((prev) => {
         if (prev <= 1) {
@@ -69,7 +84,7 @@ export default function SpeedRecallGame({
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [currentRound, gameOver, isAnswered]);
+  }, [currentRound, gameOver, isAnswered, roundTimeLimit]);
 
   const handleTimeout = () => {
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -77,6 +92,11 @@ export default function SpeedRecallGame({
     setCombo(0);
 
     if (activeCard) {
+      setSessionMistakes((prev) => {
+        if (prev.some((m) => m.word.toLowerCase() === activeCard.word.toLowerCase())) return prev;
+        return [...prev, { word: activeCard.word, meaning: activeCard.meaning }];
+      });
+
       saveArenaMistake({
         word: activeCard.word,
         meaning: activeCard.meaning,
@@ -103,16 +123,39 @@ export default function SpeedRecallGame({
       setMaxCombo((prev) => Math.max(prev, nextCombo));
       setCorrectCount((c) => c + 1);
 
-      // Çarpanlı puan
-      const earned = 100 + nextCombo * 20;
-      setScore((s) => s + earned);
+      // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
+      const reward = calculateWordReward({
+        word: activeCard.word,
+        streak: nextCombo,
+        isCorrect: true,
+        isFinalQuestion: currentRound + 1 >= totalRounds,
+        activeBuffMultiplier: mysteryBuff,
+      });
+
+      if (mysteryBuffCount > 0) {
+        const nextC = mysteryBuffCount - 1;
+        setMysteryBuffCount(nextC);
+        if (nextC <= 0) setMysteryBuff(1.0);
+      }
+
+      setScore((s) => s + reward.totalXP);
 
       if (nextCombo >= 3) {
         confetti({ particleCount: 25, spread: 40 });
       }
+
+      // Her 3 doğru seride 3 Gizemli Sandık Aç
+      if (shouldTriggerMysteryChest(nextCombo)) {
+        setTimeout(() => setIsMysteryOpen(true), 400);
+      }
     } else {
       setCombo(0);
       if (activeCard) {
+        setSessionMistakes((prev) => {
+          if (prev.some((m) => m.word.toLowerCase() === activeCard.word.toLowerCase())) return prev;
+          return [...prev, { word: activeCard.word, meaning: activeCard.meaning }];
+        });
+
         saveArenaMistake({
           word: activeCard.word,
           meaning: activeCard.meaning,
@@ -146,6 +189,7 @@ export default function SpeedRecallGame({
     setSelectedOption(null);
     setIsAnswered(false);
     setGameOver(false);
+    setSessionMistakes([]);
   };
 
   return (
@@ -157,7 +201,7 @@ export default function SpeedRecallGame({
             <Zap className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-white">5s Hızlı Kombo (Speed Recall)</h2>
+            <h2 className="text-base font-black text-white">{roundTimeLimit}s Hızlı Kombo (Speed Recall)</h2>
             <p className="text-xs text-slate-400 font-medium">{deckTitle}</p>
           </div>
         </div>
@@ -249,20 +293,34 @@ export default function SpeedRecallGame({
         </div>
       </div>
 
-      {/* 3. Oyun Sonu Ekranı */}
+      {/* 3. Oyun Sonu Ekranı (5 Saniyelik Hata Telafisi ile) */}
       {gameOver && (
         <GameOverScreen
-          gameTitle="5s Hızlı Kombo (Speed Recall)"
+          gameTitle="⚡ Hızlı Kombo"
           deckTitle={deckTitle}
           score={score}
           accuracyPercent={Math.round((correctCount / totalRounds) * 100)}
-          awardedXP={85}
-          awardedGold={30}
+          awardedXP={Math.max(40, score)}
+          awardedGold={Math.max(15, Math.round(score * 0.35))}
           streakCount={maxCombo}
+          mistakes={sessionMistakes}
           onPlayAgain={resetGame}
           onBackToArena={onClose}
         />
       )}
+
+      {/* 4. 3 Kapalı Gizemli Sandık Modalı (Pedagojik Kayıpsız) */}
+      <MysteryChestModal
+        isOpen={isMysteryOpen}
+        streak={combo}
+        onClose={() => setIsMysteryOpen(false)}
+        onClaimReward={(reward: MysteryReward) => {
+          if (reward.multiplier) {
+            setMysteryBuff(reward.multiplier);
+            setMysteryBuffCount(reward.buffQuestions || 3);
+          }
+        }}
+      />
     </div>
   );
 }

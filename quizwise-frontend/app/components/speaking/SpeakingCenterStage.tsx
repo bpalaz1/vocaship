@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { stopSpeech } from "../../utils/tts";
 import {
   Mic,
   Volume2,
@@ -80,12 +81,10 @@ export default function SpeakingCenterStage({
 }: SpeakingCenterStageProps) {
   const [showWhisper, setShowWhisper] = useState(false);
 
-  // Doğal Kesme (Barge-in): Kullanıcı konuşurken veya kelime yakalandığında yapay zeka sesini kes
+  // Doğal Kesme (Barge-in): Kullanıcı konuşurken veya kelime yakalandığında yapay zeka sesini anında kes
   useEffect(() => {
     if ((isRecording || interimText.trim() || userTranscript.trim()) && isAiSpeaking) {
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      stopSpeech();
     }
   }, [isRecording, interimText, userTranscript, isAiSpeaking]);
 

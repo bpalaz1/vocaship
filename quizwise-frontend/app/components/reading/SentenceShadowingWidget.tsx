@@ -22,6 +22,7 @@ import {
   WordAccuracy,
   cleanToken,
 } from "../../utils/pronunciationMatcher";
+import { playNeuralTTS, stopSpeech } from "../../utils/tts";
 
 export interface SentenceShadowingWidgetProps {
   sentence: string;
@@ -60,39 +61,24 @@ export default function SentenceShadowingWidget({
     setHasAwardedXP(false);
   }, [sentence]);
 
-  // 1. WEB SPEECH API (SESLİ OKUMA & TEK KELİME SESLENDİRME)
+  // 1. EDGE-TTS NÖRAL SES (DOĞAL SESLİ OKUMA & TEK KELİME SESLENDİRME)
   const speakWordSlowly = useCallback((word: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const cleaned = cleanToken(word);
-      const utterance = new SpeechSynthesisUtterance(cleaned);
-      utterance.lang = "en-US";
-      utterance.rate = 0.7; // Yavaş ve net telaffuz (rate: 0.7)
-      utterance.pitch = 1.0;
-
-      setActiveSpeakingWord(cleaned);
-      utterance.onend = () => setActiveSpeakingWord(null);
-      utterance.onerror = () => setActiveSpeakingWord(null);
-
-      window.speechSynthesis.speak(utterance);
-    } catch {}
+    const cleaned = cleanToken(word);
+    setActiveSpeakingWord(cleaned);
+    playNeuralTTS(cleaned, {
+      rate: 0.75,
+      onEnd: () => setActiveSpeakingWord(null),
+      onError: () => setActiveSpeakingWord(null),
+    });
   }, []);
 
   const speakFullSentence = useCallback(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(sentence);
-      utterance.lang = "en-US";
-      utterance.rate = 0.85; // Net model okuma hızı
-
-      setIsModelSpeaking(true);
-      utterance.onend = () => setIsModelSpeaking(false);
-      utterance.onerror = () => setIsModelSpeaking(false);
-
-      window.speechSynthesis.speak(utterance);
-    } catch {}
+    setIsModelSpeaking(true);
+    playNeuralTTS(sentence, {
+      rate: 0.85,
+      onEnd: () => setIsModelSpeaking(false),
+      onError: () => setIsModelSpeaking(false),
+    });
   }, [sentence]);
 
   // 2. SPEECH RECOGNITION (SES TANIMA & GÖLGELEME MOTORU)
@@ -109,7 +95,7 @@ export default function SentenceShadowingWidget({
     }
 
     try {
-      window.speechSynthesis?.cancel();
+      stopSpeech();
       setIsModelSpeaking(false);
       setActiveSpeakingWord(null);
 
@@ -201,7 +187,7 @@ export default function SentenceShadowingWidget({
     <div
       role="region"
       aria-label="Mikro Telaffuz ve Gölgeleme Penceresi"
-      className="fixed inset-x-0 bottom-0 sm:bottom-6 sm:inset-x-auto sm:right-6 sm:left-auto z-50 w-full sm:w-[540px] max-w-full p-4 sm:p-0 animate-in fade-in slide-in-from-bottom-4 duration-200"
+      className="fixed bottom-24 right-4 sm:right-8 z-50 w-[calc(100%-2rem)] sm:w-[540px] max-w-full animate-in fade-in slide-in-from-bottom-4 duration-200"
     >
       <div className="bg-slate-950/95 border border-indigo-500/30 rounded-3xl p-5 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 text-slate-100 flex flex-col space-y-4">
         {/* ============================================================== */}

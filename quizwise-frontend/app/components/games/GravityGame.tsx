@@ -5,6 +5,12 @@ import confetti from "canvas-confetti";
 import { Flame, Heart, X, Zap, Target, Sparkles, Send } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
 import RespawnModal from "./RespawnModal";
+import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
+import {
+  calculateWordReward,
+  shouldTriggerMysteryChest,
+} from "../../utils/gamificationEngine";
+import { GameMistakeItem } from "./GameOverSummary";
 
 export interface GravityGameProps {
   cards: Array<{ word: string; meaning: string }>;
@@ -24,10 +30,16 @@ export default function GravityGame({
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
   const [wave, setWave] = useState(1);
+  const [streak, setStreak] = useState(0);
   const [isExploding, setIsExploding] = useState(false);
   const [isImpact, setIsImpact] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [isRespawnOpen, setIsRespawnOpen] = useState(false);
+  const [hasRespawned, setHasRespawned] = useState(false);
+  const [isMysteryOpen, setIsMysteryOpen] = useState(false);
+  const [mysteryBuff, setMysteryBuff] = useState(1.0);
+  const [mysteryBuffCount, setMysteryBuffCount] = useState(0);
+  const [sessionMistakes, setSessionMistakes] = useState<GameMistakeItem[]>([]);
   const [typedInput, setTypedInput] = useState("");
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,11 +78,25 @@ export default function GravityGame({
     setIsImpact(true);
     if (loopTimerRef.current) clearInterval(loopTimerRef.current);
 
+    setStreak(0);
+
+    // 5 Saniyelik Hata Telafisi için kaydet
+    if (activeCard) {
+      setSessionMistakes((prev) => {
+        if (prev.some((m) => m.word.toLowerCase() === activeCard.word.toLowerCase())) return prev;
+        return [...prev, { word: activeCard.word, meaning: activeCard.meaning }];
+      });
+    }
+
     setLives((prevLives) => {
       const nextLives = prevLives - 1;
       if (nextLives <= 0) {
-        // Can bitti: Sıfır Eleme Kurtarma Odası açılır!
-        setTimeout(() => setIsRespawnOpen(true), 400);
+        // Can bitti: Sıfır Eleme Kurtarma Odası açılır (önceden kurtarılmadıysa)
+        if (!hasRespawned) {
+          setTimeout(() => setIsRespawnOpen(true), 400);
+        } else {
+          setTimeout(() => setGameOver(true), 600);
+        }
       } else {
         setTimeout(() => {
           setIsImpact(false);
@@ -110,7 +136,29 @@ export default function GravityGame({
         origin: { y: Math.min(0.8, asteroidY / 100) },
       });
 
-      setScore((s) => s + 100 + wave * 20);
+      const nextStreak = streak + 1;
+      setStreak(nextStreak);
+
+      // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
+      const reward = calculateWordReward({
+        word: activeCard.word,
+        streak: nextStreak,
+        isCorrect: true,
+        activeBuffMultiplier: mysteryBuff,
+      });
+
+      if (mysteryBuffCount > 0) {
+        const nextRem = mysteryBuffCount - 1;
+        setMysteryBuffCount(nextRem);
+        if (nextRem <= 0) setMysteryBuff(1.0);
+      }
+
+      setScore((s) => s + reward.totalXP + wave * 10);
+
+      // Her 3 doğru seride 3 Gizemli Sandık Aç
+      if (shouldTriggerMysteryChest(nextStreak)) {
+        setTimeout(() => setIsMysteryOpen(true), 400);
+      }
 
       setTimeout(() => {
         setIsExploding(false);
@@ -137,11 +185,14 @@ export default function GravityGame({
     setLives(3);
     setScore(0);
     setWave(1);
+    setStreak(0);
     setCurrentIdx(0);
     setAsteroidY(10);
     setIsExploding(false);
     setIsImpact(false);
     setGameOver(false);
+    setHasRespawned(false);
+    setSessionMistakes([]);
     setTypedInput("");
   };
 
@@ -264,15 +315,16 @@ export default function GravityGame({
         </div>
       </div>
 
-      {/* 4. Oyun Bitiş Ekranı */}
+      {/* 4. Oyun Bitiş Ekranı (5 Saniyelik Hata Telafisi ile) */}
       {gameOver && (
         <GameOverScreen
-          gameTitle="Yerçekimi Savunması (Gravity)"
+          gameTitle="☄️ Yerçekimi Savunması"
           deckTitle={deckTitle}
           score={score}
-          awardedXP={90}
-          awardedGold={40}
-          streakCount={wave}
+          awardedXP={Math.max(50, score)}
+          awardedGold={Math.max(20, Math.round(score * 0.4))}
+          streakCount={streak}
+          mistakes={sessionMistakes}
           onPlayAgain={resetGame}
           onBackToArena={onClose}
         />
@@ -284,6 +336,7 @@ export default function GravityGame({
         cards={cards}
         onRespawn={() => {
           setIsRespawnOpen(false);
+          setHasRespawned(true);
           setLives(1);
           setIsImpact(false);
           setAsteroidY(10);
@@ -293,6 +346,19 @@ export default function GravityGame({
         onGiveUp={() => {
           setIsRespawnOpen(false);
           setGameOver(true);
+        }}
+      />
+
+      {/* 6. 3 Kapalı Gizemli Sandık Modalı (Pedagojik Kayıpsız) */}
+      <MysteryChestModal
+        isOpen={isMysteryOpen}
+        streak={streak}
+        onClose={() => setIsMysteryOpen(false)}
+        onClaimReward={(reward: MysteryReward) => {
+          if (reward.multiplier) {
+            setMysteryBuff(reward.multiplier);
+            setMysteryBuffCount(reward.buffQuestions || 3);
+          }
         }}
       />
     </div>

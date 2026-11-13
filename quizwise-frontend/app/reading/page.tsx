@@ -6,11 +6,21 @@ import ReadingRoom from "../components/reading/ReadingRoom";
 const ShareModal = dynamic(() => import("../components/ShareModal"), { ssr: false });
 import { API_BASE } from "../config";
 import { useLanguage } from "../context/LanguageContext";
+import { useProfile } from "../context/ProfileContext";
+import SettingsModal from "../components/settings/SettingsModal";
 import { Loader2 } from "lucide-react";
+import {
+  fetchDecksList,
+  getActiveDeckId,
+  setActiveDeckId,
+  subscribeToActiveDeck,
+} from "../utils/activeDeckStore";
 
 export default function ReadingPage() {
   const { t } = useLanguage();
+  const { isSettingsModalOpen, setIsSettingsModalOpen } = useProfile();
   const [decks, setDecks] = useState<{ id: string; title: string }[]>([]);
+  const [activeDeckId, setActiveDeckIdState] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [shareModalConfig, setShareModalConfig] = useState<{
     isOpen: boolean;
@@ -20,26 +30,24 @@ export default function ReadingPage() {
     story?: any;
   } | null>(null);
 
-  const fetchDecks = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/decks`);
-      if (res.ok) {
-        const data = await res.json();
-        setDecks(Array.isArray(data) ? data : []);
-      } else {
-        console.warn(`[fetchDecks] HTTP ${res.status}: Boş deste listesi kullanılıyor.`);
-        setDecks([]);
+  useEffect(() => {
+    async function loadDecks() {
+      setLoading(true);
+      const list = await fetchDecksList();
+      setDecks(list);
+      const currentId = getActiveDeckId() || list[0]?.id || "";
+      setActiveDeckIdState(currentId);
+      if (currentId && !getActiveDeckId()) {
+        setActiveDeckId(currentId);
       }
-    } catch (err) {
-      console.warn("Desteler yüklenemedi (sunucu kapalı veya ağ hatası), boş liste kullanılıyor:", err);
-      setDecks([]);
-    } finally {
       setLoading(false);
     }
-  };
+    loadDecks();
 
-  useEffect(() => {
-    fetchDecks();
+    const unsubscribe = subscribeToActiveDeck((newId) => {
+      setActiveDeckIdState(newId);
+    });
+    return () => unsubscribe();
   }, []);
 
   return (
@@ -52,7 +60,7 @@ export default function ReadingPage() {
       ) : (
         <ReadingRoom
           decks={decks}
-          selectedDeckId={decks[0]?.id || ""}
+          selectedDeckId={activeDeckId || decks[0]?.id || ""}
           initialStory={null}
           onShareStory={(storyItem) => {
             setShareModalConfig({
@@ -76,6 +84,12 @@ export default function ReadingPage() {
           story={shareModalConfig.story}
         />
       )}
+
+      {/* Merkezi Hesap & Tercihler Modalı */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+      />
     </main>
   );
 }

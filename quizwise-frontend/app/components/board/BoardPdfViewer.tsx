@@ -19,7 +19,11 @@ import {
   MousePointer,
   FolderOpen,
   Eye,
-  Maximize2
+  Maximize2,
+  Ruler,
+  Circle,
+  Square,
+  Hand,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { BoardTerm } from "../../classroom/board/page";
@@ -100,7 +104,7 @@ export default function BoardPdfViewer({
 
   // Çizim & İnceleme Modu
   const [drawMode, setDrawMode] = useState<boolean>(false);
-  const [tool, setTool] = useState<"highlighter" | "pen">("highlighter");
+  const [tool, setTool] = useState<"highlighter" | "pen" | "line" | "circle" | "rect">("highlighter");
 
   // Aktif dokunulan terim modalı
   const [selectedTerm, setSelectedTerm] = useState<BoardTerm | null>(null);
@@ -108,8 +112,115 @@ export default function BoardPdfViewer({
   // Canvas ve Çizim Referansları
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isDrawingRef = useRef<boolean>(false);
+  const lastCoordRef = useRef<{ x: number; y: number } | null>(null);
+  const startCoordRef = useRef<{ x: number; y: number } | null>(null);
+  const shapeSnapshotRef = useRef<ImageData | null>(null);
   const undoStackRef = useRef<ImageData[]>([]);
+
+  // 🖐️ Gezin (Pan / Grab & Drag) Durumları
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{
+    startX: number;
+    startY: number;
+    startScrollLeft: number;
+    startScrollTop: number;
+  }>({
+    startX: 0,
+    startY: 0,
+    startScrollLeft: 0,
+    startScrollTop: 0,
+  });
+
+  const handlePanMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (drawMode) return;
+    if ((e.target as HTMLElement).closest("button, input, select, a")) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    setIsPanning(true);
+    panStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startScrollLeft: container.scrollLeft,
+      startScrollTop: container.scrollTop,
+    };
+  };
+
+  const handlePanMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPanning || drawMode) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    e.preventDefault();
+    const dx = e.clientX - panStartRef.current.startX;
+    const dy = e.clientY - panStartRef.current.startY;
+    container.scrollLeft = panStartRef.current.startScrollLeft - dx;
+    container.scrollTop = panStartRef.current.startScrollTop - dy;
+  };
+
+  const handlePanMouseUp = () => {
+    if (isPanning) {
+      setIsPanning(false);
+    }
+  };
+
+  const handlePanTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (drawMode) return;
+    if ((e.target as HTMLElement).closest("button, input, select, a")) return;
+    if (e.touches.length === 1) {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      setIsPanning(true);
+      panStartRef.current = {
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startScrollLeft: container.scrollLeft,
+        startScrollTop: container.scrollTop,
+      };
+    }
+  };
+
+  const handlePanTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isPanning || drawMode) return;
+    if (e.touches.length === 1) {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      if (e.cancelable) e.preventDefault();
+      const dx = e.touches[0].clientX - panStartRef.current.startX;
+      const dy = e.touches[0].clientY - panStartRef.current.startY;
+      container.scrollLeft = panStartRef.current.startScrollLeft - dx;
+      container.scrollTop = panStartRef.current.startScrollTop - dy;
+    }
+  };
+
+  const handlePanTouchEnd = () => {
+    if (isPanning) {
+      setIsPanning(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isPanning) return;
+    const handleGlobalMouseUp = () => setIsPanning(false);
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (drawMode) return;
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      const dx = e.clientX - panStartRef.current.startX;
+      const dy = e.clientY - panStartRef.current.startY;
+      container.scrollLeft = panStartRef.current.startScrollLeft - dx;
+      container.scrollTop = panStartRef.current.startScrollTop - dy;
+    };
+
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    window.addEventListener("mousemove", handleGlobalMouseMove);
+    return () => {
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+      window.removeEventListener("mousemove", handleGlobalMouseMove);
+    };
+  }, [isPanning, drawMode]);
 
   // Web Speech API Seslendirme
   const speakWord = (word: string) => {
@@ -186,18 +297,28 @@ export default function BoardPdfViewer({
     return () => window.removeEventListener("resize", syncCanvasSize);
   }, [syncCanvasSize, pdfUrl, currentPage, zoom]);
 
-  // Çizim Ön Ayarları
+  // Çizim Ön Ayarları (Multiply + 0.25 Alpha + mix-blend-multiply)
   const applyDrawingStyles = (ctx: CanvasRenderingContext2D) => {
     if (tool === "highlighter") {
-      ctx.strokeStyle = "#facc15"; // Fosforlu sarı
-      ctx.globalAlpha = 0.35;
-      ctx.lineWidth = 20 * zoom;
+      ctx.globalCompositeOperation = "multiply";
+      ctx.strokeStyle = "#facc15"; // Canlı fosforlu sarı
+      ctx.globalAlpha = 0.25; // Yüksek şeffaflık; canlı çizim sırasında alttaki harfler net görünür
+      ctx.lineWidth = 22 * zoom;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-    } else {
+    } else if (tool === "pen") {
+      ctx.globalCompositeOperation = "source-over";
       ctx.strokeStyle = "#ef4444"; // Kırmızı çizim kalemi
       ctx.globalAlpha = 1.0;
       ctx.lineWidth = 4 * zoom;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    } else {
+      // Geometrik şekiller (line, circle, rect)
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = "#ef4444";
+      ctx.globalAlpha = 0.9;
+      ctx.lineWidth = 3 * zoom;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
     }
@@ -240,7 +361,7 @@ export default function BoardPdfViewer({
   };
 
   // =========================================================================
-  // DOKUNMATİK VE FARE ÇİZİM OLAYLARI
+  // DOKUNMATİK VE FARE ÇİZİM OLAYLARI (Over-paint engeli + Şekil Canlı Önizleme)
   // =========================================================================
 
   const getCanvasCoordinates = (clientX: number, clientY: number) => {
@@ -263,10 +384,23 @@ export default function BoardPdfViewer({
     saveToUndoStack();
     isDrawingRef.current = true;
     const { x, y } = getCanvasCoordinates(clientX, clientY);
+    startCoordRef.current = { x, y };
 
-    ctx.beginPath();
-    applyDrawingStyles(ctx);
-    ctx.moveTo(x, y);
+    const isShape = tool === "line" || tool === "circle" || tool === "rect";
+    if (isShape) {
+      try {
+        shapeSnapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      } catch {
+        shapeSnapshotRef.current = null;
+      }
+    } else {
+      ctx.beginPath();
+      applyDrawingStyles(ctx);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      lastCoordRef.current = { x, y };
+    }
   };
 
   const drawMove = (clientX: number, clientY: number) => {
@@ -277,13 +411,59 @@ export default function BoardPdfViewer({
     if (!ctx) return;
 
     const { x, y } = getCanvasCoordinates(clientX, clientY);
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    const isShape = tool === "line" || tool === "circle" || tool === "rect";
+
+    if (isShape) {
+      if (!startCoordRef.current) return;
+      if (shapeSnapshotRef.current) {
+        ctx.putImageData(shapeSnapshotRef.current, 0, 0);
+      }
+      ctx.save();
+      applyDrawingStyles(ctx);
+      const startX = startCoordRef.current.x;
+      const startY = startCoordRef.current.y;
+
+      if (tool === "line") {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      } else if (tool === "rect") {
+        ctx.beginPath();
+        ctx.strokeRect(startX, startY, x - startX, y - startY);
+      } else if (tool === "circle") {
+        const radiusX = Math.abs(x - startX) / 2;
+        const radiusY = Math.abs(y - startY) / 2;
+        const centerX = Math.min(startX, x) + radiusX;
+        const centerY = Math.min(startY, y) + radiusY;
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY, Math.max(radiusX, 1), Math.max(radiusY, 1), 0, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      if (!lastCoordRef.current) {
+        lastCoordRef.current = { x, y };
+        return;
+      }
+
+      // Tek bir sürekli adım: moveTo önceki nokta, lineTo yeni nokta, stroke
+      ctx.beginPath();
+      applyDrawingStyles(ctx);
+      ctx.moveTo(lastCoordRef.current.x, lastCoordRef.current.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+
+      lastCoordRef.current = { x, y };
+    }
   };
 
   const stopDrawing = () => {
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
+    lastCoordRef.current = null;
+    startCoordRef.current = null;
+    shapeSnapshotRef.current = null;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -304,12 +484,12 @@ export default function BoardPdfViewer({
             onClick={() => setDrawMode(false)}
             className={`min-h-[42px] px-3.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer touch-manipulation active:scale-95 ${
               !drawMode
-                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            <MousePointer className="w-4 h-4" />
-            <span>👆 İnceleme Modu</span>
+            <Hand className="w-4 h-4" />
+            <span>🖐️ Gezin & İncele</span>
           </button>
 
           <button
@@ -355,6 +535,48 @@ export default function BoardPdfViewer({
             >
               <PenTool className="w-4 h-4 text-rose-400" />
               <span className="hidden sm:inline">Kalem</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTool("line")}
+              className={`p-2.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                tool === "line"
+                  ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm ring-1 ring-indigo-400/40"
+                  : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+              }`}
+              title="Düz Çizgi"
+            >
+              <Ruler className="w-4 h-4 text-indigo-400" />
+              <span className="hidden sm:inline">Çizgi</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTool("circle")}
+              className={`p-2.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                tool === "circle"
+                  ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm ring-1 ring-indigo-400/40"
+                  : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+              }`}
+              title="Daire / Elips"
+            >
+              <Circle className="w-4 h-4 text-indigo-400" />
+              <span className="hidden sm:inline">Daire</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTool("rect")}
+              className={`p-2.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                tool === "rect"
+                  ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm ring-1 ring-indigo-400/40"
+                  : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+              }`}
+              title="Kare / Dikdörtgen Çerçeve"
+            >
+              <Square className="w-4 h-4 text-indigo-400" />
+              <span className="hidden sm:inline">Kare</span>
             </button>
 
             <button
@@ -496,7 +718,19 @@ export default function BoardPdfViewer({
           </div>
         ) : (
           /* B) PDF YÜKLENDİĞİNDE: İNTERAKTİF SLAYT / DÖKÜMAN GÖRÜNTÜLEYİCİ */
-          <div className="relative w-full h-full flex flex-col items-center justify-center overflow-auto p-4">
+          <div
+            ref={scrollContainerRef}
+            onMouseDown={handlePanMouseDown}
+            onMouseMove={handlePanMouseMove}
+            onMouseUp={handlePanMouseUp}
+            onMouseLeave={handlePanMouseUp}
+            onTouchStart={handlePanTouchStart}
+            onTouchMove={handlePanTouchMove}
+            onTouchEnd={handlePanTouchEnd}
+            className={`relative w-full h-full flex flex-col items-center justify-center overflow-auto p-4 select-none ${
+              !drawMode ? (isPanning ? "cursor-grabbing" : "cursor-grab") : ""
+            }`}
+          >
             {/* Sayfa Gövdesi (Vektörel & Net Biyoloji Sunumu) */}
             <div
               style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
@@ -598,7 +832,7 @@ export default function BoardPdfViewer({
                 e.preventDefault();
                 stopDrawing();
               }}
-              className={`absolute inset-0 z-20 w-full h-full ${
+              className={`absolute inset-0 z-20 w-full h-full mix-blend-multiply ${
                 drawMode
                   ? "pointer-events-auto cursor-crosshair"
                   : "pointer-events-none"

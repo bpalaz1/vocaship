@@ -924,3 +924,937 @@ STRICT INSTRUCTIONS:
     }
 
 
+# =========================================================================
+# 7. AKILLI TAHTA DERS SONU YAPAY ZEKÂ ANALİZİ & SM-2 ÖDEV MOTORU
+# =========================================================================
+
+def _extract_real_context_terms_and_summary(
+    class_id: str,
+    transcript: str,
+    pdf_text_context: Optional[str] = None,
+    highlighted_words: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Herhangi bir mock veya sabit biyoloji kalıbı içermeyen,
+    doğrudan tahtadaki PDF metni ve transkriptten kilit kavramları çıkaran dinamik analizci.
+    """
+    pdf_text = (pdf_text_context or "").strip()
+    clean_transcript = (transcript or "").strip()
+    combined_text = f"{pdf_text} {clean_transcript}".strip()
+
+    # 1. Başlık Belirleme (Doğrudan konuya odaklanır, soyut eğitim metodolojisi başlıkları atmaz)
+    derived_title = "Ders Konusu & Temel Kavramlar"
+    if highlighted_words and len(highlighted_words) > 0 and highlighted_words[0].strip():
+        derived_title = f"{highlighted_words[0].strip().title()} ve Temel Kavramlar"
+    elif pdf_text:
+        first_clean_line = ""
+        for line in pdf_text.split("\n"):
+            line_str = line.strip()
+            # Başlık satırlarını ve konu adını bul
+            if line_str.startswith("[Sayfa"):
+                line_str = re.sub(r"^\[Sayfa \d+\]:\s*", "", line_str).strip()
+            if len(line_str) >= 4 and not line_str.startswith("%") and not line_str.startswith("/"):
+                first_clean_line = line_str[:60]
+                break
+        if first_clean_line:
+            # Genel kalıp kelimeleri başlıktan ayıkla
+            clean_title = re.sub(r"^(konu|ünite|bölüm|ders|öğrenme|metin)\s*[:\-]\s*", "", first_clean_line, flags=re.I)
+            derived_title = clean_title.strip().capitalize()
+    elif clean_transcript:
+        first_words = " ".join(clean_transcript.split()[:5])
+        derived_title = f"{first_words.capitalize()}..."
+
+    # 2. Metindeki Gerçek Kelimeleri ve Frekansları Çıkar
+    words = re.findall(r"[a-zA-ZçğıöşüÇĞİÖŞÜ]{3,}", combined_text)
+    stop_words = {
+        "bir", "bu", "ve", "ile", "için", "olan", "daha", "çok", "kadar", "gibi",
+        "veya", "ama", "fakat", "ancak", "çünkü", "nasıl", "neden", "diye", "olarak",
+        "tarafından", "üzerine", "sonra", "önce", "kendi", "tüm", "her", "bazı",
+        "the", "and", "that", "this", "with", "from", "for", "are", "was", "were", "been",
+        "have", "has", "had", "will", "would", "can", "could", "should", "their", "there",
+        "ders", "öğretmen", "öğrenci", "tahta", "sayfa", "konu", "olan", "göre", "bunu",
+        "eğitim", "metodoloji", "değerlendirme", "çalışma", "kağıdı", "ünite", "kazanım", "etkinlik"
+    }
+
+    freq: Dict[str, int] = {}
+    for w in words:
+        wl = w.lower()
+        if wl not in stop_words and len(wl) >= 3:
+            cap = w.capitalize()
+            freq[cap] = freq.get(cap, 0) + 1
+
+    sorted_candidates = sorted(freq.keys(), key=lambda k: freq[k], reverse=True)
+
+    key_terms: List[Dict[str, str]] = []
+    used_words = set()
+
+    # Vurgulanan kelimeleri öncelikli al
+    for hw in (highlighted_words or []):
+        clean_hw = hw.strip().capitalize()
+        if clean_hw and clean_hw.lower() not in used_words:
+            used_words.add(clean_hw.lower())
+            key_terms.append({
+                "word": clean_hw,
+                "turkish": f"{clean_hw} (Derste vurgulanan anahtar kavram)",
+                "phonetic": "",
+                "example": f"Öğretmen ders anlatımında {clean_hw} kavramı üzerinde durdu."
+            })
+        if len(key_terms) >= 5:
+            break
+
+    # Metinden çıkan en sık kavramlarla tamamla
+    for cand in sorted_candidates:
+        if len(key_terms) >= 5:
+            break
+        if cand.lower() not in used_words:
+            used_words.add(cand.lower())
+            key_terms.append({
+                "word": cand,
+                "turkish": f"{cand} (Ders materyalinde geçen temel kavram)",
+                "phonetic": "",
+                "example": f"Ders içeriğinde {cand} konusu detaylıca açıklandı."
+            })
+
+    # Eğer metin tamamen boşsa ders branşına uygun dinamik genel kavramlar
+    fallback_academic = ["Kavram Analizi", "Temel İlke", "Uygulama Metodu", "Problem Çözümü", "Kritik Çıkarım"]
+    for fb in fallback_academic:
+        if len(key_terms) >= 5:
+            break
+        if fb.lower() not in used_words:
+            key_terms.append({
+                "word": fb,
+                "turkish": f"{fb} (Ders kazanımlarının ana bileşeni)",
+                "phonetic": "",
+                "example": f"Bu derste {fb} üzerinde durularak pekiştirme yapıldı."
+            })
+
+    first_term = key_terms[0]["word"] if key_terms else "Temel Konu"
+    second_term = key_terms[1]["word"] if len(key_terms) > 1 else "Anahtar Kavram"
+
+    summary_points = [
+        f"'{derived_title}' konusunda metinde yer alan temel bilgiler, ilkeler ve örnekler incelendi.",
+        f"Öğrencilerle interaktif işlenerek '{first_term}' ve '{second_term}' kavramlarının ders bağlamındaki yeri pekiştirildi.",
+        f"Dersin kilit noktaları tamamlanarak '{derived_title}' kazanımları somutlaştırıldı."
+    ]
+
+    quiz_questions = [
+        {
+            "question": f"Bugünkü derste işlenen '{first_term}' kavramının temel önemi nedir?",
+            "options": [
+                f"{key_terms[0]['turkish']} olarak dersin merkezinde yer alması",
+                "Yalnızca ikincil bir detay olması",
+                "Ders konusuyla herhangi bir ilgisinin bulunmaması",
+                "Sadece eski metinlerde geçmesi"
+            ],
+            "correct_index": 0,
+            "explanation": f"'{first_term}' dersin anahtar kavramlarından biridir."
+        },
+        {
+            "question": f"Derste geçen '{second_term}' hangi amaca yönelik pekiştirilmiştir?",
+            "options": [
+                "Konunun pratik ve mantıksal kavranmasını sağlamak için",
+                "Sadece ezber amaçlı",
+                "Dersi uzatmak için",
+                "Herhangi bir amaca hizmet etmemektedir"
+            ],
+            "correct_index": 0,
+            "explanation": "Kavramların doğru bağlamda kullanımı kalıcı öğrenmeyi hedefler."
+        },
+        {
+            "question": "Bu derste öğrenilen kavramların kalıcılığı için en etkili çalışma yöntemi nedir?",
+            "options": [
+                "SM-2 aralıklı tekrar sistemiyle terimleri periyodik pekiştirmek",
+                "Ders notlarına bir daha hiç bakmamak",
+                "Yalnızca sınav sabahı hızlıca göz gezdirmek",
+                "Tüm konuları tek seferde ezberlemeye çalışmak"
+            ],
+            "correct_index": 0,
+            "explanation": "SM-2 algoritması unutma eğrisini kırarak bilgiyi uzun süreli belleğe taşır."
+        }
+    ]
+
+    return {
+        "class_id": class_id,
+        "title": derived_title,
+        "summary_points": summary_points,
+        "key_terms": key_terms[:5],
+        "quiz_questions": quiz_questions[:3],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
+
+async def generate_board_summary(
+    class_id: str,
+    transcript: str,
+    pdf_text_context: Optional[str] = None,
+    highlighted_words: Optional[List[str]] = None,
+    db=None
+) -> Dict[str, Any]:
+    """
+    Öğretmenin yerel transkriptini, PDF metin bağlamını ve vurgulanan terimleri
+    Gemini 2.5 Flash ile analiz ederek o dersin gerçek branşına (Din Kültürü, Matematik,
+    Tarih, İngilizce vb.) tam uyumlu 3-4 maddelik hap özet, 5 kilit kavram ve 3 anlama sorusu üretir.
+    """
+    highlighted_words = [w.strip() for w in (highlighted_words or []) if w and w.strip()]
+    cleaned_transcript = (transcript or "").strip()
+    pdf_context = (pdf_text_context or "").strip()
+
+    prompt = f"""
+Sen akıllı tahtada işlenen canlı bir dersi analiz eden uzman bir pedagojik yapay zekâ asistanısın.
+GÖREV: Sana verilen PDF metninin ve ders transkriptinin DOĞRUDAN KONUSUNU (Örn: Melekler, Varlıklar Âlemi, Fonksiyonlar, Kurtuluş Savaşı, Kimyasal Bağlar, DNA vb.) analiz et.
+Asla "eğitim metodolojisi", "çalışma kağıdı değerlendirmesi", "interaktif ders çalışması" gibi genel ve soyut başlıklar atma!
+Metinde anlatılan dini, fen, matematik, tarih veya edebiyat konusunun özünü 3 maddede özetle ve o konudan 5 anahtar terim çıkar.
+
+DERS BAĞLAMI:
+Sınıf / Ders: {class_id}
+Öğretmen Konuşma Transkripti:
+{cleaned_transcript if cleaned_transcript else "(Sesli transkript kaydedilmedi - PDF materyal metnine odaklan)"}
+
+Açık PDF / Ders Materyali Metni (Tam İçerik):
+{pdf_context if pdf_context else "(PDF metni girilmedi - transkript ve sınıf bilgisine odaklan)"}
+
+Vurgulanan Anahtar Kelimeler:
+{", ".join(highlighted_words) if highlighted_words else "(Özel vurgulama yapılmadı)"}
+
+KRİTİK TALİMATLAR:
+1. Kesinlikle varsayılan kalıp veya alakasız branş (örn. fen/biyoloji) uydurma! Açık olan metin hangi ders ve konuysa (örn. Din Kültürü ise Melekler, Cebrail, Mikail, Ahiret, Varlıklar Âlemi vb., Matematik ise Fonksiyonlar/Üslü Sayılar vb., Tarih ise Kurtuluş Savaşı vb.) DOĞRUDAN o konunun özünü analiz et.
+2. "title": Belgenin veya dersin anlattığı asıl konuyu belirten net başlık (Örn: "Melekler ve Varlıklar Âlemi", "Fonksiyon Grafikleri", "Kurtuluş Savaşı Cepheleri").
+3. "summary_points": Metinde anlatılan konunun özünü ve temel bilgilerini doğrudan aktaran 3 maddelik konu özeti (Türkçe).
+4. "key_terms": O konudan çıkarılan en kritik 5 anahtar terim veya kavram.
+   Her terim için:
+   - "word": Terimin adı (İngilizce dersi ise İngilizce kelime, Türkçe/Tarih/Din/Matematik ise Türkçe terim)
+   - "turkish": Terimin bu ders konusundaki net tanımı ve anlamı
+   - "phonetic": Varsa okunuşu veya alanı (örn. Din Kültürü, Matematik)
+   - "example": Bu kavramın kullanıldığı doğal bir örnek cümle
+5. "quiz_questions": Bu dersin konusunu ölçen TAM 3 ADET çoktan seçmeli soru.
+   Her soru için:
+   - "question": Net soru kökü
+   - "options": 4 mantıklı seçenek [A, B, C, D]
+   - "correct_index": Doğru seçeneğin indeksi (0-3)
+   - "explanation": Doğru cevabın pedagojik açıklaması
+
+JSON FORMATI (YALNIZCA GEÇERLİ JSON):
+{{
+  "title": "...",
+  "summary_points": ["...", "...", "..."],
+  "key_terms": [
+    {{"word": "...", "turkish": "...", "phonetic": "...", "example": "..."}},
+    {{"word": "...", "turkish": "...", "phonetic": "...", "example": "..."}},
+    {{"word": "...", "turkish": "...", "phonetic": "...", "example": "..."}},
+    {{"word": "...", "turkish": "...", "phonetic": "...", "example": "..."}},
+    {{"word": "...", "turkish": "...", "phonetic": "...", "example": "..."}}
+  ],
+  "quiz_questions": [
+    {{"question": "...", "options": ["...", "...", "...", "..."], "correct_index": 0, "explanation": "..."}},
+    {{"question": "...", "options": ["...", "...", "...", "..."], "correct_index": 1, "explanation": "..."}},
+    {{"question": "...", "options": ["...", "...", "...", "..."], "correct_index": 2, "explanation": "..."}}
+  ]
+}}
+"""
+
+    try:
+        data = await asyncio.wait_for(async_call_gemini_with_fallback(prompt, temperature=0.3), timeout=8.0)
+        if isinstance(data, dict) and "summary_points" in data and "key_terms" in data:
+            title = str(data.get("title") or "Akıllı Tahta İnteraktif Ders Özeti")
+            summary_points = list(data.get("summary_points", []))
+            if len(summary_points) < 3:
+                summary_points.append("Ders boyunca kilit kavramlar ve pratik örnekler pekiştirildi.")
+
+            raw_terms = list(data.get("key_terms", []))
+            key_terms = []
+            for t in raw_terms[:5]:
+                key_terms.append({
+                    "word": str(t.get("word", "")),
+                    "turkish": str(t.get("turkish", "")),
+                    "phonetic": str(t.get("phonetic", "")),
+                    "example": str(t.get("example", ""))
+                })
+
+            raw_questions = list(data.get("quiz_questions", []))
+            quiz_questions = []
+            for q in raw_questions[:3]:
+                opts = list(q.get("options", []))
+                if len(opts) < 4:
+                    opts = ["Seçenek A", "Seçenek B", "Seçenek C", "Seçenek D"]
+                c_idx = int(q.get("correct_index", 0))
+                if c_idx < 0 or c_idx >= len(opts):
+                    c_idx = 0
+                quiz_questions.append({
+                    "question": str(q.get("question", "")),
+                    "options": opts[:4],
+                    "correct_index": c_idx,
+                    "explanation": str(q.get("explanation", ""))
+                })
+
+            # Eğer 5 kelime veya 3 soru eksikse dinamik içerikten tamamla
+            if len(key_terms) < 5 or len(quiz_questions) < 3:
+                dyn = _extract_real_context_terms_and_summary(class_id, cleaned_transcript, pdf_context, highlighted_words)
+                for dt in dyn["key_terms"]:
+                    if len(key_terms) >= 5:
+                        break
+                    if not any(k["word"].lower() == dt["word"].lower() for k in key_terms):
+                        key_terms.append(dt)
+                for dq in dyn["quiz_questions"]:
+                    if len(quiz_questions) >= 3:
+                        break
+                    quiz_questions.append(dq)
+
+            return {
+                "class_id": class_id,
+                "title": title,
+                "summary_points": summary_points[:4],
+                "key_terms": key_terms[:5],
+                "quiz_questions": quiz_questions[:3],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+    except Exception as e:
+        print(f"[Board Summary AI Gemini Error, using dynamic real-context fallback]: {e}")
+
+    # Yapay zekâ yanıt vermezse dinamik gerçek metin çıkarıcısını kullan
+    return _extract_real_context_terms_and_summary(
+        class_id=class_id,
+        transcript=cleaned_transcript,
+        pdf_text_context=pdf_context,
+        highlighted_words=highlighted_words
+    )
+
+
+def assign_board_lesson_to_class(
+    class_id: str,
+    title: str,
+    summary_points: List[str],
+    key_terms: List[Dict[str, Any]],
+    quiz_questions: List[Dict[str, Any]],
+    db=None
+) -> Dict[str, Any]:
+    """
+    Ders özetini, 5 kritik kelimeyi ve 3 soruyu sınıfa ödev olarak fırlatır;
+    kelimeleri öğrencilerin SM-2 tekrar kuyruğuna (needs_review=True, interval=1) ekler.
+    """
+    from app.services.study_service import process_card_review_result
+
+    # 1. Ödev kaydı oluştur
+    assign_payload = {
+        "classroom_id": class_id,
+        "title": f"⚡ Tahta Dersi Ödevi: {title}",
+        "story_content": "\n".join(summary_points),
+        "target_words": [
+            {
+                "word": t.get("word", ""),
+                "meaning": t.get("turkish", ""),
+                "phonetic": t.get("phonetic", ""),
+                "example": t.get("example", "")
+            }
+            for t in key_terms
+        ],
+        "questions": [
+            {
+                "question": q.get("question", ""),
+                "options": q.get("options", []),
+                "correct_index": q.get("correct_index", 0),
+                "explanation": q.get("explanation", "")
+            }
+            for q in quiz_questions
+        ],
+        "due_date": "Bu Hafta Sonu, 23:59"
+    }
+
+    assignment = create_assignment(assign_payload, db=db)
+
+    # 2. SM-2 Tekrar Kuyruğuna Ekle (Zayıf Nokta / Öncelikli Tekrar)
+    sm2_enqueued_words = []
+    for t in key_terms:
+        word = t.get("word")
+        if word:
+            try:
+                # needs_review=True ve tekrar başlatmak için rating=2 ile sisteme kaydet
+                process_card_review_result(card_id=word, is_correct=False, rating=2)
+                sm2_enqueued_words.append(word)
+            except Exception as e:
+                print(f"[SM-2 enqueue warning for {word}]: {e}")
+
+    return {
+        "success": True,
+        "assignment": assignment,
+        "enqueued_terms_count": len(sm2_enqueued_words),
+        "enqueued_terms": sm2_enqueued_words,
+        "message": f"Ders özeti sınıfa ödev olarak fırlatıldı ve {len(sm2_enqueued_words)} kelime SM-2 kuyruğuna alındı! 🚀"
+    }
+
+
+# =========================================================================
+# FAZ 2: TEKİL KULLANICI SINIF, BİLET, UTC TAKVİM, IBAN & MANUEL GÖNDERİM
+# =========================================================================
+
+IN_MEMORY_CLASSES_V2: List[Dict[str, Any]] = []
+IN_MEMORY_CLASS_SESSIONS: List[Dict[str, Any]] = []
+IN_MEMORY_SESSION_ATTENDEES: List[Dict[str, Any]] = []
+IN_MEMORY_MATERIAL_DELIVERIES: List[Dict[str, Any]] = []
+
+
+def generate_invite_slug(db=None) -> str:
+    """Benzersiz 6 haneli kısa davet kodu üretir (Örn: 7A2-5K9)."""
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    for _ in range(50):
+        part1 = "".join(random.choices(chars, k=3))
+        part2 = "".join(random.choices(chars, k=3))
+        slug = f"{part1}-{part2}"
+
+        # DB ve bellek kontrolü
+        exists = False
+        if db:
+            try:
+                res = db.table("classes").select("id").eq("invite_slug", slug).execute()
+                if res.data and len(res.data) > 0:
+                    exists = True
+            except Exception:
+                pass
+        if not exists:
+            if not any(c.get("invite_slug") == slug for c in IN_MEMORY_CLASSES_V2):
+                return slug
+
+    return f"{uuid.uuid4().hex[:3].upper()}-{uuid.uuid4().hex[3:6].upper()}"
+
+
+def create_faz2_class(
+    teacher_id: str,
+    name: str,
+    price: float = 0.0,
+    currency: str = "TRY",
+    billing_type: str = "one_time",
+    schedule_mode: str = "fixed",
+    scheduled_dates_utc: Optional[List[str]] = None,
+    duration_minutes: int = 60,
+    monthly_credits: int = 0,
+    db=None
+) -> Dict[str, Any]:
+    """
+    Yeni tekil sınıf açar.
+    Eğer price > 0 ise payout_profiles tablosunda IBAN doğrulaması yapar.
+    Oturumları class_sessions tablosuna status='scheduled' olarak ekler.
+    """
+    from app.api.v1.endpoints.payments import has_payout_profile
+
+    # Ücretli ders ise IBAN zorunluluğu kontrolü
+    if price > 0:
+        if not has_payout_profile(teacher_id, db=db):
+            return {
+                "error": "IBAN_REQUIRED",
+                "message": "Ücretli ders açmak için önce IBAN bilgilerinizi tanımlamalısınız."
+            }
+
+    class_id = str(uuid.uuid4())
+    invite_slug = generate_invite_slug(db=db)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    class_record = {
+        "id": class_id,
+        "teacher_id": teacher_id,
+        "name": name.strip(),
+        "price": float(price),
+        "currency": currency.upper(),
+        "billing_type": billing_type,
+        "schedule_mode": schedule_mode,
+        "duration_minutes": int(duration_minutes),
+        "monthly_credits": int(monthly_credits),
+        "invite_slug": invite_slug,
+        "code": invite_slug,
+        "student_count": 0,
+        "created_at": now_iso
+    }
+
+    if db:
+        try:
+            db.table("classes").insert(class_record).execute()
+        except Exception as e:
+            print(f"[DB classes Insert Error]: {e}")
+
+    IN_MEMORY_CLASSES_V2.insert(0, class_record)
+
+    # Oturumları oluştur (class_sessions)
+    created_sessions = []
+    dates = scheduled_dates_utc or []
+    for date_str in dates:
+        session_id = str(uuid.uuid4())
+        session_record = {
+            "id": session_id,
+            "class_id": class_id,
+            "session_date_utc": date_str,
+            "duration_minutes": duration_minutes,
+            "status": "scheduled",
+            "started_at": None,
+            "ended_at": None,
+            "created_at": now_iso
+        }
+        if db:
+            try:
+                db.table("class_sessions").insert(session_record).execute()
+            except Exception as e:
+                print(f"[DB class_sessions Insert Error]: {e}")
+
+        IN_MEMORY_CLASS_SESSIONS.append(session_record)
+        created_sessions.append(session_record)
+
+    return {
+        "id": class_id,
+        "teacher_id": teacher_id,
+        "name": class_record["name"],
+        "price": class_record["price"],
+        "currency": class_record["currency"],
+        "billing_type": class_record["billing_type"],
+        "schedule_mode": class_record["schedule_mode"],
+        "duration_minutes": class_record["duration_minutes"],
+        "monthly_credits": class_record["monthly_credits"],
+        "invite_slug": invite_slug,
+        "code": invite_slug,
+        "sessions": created_sessions,
+        "created_at": now_iso
+    }
+
+
+def get_class_by_invite_slug(slug: str, db=None) -> Optional[Dict[str, Any]]:
+    """
+    Davet linki (slug) ile sınıfı ve yaklaşan (scheduled) oturumlarını getirir.
+    """
+    clean_slug = slug.strip().upper()
+    class_record = None
+
+    if db:
+        try:
+            res = db.table("classes").select("*").eq("invite_slug", clean_slug).execute()
+            if res.data and len(res.data) > 0:
+                class_record = res.data[0]
+        except Exception as e:
+            print(f"[DB Get Class by Slug Error]: {e}")
+
+    if not class_record:
+        class_record = next(
+            (c for c in IN_MEMORY_CLASSES_V2 if c.get("invite_slug", "").upper() == clean_slug or c.get("code", "").upper() == clean_slug),
+            None
+        )
+
+    if not class_record:
+        return None
+
+    class_id = class_record["id"]
+
+    # Yaklaşan oturumları çek (status='scheduled')
+    upcoming_sessions = []
+    if db:
+        try:
+            s_res = db.table("class_sessions").select("*").eq("class_id", class_id).eq("status", "scheduled").order("session_date_utc").execute()
+            if s_res.data:
+                upcoming_sessions = s_res.data
+        except Exception as e:
+            print(f"[DB Get Sessions Error]: {e}")
+
+    if not upcoming_sessions:
+        upcoming_sessions = [
+            s for s in IN_MEMORY_CLASS_SESSIONS
+            if s.get("class_id") == class_id and s.get("status") == "scheduled"
+        ]
+        upcoming_sessions.sort(key=lambda x: x.get("session_date_utc", ""))
+
+    # Öğretmen bilgisi
+    teacher_name = "Eğitmen"
+    teacher_id = class_record.get("teacher_id")
+    if teacher_id and db:
+        try:
+            u_res = db.table("users").select("full_name, username").eq("id", teacher_id).execute()
+            if u_res.data and len(u_res.data) > 0:
+                teacher_name = u_res.data[0].get("full_name") or u_res.data[0].get("username") or "Eğitmen"
+        except Exception:
+            pass
+
+    return {
+        "class": class_record,
+        "upcoming_sessions": upcoming_sessions,
+        "teacher": {
+            "id": teacher_id,
+            "name": teacher_name
+        }
+    }
+
+
+def join_class_by_slug(slug: str, user_id: str, selected_session_id: Optional[str] = None, db=None) -> Dict[str, Any]:
+    """
+    Sınıfa katılma işlemi:
+    - price == 0: session_attendees tablosuna payment_status='free' olarak kaydet, erişim ver.
+    - price > 0: session_attendees tablosunda 'paid' veya 'subscription_active' kontrolü yap.
+    """
+    class_info = get_class_by_invite_slug(slug, db=db)
+    if not class_info:
+        return {"error": "NOT_FOUND", "message": "Sınıf bulunamadı."}
+
+    class_record = class_info["class"]
+    class_id = class_record["id"]
+    price = float(class_record.get("price", 0.0))
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if price == 0:
+        # Ücretsiz sınıf: Katılımcı kaydını oluştur
+        existing_attendee = None
+        if db:
+            try:
+                a_res = db.table("session_attendees").select("*").eq("class_id", class_id).eq("user_id", user_id).execute()
+                if a_res.data and len(a_res.data) > 0:
+                    existing_attendee = a_res.data[0]
+            except Exception as e:
+                print(f"[DB Check Attendee Error]: {e}")
+
+        if not existing_attendee:
+            existing_attendee = next(
+                (a for a in IN_MEMORY_SESSION_ATTENDEES if a.get("class_id") == class_id and a.get("user_id") == user_id),
+                None
+            )
+
+        if not existing_attendee:
+            attendee_id = str(uuid.uuid4())
+            new_attendee = {
+                "id": attendee_id,
+                "class_id": class_id,
+                "session_id": selected_session_id,
+                "user_id": user_id,
+                "payment_status": "free",
+                "joined_at": now_iso,
+                "created_at": now_iso
+            }
+            if db:
+                try:
+                    db.table("session_attendees").insert(new_attendee).execute()
+                except Exception as e:
+                    print(f"[DB Attendee Insert Error]: {e}")
+            IN_MEMORY_SESSION_ATTENDEES.append(new_attendee)
+
+            # Katılımcı sayısını güncelle
+            class_record["student_count"] = class_record.get("student_count", 0) + 1
+            if db:
+                try:
+                    db.table("classes").update({"student_count": class_record["student_count"]}).eq("id", class_id).execute()
+                except Exception:
+                    pass
+
+        return {
+            "access_granted": True,
+            "requires_payment": False,
+            "class_id": class_id,
+            "session_id": selected_session_id,
+            "payment_status": "free"
+        }
+
+    else:
+        # Ücretli sınıf: Ödeme veya abonelik durumunu kontrol et
+        paid_attendee = None
+        if db:
+            try:
+                a_res = db.table("session_attendees").select("*").eq("class_id", class_id).eq("user_id", user_id).execute()
+                for row in (a_res.data or []):
+                    if row.get("payment_status") in ("paid", "subscription_active"):
+                        paid_attendee = row
+                        break
+            except Exception as e:
+                print(f"[DB Check Paid Attendee Error]: {e}")
+
+        if not paid_attendee:
+            paid_attendee = next(
+                (a for a in IN_MEMORY_SESSION_ATTENDEES if a.get("class_id") == class_id and a.get("user_id") == user_id and a.get("payment_status") in ("paid", "subscription_active")),
+                None
+            )
+
+        if paid_attendee:
+            return {
+                "access_granted": True,
+                "requires_payment": False,
+                "class_id": class_id,
+                "session_id": selected_session_id,
+                "payment_status": paid_attendee.get("payment_status", "paid")
+            }
+        else:
+            return {
+                "access_granted": False,
+                "requires_payment": True,
+                "price": price,
+                "currency": class_record.get("currency", "TRY"),
+                "class_id": class_id,
+                "billing_type": class_record.get("billing_type", "one_time")
+            }
+
+
+def get_user_timeline(user_id: str, db=None) -> Dict[str, Any]:
+    """
+    Kullanıcının öğretmen ve katılımcı olarak zaman tünelini döner.
+    Otomatik AI özeti veya SM-2 ödevi üretilmez.
+    """
+    # 1. teaching_sessions: teacher_id == user_id
+    teaching_classes = []
+    if db:
+        try:
+            c_res = db.table("classes").select("*").eq("teacher_id", user_id).execute()
+            if c_res.data:
+                teaching_classes = c_res.data
+        except Exception as e:
+            print(f"[DB Get Teaching Classes Error]: {e}")
+
+    if not teaching_classes:
+        teaching_classes = [c for c in IN_MEMORY_CLASSES_V2 if c.get("teacher_id") == user_id]
+
+    teaching_sessions = []
+    for c_data in teaching_classes:
+        cid = c_data["id"]
+
+        # Oturumları çek
+        c_sessions = []
+        if db:
+            try:
+                s_res = db.table("class_sessions").select("*").eq("class_id", cid).execute()
+                if s_res.data:
+                    c_sessions = s_res.data
+            except Exception:
+                pass
+        if not c_sessions:
+            c_sessions = [s for s in IN_MEMORY_CLASS_SESSIONS if s.get("class_id") == cid]
+
+        # Katılımcıları çek
+        attendees = []
+        if db:
+            try:
+                att_res = db.table("session_attendees").select("*").eq("class_id", cid).execute()
+                if att_res.data:
+                    attendees = att_res.data
+            except Exception:
+                pass
+        if not attendees:
+            attendees = [a for a in IN_MEMORY_SESSION_ATTENDEES if a.get("class_id") == cid]
+
+        # Katılımcı isimlerini çöz
+        attendee_user_ids = list({a["user_id"] for a in attendees if a.get("user_id")})
+        user_names_map = {}
+        if attendee_user_ids and db:
+            try:
+                for uid in attendee_user_ids:
+                    u_row = db.table("users").select("full_name, username").eq("id", uid).execute()
+                    if u_row.data and len(u_row.data) > 0:
+                        name = u_row.data[0].get("full_name") or u_row.data[0].get("username") or "Öğrenci"
+                        user_names_map[uid] = name
+            except Exception:
+                pass
+
+        attendee_names = [user_names_map.get(uid, f"Öğrenci-{uid[:4]}") for uid in attendee_user_ids]
+
+        for s in c_sessions:
+            teaching_sessions.append({
+                "session_id": s["id"],
+                "class_id": cid,
+                "class_name": c_data.get("name", "Sınıf"),
+                "session_date_utc": s.get("session_date_utc"),
+                "duration_minutes": s.get("duration_minutes", 60),
+                "status": s.get("status", "scheduled"),
+                "price": c_data.get("price", 0.0),
+                "currency": c_data.get("currency", "TRY"),
+                "attendee_names": attendee_names,
+                "attendees_count": len(attendee_names),
+                "invite_slug": c_data.get("invite_slug")
+            })
+
+    teaching_sessions.sort(key=lambda x: x.get("session_date_utc") or "", reverse=True)
+
+    # 2. attending_sessions: session_attendees üzerinden
+    attended_records = []
+    if db:
+        try:
+            att_res = db.table("session_attendees").select("*").eq("user_id", user_id).execute()
+            if att_res.data:
+                attended_records = att_res.data
+        except Exception as e:
+            print(f"[DB Attended Records Error]: {e}")
+
+    if not attended_records:
+        attended_records = [a for a in IN_MEMORY_SESSION_ATTENDEES if a.get("user_id") == user_id]
+
+    attending_sessions = []
+    seen_session_keys = set()
+
+    for a in attended_records:
+        cid = a.get("class_id")
+        c_record = None
+        if db:
+            try:
+                c_res = db.table("classes").select("*").eq("id", cid).execute()
+                if c_res.data and len(c_res.data) > 0:
+                    c_record = c_res.data[0]
+            except Exception:
+                pass
+        if not c_record:
+            c_record = next((c for c in IN_MEMORY_CLASSES_V2 if c.get("id") == cid), None)
+
+        class_name = c_record.get("name", "Sınıf") if c_record else "Ders"
+        teacher_id = c_record.get("teacher_id") if c_record else None
+
+        teacher_name = "Eğitmen"
+        if teacher_id and db:
+            try:
+                u_row = db.table("users").select("full_name, username").eq("id", teacher_id).execute()
+                if u_row.data and len(u_row.data) > 0:
+                    teacher_name = u_row.data[0].get("full_name") or u_row.data[0].get("username") or "Eğitmen"
+            except Exception:
+                pass
+
+        sid = a.get("session_id")
+        sessions_to_add = []
+        if sid:
+            s_row = None
+            if db:
+                try:
+                    s_res = db.table("class_sessions").select("*").eq("id", sid).execute()
+                    if s_res.data and len(s_res.data) > 0:
+                        s_row = s_res.data[0]
+                except Exception:
+                    pass
+            if not s_row:
+                s_row = next((s for s in IN_MEMORY_CLASS_SESSIONS if s.get("id") == sid), None)
+            if s_row:
+                sessions_to_add.append(s_row)
+        else:
+            all_c_sessions = []
+            if db:
+                try:
+                    s_res = db.table("class_sessions").select("*").eq("class_id", cid).execute()
+                    if s_res.data:
+                        all_c_sessions = s_res.data
+                except Exception:
+                    pass
+            if not all_c_sessions:
+                all_c_sessions = [s for s in IN_MEMORY_CLASS_SESSIONS if s.get("class_id") == cid]
+            sessions_to_add.extend(all_c_sessions)
+
+        for s in sessions_to_add:
+            key = f"{cid}_{s['id']}"
+            if key not in seen_session_keys:
+                seen_session_keys.add(key)
+                attending_sessions.append({
+                    "session_id": s["id"],
+                    "class_id": cid,
+                    "class_name": class_name,
+                    "teacher_name": teacher_name,
+                    "session_date_utc": s.get("session_date_utc"),
+                    "duration_minutes": s.get("duration_minutes", 60),
+                    "status": s.get("status", "scheduled"),
+                    "payment_status": a.get("payment_status", "free")
+                })
+
+    attending_sessions.sort(key=lambda x: x.get("session_date_utc") or "", reverse=True)
+
+    return {
+        "teaching_sessions": teaching_sessions,
+        "attending_sessions": attending_sessions
+    }
+
+
+def complete_session(session_id: str, db=None) -> Optional[Dict[str, Any]]:
+    """
+    Eğitmen dersi bitirdiğinde status='completed' ve ended_at=NOW() yapar.
+    Otomatik AI özeti veya SM-2 kartı üretilmez.
+    """
+    session_record = None
+    if db:
+        try:
+            res = db.table("class_sessions").select("*").eq("id", session_id).execute()
+            if res.data and len(res.data) > 0:
+                session_record = res.data[0]
+        except Exception as e:
+            print(f"[DB Complete Session Select Error]: {e}")
+
+    if not session_record:
+        session_record = next((s for s in IN_MEMORY_CLASS_SESSIONS if s.get("id") == session_id), None)
+
+    if not session_record:
+        return None
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    session_record["status"] = "completed"
+    session_record["ended_at"] = now_iso
+
+    if db:
+        try:
+            db.table("class_sessions").update({
+                "status": "completed",
+                "ended_at": now_iso
+            }).eq("id", session_id).execute()
+        except Exception as e:
+            print(f"[DB Complete Session Update Error]: {e}")
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "status": "completed",
+        "ended_at": now_iso
+    }
+
+
+def send_material_to_class(
+    teacher_id: str,
+    class_id: str,
+    subject: str,
+    message_body: str,
+    attachment_url: Optional[str] = None,
+    db=None
+) -> Dict[str, Any]:
+    """
+    Sadece öğretmenin manuel isteğiyle çalışır; ilgili sınıftaki katılımcıların listesini çeker,
+    gönderim kaydını döner.
+    """
+    attendees = []
+    if db:
+        try:
+            res = db.table("session_attendees").select("user_id").eq("class_id", class_id).execute()
+            if res.data:
+                attendees = res.data
+        except Exception as e:
+            print(f"[DB Send Material Attendees Error]: {e}")
+
+    if not attendees:
+        attendees = [a for a in IN_MEMORY_SESSION_ATTENDEES if a.get("class_id") == class_id]
+
+    if not attendees and db:
+        try:
+            m_res = db.table("class_members").select("user_id").eq("class_id", class_id).execute()
+            if m_res.data:
+                attendees = m_res.data
+        except Exception:
+            pass
+
+    unique_students = list({a["user_id"] for a in attendees if a.get("user_id")})
+    sent_count = len(unique_students)
+    delivery_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    delivery_record = {
+        "id": delivery_id,
+        "teacher_id": teacher_id,
+        "class_id": class_id,
+        "subject": subject.strip(),
+        "message_body": message_body.strip(),
+        "attachment_url": attachment_url,
+        "sent_count": sent_count,
+        "status": "delivered",
+        "created_at": now_iso
+    }
+
+    if db:
+        try:
+            db.table("material_deliveries").insert(delivery_record).execute()
+        except Exception as e:
+            print(f"[DB Material Deliveries Insert Error]: {e}")
+
+    IN_MEMORY_MATERIAL_DELIVERIES.append(delivery_record)
+
+    return {
+        "sent_count": sent_count,
+        "status": "delivered",
+        "subject": subject.strip(),
+        "delivered_at": now_iso
+    }
+
+
+
+

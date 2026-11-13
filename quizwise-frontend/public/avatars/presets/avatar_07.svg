@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg7" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="60" fill="url(#bg7)"/>
+  <!-- Clothes / Blazer -->
+  <path d="M25 115 C25 94 42 88 60 88 C78 88 95 94 95 115 Z" fill="#1e1b4b"/>
+  <!-- Shirt & Tie -->
+  <polygon points="50,88 60,115 70,88" fill="#ffffff"/>
+  <polygon points="58,95 62,95 64,115 60,118 56,115" fill="#f43f5e"/>
+  <!-- Neck -->
+  <rect x="52" y="68" width="16" height="22" rx="4" fill="#fed7aa"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="54" rx="21" ry="23" fill="#ffedd5"/>
+  <!-- Hair parted -->
+  <path d="M38 46 C39 28 50 24 62 24 C74 24 82 28 82 46 C74 32 62 30 38 46 Z" fill="#451a03"/>
+  <!-- Round modern glasses -->
+  <circle cx="50" cy="53" r="7" stroke="#f59e0b" stroke-width="2" fill="none"/>
+  <circle cx="70" cy="53" r="7" stroke="#f59e0b" stroke-width="2" fill="none"/>
+  <line x1="57" y1="53" x2="63" y2="53" stroke="#f59e0b" stroke-width="2"/>
+  <!-- Eyes -->
+  <circle cx="50" cy="53" r="2.2" fill="#0f172a"/>
+  <circle cx="70" cy="53" r="2.2" fill="#0f172a"/>
+  <!-- Eyebrows -->
+  <path d="M45 43 Q50 41 55 43" stroke="#451a03" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M65 43 Q70 41 75 43" stroke="#451a03" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <!-- Smile -->
+  <path d="M54 67 Q60 71 66 67" stroke="#0f172a" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>
+

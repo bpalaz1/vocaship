@@ -7,7 +7,7 @@ import asyncio
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Depends, status
 from google.genai import types
 from app.core.database import get_db
@@ -24,6 +24,8 @@ from app.schemas.speaking import (
     StoryQuestionItem,
     GenerateStoryQuestionsRequest,
     GenerateStoryQuestionsResponse,
+    InitStoryDebateRequest,
+    InitStoryDebateResponse,
     SpeakingArchiveCreate,
     SpeakingArchiveResponse,
 )
@@ -34,28 +36,28 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-PRIMARY_SPEAKING_MODEL = "gemini-3.5-flash"
+PRIMARY_SPEAKING_MODEL = "gemini-2.5-flash"
 FAST_FALLBACK_MODELS = [
-    "gemini-3.6-flash",
     "gemini-flash-lite-latest",
     "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
     "gemini-3.8-flash",
     "gemini-2.5-flash",
 ]
 
-INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION = """You are the Vocaship Live Speaking Engine (Kişisel İngilizce Sohbet Partneri ve Koçu).
-Follow these core rules at all times:
-1. DOĞRUDAN VE GERÇEK SOHBET PARTNERİ OL (Direct & Authentic Response):
-   - ASLA ezber genel kalıplarla ('Tell me more about weekend...', 'Have you been planning anything fun for the upcoming weekend...') geçiştirme!
-   - Kullanıcı ne sorarsa veya ne söylerse (örneğin geleceğin iyi mi kötü mü olacağı, yapay zekanın etkisi, teknoloji, iş hayatı, hava durumu vb.), önce DOĞRUDAN onun sorusuna veya düşüncesine kendi fikrini belirten 1-2 cümlelik samimi, zeki ve insani bir yanıt ver.
-   - Ardından sohbeti canlı tutmak için o soruyla doğrudan ilişkili yeni bir açık uçlu karşı soru sor.
-2. ROL VE SEVİYE UYUMU (Role & Level Adaptation):
-   - If the user/scenario is Kids or A1-A2: Speak with simple, short, clear, and encouraging sentences.
-   - If the user/scenario is Adult or B2-C1: Speak with natural, articulate, thoughtful English.
-3. SÜREKLİLİK (Infinite Dialogue Continuity):
-   - NEVER say "the interview is over" or close the conversation. Keep the dialogue flowing naturally around the topic the user wants to discuss.
-4. YANIT FORMATI (Strict Dual-Output JSON):
-   - Always return valid JSON matching the exact schema containing `assistant_reply` and `feedback` (`grammar_correction`, `better_alternative`, `used_vocabulary`, `fluency_score`)."""
+INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION = """Sen canlı, enerjik ve samimi bir İngilizce konuşma mentorusun.
+ASLA kuru, kitabi veya robotik cümleler kurma. Doğal konuşma diline uygun tepkiler ver ('Oh, really?...', 'That sounds amazing!', 'Well, to be honest...').
+Cümle içinde doğal nefes aralıkları ve duraklamalar için virgül ve üç nokta (...) kullan.
+Cevapların kısa, akıcı (maksimum 2-3 cümle) olsun ve mutlaka ucu açık merak uyandırıcı bir takip sorusuyla bitsin.
+
+Çıktıyı kesinlikle bu JSON şemasında ver:
+{
+  "assistant_reply": "İngilizce seslendirilecek doğal yanıt",
+  "target_words_spotted": ["kullanıcının başarıyla kullandığı hedef kelimeler"],
+  "polished_alternative": "Cümlenin daha doğal/kurumsal C1 alternatifi",
+  "suggested_new_words": [{"word": "terim", "meaning": "anlamı"}]
+}"""
 
 
 async def _call_single_model(
@@ -86,8 +88,8 @@ async def async_call_speaking_gemini(
     client = get_client()
     sys_inst = system_instruction or INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION
 
-    # Race top 2 responsive models concurrently for sub-2s response
-    race_models = ["gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.6-flash"]
+    # Race top responsive Gemini models concurrently for lowest latency
+    race_models = ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-3.5-flash"]
     tasks = [
         asyncio.create_task(_call_single_model(client, m, contents_payload, sys_inst))
         for m in race_models
@@ -312,19 +314,24 @@ SCENARIOS["kids_sparky"] = SCENARIOS["casual_sparky"]
 def generate_fallback_response(
     scenario_id: str,
     user_text: str,
-    story_context: Optional[str] = None,
-    conversation_mode: str = "interview",
+    story_context: Optional[Union[Dict[str, Any], str]] = None,
+    conversation_mode: str = "casual",
     turn_count: int = 0,
+    level: str = "A1",
+    persona: str = "sparky",
 ) -> Dict[str, Any]:
     """Generates an intelligent, adaptive, open-ended response when offline or on LLM error."""
-    scenario = SCENARIOS.get(scenario_id, SCENARIOS["project_control"])
-    target_vocab = list(scenario.target_vocabulary)
+    scenario = SCENARIOS.get(scenario_id, SCENARIOS.get("project_control"))
+    target_vocab = list(scenario.target_vocabulary) if scenario else ["practice", "learn", "fun"]
 
     sample_highlights = [v for v in target_vocab if v.lower() in user_text.lower()]
     if not sample_highlights:
         sample_highlights = target_vocab[:2]
 
-    mode = (conversation_mode or "interview").lower()
+    persona_key = (persona or "sparky").lower().strip()
+    is_sparky = "alex" not in persona_key
+
+    mode = (conversation_mode or "casual").lower()
     lower_text = user_text.lower()
 
     # Topic-aware offline fallback (never uses generic weekend cliches)
@@ -416,8 +423,24 @@ def generate_fallback_response(
         if parts:
             extracted_q = parts[-1] + "?"
 
+    fluency_hint_default = (
+        "Actually, I had so much fun learning new things today!"
+        if is_sparky
+        else "I believe taking a calm and steady approach works best in this situation."
+    )
+
     return {
         "assistant_reply": reply,
+        "recast_note": None,
+        "fluency_hint": fluency_hint_default,
+        "session_vocabulary_used": sample_highlights,
+        "target_words_spotted": sample_highlights,
+        "polished_alternative": alt,
+        "level_label": f"{level.upper()} Seviye",
+        "suggested_new_words": [
+            {"word": "unwind", "meaning": "Günün yorgunluğunu atmak, rahatlamak"},
+            {"word": "routine", "meaning": "Alışılagelmiş düzen, günlük rutin"},
+        ],
         "reply_message": reply,
         "follow_up_question": extracted_q,
         "metrics": {
@@ -453,12 +476,13 @@ async def get_scenarios():
 @router.post("/respond", response_model=SpeakingRespondResponse)
 async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
     """
-    Infinite Adaptive Conversation Engine:
-    Evaluates user speech transcript in a flexible, natural, and continuous flow:
-    1. Warm, empathetic in-character continuation + open-ended follow-up question (never closes after 3-4 turns)
-    2. Natural bridging from casual small talk to project/site context when appropriate
-    3. Constructive grammar feedback & natural alternative phrasing
-    4. Vocabulary highlights, jargon score, and fluency score
+    Pedagogical N+1 Speaking Dialogue Engine:
+    Evaluates user speech transcript in a warm, friendly, and non-judgmental conversational flow:
+    1. Persona-driven tone (Sparky: Cheerful & curious kid mascot | Alex: Calm & reassuring adult mentor)
+    2. Sandwich method & Implicit Recasting: Never robotic or didactic, naturally mirrors mistakes in correct grammar
+    3. Strict N+1 CEFR Level Scaffolding (A1/A2, B1/B2, C1)
+    4. Short, concise turns (strictly 2-3 sentences) ending with exactly 1 open-ended follow-up question
+    5. Returns recast_note, fluency_hint, session_vocabulary_used, and full backward-compatible fields
     """
     raw_history = (
         payload.conversation_history
@@ -468,12 +492,90 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
 
     if len(raw_history) == 0:
         check_and_consume_quota(request, "speaking", increment=True)
-    scenario = SCENARIOS.get(payload.scenario_id, SCENARIOS["project_control"])
+
+    scenario = SCENARIOS.get(payload.scenario_id, SCENARIOS.get("project_control"))
     user_text = payload.user_transcript.strip()
-    mode = (payload.conversation_mode or "interview").lower()
 
     if not user_text:
         raise HTTPException(status_code=400, detail="User transcript cannot be empty.")
+
+    # Persona & Karakter Belirleme
+    persona_key = (payload.persona or "sparky").lower().strip()
+    is_sparky = "alex" not in persona_key
+    persona_name = "Alex" if not is_sparky else "Sparky"
+
+    if is_sparky:
+        persona_tone_rules = (
+            "SENİN KİMLİĞİN: SPARKY (Neşeli, sevimli, meraklı çocuk ve maskot dostu)\n"
+            "- Enerjik, oyuncu, sıcakkanlı ve kullanıcının her söylediğini büyük bir heves ve ilgiyle dinleyen bir dostsun.\n"
+            "- Asla soğuk, kitabi, didaktik veya resmi konuşma. Samimi konuşma nidası ve duraklamalar ('Oh, really?!...', 'That sounds amazing!', 'Wow, tell me more!') kullan.\n"
+            "- Konuşmacının çabasını içtenlikle destekle, hata yapsa bile hevesini asla kırma."
+        )
+    else:
+        persona_tone_rules = (
+            "SENİN KİMLİĞİN: ALEX (Sakin, güven veren, son derece sabırlı yetişkin mentör)\n"
+            "- Sakin, anlayışlı, derin dinleyen ve güven veren bir yetişkin mentör ve sohbet arkadaşısın.\n"
+            "- Kullanıcıyı asla aceleye getirme veya tedirgin etme. Kahve sohbeti rahatlığında ('I see what you mean...', 'That is a very thoughtful point...', 'Take your time, you are doing great.') konuş.\n"
+            "- Samimi, yapıcı ve güven verici bir tonda kal."
+        )
+
+    # Dinamik CEFR Seviye Yönetimi (N+1 Kuralı)
+    raw_level = (payload.target_level or payload.level or "A1").upper().strip()
+    if "A1" in raw_level:
+        clean_level = "A1"
+        next_level = "A2"
+        level_rules = (
+            "CEFR A1 (Başlangıç / Beginner): Basit zamanlar (present simple, simple past), en temel kelimeler, kısa ve kristal netliğinde cümleler kur. "
+            "ASLA akademik C1 deyimleri, ağır iş jargonu ve karmaşık yan cümleler kullanma. Sadece tek bir yeni kelimeyle zenginleştir (N+1 kuralı)."
+        )
+    elif "A2" in raw_level:
+        clean_level = "A2"
+        next_level = "B1"
+        level_rules = (
+            "CEFR A2 (Temel / Elementary): Günlük temel zamanlar, basit bağlaçlar (and, but, because, so), kısa ve doğrudan cümleler. "
+            "Ağır deyim ve akademik jargondan tamamen kaçın."
+        )
+    elif "B1" in raw_level:
+        clean_level = "B1"
+        next_level = "B2"
+        level_rules = (
+            "CEFR B1 (Orta / Intermediate): Günlük akıcı dil, yaygın doğal bağlaçlar (although, however, so), rahat ve samimi ifadeler, merak uyandıran sorular."
+        )
+    elif "B2" in raw_level:
+        clean_level = "B2"
+        next_level = "C1"
+        level_rules = (
+            "CEFR B2 (Orta-İleri / Upper-Intermediate): Zengin kelime dağarcığı, günlük deyimler ve phrasal verb'ler, akıcı ve doğal konuşma dili."
+        )
+    elif "C1" in raw_level or "C2" in raw_level:
+        clean_level = "C1"
+        next_level = "C2"
+        level_rules = (
+            "CEFR C1 (İleri / Advanced): Nüanslı, sofistike ve zengin kelime dağarcığı, edebi ve akıcı ifadeler, profesyonel derinlik."
+        )
+    else:
+        clean_level = "A1"
+        next_level = "A2"
+        level_rules = "CEFR A1: Basit zamanlar, temel kelimeler, kısa ve net cümleler."
+
+    default_level_label = f"{clean_level} Seviye"
+
+    # Hikaye Bağlamı (Story Context)
+    story_instruction = ""
+    if payload.story_context:
+        if isinstance(payload.story_context, dict):
+            st_title = payload.story_context.get("title", "")
+            st_level = payload.story_context.get("level", "")
+            st_words = payload.story_context.get("target_words", [])
+            words_str = ", ".join(st_words) if isinstance(st_words, list) else str(st_words)
+            story_instruction = (
+                f"\nAKTİF HİKAYE BAĞLAMI:\n"
+                f"- Başlık: '{st_title}' (Seviye: {st_level})\n"
+                f"- Hikayedeki Hedef Kelimeler: {words_str}\n"
+                f"- Diyalogda bu hikayenin temalarını ve kelimelerini doğal bir şekilde pekiştir.\n"
+            )
+        else:
+            story_instruction = f"\nAKTİF HİKAYE / REFERANS BAĞLAMI:\n{str(payload.story_context)[:400]}\n"
 
     # Konuşma geçmişindeki son 6 mesajı hem okunabilir metin hem de Gemini 'contents' akışı olarak hazırla
     recent_turns = raw_history[-6:]
@@ -485,9 +587,8 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
         msg_raw = str(turn.get("content") or turn.get("message") or "").strip()
         if not msg_raw:
             continue
-        # Remove speaker prefix if already present
-        clean_msg = msg_raw.replace("AI Mentor:", "").replace("User:", "").strip()
-        prefix = "User" if role_raw == "user" else f"{scenario.role_name}"
+        clean_msg = msg_raw.replace("AI Mentor:", "").replace(f"{persona_name}:", "").replace("User:", "").strip()
+        prefix = "User" if role_raw == "user" else persona_name
         history_lines.append(f"{prefix}: {clean_msg}")
 
         gemini_role = "user" if role_raw == "user" else "model"
@@ -495,7 +596,7 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
             gemini_contents.append(
                 types.Content(
                     role="user",
-                    parts=[types.Part.from_text(text=f"[Start of conversation with {scenario.role_name}]")],
+                    parts=[types.Part.from_text(text=f"[Start of dialogue with {persona_name}]")],
                 )
             )
         gemini_contents.append(
@@ -507,69 +608,59 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
 
     formatted_history = "\n".join(history_lines) if history_lines else "(Start of natural conversation)"
 
-    target_vocab_str = ", ".join(scenario.target_vocabulary)
+    dynamic_sys_instruction = f"""{persona_tone_rules}
 
-    story_instruction = ""
-    if payload.story_context:
-        story_instruction = f"Optional Story Idea / Reference Context:\n{payload.story_context[:400]}\n"
+HEDEF CEFR SEVİYESİ: {clean_level} (N+1 Seviyesi: {next_level})
+SEVİYE KURALLARI:
+{level_rules}
+{story_instruction}
+PEDAGOJİK KURAL (SANDVİÇ VE RECASTING / ÖRTÜK DÜZELTME PRENSİBİ):
+1. ASLA ROBOTİK VEYA DİDAKTİK DÜZELTME YAPMA:
+   - "Gramerin yanlış", "Hata yaptın", "Böyle demeliydin" gibi direkt uyarı ve yargılayıcı kalıplar KESİNLİKLE YASAKTIR.
+2. ÖRTÜK DÜZELTME (RECASTING):
+   - Kullanıcının hatalarını sohbetin akışı içinde DOĞRU HALİYLE YANKILA (Recasting).
+   - Örn: Kullanıcı "Yesterday I go park" derse -> "Oh, you WENT to the park yesterday? How fun! Who did you go with?"
+   - Örn: Kullanıcı "She don't like movies" derse -> "Ah, she DOESN'T like movies? What does she enjoy doing instead?"
+3. RECASTING NOTU (`recast_note`):
+   - Kullanıcının hatasını sohbette nasıl doğal yankıladığını Türkçe olarak 1 kısa cümleyle açıkla (Örn: "Geçmiş zaman kuralı sohbet içinde nazikçe 'went' olarak yankılandı.").
+   - Eğer kullanıcının cümlesinde hiçbir gramer hatası yoksa `recast_note` değerini null yap.
+4. KONUŞMA FISILTISI (`fluency_hint`):
+   - Kullanıcı soruna cevap verirken takılırsa veya duraksarsa hemen söyleyebileceği, {clean_level} seviyesinde 1 cümlelik hazır konuşma kalıbı yaz (Örn: "Actually, I went there with my cousin to play tennis.").
+5. SÜREKLİLİK VE UZUNLUK (2-3 CÜMLE SINIRI):
+   - `assistant_reply` KESİNLİKLE 2-3 cümleyi GEÇMEMELİDİR. Asla monolog üretme.
+   - İlk 1-2 cümle kullanıcının söylediğine samimi, insani bir tepki verir (ve hatayı recasting ile yankılar).
+   - Yanıtın sonunda diyaloğu canlı tutacak, merak uyandıran TEK bir açık uçlu soru sor.
+6. HEDEF KELİMELER:
+   - Oturumda kullanılan hedef kelimeleri `session_vocabulary_used` ve `target_words_spotted` listelerine ekle.
+   - `polished_alternative` içine kullanıcının cümlesinin bir tık üst ({next_level} seviyesi) doğal halini yaz.
 
-    active_cat = payload.active_category or scenario.title
-    allowed_scope = payload.allowed_scope or scenario.context_desc
+Çıktıyı KESİNLİKLE bu JSON şemasında ver:
+{{
+  "assistant_reply": "İngilizce seslendirilecek doğal yanıt (kısa, canlı, 2-3 cümle ve açık uçlu soruyla biten, {clean_level} seviyesinde)",
+  "recast_note": "Kullanıcının gramer hatasının sohbette doğal yankılanma şekli veya hata yoksa null",
+  "fluency_hint": "Kullanıcı takılırsa söyleyebileceği 1 cümlelik konuşma fısıltısı ({clean_level} seviyesinde)",
+  "session_vocabulary_used": ["kelime1", "kelime2"],
+  "target_words_spotted": ["kelime1"],
+  "polished_alternative": "Cümlenin kullanıcının seviyesinin bir tık üstü ({next_level} seviyesi) doğal alternatifi",
+  "level_label": "{default_level_label}",
+  "suggested_new_words": [{{"word": "terim", "meaning": "anlamı"}}]
+}}"""
 
-    # Mod bazlı esnek stil ipuçları
-    if mode == "casual":
-        mode_instruction = """CONVERSATION STYLE: CASUAL & FRIENDLY (Everyday Natural English)
-- Personality: Warm, thoughtful, authentic friend & language partner.
-- Tone: Relaxed, encouraging, empathetic. Never sound like a rigid examiner or use canned templates."""
-    elif mode == "problem_solving":
-        mode_instruction = """CONVERSATION STYLE: COLLABORATIVE PROBLEM SOLVING
-- Personality: Supportive project partner & crisis solver.
-- Tone: Constructive, practical, engaging, and human."""
-    elif mode == "story_debate":
-        mode_instruction = """CONVERSATION STYLE: CURIOUS STORY & IDEA DISCUSSION
-- Personality: Inquisitive, friendly discussion partner.
-- Tone: Thought-provoking, open-minded, conversational."""
-    else:
-        mode_instruction = f"""CONVERSATION STYLE: FRIENDLY PROFESSIONAL MENTOR ({scenario.role_name} - {scenario.title})
-- Personality: Warm, approachable, experienced mentor/colleague who answers any question directly and thoughtfully.
-- Tone: Natural, encouraging, human, and collaborative."""
-
-    adaptive_engine_rules = f"""CRITICAL DIALOGUE RULES:
-1. ASLA ezber genel kalıplarla ('Tell me more about weekend...', 'Have you been planning anything fun for the upcoming weekend...') geçiştirme!
-2. Kullanıcı ne sorarsa (örneğin geleceğin iyi mi kötü mü olacağı, yapay zekanın etkisi, hava durumu, iş veya günlük hayat vb.), ÖNCE doğrudan onun sorusuna kendi fikrini belirten 1-2 cümlelik samimi ve insani bir yanıt ver.
-3. Ardından sohbeti canlı tutmak için o soruyla DOĞRUDAN ilişkili yeni bir açık uçlu karşı soru sor.
-4. Current context theme (optional background): '{active_cat}' ({allowed_scope}). Even if the user asks an open philosophical or personal question outside this theme, ALWAYS answer their exact question directly first!"""
-
-    user_turn_prompt = f"""{mode_instruction}
-{adaptive_engine_rules}
-Target CEFR Level: {payload.target_level or 'C1'}
-{story_instruction}Recent Conversation Context (Last {len(history_lines)} turns):
+    user_turn_prompt = f"""Son Konuşma Akışı (Son {len(history_lines)} mesaj):
 {formatted_history}
 
-User's latest message / question:
+Kullanıcının Son Cümlesi:
 "{user_text}"
 
-TASK (DYNAMIC FOLLOW-UP & DUAL-OUTPUT EVALUATION):
-1. In `reply_message` (also returned as `assistant_reply`): Directly respond to "{user_text}" with 1-2 thoughtful, natural sentences in character, referencing the user's specific details.
-2. In `follow_up_question`: Generate exactly 1 open-ended follow-up question strictly calibrated to CEFR level {payload.target_level or 'C1'}, directly referring to what the user said to keep the conversation flowing smoothly.
-3. In `feedback`: Provide a concise feedback comment or structured evaluation (e.g. natural pronunciation, vocabulary praise or grammar tip).
-4. In `metrics`: Score fluency (0-100), vocabulary (0-100), and grammar (0-100).
+GÖREV:
+1. {persona_name} kimliğini koruyarak {clean_level} seviyesine KESİNLİKLE sadık kal ({level_rules}).
+2. Eğer kullanıcının cümlesinde gramer/zaman/edat hatası varsa, sohbetin akışında DOĞRU HALİYLE YANKILA (Recasting).
+3. `recast_note` alanına bu düzeltmeyi Türkçe 1 kısa cümleyle açıkla, hata yoksa null ver.
+4. `fluency_hint` alanına kullanıcının soruna takılmadan verebileceği {clean_level} seviyesinde 1 cümlelik bir fısıltı yaz.
+5. `assistant_reply` kesinlikle 2-3 cümle olmalı ve samimi tek bir açık uçlu soruyla bitmelidir.
+6. `polished_alternative` alanına cümlenin {next_level} seviyesindeki doğal alternatifini ekle.
 
-Return ONLY valid JSON in this exact structure:
-{{
-  "feedback": "Great pronunciation on notable phrases!",
-  "reply_message": "Warm, natural in-character response referencing user details + the follow up question.",
-  "assistant_reply": "Same as reply_message for audio playback.",
-  "follow_up_question": "Direct open-ended follow-up question calibrated to CEFR {payload.target_level or 'C1'}.",
-  "better_alternative": "A more natural, fluent, or C1-level alternative phrasing of the user's sentence.",
-  "grammar_correction": null,
-  "used_vocabulary": ["notable", "words", "used"],
-  "metrics": {{
-    "fluency": 85,
-    "vocabulary": 80,
-    "grammar": 90
-  }}
-}}"""
+Return ONLY valid JSON matching the schema."""
 
     gemini_contents.append(
         types.Content(
@@ -579,86 +670,97 @@ Return ONLY valid JSON in this exact structure:
     )
 
     try:
-        # 10 saniyelik toplam koruma (her model için 4.5s timeout var)
         response_dict = await asyncio.wait_for(
             async_call_speaking_gemini(
                 gemini_contents,
-                system_instruction=INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION,
+                system_instruction=dynamic_sys_instruction,
             ),
             timeout=10.0,
         )
 
         reply_message = (
-            response_dict.get("reply_message")
-            or response_dict.get("assistant_reply")
-            or "That's a really interesting point! How did that play out for you today, and what are you thinking of doing next?"
+            response_dict.get("assistant_reply")
+            or response_dict.get("reply_message")
+            or ("Oh, that sounds so much fun! What did you enjoy the most about it?" if is_sparky else "That's a very thoughtful perspective. How are you planning to take the next step?")
         )
-        assistant_reply = response_dict.get("assistant_reply") or reply_message
+        assistant_reply = reply_message
 
-        # Dinamik takip sorusunu al; eğer yoksa cümlenin soru kısmından çıkar
+        # Recasting Notu
+        recast_raw = response_dict.get("recast_note")
+        if recast_raw and str(recast_raw).strip().lower() in ["null", "none", "", "none.", "yok", "hata yok"]:
+            recast_note = None
+        else:
+            recast_note = str(recast_raw).strip() if recast_raw else None
+
+        # Konuşma Fısıltısı (Fluency Hint)
+        fluency_hint = (
+            response_dict.get("fluency_hint")
+            or ("Actually, I had so much fun learning new things today!" if is_sparky else "I believe taking a calm, steady approach works best in this situation.")
+        )
+
+        # Hedef Kelimeler
+        session_vocabulary_used = (
+            response_dict.get("session_vocabulary_used")
+            or response_dict.get("target_words_spotted")
+            or []
+        )
+        if not isinstance(session_vocabulary_used, list):
+            session_vocabulary_used = [str(session_vocabulary_used)]
+
+        target_words_spotted = (
+            response_dict.get("target_words_spotted")
+            or session_vocabulary_used
+            or []
+        )
+        if not isinstance(target_words_spotted, list):
+            target_words_spotted = []
+
+        polished_alternative = (
+            response_dict.get("polished_alternative")
+            or response_dict.get("better_alternative")
+            or f"Looking at this from a broader angle, I believe steady progress brings the best outcome."
+        )
+
+        level_label = response_dict.get("level_label") or default_level_label
+
+        suggested_new_words = response_dict.get("suggested_new_words") or []
+        if not isinstance(suggested_new_words, list):
+            suggested_new_words = []
+
+        # Dinamik takip sorusu
         follow_up_question = response_dict.get("follow_up_question")
         if not follow_up_question:
-            if "?" in reply_message:
-                parts = [p.strip() for p in reply_message.split("?") if p.strip()]
+            if "?" in assistant_reply:
+                parts = [p.strip() for p in assistant_reply.split("?") if p.strip()]
                 if parts:
                     follow_up_question = parts[-1] + "?"
             else:
-                follow_up_question = f"What are your thoughts on that, and how do you see things progressing?"
+                follow_up_question = "What are your thoughts on that?"
 
-        fb_raw = response_dict.get("feedback")
-        if not isinstance(fb_raw, dict):
-            feedback_text = str(fb_raw) if fb_raw else "Great effort and natural response!"
-            fb_raw = {"general_feedback": feedback_text}
-
-        grammar_correction = (
-            fb_raw.get("grammar_correction")
-            if "grammar_correction" in fb_raw
-            else response_dict.get("grammar_correction", response_dict.get("grammar_feedback"))
-        )
-        if grammar_correction and str(grammar_correction).strip().lower() in ["null", "none", ""]:
-            grammar_correction = None
-
-        better_alternative = (
-            fb_raw.get("better_alternative")
-            or response_dict.get("better_alternative")
-            or f"To keep things moving smoothly, I'm focusing on practical steps while keeping {scenario.target_vocabulary[0]} in mind."
-        )
-
-        used_vocabulary = (
-            fb_raw.get("used_vocabulary")
-            if isinstance(fb_raw.get("used_vocabulary"), list)
-            else response_dict.get("used_vocabulary", response_dict.get("vocabulary_highlight"))
-        )
-        if not isinstance(used_vocabulary, list):
-            used_vocabulary = []
-
+        # Metrikler & Skorlar
         metrics_raw = response_dict.get("metrics")
         if not isinstance(metrics_raw, dict):
             metrics_raw = {}
 
-        raw_fluency = metrics_raw.get("fluency", fb_raw.get("fluency_score", response_dict.get("fluency_score", 85)))
-        raw_vocab = metrics_raw.get("vocabulary", response_dict.get("jargon_score", 80))
-        raw_grammar = metrics_raw.get("grammar", 92 if not grammar_correction else 78)
-
         try:
-            fluency_score = max(0, min(100, int(raw_fluency)))
+            fluency_score = int(metrics_raw.get("fluency", response_dict.get("fluency_score", 90)))
         except (ValueError, TypeError):
-            fluency_score = 85
+            fluency_score = 90
 
         try:
-            jargon_score = max(0, min(100, int(raw_vocab)))
+            jargon_score = int(metrics_raw.get("vocabulary", response_dict.get("jargon_score", 85)))
         except (ValueError, TypeError):
-            jargon_score = 80
+            jargon_score = 85
 
         try:
-            grammar_score = max(0, min(100, int(raw_grammar)))
+            grammar_score = int(metrics_raw.get("grammar", 95 if not recast_note else 82))
         except (ValueError, TypeError):
             grammar_score = 90
 
         feedback_obj = SpeakingFeedback(
-            grammar_correction=grammar_correction,
-            better_alternative=better_alternative,
-            used_vocabulary=used_vocabulary,
+            grammar_correction=recast_note,
+            better_alternative=polished_alternative,
+            used_vocabulary=session_vocabulary_used or target_words_spotted,
             fluency_score=fluency_score,
         )
 
@@ -670,35 +772,46 @@ Return ONLY valid JSON in this exact structure:
 
         return SpeakingRespondResponse(
             assistant_reply=assistant_reply,
+            recast_note=recast_note,
+            fluency_hint=fluency_hint,
+            session_vocabulary_used=session_vocabulary_used,
+            level_label=level_label,
+            target_words_spotted=target_words_spotted,
+            polished_alternative=polished_alternative,
+            suggested_new_words=suggested_new_words,
             reply_message=reply_message,
             follow_up_question=follow_up_question,
             metrics=metrics_obj,
             feedback=feedback_obj,
-            grammar_feedback=grammar_correction,
-            better_alternative=better_alternative,
-            vocabulary_highlight=used_vocabulary,
+            grammar_feedback=recast_note,
+            better_alternative=polished_alternative,
+            vocabulary_highlight=session_vocabulary_used or target_words_spotted,
             jargon_score=jargon_score,
             fluency_score=fluency_score,
         )
 
     except asyncio.TimeoutError:
-        logger.warning("Gemini speaking call exceeded 6.0s timeout. Returning adaptive fallback response.")
+        logger.warning("Gemini speaking call exceeded timeout. Returning adaptive fallback response.")
         fallback_data = generate_fallback_response(
-            payload.scenario_id,
-            user_text,
-            payload.story_context,
-            conversation_mode=payload.conversation_mode,
+            scenario_id=payload.scenario_id or "casual_chat",
+            user_text=user_text,
+            story_context=payload.story_context,
+            conversation_mode=payload.conversation_mode or "casual",
             turn_count=len(payload.history),
+            level=clean_level,
+            persona=persona_key,
         )
         return SpeakingRespondResponse(**fallback_data)
     except Exception as e:
         logger.warning(f"Speaking endpoint fallback triggered: {e}")
         fallback_data = generate_fallback_response(
-            payload.scenario_id,
-            user_text,
-            payload.story_context,
-            conversation_mode=payload.conversation_mode,
+            scenario_id=payload.scenario_id or "casual_chat",
+            user_text=user_text,
+            story_context=payload.story_context,
+            conversation_mode=payload.conversation_mode or "casual",
             turn_count=len(payload.history),
+            level=clean_level,
+            persona=persona_key,
         )
         return SpeakingRespondResponse(**fallback_data)
 
@@ -900,6 +1013,102 @@ Return ONLY valid JSON matching this schema:
             title=story_title,
             opening_question=opening_question,
             questions=fallback_questions
+        )
+
+
+@router.post("/init-story-debate", response_model=InitStoryDebateResponse)
+async def init_story_debate(payload: InitStoryDebateRequest):
+    """
+    Okuma odasından gelen hikayeye özel, ana olay örgüsünü veya kilit karakter kararını
+    hedef alan seviyeye uygun ({level}) dinamik ilk açılış sorusunu üretir.
+    """
+    story_title = (payload.story_title or "Story Discussion").strip()
+    story_snippet = (payload.story_snippet or "").strip()
+    raw_level = (payload.level or "B1").upper().strip()
+
+    if "A1" in raw_level:
+        clean_level = "A1"
+        level_rules = "Basit zamanlar (present simple, past simple), temel kelimeler, kısa ve net cümleler kur. Ağır deyim ve idiom kullanma."
+    elif "A2" in raw_level or raw_level == "A":
+        clean_level = "A2"
+        level_rules = "Günlük temel zamanlar, basit bağlaçlar (and, but, because), anlaşılır ve doğrudan ifadeler. Ağır deyimlerden kaçın."
+    elif "B1" in raw_level or raw_level == "B":
+        clean_level = "B1"
+        level_rules = "Günlük akıcı dil, yaygın bağlaçlar, rahat ve merak uyandıran bir üslup."
+    elif "B2" in raw_level:
+        clean_level = "B2"
+        level_rules = "Zengin kelime dağarcığı, deyimsel kullanımlar, akıcı ve doğal konuşma dili."
+    elif "C1" in raw_level or raw_level == "C":
+        clean_level = "C1"
+        level_rules = "Akademik, sofistike, derinlikli ve nüanslı ifadeler."
+    elif "C2" in raw_level:
+        clean_level = "C2"
+        level_rules = "Üst düzey edebi ve felsefi derinlik, zengin nüanslar."
+    else:
+        clean_level = raw_level or "B1"
+        level_rules = "Günlük akıcı dil ve merak uyandıran sorular."
+
+    system_instruction = f"""Sen bu hikayeyi kullanıcıyla yeni bitirmiş enerjik, samimi bir kitap kulübü mentorüsün.
+Kullanıcının hedef CEFR seviyesi: {clean_level} ({level_rules}).
+
+KRİTİK TALİMATLAR:
+1. Genel 'kitap okumayı sever misin', 'hikaye nasıldı' gibi klişe sorular KESİNLİKLE SORMA!
+2. Doğrudan hikayenin can alıcı noktası, bir karakterin kararı, ahlaki bir ikilem veya olay örgüsünün sürprizi hakkında seviyeye ({clean_level}) uygun, merak uyandırıcı TEK bir açılış sorusu sor.
+3. Cümleye canlı bir karakter/mentor nidasıyla başla: 'Oh, wow!', 'That ending was wild!...', 'I really did not see that coming!...', 'What an intense dilemma!...', 'Whoa, that was unexpected!...' vb.
+4. Yanıtın kısa, canlı, konuşma dilinde (maksimum 1-2 cümle) olsun ve mutlaka doğrudan soru işareti (?) ile bitsin.
+5. Sadece ve sadece İngilizce konuş.
+
+Çıktıyı kesinlikle bu JSON şemasında ver:
+{{
+  "initial_question": "Canlı nida ile başlayan, hikayenin kilit olayını/kararını hedef alan İngilizce soru"
+}}"""
+
+    context_text = f"Story Title: {story_title}\n"
+    if story_snippet:
+        context_text += f"Story Context / Snippet:\n{story_snippet[:1500]}\n"
+    context_text += f"Target Level: {clean_level}\n\nTask: Bu hikayenin kilit dönüm noktasına veya karakterin zorlu kararına odaklanan, canlı nida ile başlayan tek bir açılış sorusu sor."
+
+    fallback_question = f"Oh, wow! That ending in '{story_title}' really caught me off guard! Looking at that critical moment, do you think the protagonist made the right decision, or what would you have done?"
+
+    try:
+        gemini_contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=context_text)],
+            )
+        ]
+
+        response_dict = await asyncio.wait_for(
+            async_call_speaking_gemini(
+                gemini_contents,
+                system_instruction=system_instruction,
+            ),
+            timeout=8.0,
+        )
+
+        initial_q = (
+            response_dict.get("initial_question")
+            or response_dict.get("question")
+            or response_dict.get("opening_question")
+            or response_dict.get("assistant_reply")
+        )
+
+        if not initial_q or not str(initial_q).strip():
+            initial_q = fallback_question
+        else:
+            initial_q = str(initial_q).strip()
+
+        return InitStoryDebateResponse(
+            story_title=story_title,
+            level=clean_level,
+            initial_question=initial_q,
+        )
+    except Exception as e:
+        logger.warning(f"Error in init-story-debate: {e}. Returning contextual fallback question.")
+        return InitStoryDebateResponse(
+            story_title=story_title,
+            level=clean_level,
+            initial_question=fallback_question,
         )
 
 

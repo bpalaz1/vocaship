@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 from pydantic import BaseModel, Field
 
 
@@ -29,29 +29,38 @@ class SpeakingFeedback(BaseModel):
 
 
 class SpeakingRespondRequest(BaseModel):
-    scenario_id: str = Field(
-        default="project_control",
-        description="Scenario identifier ('project_control' | 'contract_claims' | 'corporate_finance' | 'ielts_simulator')",
-    )
+    user_transcript: str = Field(..., description="Spoken transcript from the user")
     history: List[Dict[str, Any]] = Field(
         default=[],
-        description="List of previous dialogue turns (e.g. [{'role': 'assistant', 'message': '...'}])",
+        description="List of previous dialogue turns (e.g. [{'role': 'assistant', 'content': '...'}])",
+    )
+    persona: str = Field(
+        default="sparky",
+        description="Persona identifier: 'sparky' (cheerful kids/mascot) or 'alex' (calm adult mentor)",
+    )
+    target_level: str = Field(
+        default="A1",
+        description="Target CEFR level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1'",
+    )
+    story_context: Optional[Union[Dict[str, Any], str]] = Field(
+        default=None,
+        description="Optional story context (title, level, target_words) or raw string summary",
+    )
+    # Geriye dönük uyumluluk alanları
+    scenario_id: Optional[str] = Field(
+        default="project_control",
+        description="Scenario identifier ('project_control' | 'contract_claims' | 'corporate_finance' | 'ielts_simulator')",
     )
     conversation_history: Optional[List[Dict[str, Any]]] = Field(
         default=None,
         description="Full conversation history [{'role': m.role, 'content': m.text}]",
     )
-    user_transcript: str = Field(..., description="Spoken transcript from the user")
-    story_context: Optional[str] = Field(
+    level: Optional[str] = Field(
         default=None,
-        description="Optional story context passed from reading room or custom document",
-    )
-    target_level: Optional[str] = Field(
-        default="C1",
-        description="Target CEFR level (A1, A2, B1, B2, or C1)",
+        description="Active CEFR level ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')",
     )
     conversation_mode: Optional[str] = Field(
-        default="interview",
+        default="casual",
         description="'casual' | 'problem_solving' | 'interview' | 'story_debate'",
     )
     active_category: Optional[str] = Field(
@@ -73,7 +82,35 @@ class SpeakingMetrics(BaseModel):
 class SpeakingRespondResponse(BaseModel):
     assistant_reply: str = Field(
         ...,
-        description="Kullanıcının seviyesine uygun, doğal, seslendirilecek İngilizce cevap",
+        description="Seslendirilecek doğal, insani yanıt ve kısa takip sorusu (2-3 cümle)",
+    )
+    recast_note: Optional[str] = Field(
+        default=None,
+        description="Kullanıcının gramer hatasının sohbette doğal yankılanma şekli (Recasting)",
+    )
+    fluency_hint: str = Field(
+        default="",
+        description="Kullanıcı duraksarsa kullanabileceği 1 cümlelik konuşma fısıltısı",
+    )
+    session_vocabulary_used: List[str] = Field(
+        default=[],
+        description="Oturumda kullanılan / pekiştirilen hedef kelimeler",
+    )
+    level_label: Optional[str] = Field(
+        default="A1 Doğal Alternatif",
+        description="Aktif CEFR seviyesine uygun alternatif başlığı",
+    )
+    target_words_spotted: List[str] = Field(
+        default=[],
+        description="Kullanıcının başarıyla kullandığı hedef kelimeler",
+    )
+    polished_alternative: str = Field(
+        default="",
+        description="Cümlenin kullanıcının seviyesinin bir tık üstü (N+1) doğal alternatifi",
+    )
+    suggested_new_words: List[Dict[str, str]] = Field(
+        default=[],
+        description="Önerilen yeni kelimeler ve anlamları [{'word': 'terim', 'meaning': 'anlamı'}]",
     )
     reply_message: Optional[str] = Field(
         default=None,
@@ -87,8 +124,8 @@ class SpeakingRespondResponse(BaseModel):
         default=None,
         description="Fluency, vocabulary ve grammar değerlendirme skorları",
     )
-    feedback: Any = Field(
-        ...,
+    feedback: Optional[Any] = Field(
+        default=None,
         description="Vocaship Live Speaking Engine standardında gramer düzeltmesi, alternatif cümle veya övgü/geri bildirim",
     )
     # Geriye dönük uyumluluk alanları (mevcut arayüz bileşenlerinin sorunsuz çalışması için)
@@ -98,7 +135,7 @@ class SpeakingRespondResponse(BaseModel):
     )
     better_alternative: str = Field(
         default="",
-        description="C1 level polished alternative to the user's sentence",
+        description="Polished alternative to the user's sentence",
     )
     vocabulary_highlight: List[str] = Field(
         default=[],
@@ -182,6 +219,18 @@ class GenerateStoryQuestionsResponse(BaseModel):
     title: str
     opening_question: str
     questions: List[StoryQuestionItem] = []
+
+
+class InitStoryDebateRequest(BaseModel):
+    story_title: str = Field(..., description="Hikayenin başlığı")
+    story_snippet: Optional[str] = Field(default="", description="Hikayenin özeti veya içeriği")
+    level: Optional[str] = Field(default="B1", description="CEFR Seviyesi (A1, A2, B1, B2, C1, C2)")
+
+
+class InitStoryDebateResponse(BaseModel):
+    story_title: str
+    level: str
+    initial_question: str
 
 
 class SpeakingArchiveCreate(BaseModel):

@@ -38,10 +38,13 @@ import {
   Edit3,
   Volume2,
   Languages,
-  Palette
+  Palette,
+  Settings,
 } from "lucide-react";
 import ReadingRoom from "./components/reading/ReadingRoom";
-import AvatarStudioModal from "./components/avatar/AvatarStudioModal";
+import AvatarPickerModal from "./components/profile/AvatarPickerModal";
+import SettingsModal from "./components/settings/SettingsModal";
+import { useProfile } from "./context/ProfileContext";
 import { API_BASE } from "./config";
 import {
   getArenaMistakes,
@@ -119,6 +122,7 @@ export default function Home() {
 
   // Sürükle-Bırak
   const [draggedDeckId, setDraggedDeckId] = useState<string | null>(null);
+  const [dragOverDeckId, setDragOverDeckId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null | "all">(null);
 
   const [decks, setDecks] = useState<Deck[]>([]);
@@ -238,22 +242,9 @@ export default function Home() {
   } | null>(null);
   const [isUpdatingCard, setIsUpdatingCard] = useState(false);
 
-  // Profil & Avatar Stüdyosu State'leri
-  const [userAvatar, setUserAvatar] = useState<string>("/avatars/sparky.png");
+  // Global Profil & Ayarlar Modalı (ProfileContext)
+  const { userProfile, isSettingsModalOpen, setIsSettingsModalOpen } = useProfile();
   const [isAvatarStudioOpen, setIsAvatarStudioOpen] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("vocaship_custom_avatar");
-      if (saved) setUserAvatar(saved);
-
-      const onAvatarUpdate = (e: any) => {
-        if (e.detail?.url) setUserAvatar(e.detail.url);
-      };
-      window.addEventListener("vocaship:avatar-updated", onAvatarUpdate);
-      return () => window.removeEventListener("vocaship:avatar-updated", onAvatarUpdate);
-    }
-  }, []);
 
   // İleri / Geri Navigasyon
   const handlePrevCard = () => {
@@ -344,12 +335,34 @@ export default function Home() {
     }
   };
 
+  // Deste Sıralama Yardımcısı (Kullanıcının özel sıralamasını korur)
+  const sortDecksBySavedOrder = (deckArr: Deck[]): Deck[] => {
+    try {
+      const savedOrderRaw = localStorage.getItem("vocaship_deck_order");
+      if (savedOrderRaw) {
+        const savedOrder: string[] = JSON.parse(savedOrderRaw);
+        if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+          const orderMap = new Map(savedOrder.map((id, index) => [id, index]));
+          return [...deckArr].sort((a, b) => {
+            const posA = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999;
+            const posB = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999;
+            return posA - posB;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Deste sırası yüklenemedi:", e);
+    }
+    return deckArr;
+  };
+
   const fetchDecks = async () => {
     try {
       const res = await fetch(`${API_BASE}/decks`);
       if (res.ok) {
         const data: Deck[] = await res.json();
-        const deckArr = Array.isArray(data) ? data : [];
+        const rawArr = Array.isArray(data) ? data : [];
+        const deckArr = sortDecksBySavedOrder(rawArr);
         setDecks(deckArr);
         if (deckArr.length > 0) {
           setSelectedDeckForWord((prev) => prev || deckArr[0].id);
@@ -427,13 +440,21 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [currentMode, isQuizOver, selectedAnswer, quizCardIndex]);
 
-  // SÜRÜKLE-BIRAK
+  // SÜRÜKLE-BIRAK (DESTE KARTLARI & KLASÖRLER)
   const handleDragStart = (e: React.DragEvent, deckId: string) => {
     setDraggedDeckId(deckId);
     e.dataTransfer.setData("text/plain", deckId);
     e.dataTransfer.effectAllowed = "move";
   };
 
+  const handleDragEnd = () => {
+    setDraggedDeckId(null);
+    setDragOverDeckId(null);
+    setDragOverFolderId(null);
+  };
+  const handleDeckDragEnd = handleDragEnd;
+
+  // 1. Klasör üzerine sürükleme olayları
   const handleDragOver = (e: React.DragEvent, folderTarget: string | null | "all") => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -448,12 +469,20 @@ export default function Home() {
 
   const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: string | null) => {
     e.preventDefault();
+    e.stopPropagation();
     const deckId = e.dataTransfer.getData("text/plain") || draggedDeckId;
     setDragOverFolderId(null);
+    setDragOverDeckId(null);
     setDraggedDeckId(null);
 
     if (!deckId) return;
 
+    // 1. Optimistic Update: Destedeki folder_id bilgisini anında güncelle (kullanıcı beklemesin)
+    setDecks((prev) =>
+      prev.map((d) => (d.id === deckId ? { ...d, folder_id: targetFolderId } : d))
+    );
+
+    // 2. Arka planda sunucuya PATCH isteği gönder ve sayaçları yenile
     try {
       const res = await fetch(`${API_BASE}/decks/${deckId}/folder`, {
         method: "PATCH",
@@ -467,7 +496,60 @@ export default function Home() {
       }
     } catch (err) {
       console.error("Deste klasöre taşınamadı:", err);
+      fetchDecks();
     }
+  };
+
+  // 2. Kartlar arası sıralama (Deck Reordering) sürükleme olayları
+  const handleDeckDragOver = (e: React.DragEvent, targetDeckId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    if (draggedDeckId && draggedDeckId !== targetDeckId) {
+      if (dragOverDeckId !== targetDeckId) {
+        setDragOverDeckId(targetDeckId);
+      }
+    }
+  };
+
+  const handleDeckDragLeave = (e: React.DragEvent, targetDeckId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverDeckId === targetDeckId) {
+      setDragOverDeckId(null);
+    }
+  };
+
+  const handleDeckDrop = (e: React.DragEvent, targetDeckId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sourceDeckId = e.dataTransfer.getData("text/plain") || draggedDeckId;
+    setDragOverDeckId(null);
+    setDraggedDeckId(null);
+    setDragOverFolderId(null);
+
+    if (!sourceDeckId || sourceDeckId === targetDeckId) return;
+
+    setDecks((prevDecks) => {
+      const fromIndex = prevDecks.findIndex((d) => d.id === sourceDeckId);
+      const toIndex = prevDecks.findIndex((d) => d.id === targetDeckId);
+      if (fromIndex === -1 || toIndex === -1) return prevDecks;
+
+      // arrayMove mantığıyla yeniden sırala
+      const updated = [...prevDecks];
+      const [movedItem] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, movedItem);
+
+      // Sıralamayı localStorage'a kaydet
+      try {
+        const orderIds = updated.map((d) => d.id);
+        localStorage.setItem("vocaship_deck_order", JSON.stringify(orderIds));
+      } catch (err) {
+        console.warn("Deste sırası kaydedilemedi:", err);
+      }
+
+      return updated;
+    });
   };
 
   // KLASÖR OLUŞTURMA & SİLME
@@ -1140,7 +1222,7 @@ export default function Home() {
   const activeFolderName = folders.find((f) => String(f.id).toLowerCase() === String(selectedFolderId).toLowerCase())?.name;
 
   return (
-    <main className="bg-[#0B0F19] min-h-screen text-slate-100 selection:bg-indigo-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+    <main className="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen selection:bg-indigo-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden transition-colors duration-150">
       {/* Yalnızca Bir Deste Açıkken Görünen Şık Deste Üst Kontrol Çubuğu */}
       {activeDeck && (
         <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between pb-4 mb-4 border-b border-slate-800 animate-in fade-in duration-150">
@@ -1190,23 +1272,58 @@ export default function Home() {
             <aside className="w-full lg:w-72 xl:w-80 shrink-0 lg:sticky lg:top-20">
               <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md">
                 {/* Üst Kısım - Profil Alanı */}
-                <div className="flex items-center gap-3">
-                  <img
-                    src={userAvatar || "/avatars/sparky.png"}
-                    alt="Profil Avatarı"
-                    className="w-12 h-12 rounded-xl border border-amber-400/50 object-cover shadow-md shadow-amber-500/10 shrink-0"
-                  />
+                <div
+                  onClick={() => setIsAvatarStudioOpen(true)}
+                  className="flex items-center gap-3 cursor-pointer group pb-3 border-b border-slate-800/80"
+                >
+                  {/* Sarı Çerçeveli Avatar */}
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-xl ring-2 ring-amber-400/80 border border-amber-400/50 bg-slate-950 flex items-center justify-center overflow-hidden shadow-md shadow-amber-500/10 shrink-0 group-hover:scale-105 transition-transform">
+                      {userProfile?.avatar_url && (userProfile.avatar_url.startsWith("http") || userProfile.avatar_url.startsWith("/") || userProfile.avatar_url.startsWith("data:")) ? (
+                        <img
+                          src={userProfile.avatar_url}
+                          alt="Profil Avatarı"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/avatars/presets/avatar_01.svg";
+                          }}
+                        />
+                      ) : userProfile?.avatar_url ? (
+                        <span className="text-2xl">{userProfile.avatar_url}</span>
+                      ) : (
+                        <span className="text-base font-bold text-amber-300">
+                          {((userProfile?.full_name || userProfile?.username || "Ö").charAt(0)).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="font-bold text-slate-100 text-sm truncate">Burak P.</h3>
-                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0">
-                        Lv.3
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="font-bold text-slate-100 text-sm truncate group-hover:text-amber-300 transition-colors">
+                        {userProfile?.username ? (userProfile.username.startsWith("@") ? userProfile.username : `@${userProfile.username}`) : (userProfile?.full_name || "@ogrenci")}
+                      </h3>
+                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 font-mono">
+                        • Lv.{userProfile?.study_level || "B1"}
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 font-medium truncate max-w-[130px] mt-0.5">
-                      Kıdemli Dil Öğr...
+                      {userProfile?.full_name || "Öğrenci"}
                     </p>
                   </div>
+
+                  {/* Zarif ✏️ Düzenle Butonu */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAvatarStudioOpen(true);
+                    }}
+                    title="Avatarı Değiştir"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer shrink-0"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* [ 🎨 Avatarı Değiştir ] Butonu */}
@@ -1275,8 +1392,8 @@ export default function Home() {
             {/* =================================================================== */}
             {/* B) SAĞ GENİŞ SÜTUN (Arama Konsolu, Klasörler & Deste Kartları)     */}
             {/* =================================================================== */}
-            <main className="flex-1 min-w-0 w-full space-y-6">
-              {/* Üst Konsol Barı */}
+            <div className="flex-1 min-w-0 w-full space-y-6">
+              {/* Üst Konsol Barı (Arama & Aksiyonlar - Tam Genişlik) */}
               <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full bg-slate-900/85 border border-slate-800/90 p-2.5 rounded-2xl shadow-xl backdrop-blur-md">
                 {/* Arama Çubuğu */}
                 <div className="relative flex-1 w-full">
@@ -1381,6 +1498,64 @@ export default function Home() {
                 </div>
               </div>
 
+            {/* Üst Klasör Sekmeleri Barı (Tüm Desteler, 📁 Klasörler - Sürükle-Bırak Hedefi) */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {/* Tüm Desteler Sekmesi */}
+              <button
+                type="button"
+                onClick={() => setSelectedFolderId(null)}
+                onDragOver={(e) => handleDragOver(e, "all")}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDropOnFolder(e, null)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  selectedFolderId === null
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400"
+                    : "bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white"
+                } ${
+                  dragOverFolderId === "all"
+                    ? "ring-2 ring-amber-400 scale-105 border-dashed border-amber-400 bg-amber-500/15 text-amber-300"
+                    : ""
+                }`}
+              >
+                <span>📚</span>
+                <span>Tüm Desteler</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-black/30 text-slate-300">
+                  {decks.length}
+                </span>
+              </button>
+
+              {/* Dinamik Klasör Sekmeleri (📁 Kuzey, 📁 Ruzgar vb.) */}
+              {folders.map((f) => {
+                const isSelected = selectedFolderId === f.id;
+                const isHovered = dragOverFolderId === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setSelectedFolderId(f.id)}
+                    onDragOver={(e) => handleDragOver(e, f.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDropOnFolder(e, f.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                      isSelected
+                        ? "bg-amber-600 text-white shadow-md shadow-amber-600/30 ring-1 ring-amber-400"
+                        : "bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white"
+                    } ${
+                      isHovered
+                        ? "ring-2 ring-amber-400 scale-105 border-dashed border-amber-400 bg-amber-500/15 text-amber-300"
+                        : ""
+                    }`}
+                  >
+                    <span>📁</span>
+                    <span>{f.name}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-black/30 text-slate-300">
+                      {f.deck_count || 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Seçili Klasör Uyarısı */}
             {selectedFolderId && (
               <div className="flex items-center justify-between px-3 py-2.5 mb-5 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl">
@@ -1459,7 +1634,7 @@ export default function Home() {
                     <FolderTree className="w-4 h-4 text-amber-400" />
                     <span>Klasörler</span>
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                     {folders.map((f) => {
                       const isHovered = dragOverFolderId === f.id;
                       return (
@@ -1469,9 +1644,9 @@ export default function Home() {
                           onDragOver={(e) => handleDragOver(e, f.id)}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDropOnFolder(e, f.id)}
-                          className={`bg-slate-900/85 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-400/60 rounded-2xl p-4 shadow-lg shadow-amber-950/20 hover:shadow-amber-500/10 transition-all cursor-pointer group flex flex-col justify-between select-none relative ${
+                          className={`bg-white dark:bg-slate-900/85 hover:bg-slate-50 dark:hover:bg-slate-850 border border-amber-500/30 hover:border-amber-400/60 rounded-2xl p-4 shadow-sm dark:shadow-lg shadow-amber-950/20 hover:shadow-amber-500/10 transition-all cursor-pointer group flex flex-col justify-between select-none relative ${
                             isHovered
-                              ? "border-dashed border-amber-400 scale-105 shadow-xl shadow-amber-500/20"
+                              ? "border-dashed border-2 border-amber-400 scale-105 bg-amber-500/10 ring-2 ring-amber-400/40 shadow-xl shadow-amber-500/20"
                               : ""
                           }`}
                         >
@@ -1485,13 +1660,13 @@ export default function Home() {
                                 handleDeleteFolder(f.id, f.name);
                               }}
                               title="Klasörü Sil"
-                              className="text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition p-1"
+                              className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition p-1"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                           <div>
-                            <h4 className="font-bold text-slate-100 text-sm group-hover:text-amber-300 transition-colors truncate">{f.name}</h4>
+                            <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm group-hover:text-amber-500 dark:group-hover:text-amber-300 transition-colors truncate">{f.name}</h4>
                             <div className="mt-2">
                               <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs px-2 py-0.5 rounded-lg font-medium inline-block">
                                 {f.deck_count || 0} Deste
@@ -1509,46 +1684,61 @@ export default function Home() {
                     <BookOpen className="w-4 h-4 text-indigo-400" />
                     <span>Genel & Bağımsız Desteler</span>
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                     {decks
                       .filter((d) => !d.folder_id)
-                      .map((deck) => (
-                        <div
-                          key={deck.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, deck.id)}
-                          onClick={() => startStudy(deck)}
-                          className="bg-slate-900/90 hover:bg-slate-850 border border-slate-800/90 hover:border-indigo-500/60 rounded-2xl p-5 shadow-xl hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none"
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center space-x-1.5 text-slate-500 group-hover:text-slate-400 text-[11px]">
-                                <GripVertical className="w-3.5 h-3.5" />
-                                <span>Sürükle</span>
+                      .map((deck) => {
+                        const isBeingDragged = draggedDeckId === deck.id;
+                        const isTargetHovered = dragOverDeckId === deck.id;
+
+                        return (
+                          <div
+                            key={deck.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, deck.id)}
+                            onDragOver={(e) => handleDeckDragOver(e, deck.id)}
+                            onDragLeave={(e) => handleDeckDragLeave(e, deck.id)}
+                            onDrop={(e) => handleDeckDrop(e, deck.id)}
+                            onDragEnd={handleDragEnd}
+                            onClick={() => startStudy(deck)}
+                            className={`${
+                              isBeingDragged
+                                ? "opacity-40 border-indigo-500 border-dashed scale-95"
+                                : isTargetHovered
+                                ? "ring-2 ring-indigo-500 scale-[1.02] border-indigo-400 shadow-xl shadow-indigo-500/20 z-10"
+                                : "bg-white dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-850 border border-slate-200/90 dark:border-slate-800/90 hover:border-indigo-400 dark:hover:border-indigo-500/60"
+                            } rounded-2xl p-5 shadow-sm dark:shadow-xl hover:shadow-md dark:hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center space-x-1.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400 text-[11px]">
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                  <span>Sürükle</span>
+                                </div>
+                                <button
+                                  onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
+                                  title="Desteyi Sil"
+                                  className="text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
-                              <button
-                                onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
-                                title="Desteyi Sil"
-                                className="text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <h4 className="text-base font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">{deck.title}</h4>
+                              <p className="text-slate-600 dark:text-slate-400 text-xs line-clamp-2 mt-1 mb-4">{deck.description || "Açıklama yok."}</p>
+                              <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
+                                {deck.card_count} Kart
+                              </span>
                             </div>
-                            <h4 className="text-base font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">{deck.title}</h4>
-                            <p className="text-slate-400 text-xs line-clamp-2 mt-1 mb-4">{deck.description || "Açıklama yok."}</p>
-                            <span className="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
-                              {deck.card_count} Kart
-                            </span>
+                            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                              <span className="text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
+                              <span className="text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
+                                <span>Çalış & Oyna →</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </span>
+                            </div>
                           </div>
-                          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                            <span className="text-slate-400 text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
-                            <span className="text-indigo-400 group-hover:text-indigo-300 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
-                              <span>Çalış & Oyna →</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
               </div>
@@ -1587,58 +1777,65 @@ export default function Home() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                     {filteredDecks.map((deck) => {
                       const parentFolder = folders.find((f) => String(f.id).toLowerCase() === String(deck.folder_id).toLowerCase());
                       const isBeingDragged = draggedDeckId === deck.id;
+                      const isTargetHovered = dragOverDeckId === deck.id;
 
                       return (
                         <div
                           key={deck.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, deck.id)}
+                          onDragOver={(e) => handleDeckDragOver(e, deck.id)}
+                          onDragLeave={(e) => handleDeckDragLeave(e, deck.id)}
+                          onDrop={(e) => handleDeckDrop(e, deck.id)}
+                          onDragEnd={handleDeckDragEnd}
                           onClick={() => startStudy(deck)}
                           className={`${
                             isBeingDragged
                               ? "opacity-40 border-indigo-500 border-dashed scale-95"
-                              : "bg-slate-900/90 hover:bg-slate-850 border border-slate-800/90 hover:border-indigo-500/60"
-                          } rounded-2xl p-5 shadow-xl hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none`}
+                              : isTargetHovered
+                              ? "ring-2 ring-indigo-500 scale-[1.02] border-indigo-400 shadow-xl shadow-indigo-500/20 z-10"
+                              : "bg-white dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-850 border border-slate-200/90 dark:border-slate-800/90 hover:border-indigo-400 dark:hover:border-indigo-500/60"
+                          } rounded-2xl p-5 shadow-sm dark:shadow-xl hover:shadow-md dark:hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none`}
                         >
                           <div>
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center space-x-1.5 text-slate-500 group-hover:text-slate-400">
+                              <div className="flex items-center space-x-1.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400">
                                 <GripVertical className="w-4 h-4" />
                                 <span className="text-[11px]">Sürükle</span>
                               </div>
                               <button
                                 onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
                                 title="Desteyi Sil"
-                                className="text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
+                                className="text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
 
                             {parentFolder && (
-                              <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-lg text-xs font-medium inline-flex items-center space-x-1 mb-2">
+                              <span className="bg-amber-500/10 text-amber-500 dark:text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-lg text-xs font-medium inline-flex items-center space-x-1 mb-2">
                                 📁 {parentFolder.name}
                               </span>
                             )}
-                            <h3 className="text-base font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
                               {deck.title}
                             </h3>
-                            <p className="text-slate-400 text-xs line-clamp-2 mt-1 mb-4">
+                            <p className="text-slate-600 dark:text-slate-400 text-xs line-clamp-2 mt-1 mb-4">
                               {deck.description || "Açıklama yok."}
                             </p>
 
-                            <span className="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
+                            <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
                               {deck.card_count} Kart
                             </span>
                           </div>
 
-                          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                            <span className="text-slate-400 text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
-                            <span className="text-indigo-400 group-hover:text-indigo-300 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
+                          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                            <span className="text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
+                            <span className="text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
                               <span>Çalış & Oyna →</span>
                               <ChevronRight className="w-3.5 h-3.5" />
                             </span>
@@ -1678,13 +1875,26 @@ export default function Home() {
                 ) : (
                   filteredDecks.map((deck) => {
                     const parentFolder = folders.find((f) => String(f.id).toLowerCase() === String(deck.folder_id).toLowerCase());
+                    const isBeingDragged = draggedDeckId === deck.id;
+                    const isTargetHovered = dragOverDeckId === deck.id;
+
                     return (
                       <div
                         key={deck.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, deck.id)}
+                        onDragOver={(e) => handleDeckDragOver(e, deck.id)}
+                        onDragLeave={(e) => handleDeckDragLeave(e, deck.id)}
+                        onDrop={(e) => handleDeckDrop(e, deck.id)}
+                        onDragEnd={handleDeckDragEnd}
                         onClick={() => startStudy(deck)}
-                        className="group cursor-pointer bg-slate-900/80 hover:bg-slate-850 border border-slate-800/90 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/20 px-4 py-3 rounded-xl transition flex items-center justify-between"
+                        className={`group cursor-pointer ${
+                          isBeingDragged
+                            ? "opacity-40 border-indigo-500 border-dashed scale-98"
+                            : isTargetHovered
+                            ? "ring-2 ring-indigo-500 scale-[1.01] border-indigo-400 bg-slate-800 shadow-xl shadow-indigo-500/20 z-10"
+                            : "bg-slate-900/80 hover:bg-slate-850 border-slate-800/90 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/20"
+                        } border px-4 py-3 rounded-xl transition-all flex items-center justify-between`}
                       >
                         <div className="flex items-center space-x-3.5 min-w-0">
                           <GripVertical className="w-4 h-4 text-slate-600 group-hover:text-slate-400 shrink-0 cursor-grab" />
@@ -1719,9 +1929,9 @@ export default function Home() {
                 )}
               </div>
             )}
-          </main>
-        </div>
-      ) : loading ? (
+            </div>
+          </div>
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center my-auto space-y-3">
             <RotateCw className="w-8 h-8 text-indigo-400 animate-spin" />
             <p className="text-sm text-slate-400">Yükleniyor...</p>
@@ -2776,12 +2986,16 @@ export default function Home() {
           </div>
         </div>
       )}
-      {/* Avatar Stüdyosu Modalı */}
-      <AvatarStudioModal
+      {/* Avatar Stüdyosu Modalı (10 Standart Avatar / Selfie / Fotoğraf Yükle) */}
+      <AvatarPickerModal
         isOpen={isAvatarStudioOpen}
         onClose={() => setIsAvatarStudioOpen(false)}
-        currentAvatarUrl={userAvatar}
-        onAvatarChanged={(url) => setUserAvatar(url)}
+      />
+
+      {/* Merkezi Hesap & Tercihler Modalı */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
       />
     </main>
   );

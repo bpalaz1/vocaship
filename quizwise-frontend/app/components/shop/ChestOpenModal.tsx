@@ -31,6 +31,7 @@ import {
   ItemRarity,
 } from "../../data/chestItems";
 import { usePersona } from "../../context/PersonaContext";
+import ItemArtwork from "./ItemArtwork";
 
 export interface ChestOpenModalProps {
   isOpen: boolean;
@@ -388,24 +389,12 @@ export default function ChestOpenModal({
                     </div>
                   )}
 
-                  {/* Eşya Vitrini */}
-                  <div
-                    className={`w-28 h-28 mx-auto rounded-3xl p-3 border-2 ${
-                      rarityColors[revealedItem.rarity].border
-                    } ${rarityColors[revealedItem.rarity].glow} ${
-                      rarityColors[revealedItem.rarity].bg
-                    } flex items-center justify-center text-5xl relative`}
-                  >
-                    {revealedItem.type === "avatar" && revealedItem.image.startsWith("/") ? (
-                      <img
-                        src={revealedItem.image}
-                        alt={revealedItem.name.tr}
-                        className="w-full h-full object-contain filter drop-shadow"
-                      />
-                    ) : (
-                      <span>{revealedItem.icon}</span>
-                    )}
-                  </div>
+                  {/* Benzersiz Eşya Vitrini */}
+                  <ItemArtwork
+                    item={revealedItem}
+                    size="xl"
+                    className="mx-auto rounded-3xl"
+                  />
 
                   <div className="space-y-1">
                     <span className="text-[10px] uppercase font-bold font-mono tracking-widest text-slate-400">
@@ -577,26 +566,18 @@ export default function ChestOpenModal({
                         : "bg-slate-950/40 border-slate-800/60 opacity-75"
                     }`}
                   >
-                    {/* Görsel / İkon */}
-                    <div
-                      className={`w-14 h-14 mx-auto rounded-xl flex items-center justify-center text-2xl relative ${
-                        isOwned
-                          ? rarityColors[item.rarity].bg
-                          : "bg-slate-900 border border-slate-800"
-                      }`}
-                    >
-                      {item.type === "avatar" && item.image.startsWith("/") ? (
-                        <img
-                          src={item.image}
-                          alt={item.name.tr}
-                          className="w-full h-full object-contain filter drop-shadow"
-                        />
-                      ) : (
-                        <span>{item.icon}</span>
-                      )}
-
+                    {/* Benzersiz SVG Görsel / İkon */}
+                    <div className="relative mx-auto">
+                      <ItemArtwork
+                        item={item}
+                        size="md"
+                        showGlow={isOwned}
+                        className={!isOwned ? "opacity-60 grayscale-[35%]" : ""}
+                      />
                       {!isOwned && (
-                        <span className="absolute -top-1 -right-1 text-xs">🔒</span>
+                        <span className="absolute -top-1 -right-1 text-xs bg-slate-950/80 rounded-full px-1 py-0.5 border border-slate-800 shadow">
+                          🔒
+                        </span>
                       )}
                     </div>
 

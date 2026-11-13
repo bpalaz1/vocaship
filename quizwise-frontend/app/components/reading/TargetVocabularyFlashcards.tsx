@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "../../context/LanguageContext";
 import { API_BASE } from "../../config";
+import { playNeuralTTS } from "../../utils/tts";
 import PronunciationCoach from "../PronunciationCoach";
 
 export interface TargetVocabularyItem {
@@ -81,16 +82,10 @@ function SingleFlashcard({
     }
   };
 
-  // 1. Telaffuz Çalma (Web Speech API) - Kartın açılmasını engeller (e.stopPropagation)
+  // 1. Telaffuz Çalma (Edge-TTS Nöral Ses) - Kartın açılmasını engeller (e.stopPropagation)
   const handleSpeak = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(item.word);
-      utterance.lang = "en-US";
-      utterance.rate = 0.95;
-      window.speechSynthesis.speak(utterance);
-    }
+    playNeuralTTS(item.word, { rate: 0.95 });
   };
 
   // 2. Desteye Kart Olarak Ekleme

@@ -22,6 +22,8 @@ import {
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
+import { calculateWordReward, awardGamificationReward } from "../../utils/gamificationEngine";
+import { GameMistakeItem } from "./GameOverSummary";
 
 export interface FlashcardItem {
   id: string;
@@ -62,7 +64,7 @@ interface Question {
 
 type GamePhase = "START" | "QUESTION" | "FEEDBACK_WRONG" | "CHEST_SELECT" | "CHEST_REVEAL" | "STEAL_SELECT" | "GAME_OVER";
 
-type ChestRewardType = "gold_25" | "gold_50" | "gold_100" | "multiplier_2x" | "steal" | "bomb";
+type ChestRewardType = "gold_25" | "gold_50" | "gold_75" | "gold_100" | "multiplier_2x" | "steal" | "bomb";
 
 interface ChestReward {
   type: ChestRewardType;
@@ -107,6 +109,9 @@ export default function GoldQuestGame({
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [selectedOptionIdx, setSelectedOptionIdx] = useState<number | null>(null);
   const [stats, setStats] = useState({ correct: 0, wrong: 0, goldEarned: 0 });
+  const [sessionMistakes, setSessionMistakes] = useState<GameMistakeItem[]>([]);
+  const [compensatedWords, setCompensatedWords] = useState<Record<string, boolean>>({});
+  const [activeSpeakingWord, setActiveSpeakingWord] = useState<string | null>(null);
 
   // Canlı Sınıf Arkadaşları
   const [players, setPlayers] = useState<Player[]>([
@@ -270,29 +275,62 @@ export default function GoldQuestGame({
     };
   };
 
-  // Rastgele Sandık Ödülleri Üretici
+  // Rastgele Sandık Ödülleri Üretici (Pedagojik Kural: Kesinlikle Bomba/Tuzak Yok)
   const rollChestRewards = (): ChestReward[] => {
     const possibleRewards: ChestReward[] = [
       { type: "gold_25", title: "+25 Altın", description: "Küçük bir hazine sandığı buldun!", icon: "💰", amount: 25 },
       { type: "gold_50", title: "+50 Altın", description: "Korsan altınları!", icon: "💎", amount: 50 },
+      { type: "gold_75", title: "+75 Altın!", description: "Büyük altın sandığı!", icon: "✨", amount: 75 },
       { type: "gold_100", title: "+100 Altın!", description: "Büyük ganimet çantası!", icon: "👑", amount: 100 },
       { type: "multiplier_2x", title: "2x Çarpan! 🔥", description: "Tüm altınların 2 katına çıktı!", icon: "⚡" },
       { type: "steal", title: "Altın Çalma! 🏴‍☠️", description: "Bir arkadaşının %25 altınını kap!", icon: "🥷" },
-      { type: "bomb", title: "Korsan Tuzağı! 💣", description: "Güm! Altınlarının %20'si denize düştü!", icon: "💣" }
     ];
 
-    // 3 sandık için ağırlıklı rastgele seçim
+    // 3 sandık için ağırlıklı rastgele seçim (Kayıpsız pozitif ödüller)
     const getWeighted = (): ChestReward => {
       const r = Math.random();
       if (r < 0.28) return possibleRewards[0]; // +25
-      if (r < 0.58) return possibleRewards[1]; // +50
-      if (r < 0.73) return possibleRewards[2]; // +100
-      if (r < 0.85) return possibleRewards[3]; // 2x
-      if (r < 0.94) return possibleRewards[4]; // Steal
-      return possibleRewards[5]; // Bomb
+      if (r < 0.55) return possibleRewards[1]; // +50
+      if (r < 0.72) return possibleRewards[2]; // +75
+      if (r < 0.85) return possibleRewards[3]; // +100
+      if (r < 0.93) return possibleRewards[4]; // 2x
+      return possibleRewards[5]; // Steal
     };
 
     return [getWeighted(), getWeighted(), getWeighted()];
+  };
+
+  // 5 Saniyelik Hata Telafisi: Web Speech API ile dinle & +15 Telafi Altını kazan
+  const handleListenAndCompensate = (item: GameMistakeItem) => {
+    const wordKey = item.word.toLowerCase();
+    setActiveSpeakingWord(wordKey);
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(item.word);
+        utterance.lang = "en-US";
+        utterance.rate = 0.85;
+        utterance.onend = () => setActiveSpeakingWord(null);
+        utterance.onerror = () => setActiveSpeakingWord(null);
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        setActiveSpeakingWord(null);
+      }
+    } else {
+      setTimeout(() => setActiveSpeakingWord(null), 500);
+    }
+
+    if (!compensatedWords[wordKey]) {
+      setCompensatedWords((prev) => ({ ...prev, [wordKey]: true }));
+      awardGamificationReward(0, 15, `🎯 Telafi: ${item.word}`);
+      saveArenaMistake({
+        word: item.word,
+        meaning: item.meaning,
+        phonetic: item.phonetic,
+        gameType: "gold_quest_compensated",
+      });
+    }
   };
 
   // Oyunu Başlat
@@ -304,6 +342,7 @@ export default function GoldQuestGame({
     setQuestionIndex(0);
     setCurrentQuestion(generateQuestion(0));
     setSelectedOptionIdx(null);
+    setSessionMistakes([]);
   };
 
   // 3 Dakikalık Geri Sayım Sayacı
@@ -351,8 +390,8 @@ export default function GoldQuestGame({
             delta = Math.floor(p.gold * 0.5);
             actionText = `${p.name} 2x Çarpan buldu! 🔥`;
           } else {
-            delta = -Math.floor(p.gold * 0.2);
-            actionText = `${p.name} korsan bombasına bastı! 💣`;
+            delta = 35;
+            actionText = `${p.name} gizemli hazine (+35 💰) buldu! ✨`;
           }
 
           const newGold = Math.max(0, p.gold + delta);
@@ -378,7 +417,15 @@ export default function GoldQuestGame({
 
     if (isCorrect) {
       playSound("correct");
-      setStats((s) => ({ ...s, correct: s.correct + 1 }));
+      const nextCorrect = stats.correct + 1;
+      setStats((s) => ({ ...s, correct: nextCorrect }));
+
+      const targetWord = currentQuestion.card?.word || currentQuestion.prompt;
+      calculateWordReward({
+        word: targetWord,
+        streak: nextCorrect,
+        isCorrect: true,
+      });
 
       // Sandık seçim ekranına geç
       const rewards = rollChestRewards();
@@ -394,8 +441,18 @@ export default function GoldQuestGame({
       setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
       setPhase("FEEDBACK_WRONG");
 
+      const correctOpt = currentQuestion.options.find((o) => o.isCorrect);
+      const missedWord = currentQuestion.card?.word || currentQuestion.prompt;
+
+      setSessionMistakes((prev) => {
+        if (prev.some((m) => m.word.toLowerCase() === missedWord.toLowerCase())) return prev;
+        return [
+          ...prev,
+          { word: missedWord, meaning: correctOpt ? correctOpt.text : "" },
+        ];
+      });
+
       if (currentQuestion.card) {
-        const correctOpt = currentQuestion.options.find((o) => o.isCorrect);
         saveArenaMistake({
           word: currentQuestion.card.word,
           meaning: correctOpt ? correctOpt.text : undefined,
@@ -439,10 +496,15 @@ export default function GoldQuestGame({
     setActiveReward(reward);
     setPhase("CHEST_REVEAL");
 
-    // Ödül mantığını uygula
-    if (reward.type === "gold_25" || reward.type === "gold_50" || reward.type === "gold_100") {
+    // Ödül mantığını uygula (Kayıpsız pozitif ödüller)
+    if (
+      reward.type === "gold_25" ||
+      reward.type === "gold_50" ||
+      reward.type === "gold_75" ||
+      reward.type === "gold_100"
+    ) {
       playSound("gold");
-      const amount = reward.amount || 25;
+      const amount = reward.amount || 50;
       updateUserGold(amount);
       setStats((s) => ({ ...s, goldEarned: s.goldEarned + amount }));
     } else if (reward.type === "multiplier_2x") {
@@ -453,15 +515,6 @@ export default function GoldQuestGame({
           const bonus = p.gold === 0 ? 50 : p.gold;
           setStats((s) => ({ ...s, goldEarned: s.goldEarned + bonus }));
           return { ...p, gold: p.gold + bonus, recentChange: bonus };
-        })
-      );
-    } else if (reward.type === "bomb") {
-      playSound("bomb");
-      setPlayers((prev) =>
-        prev.map((p) => {
-          if (!p.isUser) return p;
-          const loss = Math.max(15, Math.floor(p.gold * 0.2));
-          return { ...p, gold: Math.max(0, p.gold - loss), recentChange: -loss };
         })
       );
     } else if (reward.type === "steal") {
@@ -916,6 +969,64 @@ export default function GoldQuestGame({
                   </div>
                 </div>
               </div>
+
+              {/* 5 Saniyelik Hata Telafisi */}
+              {sessionMistakes.length > 0 && (
+                <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 text-left space-y-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
+                      <span>🎯 5 Saniyelik Hata Telafisi</span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
+                      Kelime Başına +15 🪙
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-snug">
+                    Bu turda kaçırdığın kelimeleri dinle; hem telaffuzunu pekiştir hem de telafi altını kazan!
+                  </p>
+
+                  <div className="space-y-1.5 pt-1">
+                    {sessionMistakes.slice(0, 3).map((m) => {
+                      const wordKey = m.word.toLowerCase();
+                      const isComp = Boolean(compensatedWords[wordKey]);
+                      const isSpk = activeSpeakingWord === wordKey;
+
+                      return (
+                        <div
+                          key={m.word}
+                          className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs sm:text-sm font-black text-white font-mono block">
+                              {m.word}
+                            </span>
+                            <span className="text-[11px] text-slate-400 truncate block">
+                              {m.meaning}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleListenAndCompensate(m)}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition cursor-pointer ${
+                              isComp
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : "bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-sm active:scale-95"
+                            }`}
+                          >
+                            {isComp ? (
+                              <span>✅ +15 🪙 Alındı</span>
+                            ) : (
+                              <span>🔊 Dinle & +15 🪙</span>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Butonlar */}
               <div className="flex items-center gap-3">

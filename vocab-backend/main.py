@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1 import router as api_v1_router
 from app.api.v1.endpoints.reading import router as reading_router
 from app.api.v1.endpoints.speaking import router as speaking_router
+from app.api.v1.endpoints import tts
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.services.quota_service import QuotaExceededException, ProRequiredException
 
@@ -58,6 +59,8 @@ app.include_router(reading_router, prefix="/api/v1")
 app.include_router(reading_router)
 app.include_router(speaking_router, prefix="/api/v1/speaking", tags=["AI Speaking Lounge"])
 app.include_router(speaking_router, prefix="/speaking", tags=["AI Speaking Lounge"])
+app.include_router(tts.router, prefix="/api/v1/tts", tags=["TTS"])
+app.include_router(tts.router, prefix="/tts", tags=["TTS"])
 
 
 @app.get("/")

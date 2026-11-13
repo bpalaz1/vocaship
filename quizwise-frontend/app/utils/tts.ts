@@ -5,10 +5,13 @@
  */
 
 import { PersonaInfo } from "../context/PersonaContext";
+import { API_BASE } from "../config";
 
 export interface SpeakOptions {
   rate?: number;
   pitch?: number;
+  emotion?: string;
+  voice?: string;
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (err: any) => void;
@@ -18,6 +21,8 @@ export interface SpeakOptions {
 let cachedVoices: SpeechSynthesisVoice[] = [];
 let activeSpeechToken = 0;
 let activeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+let currentNeuralAudio: HTMLAudioElement | null = null;
+let karaokeIntervalTimer: ReturnType<typeof setInterval> | null = null;
 
 function clearSpeechTimers() {
   if (activeFallbackTimer) {
@@ -348,16 +353,86 @@ export function getCalibratedRateForPersona(persona: PersonaInfo): number {
 }
 
 /**
- * Karakterin cinsiyet tonu, prosody-optimize metni, hızı ve perdesine göre seslendirir.
- * Ses çalmaya başladığı milisaniyede onStart(), kelime geçişlerinde onBoundary(),
- * ses bittiği milisaniyede onEnd() tetiklenir.
+ * Persona için en uygun Edge-TTS Nöral Ses modelini seçer.
+ * Kadın: en-US-JennyNeural
+ * Genç / Erkek: en-US-GuyNeural
+ * Otoriter / İngiliz: en-GB-RyanNeural
+ * Çocuk: en-US-AnaNeural
  */
-export function speakPersonaText(
+export function getNeuralVoiceForPersona(persona?: PersonaInfo | null): string {
+  if (!persona) return "en-US-JennyNeural";
+
+  const isSparky = persona.id === "sparky" || persona.id === "ruby" || persona.id === "kids_female";
+  const isChuck = persona.id === "chuck";
+  const isKids = isSparky || isChuck || persona.category === "kids";
+  if (isKids) {
+    return "en-US-AnaNeural";
+  }
+
+  const isSeniorMale =
+    ["mr_harrison", "julian", "marcus", "legal_contracts_male", "corp_legal_contracts"].includes(
+      persona.id
+    ) || persona.category === "legal_contracts";
+  if (isSeniorMale) {
+    return "en-GB-RyanNeural";
+  }
+
+  if (persona.gender === "male") {
+    return "en-US-GuyNeural";
+  }
+
+  return "en-US-JennyNeural";
+}
+
+/**
+ * Cümle içindeki duygu ve tonlamayı otomatik tespit eder (SSML prosody eşlemesi).
+ */
+export function detectSentenceEmotion(
+  text: string
+): "cheerful" | "sad" | "friendly" | "whisper" | "default" {
+  if (!text) return "default";
+  const trimmed = text.trim();
+
+  // Yüksek enerji / kutlama / ünlem
+  if (trimmed.endsWith("!") || /!(?:\s|$)/.test(trimmed)) {
+    return "cheerful";
+  }
+
+  // Fısıltı / sır / gizem
+  if (/\b(whisper|whispered|secret|quietly|silent|hush)\b/i.test(trimmed)) {
+    return "whisper";
+  }
+
+  // Hüzün / empati / üç nokta
+  if (
+    trimmed.includes("...") ||
+    /\b(sad|cried|crying|tear|tears|sorry|regret|grief|sorrow|unfortunate|lonely|depressed|heartbroken)\b/i.test(
+      trimmed
+    )
+  ) {
+    return "sad";
+  }
+
+  // Soru ve dostane diyalog
+  if (trimmed.endsWith("?")) {
+    return "friendly";
+  }
+
+  return "default";
+}
+
+/**
+ * Edge-TTS Yüksek Kaliteli Nöral Ses Akışı Çalar.
+ * /api/v1/tts/stream üzerinden canlı MP3 stream alır ve sıfır gecikmeyle oynatır.
+ */
+export function playNeuralTTS(
   text: string,
-  persona: PersonaInfo,
   options?: SpeakOptions
-): SpeechSynthesisUtterance | null {
-  clearSpeechTimers();
+): HTMLAudioElement | null {
+  if (typeof window === "undefined") return null;
+
+  // Mevcut konuşmayı anında kes (Barge-in)
+  stopSpeech();
   const currentToken = ++activeSpeechToken;
 
   const optimizedText = optimizeProsodyForSpeech(text);
@@ -366,128 +441,161 @@ export function speakPersonaText(
     return null;
   }
 
-  const wordCount = optimizedText.split(/\s+/).filter(Boolean).length;
-  const calibratedRate = getCalibratedRateForPersona(persona);
-  const effectiveRate = options?.rate ?? persona.ttsSettings?.rate ?? calibratedRate;
-  const estimatedDurationMs = Math.min(
-    14000,
-    Math.max(2200, Math.round((wordCount * 330) / Math.max(0.65, effectiveRate)))
-  );
+  const voice =
+    options?.voice ||
+    (typeof window !== "undefined"
+      ? localStorage.getItem("vocaship_neural_voice") || "en-US-JennyNeural"
+      : "en-US-JennyNeural");
+  const emotion = options?.emotion || detectSentenceEmotion(optimizedText);
 
-  // Ses çalmaya başladığı milisaniyede anında talking moduna geçsin ve ilk kelimeyi vurgulasın
-  options?.onStart?.();
-  options?.onBoundary?.(0, 0);
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("vocaship:tts-start"));
-  }
-  let hasEnded = false;
+  // Hız biçimlendirme
+  const speed = options?.rate ?? 1.0;
+  const rateStr =
+    speed === 1.0
+      ? "0%"
+      : speed > 1.0
+      ? `+${Math.round((speed - 1) * 100)}%`
+      : `-${Math.round((1 - speed) * 100)}%`;
+
+  const audioUrl = `${API_BASE}/api/v1/tts/stream?text=${encodeURIComponent(
+    optimizedText
+  )}&voice=${encodeURIComponent(voice)}&emotion=${encodeURIComponent(
+    emotion
+  )}&rate=${encodeURIComponent(rateStr)}`;
+
+  const audio = new Audio(audioUrl);
+  audio.playbackRate = speed;
+  currentNeuralAudio = audio;
+
+  const tokens = optimizedText.split(/\s+/).filter(Boolean);
+
+  audio.onplay = () => {
+    if (currentToken !== activeSpeechToken) return;
+    options?.onStart?.();
+    options?.onBoundary?.(0, 0);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocaship:tts-start"));
+    }
+
+    // Kelime kelime karaoke takibi simülasyonu
+    if (tokens.length > 0 && options?.onBoundary) {
+      const estimatedDurationSec = Math.max(1.2, (tokens.length * 0.35) / speed);
+      const stepMs = Math.max(120, (estimatedDurationSec * 1000) / tokens.length);
+      let currentWord = 0;
+      if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
+      karaokeIntervalTimer = setInterval(() => {
+        if (currentToken !== activeSpeechToken) {
+          if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
+          return;
+        }
+        currentWord++;
+        if (currentWord < tokens.length) {
+          options?.onBoundary?.(currentWord, 0);
+        } else {
+          if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
+        }
+      }, stepMs);
+    }
+  };
 
   const finishSpeaking = () => {
-    if (hasEnded || currentToken !== activeSpeechToken) return;
-    hasEnded = true;
-    clearSpeechTimers();
+    if (currentToken !== activeSpeechToken) return;
+    if (karaokeIntervalTimer) {
+      clearInterval(karaokeIntervalTimer);
+      karaokeIntervalTimer = null;
+    }
+    if (currentNeuralAudio === audio) {
+      currentNeuralAudio = null;
+    }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("vocaship:tts-end"));
     }
     options?.onEnd?.();
   };
 
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    activeFallbackTimer = setTimeout(finishSpeaking, estimatedDurationMs);
-    return null;
-  }
-
-  try {
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(optimizedText);
-    utterance.lang = "en-US";
-
-    const matchedVoice = getBestVoiceForPersona(persona);
-    if (matchedVoice) {
-      utterance.voice = matchedVoice;
-    }
-
-    const isSparky = persona.id === "sparky" || persona.id === "ruby" || persona.id === "kids_female";
-    const isChuck = persona.id === "chuck";
-    const isKids = isSparky || isChuck || persona.category === "kids";
-    const isFemale = persona.gender === "female";
-    const isMale = persona.gender === "male";
-    const isSeniorMale =
-      ["mr_harrison", "julian", "marcus", "legal_contracts_male", "corp_legal_contracts"].includes(
-        persona.id
-      ) || persona.category === "legal_contracts";
-
-    const calibratedPitch = isSparky
-      ? 1.24
-      : isChuck
-      ? 1.14
-      : isKids
-      ? 1.18
-      : isFemale
-      ? 1.02
-      : isSeniorMale
-      ? 0.85
-      : isMale
-      ? 0.88 // Leo, Alex ve tüm erkek karakterlerde tok, maskülen perde garantisi
-      : 0.95;
-
-    let targetPitch = options?.pitch ?? persona.ttsSettings?.pitch ?? calibratedPitch;
-    // Eğer erkek karakter konuşuyorsa ve cihazda kadın fallback sesine düşülmüşse sesi kalınlaştır (pitch: 0.88)
-    if (isMale && targetPitch > 0.90) {
-      targetPitch = 0.88;
-    }
-
-    utterance.pitch = targetPitch;
-    utterance.rate = effectiveRate;
-
-    utterance.onstart = () => {
-      if (currentToken === activeSpeechToken) {
-        options?.onStart?.();
-        options?.onBoundary?.(0, 0);
-      }
-    };
-
-    utterance.onboundary = (event: SpeechSynthesisEvent) => {
-      if (currentToken !== activeSpeechToken) return;
-      if (typeof event.charIndex === "number") {
-        const wIdx = getWordIndexFromCharIndex(optimizedText, event.charIndex);
-        options?.onBoundary?.(wIdx, event.charIndex);
-      }
-    };
-
-    // Ses bittiğinde milisaniyelik gecikme olmadan anında idle moduna dönsün
-    utterance.onend = () => {
-      if (currentToken === activeSpeechToken) {
-        finishSpeaking();
-      }
-    };
-
-    utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
-      if (currentToken !== activeSpeechToken) return;
-      if (e?.error === "canceled" || e?.error === "interrupted") {
-        finishSpeaking();
-        return;
-      }
-      // Tarayıcı ses motoru yanıt vermezse tahmini süre sonunda idle'a dön
-      activeFallbackTimer = setTimeout(finishSpeaking, estimatedDurationMs);
-    };
-
-    window.speechSynthesis.speak(utterance);
-    return utterance;
-  } catch {
+  audio.onended = () => {
     finishSpeaking();
-    return null;
-  }
+  };
+
+  audio.onerror = (e) => {
+    if (currentToken !== activeSpeechToken) return;
+    console.warn("Edge-TTS Audio error, falling back to Web Speech:", e);
+    if (karaokeIntervalTimer) {
+      clearInterval(karaokeIntervalTimer);
+      karaokeIntervalTimer = null;
+    }
+
+    // Fallback: tarayıcı speechSynthesis'e güvenli geçiş
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        const utter = new SpeechSynthesisUtterance(optimizedText);
+        utter.lang = "en-US";
+        utter.rate = speed;
+        utter.onend = () => finishSpeaking();
+        utter.onerror = () => finishSpeaking();
+        window.speechSynthesis.speak(utter);
+        return;
+      } catch {}
+    }
+    finishSpeaking();
+    options?.onError?.(e);
+  };
+
+  audio.play().catch((err) => {
+    console.warn("Edge-TTS audio play blocked or failed:", err);
+    finishSpeaking();
+  });
+
+  return audio;
+}
+
+/**
+ * Karakterin profil ve tonlamasına göre Edge-TTS nöral ses motorunu çalıştırır.
+ */
+export function speakPersonaText(
+  text: string,
+  persona: PersonaInfo,
+  options?: SpeakOptions
+): HTMLAudioElement | SpeechSynthesisUtterance | null {
+  const neuralVoice = getNeuralVoiceForPersona(persona);
+  const calibratedRate = getCalibratedRateForPersona(persona);
+  const effectiveRate = options?.rate ?? persona.ttsSettings?.rate ?? calibratedRate;
+  const emotion = options?.emotion || detectSentenceEmotion(text);
+
+  return playNeuralTTS(text, {
+    ...options,
+    voice: options?.voice || neuralVoice,
+    emotion,
+    rate: effectiveRate,
+  });
 }
 
 /**
  * Mevcut konuşmayı anında keser (Barge-in / Interruption).
- * Hem Web Speech API (speechSynthesis.cancel) hem de aktif HTML5 Audio akışlarını (audio.pause) sıfır gecikmeyle durdurur.
+ * Hem Edge-TTS nöral ses akışını hem de tarayıcı sesini anında durdurur.
  */
 export function stopSpeech() {
   activeSpeechToken++;
   clearSpeechTimers();
+
+  if (karaokeIntervalTimer) {
+    clearInterval(karaokeIntervalTimer);
+    karaokeIntervalTimer = null;
+  }
+
+  if (currentNeuralAudio) {
+    try {
+      currentNeuralAudio.onplay = null;
+      currentNeuralAudio.onended = null;
+      currentNeuralAudio.onerror = null;
+      currentNeuralAudio.pause();
+      currentNeuralAudio.currentTime = 0;
+      currentNeuralAudio.src = "";
+    } catch {}
+    currentNeuralAudio = null;
+  }
+
   if (typeof window !== "undefined") {
     if ("speechSynthesis" in window) {
       try {
@@ -499,9 +607,11 @@ export function stopSpeech() {
       audioElements.forEach((audio) => {
         if (!audio.paused) {
           audio.pause();
+          audio.currentTime = 0;
         }
       });
     } catch {}
     window.dispatchEvent(new CustomEvent("vocaship:barge-in"));
+    window.dispatchEvent(new CustomEvent("vocaship:tts-end"));
   }
 }

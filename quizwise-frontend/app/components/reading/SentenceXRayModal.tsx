@@ -17,6 +17,7 @@ import {
   DecompiledSentence,
   DecompiledComponent,
 } from "../../utils/sentenceDecompiler";
+import { playNeuralTTS, stopSpeech } from "../../utils/tts";
 
 export interface SentenceXRayModalProps {
   sentence: string;
@@ -38,23 +39,16 @@ export default function SentenceXRayModal({
     return decompileSentence(sentence || "");
   }, [sentence]);
 
-  // Sesli okuma
+  // Sesli okuma - Edge-TTS Nöral Ses Motoru
   const handlePlaySentence = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(sentence);
-      utterance.lang = "en-US";
-      utterance.rate = 0.85;
-
-      setIsPlayingAudio(true);
-      utterance.onend = () => setIsPlayingAudio(false);
-      utterance.onerror = () => setIsPlayingAudio(false);
-
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      setIsPlayingAudio(false);
-    }
+    if (!sentence) return;
+    setIsPlayingAudio(true);
+    playNeuralTTS(sentence, {
+      rate: 0.85,
+      voice: "en-US-JennyNeural",
+      onEnd: () => setIsPlayingAudio(false),
+      onError: () => setIsPlayingAudio(false),
+    });
   };
 
   if (!isOpen) return null;
@@ -62,38 +56,41 @@ export default function SentenceXRayModal({
   return (
     <div
       role="dialog"
-      aria-modal="true"
-      aria-label="X-Ray Cümle Röntgeni Modalı"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150"
+      aria-modal="false"
+      aria-label="X-Ray Cümle Röntgeni"
+      className="fixed bottom-24 right-4 sm:right-8 z-50 w-[calc(100%-2rem)] sm:w-[520px] max-h-[78vh] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200"
     >
-      <div className="relative w-full max-w-2xl max-h-[90vh] bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-white/10 text-slate-100">
+      <div className="relative w-full max-h-[78vh] bg-slate-900/95 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-cyan-500/20 backdrop-blur-2xl text-slate-100">
         {/* ============================================================== */}
         {/* 1. ÜST BAŞLIK VE KONTROLLER                                    */}
         {/* ============================================================== */}
-        <div className="p-4 sm:p-5 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex items-center justify-between shrink-0">
+        <div className="p-3.5 sm:p-4 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20">
-              <span className="text-base leading-none">🔬</span>
+            <div className="p-2 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20">
+              <span className="text-sm leading-none">🔬</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black text-white tracking-tight">
+                <h3 className="text-xs sm:text-sm font-black text-white tracking-tight">
                   X-Ray Cümle Röntgeni
                 </h3>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
-                  SYNTAX DECOMPILER
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  DECOMPILER
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                İngilizce cümlenin gramer iskeletini ve ögelerini renk bloklarıyla keşfedin.
+              <p className="text-[10px] text-slate-400">
+                Gramer iskeletini ve ögelerini renk bloklarıyla keşfedin.
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition cursor-pointer"
+            onClick={() => {
+              stopSpeech();
+              onClose();
+            }}
+            className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition cursor-pointer"
             title="Kapat"
           >
             <X className="w-4 h-4" />
@@ -234,6 +231,7 @@ export default function SentenceXRayModal({
               <button
                 type="button"
                 onClick={() => {
+                  stopSpeech();
                   onClose();
                   onOpenShadowing(sentence);
                 }}
@@ -246,7 +244,10 @@ export default function SentenceXRayModal({
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                stopSpeech();
+                onClose();
+              }}
               className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition cursor-pointer"
             >
               Tamam

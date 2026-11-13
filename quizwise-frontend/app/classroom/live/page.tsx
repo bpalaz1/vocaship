@@ -125,6 +125,7 @@ function ClassroomLiveStudioContent() {
   const camVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const camStreamRef = useRef<MediaStream | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -216,6 +217,11 @@ function ClassroomLiveStudioContent() {
       tracks.forEach((track) => track.stop());
       camStreamRef.current = null;
     }
+    if (micStreamRef.current) {
+      const tracks = micStreamRef.current.getTracks();
+      tracks.forEach((track) => track.stop());
+      micStreamRef.current = null;
+    }
   };
 
   const formatDuration = (totalSec: number) => {
@@ -231,17 +237,13 @@ function ClassroomLiveStudioContent() {
     }, 5500);
   };
 
-  // Toggle Camera via navigator.mediaDevices.getUserMedia
+  // Toggle Camera via navigator.mediaDevices.getUserMedia (SADECE video track)
   const handleToggleCamera = async () => {
     if (isCamOn) {
       if (camStreamRef.current) {
         const videoTracks = camStreamRef.current.getVideoTracks();
         videoTracks.forEach((track) => track.stop());
-        if (!isMicOn) {
-          const tracks = camStreamRef.current.getTracks();
-          tracks.forEach((track) => track.stop());
-          camStreamRef.current = null;
-        }
+        camStreamRef.current = null;
       }
       if (camVideoRef.current) {
         camVideoRef.current.srcObject = null;
@@ -261,7 +263,7 @@ function ClassroomLiveStudioContent() {
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true,
+        audio: false,
       });
       camStreamRef.current = stream;
 
@@ -269,69 +271,51 @@ function ClassroomLiveStudioContent() {
         camVideoRef.current.srcObject = stream;
       }
       setIsCamOn(true);
-      setIsMicOn(true);
-      stream.getAudioTracks().forEach((track) => {
-        track.enabled = true;
-      });
-      showNotice("📷 Kamera ve mikrofon başarıyla canlı stüdyoya bağlandı.", "info");
+      showNotice("📷 Kamera görüntüsü canlı stüdyoya bağlandı.", "info");
     } catch {
       showNotice(
-        "Kamera veya mikrofon izni reddedildi. Canlı görüntü paylaşmak için tarayıcı adres çubuğundan kamera iznini etkinleştirebilirsiniz.",
+        "Kamera izni reddedildi. Canlı görüntü paylaşmak için tarayıcı adres çubuğundan kamera iznini etkinleştirebilirsiniz.",
         "warning"
       );
     }
   };
 
-  // Toggle Microphone
+  // Toggle Microphone (SADECE audio track, kameradan tamamen bağımsız)
   const handleToggleMic = async () => {
-    if (camStreamRef.current && camStreamRef.current.getAudioTracks().length > 0) {
-      const nextMicState = !isMicOn;
-      camStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = nextMicState;
-      });
-      setIsMicOn(nextMicState);
-      if (role === "teacher") {
-        if (nextMicState) startWhisperListening();
-        else stopWhisperListening();
+    if (isMicOn) {
+      if (micStreamRef.current) {
+        const audioTracks = micStreamRef.current.getAudioTracks();
+        audioTracks.forEach((track) => track.stop());
+        micStreamRef.current = null;
       }
-      showNotice(
-        nextMicState
-          ? "🎤 Mikrofon açıldı ve Live Whisper dinleme aktif edildi."
-          : "🔇 Mikrofon sessize alındı.",
-        "info"
-      );
+      setIsMicOn(false);
+      if (role === "teacher") stopWhisperListening();
+      showNotice("🔇 Mikrofon sessize alındı.", "info");
       return;
     }
 
-    if (!isMicOn) {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          setIsMicOn(true);
-          if (role === "teacher") startWhisperListening();
-          showNotice("🎤 Mikrofon ve Live Whisper aktif edildi.", "info");
-          return;
-        }
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-          video: false,
-          audio: true,
-        });
-        camStreamRef.current = audioStream;
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setIsMicOn(true);
         if (role === "teacher") startWhisperListening();
-        showNotice("🎤 Mikrofon ve Live Whisper kelime yakalama aktif edildi.", "info");
-      } catch {
-        // İzin reddedilse bile Whisper modunu simülasyona aç
-        setIsMicOn(true);
-        if (role === "teacher") startWhisperListening();
-        showNotice(
-          "Mikrofon izni bekleniyor veya simülasyon modu hazır. Kelime yakalama paneli aktif.",
-          "info"
-        );
+        showNotice("🎤 Mikrofon ve Live Whisper aktif edildi.", "info");
+        return;
       }
-    } else {
-      setIsMicOn(false);
-      if (role === "teacher") stopWhisperListening();
-      showNotice("🔇 Mikrofon kapatıldı.", "info");
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: true,
+      });
+      micStreamRef.current = audioStream;
+      setIsMicOn(true);
+      if (role === "teacher") startWhisperListening();
+      showNotice("🎤 Mikrofon ve Live Whisper aktif edildi.", "info");
+    } catch {
+      setIsMicOn(true);
+      if (role === "teacher") startWhisperListening();
+      showNotice(
+        "Mikrofon izni bekleniyor veya simülasyon modu hazır. Kelime yakalama paneli aktif.",
+        "info"
+      );
     }
   };
 

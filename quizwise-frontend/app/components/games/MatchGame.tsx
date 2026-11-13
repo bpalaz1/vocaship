@@ -3,7 +3,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Shuffle, Clock, X, Trophy, Sparkles, Check, RotateCcw } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
+import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
+import {
+  calculateWordReward,
+  shouldTriggerMysteryChest,
+} from "../../utils/gamificationEngine";
+import { GameMistakeItem } from "./GameOverSummary";
 
 export interface MatchPairItem {
   id: string;
@@ -34,6 +40,10 @@ export default function MatchGame({
   const [isFinished, setIsFinished] = useState(false);
   const [score, setScore] = useState(0);
   const [combos, setCombos] = useState(0);
+  const [isMysteryOpen, setIsMysteryOpen] = useState(false);
+  const [mysteryBuff, setMysteryBuff] = useState(1.0);
+  const [mysteryBuffCount, setMysteryBuffCount] = useState(0);
+  const [sessionMistakes, setSessionMistakes] = useState<GameMistakeItem[]>([]);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -74,6 +84,8 @@ export default function MatchGame({
     setIsFinished(false);
     setScore(0);
     setCombos(0);
+    setSessionMistakes([]);
+    setCombos(0);
 
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
@@ -106,8 +118,31 @@ export default function MatchGame({
             prev.map((c) => (c.pairId === first.pairId ? { ...c, isMatched: true } : c))
           );
           setSelectedIds([]);
-          setScore((s) => s + 100 + combos * 15);
-          setCombos((c) => c + 1);
+
+          const nextCombos = combos + 1;
+          setCombos(nextCombos);
+
+          // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
+          const wordKey = first.word || item.word || "word";
+          const reward = calculateWordReward({
+            word: wordKey,
+            streak: nextCombos,
+            isCorrect: true,
+            activeBuffMultiplier: mysteryBuff,
+          });
+
+          if (mysteryBuffCount > 0) {
+            const nextC = mysteryBuffCount - 1;
+            setMysteryBuffCount(nextC);
+            if (nextC <= 0) setMysteryBuff(1.0);
+          }
+
+          setScore((s) => s + reward.totalXP);
+
+          // Her 3 doğru seride 3 Gizemli Sandık Aç
+          if (shouldTriggerMysteryChest(nextCombos)) {
+            setTimeout(() => setIsMysteryOpen(true), 400);
+          }
 
           // Tüm kartlar eşleşti mi kontrolü
           const remaining = gridItems.filter((c) => !c.isMatched && c.pairId !== first.pairId);
@@ -120,6 +155,18 @@ export default function MatchGame({
         // HATALI EŞLEŞME: Kırmızı Titreme (Shake)
         setMismatchedIds(newSelected);
         setCombos(0);
+
+        const wordCard = cards.find(
+          (c) =>
+            c.word.toLowerCase() === (first?.word || "").toLowerCase() ||
+            c.word.toLowerCase() === (item.word || "").toLowerCase()
+        );
+        if (wordCard) {
+          setSessionMistakes((prev) => {
+            if (prev.some((m) => m.word.toLowerCase() === wordCard.word.toLowerCase())) return prev;
+            return [...prev, { word: wordCard.word, meaning: wordCard.meaning }];
+          });
+        }
 
         if (first?.word) {
           saveArenaMistake({ word: first.word, gameType: "match" });
@@ -213,20 +260,34 @@ export default function MatchGame({
         </div>
       </div>
 
-      {/* Oyun Sonu Ekranı */}
+      {/* Oyun Sonu Ekranı (5 Saniyelik Hata Telafisi ile) */}
       {isFinished && (
         <GameOverScreen
-          gameTitle="Kart Eşleştirme (Match)"
+          gameTitle="🃏 Kart Eşleştirme"
           deckTitle={deckTitle}
           score={score}
           timeSeconds={seconds}
-          awardedXP={80}
-          awardedGold={35}
+          awardedXP={Math.max(40, score)}
+          awardedGold={Math.max(15, Math.round(score * 0.35))}
           streakCount={combos}
+          mistakes={sessionMistakes}
           onPlayAgain={initGame}
           onBackToArena={onClose}
         />
       )}
+
+      {/* 3 Kapalı Gizemli Sandık Modalı (Pedagojik Kayıpsız) */}
+      <MysteryChestModal
+        isOpen={isMysteryOpen}
+        streak={combos}
+        onClose={() => setIsMysteryOpen(false)}
+        onClaimReward={(reward: MysteryReward) => {
+          if (reward.multiplier) {
+            setMysteryBuff(reward.multiplier);
+            setMysteryBuffCount(reward.buffQuestions || 3);
+          }
+        }}
+      />
     </div>
   );
 }

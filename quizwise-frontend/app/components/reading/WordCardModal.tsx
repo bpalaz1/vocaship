@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Volume2, Plus, Check, X, Loader2, ArrowLeft, Languages } from "lucide-react";
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
+import { playNeuralTTS } from "../../utils/tts";
 import PronunciationCoach from "../PronunciationCoach";
 
 interface Deck {
@@ -212,13 +213,7 @@ export default function WordCardModal({
     }, [word, contextSentence, nativeLang]);
 
     const speak = () => {
-        if ("speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(word);
-            utterance.lang = "en-US";
-            utterance.rate = 0.9;
-            window.speechSynthesis.speak(utterance);
-        }
+        playNeuralTTS(word, { rate: 0.9 });
     };
 
     const handleSaveToDeck = async () => {

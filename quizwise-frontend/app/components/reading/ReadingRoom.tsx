@@ -12,6 +12,8 @@ import {
   Story,
 } from "../../data/stories";
 import { useUserStories } from "../../context/UserStoriesContext";
+import { useAuth } from "../../context/AuthContext";
+import { useProfile } from "../../context/ProfileContext";
 import { autoAssignCover, autoAssignGradient } from "../../utils/autoCover";
 import { useTranslation, useLanguage } from "../../context/LanguageContext";
 import {
@@ -249,10 +251,10 @@ function StoryCardItem({
           onSelect(story);
         }
       }}
-      className={`group relative w-full rounded-2xl bg-slate-900/90 border shadow-lg hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-200 cursor-pointer overflow-hidden flex flex-col focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+      className={`group relative w-full rounded-2xl bg-white dark:bg-slate-900/90 border shadow-sm dark:shadow-lg hover:shadow-md dark:hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-200 cursor-pointer overflow-hidden flex flex-col focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
         isUserStory
           ? "border-amber-500/40 hover:border-amber-400 hover:shadow-amber-500/10"
-          : "border-slate-800 hover:border-indigo-500/70 hover:shadow-indigo-500/15"
+          : "border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500/70 hover:shadow-indigo-500/15"
       }`}
     >
       {/* 16:9 Kapak Görseli Katmanı (aspect-video) */}
@@ -352,10 +354,10 @@ function StoryCardItem({
           >
             {story.topic || story.categoryName || (isUserStory ? "Özel Hikaye" : "Genel Okuma")}
           </span>
-          <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+          <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors line-clamp-1">
             {story.title}
           </h3>
-          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
             {story.desc || (story.content ? story.content.slice(0, 110) + "..." : "")}
           </p>
         </div>
@@ -370,11 +372,11 @@ function StoryCardItem({
                 <span
                   key={idx}
                   title={trMeaning ? `${wordText}: ${trMeaning}` : wordText}
-                  className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700/80 text-slate-300 group-hover:border-indigo-500/40 transition-colors"
+                  className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 group-hover:border-indigo-400 dark:group-hover:border-indigo-500/40 transition-colors"
                 >
-                  <strong className="text-indigo-300">{wordText}</strong>
+                  <strong className="text-indigo-600 dark:text-indigo-300">{wordText}</strong>
                   {trMeaning && (
-                    <span className="text-slate-400"> • {trMeaning}</span>
+                    <span className="text-slate-500 dark:text-slate-400"> • {trMeaning}</span>
                   )}
                 </span>
               );
@@ -383,8 +385,8 @@ function StoryCardItem({
         )}
 
         {/* Aksiyon Alt Çubuğu */}
-        <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs font-semibold text-slate-400 group-hover:text-indigo-300 transition-colors">
-          <span className="text-[11px] text-slate-500">
+        <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+          <span className="text-[11px] text-slate-500 dark:text-slate-500">
             {isUserStory ? "Kişisel Kütüphane" : "Sıfır Bekleme (0ms)"}
           </span>
           <div className="flex items-center gap-1 text-indigo-400 group-hover:translate-x-1 transition-transform">
@@ -407,6 +409,14 @@ export default function ReadingRoom({
 }: ReadingRoomProps) {
   const { t } = useTranslation();
   const { userStories, deleteUserStory } = useUserStories();
+  const { user } = useAuth();
+  const { userProfile } = useProfile();
+
+  const planTier: "basic" | "plus" | "pro" =
+    user?.planTier ||
+    userProfile?.planTier ||
+    userProfile?.plan_tier ||
+    (user?.isPro ? "pro" : "basic");
 
   // 1. KÜTÜPHANE 3 ANA SEKME STATE'İ: 'explore' | 'in_progress' | 'completed'
   const [activeTab, setActiveTab] = useState<"explore" | "in_progress" | "completed">("explore");
@@ -643,8 +653,8 @@ export default function ReadingRoom({
         <div className="space-y-4">
           {/* 1. KOMPAKT VE TEK SATIRLIK ÜST ŞERİT (TOP BAR) */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl backdrop-blur-md">
-            {/* Sol: Başlık + Toplam Hikaye Rozeti */}
-            <div className="flex items-center gap-2.5 shrink-0">
+            {/* Sol: Başlık + Toplam Hikaye Rozeti + Günlük AI Hikaye Kotası */}
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
                 <span className="text-indigo-400">📖</span>
                 <span>{t("nav_reading", "Okuma Odası")}</span>
@@ -652,6 +662,19 @@ export default function ReadingRoom({
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 {allAvailableStories.length} Hikaye
               </span>
+              {planTier === "pro" ? (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] flex items-center gap-1 shadow-sm">
+                  👑 PRO • Sınırsız AI
+                </span>
+              ) : planTier === "plus" ? (
+                <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold text-[11px] flex items-center gap-1 shadow-sm">
+                  ⚡ Plus • Günlük 5/5 AI
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
+                  🆓 Basic • Günlük 1/1 AI
+                </span>
+              )}
             </div>
 
             {/* Orta/Sağ: Arama + Seviye Filtre Hapları + Eylem Butonları */}
@@ -1061,43 +1084,12 @@ export default function ReadingRoom({
                   {/* HİKAYE KARTLARI IZGARASI */}
                   {filteredStories.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-                      {/* "+ Yapay Zekâ ile Hikaye Üret" Kartı */}
-                      {(selectedCategory === "user_custom" || (selectedCategory === "all" && !searchQuery)) && (
-                        <div
-                          onClick={() => setIsGeneratorModalOpen(true)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              setIsGeneratorModalOpen(true);
-                            }
-                          }}
-                          className="w-full rounded-2xl border-2 border-dashed border-indigo-500/30 hover:border-indigo-400 bg-indigo-950/20 hover:bg-indigo-950/40 p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all space-y-3 group min-h-[260px]"
-                        >
-                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-amber-500/20 group-hover:from-indigo-500/30 group-hover:to-amber-500/30 text-amber-300 flex items-center justify-center transition shadow-inner">
-                            <Sparkles className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition flex items-center justify-center gap-1.5">
-                              <span>+ {t("reading_generate_ai", "Yapay Zekâ ile Hikaye Üret")}</span>
-                            </h4>
-                            <p className="text-xs text-slate-400 mt-1 max-w-xs leading-relaxed">
-                              {t(
-                                "generate_custom_story_desc",
-                                "Destelerinden veya unutma eğrindeki kelimelerden sana özel hikaye oluştur"
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
                       {/* Hikaye Kartları */}
-                      {filteredStories.map((storyItem) => {
+                      {filteredStories.map((storyItem, index) => {
                         const isCustom = !!storyItem.isUserStory;
                         return (
                           <StoryCardItem
-                            key={storyItem.id}
+                            key={`${storyItem.id}-${storyItem.isUserStory ? 'custom' : 'default'}-${index}`}
                             story={storyItem}
                             onSelect={handleSelectStory}
                             isCompleted={completedStories.some((c) => c.storyKey === storyItem.id)}
@@ -1170,14 +1162,14 @@ export default function ReadingRoom({
                     </div>
                   ) : (
                     <div className="grid gap-3">
-                      {inProgressStories.map((item) => {
+                      {inProgressStories.map((item, index) => {
                         const totalP = item.totalPages || 3;
                         const currentP = (item.lastPage ?? item.lastParagraph ?? 0) + 1;
                         const percent = Math.min(100, Math.round((currentP / totalP) * 100));
 
                         return (
                           <div
-                            key={item.storyKey}
+                            key={`${item.storyKey}-${index}`}
                             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-indigo-500/40 transition shadow-sm"
                           >
                             <div className="space-y-2 flex-1 min-w-0">
@@ -1250,9 +1242,9 @@ export default function ReadingRoom({
                     </div>
                   ) : (
                     <div className="grid gap-3">
-                      {completedStories.map((item) => (
+                      {completedStories.map((item, index) => (
                         <div
-                          key={item.storyKey}
+                          key={`${item.storyKey}-${index}`}
                           className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-emerald-500/40 transition shadow-sm"
                         >
                           <div className="space-y-1.5">
