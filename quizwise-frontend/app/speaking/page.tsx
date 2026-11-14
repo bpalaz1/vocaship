@@ -440,8 +440,115 @@ function SpeakingContent() {
         : null;
     const targetVoice = storedVoice || "en-US-JennyNeural";
     const encodedText = encodeURIComponent(clean);
-    const baseUrl = API_BASE || "http://127.0.0.1:8000";
-    const streamUrl = `${baseUrl}/api/v1/tts/stream?text=${encodedText}&voice=${encodeURIComponent(targetVoice)}&rate=-4%`;
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || API_BASE || "http://localhost:8000").replace(/\/+$/, "");
+    const streamUrl = `${baseUrl}/api/v1/speaking/tts?text=${encodedText}&voice=${encodeURIComponent(targetVoice)}&rate=-4%`;
+
+    // Tarayıcı yerel ses motoru (Web Speech API) yedeği
+    const playWebSpeechFallback = (textToSpeak: string) => {
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+        setKaraokeWordIdx(9999);
+        isAiSpeakingRef.current = false;
+        setIsAiSpeaking(false);
+        cooldownRef.current = false;
+        setIsCooldown(false);
+        if (isHandsFreeActiveRef.current && !isUserMutedRef.current) {
+          try {
+            recognitionRef.current?.start();
+          } catch {
+            startContinuousRecognitionRef.current();
+          }
+        }
+        return;
+      }
+
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        const isBritish = targetVoice.includes("en-GB") || targetVoice.includes("Ryan");
+        utterance.lang = isBritish ? "en-GB" : "en-US";
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find((v) =>
+          isBritish
+            ? v.lang.startsWith("en-GB")
+            : (v.lang.startsWith("en-US") || v.lang.startsWith("en"))
+        );
+        if (preferredVoice) {
+          utterance.voice = preferredVoice;
+        }
+
+        const wordsList = textToSpeak.split(/\s+/).filter(Boolean);
+        const wordsTotal = wordsList.length;
+
+        utterance.onstart = () => {
+          isAiSpeakingRef.current = true;
+          setIsAiSpeaking(true);
+          cooldownRef.current = false;
+          setIsCooldown(false);
+          if (recognitionRef.current) {
+            try {
+              recognitionRef.current.abort();
+            } catch {}
+          }
+          setIsListening(false);
+
+          setKaraokeWordIdx(0);
+          if (karaokeIntervalRef.current) {
+            clearInterval(karaokeIntervalRef.current);
+          }
+          const stepMs = Math.max(160, Math.floor((wordsTotal * 320) / Math.max(1, wordsTotal)));
+          let currIdx = 0;
+          karaokeIntervalRef.current = setInterval(() => {
+            currIdx = Math.min(wordsTotal - 1, currIdx + 1);
+            setKaraokeWordIdx(currIdx);
+          }, stepMs);
+        };
+
+        const handleSpeechDone = () => {
+          if (karaokeIntervalRef.current) {
+            clearInterval(karaokeIntervalRef.current);
+            karaokeIntervalRef.current = null;
+          }
+          setKaraokeWordIdx(9999);
+          isAiSpeakingRef.current = false;
+          setIsAiSpeaking(false);
+          cooldownRef.current = true;
+          setIsCooldown(true);
+
+          setTimeout(() => {
+            isAiSpeakingRef.current = false;
+            cooldownRef.current = false;
+            setIsCooldown(false);
+            if (isHandsFreeActiveRef.current && !isUserMutedRef.current) {
+              try {
+                if (recognitionRef.current) {
+                  recognitionRef.current.start();
+                } else {
+                  startContinuousRecognitionRef.current();
+                }
+              } catch {
+                startContinuousRecognitionRef.current();
+              }
+            }
+          }, 450);
+        };
+
+        utterance.onend = handleSpeechDone;
+        utterance.onerror = (e) => {
+          console.warn("[WebSpeech] Seslendirme tamamlanamadı:", e);
+          handleSpeechDone();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn("[WebSpeech] Konuşma motoru başlatılamadı:", err);
+        setKaraokeWordIdx(9999);
+        isAiSpeakingRef.current = false;
+        setIsAiSpeaking(false);
+      }
+    };
 
     const audio = new Audio(streamUrl);
     audioRef.current = audio;
@@ -485,24 +592,13 @@ function SpeakingContent() {
       }, stepMs);
     };
 
-    audio.onerror = (e) => {
-      console.error("Nöral TTS servisine ulaşılamadı (Port 8000):", e);
+    audio.onerror = () => {
+      console.warn("Nöral TTS yanıt vermedi, tarayıcı ses motoruna geçiliyor.");
       if (karaokeIntervalRef.current) {
         clearInterval(karaokeIntervalRef.current);
         karaokeIntervalRef.current = null;
       }
-      setKaraokeWordIdx(9999);
-      isAiSpeakingRef.current = false;
-      setIsAiSpeaking(false);
-      cooldownRef.current = false;
-      setIsCooldown(false);
-      if (isHandsFreeActiveRef.current && !isUserMutedRef.current) {
-        try {
-          recognitionRef.current?.start();
-        } catch {
-          startContinuousRecognitionRef.current();
-        }
-      }
+      playWebSpeechFallback(clean);
     };
 
     audio.onended = () => {
@@ -539,22 +635,12 @@ function SpeakingContent() {
     setPlayBlocked(false);
 
     audio.play().catch((err) => {
-      console.warn("Otomatik oynatma tarayıcı tarafından engellendi:", err);
+      console.warn("Nöral ses oynatılamadı, tarayıcı ses motoruna geçiliyor:", err);
       if (karaokeIntervalRef.current) {
         clearInterval(karaokeIntervalRef.current);
         karaokeIntervalRef.current = null;
       }
-      setKaraokeWordIdx(9999);
-      isAiSpeakingRef.current = false;
-      setIsAiSpeaking(false);
-      cooldownRef.current = false;
-      setIsCooldown(false);
-      setPlayBlocked(true);
-      if (isHandsFreeActiveRef.current && !isUserMutedRef.current) {
-        try {
-          recognitionRef.current?.start();
-        } catch {}
-      }
+      playWebSpeechFallback(clean);
     });
   }, [handleBargeIn]);
 

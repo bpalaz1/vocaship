@@ -59,6 +59,8 @@ app.include_router(reading_router, prefix="/api/v1")
 app.include_router(reading_router)
 app.include_router(speaking_router, prefix="/api/v1/speaking", tags=["AI Speaking Lounge"])
 app.include_router(speaking_router, prefix="/speaking", tags=["AI Speaking Lounge"])
+app.include_router(tts.router, prefix="/api/v1/speaking/tts", tags=["TTS"])
+app.include_router(tts.router, prefix="/speaking/tts", tags=["TTS"])
 app.include_router(tts.router, prefix="/api/v1/tts", tags=["TTS"])
 app.include_router(tts.router, prefix="/tts", tags=["TTS"])
 

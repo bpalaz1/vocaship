@@ -124,6 +124,8 @@ async def generate_audio_stream(
 
 
 @router.get("/stream", summary="Stream Neural Speech Audio")
+@router.get("", summary="Stream Neural Speech Audio")
+@router.get("/tts", summary="Stream Neural Speech Audio")
 async def tts_stream_get(
     text: str = Query(..., min_length=1, max_length=2000, description="Metin"),
     voice: str = Query(DEFAULT_VOICE, description="Nöral ses modeli (en-US-JennyNeural, en-US-GuyNeural vb.)"),
