@@ -31,10 +31,7 @@ import { saveSpeakingArchiveSession } from "../actions/speakingArchive";
 
 // Dinamik Backend API Adresi
 const API_BASE =
-  typeof window !== "undefined" &&
-  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-    ? "http://127.0.0.1:8000"
-    : process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com";
+  process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com";
 
 export interface DialogueTurn {
   role: "assistant" | "user";
@@ -374,7 +371,7 @@ function SpeakingContent() {
 
   // Render Sunucusunu Arka Planda Uyandır (Cold Start Koruması)
   useEffect(() => {
-    fetch(`${API_BASE}/health`).catch(() => {});
+    fetch(`${API_BASE}/docs`).catch(() => {});
   }, []);
 
   const huntedTargetWords = useMemo(() => {
@@ -1754,7 +1751,7 @@ function SpeakingContent() {
                 {isAiSpeaking ? (
                   <div className="flex flex-col items-center justify-center p-2">
                     <Volume2 className="w-9 h-9 mb-1.5 text-white animate-pulse" />
-                    <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
+                    <span className="whitespace-normal text-center leading-tight px-3 text-xs sm:text-sm font-semibold text-white">
                       🔊 Konuşuyor...
                     </span>
                     <span className="text-[10px] text-indigo-200 mt-1">
@@ -1764,14 +1761,14 @@ function SpeakingContent() {
                 ) : isThinking ? (
                   <div className="flex flex-col items-center justify-center p-2">
                     <Loader2 className="w-8 h-8 mb-1.5 text-white animate-spin" />
-                    <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
+                    <span className="whitespace-normal text-center leading-tight px-3 text-xs sm:text-sm font-semibold text-white">
                       Düşünüyor...
                     </span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center p-2">
                     <Mic className="w-9 h-9 mb-1.5 text-white" />
-                    <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
+                    <span className="whitespace-normal text-center leading-tight px-3 text-xs sm:text-sm font-semibold text-white">
                       🟢 Seni Dinliyorum...
                     </span>
                   </div>
@@ -1784,13 +1781,13 @@ function SpeakingContent() {
           <button
             type="button"
             onClick={() => setIsHintBoxOpen((prev) => !prev)}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs sm:text-sm font-bold transition active:scale-95 cursor-pointer shadow-sm ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs sm:text-sm font-semibold transition active:scale-95 cursor-pointer shadow-sm ${
               isHintBoxOpen
-                ? "bg-amber-500/25 border-amber-400/60 text-amber-200"
-                : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/35 text-amber-300"
+                ? "bg-amber-300 border-amber-400 text-amber-950"
+                : "bg-amber-300/90 hover:bg-amber-300 border-amber-500/40 text-amber-950"
             }`}
           >
-            <Lightbulb className="w-4 h-4 text-amber-400" />
+            <Lightbulb className="w-4 h-4 text-amber-900" />
             <span>Ne Diyebilirim?</span>
           </button>
         </div>
