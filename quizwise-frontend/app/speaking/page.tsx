@@ -5,15 +5,17 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   Mic,
   Volume2,
-  ArrowLeft,
   Loader2,
-  Clock,
+  Maximize2,
+  Minimize2,
+  History,
+  Lightbulb,
+  X,
   BookOpen,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { usePersona } from "../context/PersonaContext";
 import { useProfile } from "../context/ProfileContext";
-import SettingsModal from "../components/settings/SettingsModal";
 import { addPendingGold } from "../utils/pendingGold";
 import {
   getActiveDeckId,
@@ -49,14 +51,119 @@ interface ActiveStoryContext {
   topic?: string;
 }
 
+function buildStarterPhrases(
+  currentAiPrompt: string,
+  storyTitle: string | null,
+  level: string
+): [string, string] {
+  const lower = (currentAiPrompt || "").toLowerCase();
+  if (storyTitle) {
+    return [
+      `In "${storyTitle}", I think the turning point was...`,
+      "If I were in that situation, I would probably...",
+    ];
+  }
+  if (lower.includes("weekend") || lower.includes("plan") || lower.includes("today")) {
+    return [
+      "Earlier today I was actually thinking about...",
+      "Usually when I have free time, I like to...",
+    ];
+  }
+  if (level === "A1" || level === "A2") {
+    return [
+      "I really like that because it makes me feel...",
+      "Yes, I think it is very good and I often...",
+    ];
+  }
+  return [
+    "To be honest, what stands out most to me is...",
+    "From my perspective, the main reason is that...",
+  ];
+}
+
 function SpeakingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { selectedCharacter } = usePersona();
-  const { userProfile, isSettingsModalOpen, setIsSettingsModalOpen } = useProfile();
+  const { userProfile } = useProfile();
 
   const isAlex = selectedCharacter === "alex_adult";
+
+  // Evrensel Profil Senkronizasyonu (Seviyeden Bağımsız Görsel Kimlik)
+  const [syncedProfile, setSyncedProfile] = useState<{
+    displayName: string;
+    avatarUrl: string;
+  }>({
+    displayName: userProfile?.username || user?.username || "Konuşmacı",
+    avatarUrl: userProfile?.avatar_url || "🦊",
+  });
+
+  useEffect(() => {
+    let localProfile: { username?: string; avatar_url?: string } | null = null;
+    if (typeof window !== "undefined") {
+      try {
+        const rawProfile =
+          localStorage.getItem("vocaship_user_profile") ||
+          localStorage.getItem("auth_user");
+        if (rawProfile) {
+          localProfile = JSON.parse(rawProfile);
+        }
+      } catch {}
+    }
+    setSyncedProfile({
+      displayName:
+        userProfile?.username ||
+        user?.username ||
+        localProfile?.username ||
+        "Konuşmacı",
+      avatarUrl:
+        userProfile?.avatar_url || localProfile?.avatar_url || "🦊",
+    });
+  }, [userProfile, user]);
+
+  // Tam Ekran, Geçmiş Çekmecesi ve Akıllı İpucu Durumları
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+  const [savedArchives, setSavedArchives] = useState<
+    Array<{
+      id: string;
+      title: string;
+      created_at: string;
+      turns: SessionArchiveTurn[];
+    }>
+  >([]);
+  const [isHintBoxOpen, setIsHintBoxOpen] = useState<boolean>(false);
+  const [starterHints, setStarterHints] = useState<string[]>([]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {}
+  };
+
+  const loadSavedArchives = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("vocaship_speaking_archives");
+      const parsed = raw ? JSON.parse(raw) : [];
+      setSavedArchives(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setSavedArchives([]);
+    }
+  }, []);
 
   // Okuma Odasından Gelindiğinde Hikaye Bağlamı (?mode=story_debate veya ?mode=story)
   const urlMode = searchParams.get("mode");
@@ -139,7 +246,6 @@ function SpeakingContent() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const textChatEndRef = useRef<HTMLDivElement | null>(null);
 
   // Diyalog Geçmişi & Arşiv
   const [dialogue, setDialogue] = useState<DialogueTurn[]>([]);
@@ -286,11 +392,6 @@ function SpeakingContent() {
     },
     [aiMessage, openingGreeting]
   );
-
-  // Metin Görünümünü Otomatik Kaydır
-  useEffect(() => {
-    textChatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [dialogue, userTranscript]);
 
   // Oturum Süresi Sayacı
   useEffect(() => {
@@ -924,6 +1025,12 @@ function SpeakingContent() {
         if (res.ok) {
           const data = await res.json();
 
+          if (Array.isArray(data.hint_suggestions) && data.hint_suggestions.length > 0) {
+            setStarterHints(data.hint_suggestions.slice(0, 2));
+          } else {
+            setStarterHints([]);
+          }
+
           const replyText = (data.assistant_reply || data.reply_message || "").trim();
           if (replyText) {
             const assistantTurn: DialogueTurn = {
@@ -1150,8 +1257,23 @@ function SpeakingContent() {
     };
   }, [stopListening]);
 
+  const activeStarterPhrases = useMemo(() => {
+    if (starterHints.length >= 2) {
+      return starterHints.slice(0, 2);
+    }
+    return buildStarterPhrases(
+      aiMessage || openingGreeting,
+      activeStoryTitle,
+      activeLevel
+    );
+  }, [starterHints, aiMessage, openingGreeting, activeStoryTitle, activeLevel]);
+
+  const isAvatarImageUrl =
+    syncedProfile.avatarUrl.startsWith("http") ||
+    syncedProfile.avatarUrl.startsWith("/");
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between relative overflow-hidden select-none">
+    <div className="h-screen w-full bg-slate-950 text-slate-100 flex flex-col justify-between relative overflow-hidden select-none">
       {/* 🌟 Arka Plan Ambient Radyal Işık Parıltısı */}
       <div
         className={`absolute inset-0 pointer-events-none transition-all duration-700 blur-[130px] opacity-40 ${
@@ -1166,85 +1288,141 @@ function SpeakingContent() {
       />
 
       {/* ========================================================================= */}
-      {/* 1. ÜST BAR: [← Geri], Opsiyonel Hikaye Etiketi ve Oturum Süresi           */}
+      {/* SOL ÜST: EVRENSEL PROFİL ROZETİ (SEVİYEDEN BAĞIMSIZ GÖRSEL KİMLİK)       */}
       {/* ========================================================================= */}
-      <header className="relative z-20 w-full px-6 py-4 flex items-center justify-between border-b border-slate-900/80 backdrop-blur-md">
+      <div className="absolute top-4 left-4 z-30 flex items-center gap-2.5">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800/90 backdrop-blur-md shadow-sm">
+          {isAvatarImageUrl ? (
+            <img
+              src={syncedProfile.avatarUrl}
+              alt={syncedProfile.displayName}
+              className="w-6 h-6 rounded-full object-cover border border-indigo-400/40"
+            />
+          ) : (
+            <span className="text-base leading-none">{syncedProfile.avatarUrl}</span>
+          )}
+          <span className="text-xs font-semibold text-slate-200 max-w-[120px] truncate">
+            @{syncedProfile.displayName}
+          </span>
+        </div>
+
+        {activeStoryTitle && (
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 border border-violet-500/30 text-violet-300 text-xs font-medium backdrop-blur-md">
+            <BookOpen className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+            <span className="truncate max-w-[160px]">{activeStoryTitle}</span>
+            <button
+              type="button"
+              onClick={handleExitStoryMode}
+              className="ml-1 text-slate-400 hover:text-rose-300 text-[10px] font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SAĞ ÜST: YALNIZCA [ ⛶ Tam Ekran ] VE [ 📜 Geçmiş ] YÜZEN BUTONLARI        */}
+      {/* ========================================================================= */}
+      <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
         <button
           type="button"
-          onClick={() => router.back()}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition active:scale-95 cursor-pointer text-xs font-semibold"
+          onClick={toggleFullscreen}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/85 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="hidden sm:inline">Geri</span>
+          {isFullscreen ? (
+            <>
+              <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>🗗 Küçült</span>
+            </>
+          ) : (
+            <>
+              <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>⛶ Tam Ekran</span>
+            </>
+          )}
         </button>
 
-        <div className="flex items-center gap-2">
-          {activeStoryTitle && (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-violet-300 text-xs font-semibold">
-              <BookOpen className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-              <span className="truncate max-w-[140px] sm:max-w-xs">
-                {activeStoryTitle}
-              </span>
-              <button
-                type="button"
-                onClick={handleExitStoryMode}
-                className="ml-1 px-2 py-0.5 rounded-full bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-[10px] font-bold transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Sağ Taraf: Oturum Süresi */}
-        <div className="flex items-center gap-2">
-          {sessionState === "active" && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/70 border border-slate-800 text-slate-400 font-mono text-xs">
-              <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{formatDuration(sessionSeconds)}</span>
-            </div>
-          )}
-        </div>
-      </header>
+        <button
+          type="button"
+          onClick={() => {
+            loadSavedArchives();
+            setIsHistoryOpen(true);
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/85 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm"
+        >
+          <History className="w-3.5 h-3.5 text-indigo-400" />
+          <span>📜 Geçmiş</span>
+        </button>
+      </div>
 
       {/* ========================================================================= */}
-      {/* 2. MERKEZ SAHNE: İKİ DURUMLU SADE KONTROL ('idle' | 'active')             */}
+      {/* SADE 3 KATMANLI MERKEZ SAHNE                                              */}
       {/* ========================================================================= */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 max-w-2xl mx-auto w-full my-auto text-center">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pt-16 pb-4 max-w-3xl mx-auto w-full text-center overflow-hidden">
         {micError && (
-          <div className="mb-4 px-4 py-3 rounded-2xl bg-rose-950/70 border border-rose-800 text-rose-200 text-xs sm:text-sm font-medium shadow-xl max-w-md">
+          <div className="mb-3 px-4 py-2.5 rounded-2xl bg-rose-950/70 border border-rose-800 text-rose-200 text-xs font-medium shadow-xl max-w-md">
             ⚠️ {micError}
           </div>
         )}
 
-        {sessionState === "idle" ? (
-          <div className="flex flex-col items-center justify-center space-y-6 my-6">
+        {/* KATMAN 1: ÜST-ORTA AKTİF DİYALOG */}
+        <div className="w-full flex flex-col items-center justify-center space-y-2.5 mb-5">
+          <div className="flex flex-col items-center gap-2 max-w-2xl">
+            <p className="text-xl md:text-2xl font-semibold text-slate-100 text-center max-w-2xl leading-relaxed tracking-tight drop-shadow-md">
+              &ldquo;{aiMessage || openingGreeting}&rdquo;
+            </p>
+            {sessionState === "active" && (
+              <button
+                type="button"
+                onClick={() => speakAiResponse(aiMessage || openingGreeting)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-indigo-300 text-xs font-semibold transition active:scale-95 cursor-pointer"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>🔊 Tekrar Dinle</span>
+              </button>
+            )}
+          </div>
+
+          {sessionState === "active" && (
+            <div className="w-full max-w-xl px-4 py-2.5 rounded-2xl bg-slate-900/65 border border-indigo-500/25 backdrop-blur-md">
+              {userTranscript ? (
+                <p className="text-sm text-indigo-200 font-medium">
+                  <span className="text-emerald-400 font-semibold mr-1.5">🎙️ Sen:</span>
+                  <span className="text-slate-100">{userTranscript}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 italic">
+                  🎙️ Seni dinliyorum, İngilizce konuşmaya başlayabilirsin...
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* KATMAN 2: MERKEZ MİKROFON & AKILLI İPUCU KÖPRÜSÜ */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-5 my-2">
+          {sessionState === "idle" ? (
             <button
               type="button"
               onClick={handleStartChat}
-              className="w-52 h-52 sm:w-60 sm:h-60 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative cursor-pointer shadow-2xl active:scale-95 bg-gradient-to-tr from-indigo-900 via-indigo-600 to-violet-500 hover:scale-105 shadow-indigo-600/40 ring-4 ring-indigo-400/30"
+              className="w-44 h-44 sm:w-48 sm:h-48 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative cursor-pointer shadow-2xl active:scale-95 bg-gradient-to-tr from-indigo-900 via-indigo-600 to-violet-500 hover:scale-105 shadow-indigo-600/40 ring-4 ring-indigo-400/30"
             >
-              <Mic className="w-12 h-12 mb-3 text-white animate-bounce" />
-              <span className="text-base sm:text-lg font-bold text-white tracking-wide">
+              <Mic className="w-10 h-10 mb-2 text-white animate-bounce" />
+              <span className="text-sm sm:text-base font-bold text-white tracking-wide">
                 🎙️ Sohbete Başla
               </span>
             </button>
-            <p className="text-sm sm:text-base text-slate-400 max-w-md leading-relaxed">
-              Tek dokunuşla eller serbest İngilizce sohbete başla. Sen konuştukça yapay zekâ seni dinler ve doğal şekilde yanıtlar.
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Aktif Konuşma / Dinleme Göstergesi (Tıklanmaz, tam otomatik) */}
-            <div className="relative flex items-center justify-center my-6">
+          ) : (
+            <div className="relative flex items-center justify-center">
               {isListening && (
                 <div
                   className="absolute rounded-full border border-emerald-400/40 transition-transform duration-75 pointer-events-none"
                   style={{
-                    width: "260px",
-                    height: "260px",
+                    width: "210px",
+                    height: "210px",
                     transform: `scale(${1 + micVolume * 0.005})`,
-                    boxShadow: `0 0 ${25 + micVolume * 0.6}px rgba(16, 185, 129, 0.35)`,
+                    boxShadow: `0 0 ${22 + micVolume * 0.5}px rgba(16, 185, 129, 0.35)`,
                   }}
                 />
               )}
@@ -1253,8 +1431,8 @@ function SpeakingContent() {
                 <div
                   className="absolute rounded-full border border-indigo-400/35 pointer-events-none animate-ping"
                   style={{
-                    width: "245px",
-                    height: "245px",
+                    width: "200px",
+                    height: "200px",
                     animationDuration: "2.3s",
                   }}
                 />
@@ -1268,7 +1446,7 @@ function SpeakingContent() {
                   }
                 }}
                 disabled={!isAiSpeaking}
-                className={`w-48 h-48 sm:w-56 sm:h-56 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative shadow-2xl select-none ${
+                className={`w-40 h-40 sm:w-44 sm:h-44 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative shadow-2xl select-none ${
                   isAiSpeaking
                     ? "cursor-pointer active:scale-95 bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 shadow-indigo-500/60 ring-4 ring-indigo-400/50 animate-pulse"
                     : isThinking
@@ -1278,7 +1456,7 @@ function SpeakingContent() {
               >
                 {isAiSpeaking ? (
                   <div className="flex flex-col items-center justify-center p-2">
-                    <Volume2 className="w-11 h-11 mb-2 text-white animate-pulse" />
+                    <Volume2 className="w-9 h-9 mb-1.5 text-white animate-pulse" />
                     <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
                       🔊 Konuşuyor...
                     </span>
@@ -1288,14 +1466,14 @@ function SpeakingContent() {
                   </div>
                 ) : isThinking ? (
                   <div className="flex flex-col items-center justify-center p-2">
-                    <Loader2 className="w-9 h-9 mb-2 text-white animate-spin" />
+                    <Loader2 className="w-8 h-8 mb-1.5 text-white animate-spin" />
                     <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
                       Yanıtlıyor...
                     </span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center p-2">
-                    <Mic className="w-11 h-11 mb-2 text-white" />
+                    <Mic className="w-9 h-9 mb-1.5 text-white" />
                     <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
                       🟢 Seni Dinliyorum...
                     </span>
@@ -1303,49 +1481,134 @@ function SpeakingContent() {
                 )}
               </button>
             </div>
+          )}
 
-            {/* AI Mesajı + Canlı Transkript Kutusu */}
-            <div className="w-full max-w-xl px-4 flex flex-col items-center justify-center mt-2 space-y-4">
-              <p className="text-lg sm:text-2xl text-slate-100 font-semibold leading-relaxed tracking-tight drop-shadow-md">
-                &ldquo;{aiMessage || openingGreeting}&rdquo;
-              </p>
+          {/* Akıllı İpucu Köprüsü Butonu */}
+          <button
+            type="button"
+            onClick={() => setIsHintBoxOpen((prev) => !prev)}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs sm:text-sm font-bold transition active:scale-95 cursor-pointer shadow-sm ${
+              isHintBoxOpen
+                ? "bg-amber-500/25 border-amber-400/60 text-amber-200"
+                : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/35 text-amber-300"
+            }`}
+          >
+            <Lightbulb className="w-4 h-4 text-amber-400" />
+            <span>💡 Ne Diyebilirim?</span>
+          </button>
+        </div>
 
-              <div className="w-full px-5 py-3.5 rounded-2xl bg-slate-900/75 border border-indigo-500/30 backdrop-blur-md shadow-lg shadow-indigo-950/40 transition-all duration-200">
-                {userTranscript ? (
-                  <p className="text-sm sm:text-base text-indigo-100 font-medium leading-relaxed tracking-wide">
-                    <span className="font-bold text-emerald-400 mr-1.5">🎙️ Sen:</span>
-                    <span className="text-white">{userTranscript}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs sm:text-sm text-slate-400 font-medium italic">
-                    🎙️ Seni dinliyorum, İngilizce konuşmaya başlayabilirsin...
-                  </p>
-                )}
+        {/* Açılır Fısıltı İpucu Kutusu (2 Hazır Cümle Başlatıcı Kalıp) */}
+        {isHintBoxOpen && (
+          <div className="w-full max-w-xl mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+            {activeStarterPhrases.map((phrase, idx) => (
+              <div
+                key={idx}
+                className="px-3.5 py-2.5 rounded-2xl bg-slate-900/90 border border-amber-500/35 text-xs text-amber-100 shadow-md"
+              >
+                <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-0.5">
+                  İpucu {idx + 1}
+                </span>
+                <span className="font-medium leading-snug">&ldquo;{phrase}&rdquo;</span>
               </div>
-            </div>
-          </>
+            ))}
+          </div>
+        )}
+
+        {/* KATMAN 3: ALT KOMPAKT KONUŞMA AKIŞI (text-xs) */}
+        {dialogue.length > 0 && (
+          <div className="w-full max-w-xl mt-4 px-3.5 py-2.5 rounded-2xl bg-slate-900/45 border border-slate-800/70 text-xs text-slate-400 max-h-28 overflow-y-auto text-left space-y-1.5 backdrop-blur-sm">
+            {dialogue.slice(-6).map((turn, idx) => (
+              <div key={idx} className="leading-relaxed">
+                <span
+                  className={`font-bold mr-1.5 ${
+                    turn.role === "assistant" ? "text-indigo-400" : "text-emerald-400"
+                  }`}
+                >
+                  {turn.role === "assistant" ? "AI:" : "Sen:"}
+                </span>
+                <span>{turn.message}</span>
+              </div>
+            ))}
+          </div>
         )}
       </main>
 
       {/* ========================================================================= */}
-      {/* 3. EN ALT BAR: YALNIZCA AKTİFKEN [ 🔴 Sohbeti Bitir ] BUTONU              */}
+      {/* EN ALT BAR: YALNIZCA AKTİFKEN [ 🔴 Sohbeti Bitir ] BUTONU                 */}
       {/* ========================================================================= */}
       {sessionState === "active" && (
-        <footer className="relative z-20 w-full px-6 py-5 flex items-center justify-center border-t border-slate-900/80 backdrop-blur-md">
+        <footer className="relative z-20 w-full px-6 py-4 flex items-center justify-center border-t border-slate-900/70 backdrop-blur-md">
           <button
             type="button"
             onClick={handleEndChat}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-bold text-sm transition active:scale-95 cursor-pointer shadow-lg shadow-rose-950/40"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-bold text-sm transition active:scale-95 cursor-pointer shadow-lg shadow-rose-950/40"
           >
             <span>🔴 Sohbeti Bitir</span>
           </button>
         </footer>
       )}
 
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-      />
+      {/* ========================================================================= */}
+      {/* GEÇMİŞ ARŞİV ÇEKMECESİ / MODALI                                           */}
+      {/* ========================================================================= */}
+      {isHistoryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-950/75 backdrop-blur-sm">
+          <div className="w-full max-w-md h-full bg-slate-900 border-l border-slate-800 p-5 flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-indigo-400" />
+                <h2 className="text-sm font-bold text-white">Konuşma Geçmişi</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHistoryOpen(false)}
+                className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 space-y-3 text-left">
+              {savedArchives.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-10">
+                  Henüz kaydedilmiş bir konuşma oturumu bulunmuyor.
+                </p>
+              ) : (
+                savedArchives.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-indigo-300 truncate">
+                        {item.title}
+                      </span>
+                      <span className="text-[10px] text-slate-500 shrink-0">
+                        {new Date(item.created_at).toLocaleDateString("tr-TR")}
+                      </span>
+                    </div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto text-xs text-slate-300">
+                      {(item.turns || []).map((t, tIdx) => (
+                        <p key={tIdx} className="leading-snug">
+                          <span
+                            className={`font-semibold mr-1 ${
+                              t.speaker === "AI" ? "text-indigo-400" : "text-emerald-400"
+                            }`}
+                          >
+                            {t.speaker}:
+                          </span>
+                          <span>{t.text}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
