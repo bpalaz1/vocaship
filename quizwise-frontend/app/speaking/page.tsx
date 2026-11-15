@@ -667,7 +667,7 @@ function SpeakingContent() {
             latestInterimRef.current = "";
             startListening();
           }
-        }, 500);
+        }, 650);
       };
 
       // Metin uzunluğuna göre dinamik maksimum güvenlik zamanlayıcısı (Zero-Deadlock)
@@ -945,10 +945,9 @@ function SpeakingContent() {
         console.warn("Speaking respond error:", err);
         isAiSpeakingRef.current = false;
         isThinkingRef.current = false;
-        const shortUserSnippet = cleanText.slice(0, 50);
         const dynamicOfflineReply = activeStoryTitle
-          ? `You brought up "${shortUserSnippet}" about "${activeStoryTitle}"! How do you think that affected the story's outcome?`
-          : `You mentioned "${shortUserSnippet}" — what is your favorite thing about that?`;
+          ? `That's a really interesting point about "${activeStoryTitle}"! What part of the story stood out to you the most?`
+          : "That sounds really interesting! How did you first get into that?";
         const assistantTurn: DialogueTurn = {
           role: "assistant",
           message: dynamicOfflineReply,

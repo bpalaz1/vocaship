@@ -8,6 +8,7 @@ import json
 import logging
 import asyncio
 import math
+import random
 import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any, Union
@@ -361,7 +362,7 @@ async def async_call_speaking_gemini(
     client = get_client()
     sys_inst = system_instruction or INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION
 
-    race_models = ["gemini-flash-lite-latest", "gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]
+    race_models = ["gemini-2.5-flash", "gemini-flash-lite-latest"]
     tasks = [
         asyncio.create_task(
             asyncio.wait_for(
@@ -387,7 +388,7 @@ async def async_call_speaking_gemini(
                 logger.debug(f"Concurrent speaking model attempt failed: {err}")
 
     # Eğer paralel arama denemeleri hata verdiyse arama aracı olmadan doğrudan hızlı modelleri çağır
-    for fallback_model in ["gemini-flash-lite-latest", "gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]:
+    for fallback_model in ["gemini-2.5-flash", "gemini-flash-lite-latest"]:
         try:
             return await asyncio.wait_for(
                 _call_single_model(
@@ -1061,8 +1062,8 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
         else:
             story_instruction = f"\nAKTİF HİKAYE / REFERANS BAĞLAMI:\n{str(payload.story_context)[:500]}\n"
 
-    # Konuşma geçmişindeki son 8 mesajı hem okunabilir metin hem de Gemini 'contents' akışı olarak hazırla
-    recent_turns = raw_history[-8:]
+    # Konuşma geçmişindeki son 6 mesajı hem okunabilir metin hem de Gemini 'contents' akışı olarak hazırla
+    recent_turns = raw_history[-6:]
     history_lines = []
     gemini_contents: List[types.Content] = []
     last_assistant_message = ""
@@ -1105,7 +1106,13 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
 
     formatted_history = "\n".join(history_lines) if history_lines else "(Start of natural conversation)"
 
-    dynamic_sys_instruction = f"""Sen kullanıcının samimi, dostane ve doğal bir İngilizce sohbet arkadaşısın. Asla bir önceki mesajda söylediğin cümleyi tekrar etme. Kullanıcının son cümlesine (örneğin hava durumu, ruh hali, günlük olaylar) doğrudan, samimi ve 1-2 kısa cümleyle karşılık ver ve sohbeti sürdürecek doğal bir soru sor. Asla ağır analizler veya uzun paragraflar yazma.
+    dynamic_sys_instruction = f"""Sen kullanıcının samimi, dostane ve doğal bir İngilizce sohbet arkadaşısın.
+
+KESİN KONUŞMA KURALLARI:
+- Kullanıcının söylediği cümleyi tırnak içinde tekrarlama ('You mentioned...' gibi robotik kalıplar YASAK).
+- Asla 'what is your favorite thing about that?' kalıbını kullanma.
+- Gerçek bir insan gibi önce kullanıcının fikrine 1 kısa cümleyle samimi bir tepki/yorum ver, ardından konuyla ilgili doğal ve farklı bir takip sorusu sor.
+- Asla bir önceki mesajda söylediğin cümleyi tekrar etme ve ağır analizler ya da uzun paragraflar yazma.
 
 {persona_tone_rules}
 
@@ -1187,17 +1194,16 @@ Return valid JSON matching the schema."""
         except Exception as second_err:
             logger.error(f"Secondary Gemini speaking call error: {second_err}")
             print(f"[Speaking Gemini Secondary Error]: {second_err}")
-            short_user_ref = re.sub(r"[^a-zA-Z0-9\s',.?-]", "", user_text).strip()[:55]
             if story_title_for_hints:
                 dynamic_err_reply = (
-                    f"You mentioned '{short_user_ref}' regarding '{story_title_for_hints}'. "
-                    f"How do you think that moment changed the direction of the story?"
+                    f"That's a really interesting thought about '{story_title_for_hints}'! "
+                    f"What part of the story stood out to you the most?"
                 )
             else:
-                dynamic_err_reply = (
-                    f"Hearing you say '{short_user_ref}' really caught my attention! "
-                    f"What part of that experience do you enjoy the most?"
-                )
+                dynamic_err_reply = random.choice([
+                    "That sounds really interesting! How did you first get into that?",
+                    "I see what you mean! What made you think about that today?",
+                ])
             response_dict = {
                 "assistant_reply": dynamic_err_reply,
                 "hint_suggestions": build_default_hints(clean_level, story_title_for_hints),
@@ -1217,10 +1223,10 @@ Return valid JSON matching the schema."""
         or ""
     ).strip()
     if not reply_message:
-        short_user_ref = re.sub(r"[^a-zA-Z0-9\s',.?-]", "", user_text).strip()[:50]
-        reply_message = (
-            f"You mentioned '{short_user_ref}' — what else happened with that?"
-        )
+        reply_message = random.choice([
+            "That sounds really interesting! How did you first get into that?",
+            "I see what you mean! What made you think about that today?",
+        ])
     assistant_reply = reply_message
 
     # Hint Suggestions (2 pratik cümle başlatıcı kalıp)
