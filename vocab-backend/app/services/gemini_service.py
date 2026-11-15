@@ -20,6 +20,7 @@ _MODEL_CACHE: Dict[str, Any] = {
 _EXCLUDED_FLASH_TOKENS = ("image", "tts", "audio", "live", "embedding", "robotics", "computer-use")
 _FALLBACK_FLASH_MODELS = [
     "gemini-2.5-flash",
+    "gemini-2.0-flash",
     "gemini-3.8-flash",
     "gemini-3.6-flash",
 ]
