@@ -1047,47 +1047,76 @@ function SpeakingContent() {
           ? Array.from(new Set(storyContext?.targetWords || storyContext?.target_vocabulary || []))
           : [];
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort("timeout"), 25000);
+        const requestBody = JSON.stringify({
+          user_message: cleanText,
+          message: cleanText,
+          transcript: cleanText,
+          user_transcript: cleanText,
+          scenario_id: activeStoryTitle ? "story_debate" : "casual_coffee",
+          history: formattedHistoryPayload,
+          conversation_history: formattedHistoryPayload,
+          persona: isAlex ? "alex" : "sparky",
+          target_level: activeLevel,
+          level: activeLevel,
+          story_context: activeStoryTitle
+            ? {
+                title: activeStoryTitle,
+                level: activeLevel,
+                snippet: (storyContext?.snippet || storyContext?.content || "").slice(
+                  0,
+                  800
+                ),
+                content: (storyContext?.content || storyContext?.snippet || "").slice(
+                  0,
+                  800
+                ),
+                target_words: targetWordsToSend,
+                target_vocabulary: targetWordsToSend,
+              }
+            : null,
+          conversation_mode: activeStoryTitle ? "story_debate" : "casual",
+        });
+
+        const executeRespondFetch = async (): Promise<Response> => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort("timeout"), 45000);
+          try {
+            return await fetch(`${API_BASE}/api/v1/speaking/respond`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: requestBody,
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        };
 
         let res: Response;
         try {
-          res = await fetch(`${API_BASE}/api/v1/speaking/respond`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_message: cleanText,
-              message: cleanText,
-              transcript: cleanText,
-              user_transcript: cleanText,
-              scenario_id: activeStoryTitle ? "story_debate" : "casual_coffee",
-              history: formattedHistoryPayload,
-              conversation_history: formattedHistoryPayload,
-              persona: isAlex ? "alex" : "sparky",
-              target_level: activeLevel,
-              level: activeLevel,
-              story_context: activeStoryTitle
-                ? {
-                    title: activeStoryTitle,
-                    level: activeLevel,
-                    snippet: (storyContext?.snippet || storyContext?.content || "").slice(
-                      0,
-                      800
-                    ),
-                    content: (storyContext?.content || storyContext?.snippet || "").slice(
-                      0,
-                      800
-                    ),
-                    target_words: targetWordsToSend,
-                    target_vocabulary: targetWordsToSend,
-                  }
-                : null,
-              conversation_mode: activeStoryTitle ? "story_debate" : "casual",
-            }),
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId);
+          res = await executeRespondFetch();
+        } catch (firstErr) {
+          const errStr =
+            typeof firstErr === "string"
+              ? firstErr
+              : firstErr instanceof Error
+              ? `${firstErr.name}: ${firstErr.message}`
+              : "";
+          const isRetryable =
+            firstErr === "timeout" ||
+            (firstErr instanceof Error && firstErr.name === "AbortError") ||
+            errStr.toLowerCase().includes("abort") ||
+            errStr.toLowerCase().includes("timeout") ||
+            errStr.toLowerCase().includes("failed to fetch") ||
+            errStr.toLowerCase().includes("network") ||
+            errStr.toLowerCase().includes("load failed");
+
+          if (!isRetryable) {
+            throw firstErr;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          res = await executeRespondFetch();
         }
 
         if (res.ok) {
