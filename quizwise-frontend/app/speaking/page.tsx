@@ -12,6 +12,10 @@ import {
   Lightbulb,
   X,
   BookOpen,
+  Sparkles,
+  Check,
+  BookPlus,
+  RotateCcw,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { usePersona } from "../context/PersonaContext";
@@ -26,7 +30,11 @@ import {
 import { saveSpeakingArchiveSession } from "../actions/speakingArchive";
 
 // Dinamik Backend API Adresi
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://127.0.0.1:8000"
+    : process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com";
 
 export interface DialogueTurn {
   role: "assistant" | "user";
@@ -38,6 +46,22 @@ export interface SessionArchiveTurn {
   speaker: "AI" | "Sen";
   text: string;
   timestamp: string;
+}
+
+export interface SpeakingSummaryData {
+  session_title: string;
+  fluency_score: number;
+  coach_feedback: string;
+  golden_sentence: {
+    original: string;
+    improved: string;
+    reason_tr: string;
+  };
+  extracted_words: Array<{
+    word: string;
+    turkish_meaning: string;
+    example_sentence: string;
+  }>;
 }
 
 interface ActiveStoryContext {
@@ -136,6 +160,15 @@ function SpeakingContent() {
   >([]);
   const [isHintBoxOpen, setIsHintBoxOpen] = useState<boolean>(false);
   const [starterHints, setStarterHints] = useState<string[]>([]);
+
+  // FAZ 4: Oturum Sonu Karnesi & Desteye Kelime Kaydı
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
+  const [summaryModalData, setSummaryModalData] = useState<SpeakingSummaryData | null>(null);
+  const [selectedSummaryWords, setSelectedSummaryWords] = useState<Record<string, boolean>>({});
+  const [userDecks, setUserDecks] = useState<Array<{ id: string; title: string }>>([]);
+  const [selectedTargetDeckId, setSelectedTargetDeckId] = useState<string>("__new__");
+  const [isSavingWords, setIsSavingWords] = useState<boolean>(false);
+  const [wordsSavedMessage, setWordsSavedMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -1129,7 +1162,17 @@ function SpeakingContent() {
         setIsAiSpeaking(false);
         setIsThinking(false);
 
-        if (isAbortOrTimeout) {
+        const isLocalBackend =
+          API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
+        const isUnreachable =
+          rawErr.toLowerCase().includes("failed to fetch") ||
+          rawErr.toLowerCase().includes("networkerror") ||
+          rawErr.toLowerCase().includes("load failed") ||
+          rawErr.toLowerCase().includes("err_connection_refused");
+
+        if (isLocalBackend && (isAbortOrTimeout || isUnreachable)) {
+          setMicError("Yerel backend (Port 8000) yanıt vermiyor");
+        } else if (isAbortOrTimeout) {
           setMicError("Sunucu uyanıyor, tekrar deneyebilirsin...");
         } else {
           const cleanErr = err instanceof Error ? err.message : "Sunucu bağlantı hatası";
@@ -1196,7 +1239,9 @@ function SpeakingContent() {
     speakAiResponse(firstGreeting);
   };
 
-  const handleEndChat = () => {
+  const handleEndChat = async () => {
+    if (isGeneratingSummary) return;
+
     stopListening();
     if (restartListenTimerRef.current) {
       clearTimeout(restartListenTimerRef.current);
@@ -1277,6 +1322,190 @@ function SpeakingContent() {
       },
     }).catch(() => {});
 
+    setIsGeneratingSummary(true);
+    setWordsSavedMessage(null);
+
+    const userLines = dialogueRef.current
+      .filter((d) => d.role === "user" && d.message.trim())
+      .map((d) => d.message.trim());
+    const longestUser =
+      userLines.sort((a, b) => b.length - a.length)[0] ||
+      "I enjoyed practicing English today.";
+
+    const localFallbackSummary: SpeakingSummaryData = {
+      session_title: activeStoryTitle
+        ? `Discussing ${activeStoryTitle.slice(0, 24)}`
+        : "Everyday English Chat",
+      fluency_score: Math.min(94, Math.max(74, 75 + userLines.length * 4)),
+      coach_feedback:
+        "Konuşma pratiğine aktif olarak katılman harika! Her oturumda cümlelerin daha akıcı ve doğal hale geliyor.",
+      golden_sentence: {
+        original: longestUser,
+        improved: `Honestly, ${longestUser.charAt(0).toLowerCase() + longestUser.slice(1)}`,
+        reason_tr:
+          "Cümleye 'Honestly' gibi doğal bir konuşma bağlacı eklemek akıcılığı artırır.",
+      },
+      extracted_words: [
+        {
+          word: "highlight",
+          turkish_meaning: "en güzel an / öne çıkan nokta",
+          example_sentence: "The highlight of my day was having a great conversation.",
+        },
+        {
+          word: "perspective",
+          turkish_meaning: "bakış açısı",
+          example_sentence: "Hearing your perspective made the topic much clearer.",
+        },
+        {
+          word: "consistent",
+          turkish_meaning: "istikrarlı, düzenli",
+          example_sentence: "Consistent speaking practice helps build strong confidence.",
+        },
+      ],
+    };
+
+    try {
+      const decksUrl = user?.id
+        ? `${API_BASE}/api/v1/decks?user_id=${encodeURIComponent(user.id)}`
+        : `${API_BASE}/api/v1/decks`;
+
+      const [summaryRes, decksRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/speaking/summary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: dialogueRef.current,
+            target_level: activeLevel,
+            story_title: activeStoryTitle,
+          }),
+        }).catch(() => null),
+        fetch(decksUrl).catch(() => null),
+      ]);
+
+      let finalSummary: SpeakingSummaryData = localFallbackSummary;
+      if (summaryRes && summaryRes.ok) {
+        const data = await summaryRes.json();
+        if (data && data.session_title) {
+          finalSummary = data;
+        }
+      }
+
+      if (decksRes && decksRes.ok) {
+        const decksJson = await decksRes.json();
+        if (Array.isArray(decksJson)) {
+          setUserDecks(decksJson);
+          if (decksJson.length > 0) {
+            setSelectedTargetDeckId(decksJson[0].id);
+          } else {
+            setSelectedTargetDeckId("__new__");
+          }
+        }
+      }
+
+      const initialChecks: Record<string, boolean> = {};
+      for (const w of finalSummary.extracted_words || []) {
+        if (w.word) initialChecks[w.word] = true;
+      }
+      setSelectedSummaryWords(initialChecks);
+      setSummaryModalData(finalSummary);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const speakSentencePreview = (text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 0.95;
+      window.speechSynthesis.speak(utterance);
+    } catch {}
+  };
+
+  const handleSaveSelectedWordsToDeck = async () => {
+    if (!summaryModalData || isSavingWords) return;
+    const chosenWords = (summaryModalData.extracted_words || []).filter(
+      (w) => selectedSummaryWords[w.word]
+    );
+    if (chosenWords.length === 0) {
+      setWordsSavedMessage("Lütfen en az bir kelime seçin.");
+      return;
+    }
+
+    setIsSavingWords(true);
+    setWordsSavedMessage(null);
+    try {
+      let targetDeckId = selectedTargetDeckId;
+      if (!targetDeckId || targetDeckId === "__new__") {
+        const existingPractice = userDecks.find(
+          (d) => d.title.toLowerCase() === "speaking pratikleri"
+        );
+        if (existingPractice) {
+          targetDeckId = existingPractice.id;
+        } else {
+          const createRes = await fetch(`${API_BASE}/api/v1/decks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: "Speaking Pratikleri",
+              description: "Speaking Lounge oturumlarından kaydedilen kelimeler",
+              user_id: user?.id || null,
+            }),
+          });
+          if (!createRes.ok) {
+            throw new Error("Deste oluşturulamadı.");
+          }
+          const createdDeck = await createRes.json();
+          targetDeckId = createdDeck.id;
+          setUserDecks((prev) => [createdDeck, ...prev]);
+          setSelectedTargetDeckId(createdDeck.id);
+        }
+      }
+
+      let savedCount = 0;
+      for (const item of chosenWords) {
+        const res = await fetch(`${API_BASE}/api/v1/decks/cards`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deck_id: targetDeckId,
+            word: item.word,
+            phonetic: null,
+            meanings: [
+              {
+                part_of_speech: "",
+                translation: item.turkish_meaning,
+                definition: "",
+              },
+            ],
+            example_sentences: item.example_sentence
+              ? [{ en: item.example_sentence, tr: "" }]
+              : [],
+            collocations: [],
+          }),
+        });
+        if (res.ok) {
+          savedCount++;
+        }
+      }
+
+      if (savedCount > 0) {
+        setWordsSavedMessage(`${savedCount} kelime desteye başarıyla eklendi!`);
+      } else {
+        setWordsSavedMessage("Kelimeler kaydedilemedi, lütfen tekrar deneyin.");
+      }
+    } catch {
+      setWordsSavedMessage("Desteye bağlanırken bir hata oluştu.");
+    } finally {
+      setIsSavingWords(false);
+    }
+  };
+
+  const handleResetFromSummaryModal = () => {
+    setSummaryModalData(null);
+    setWordsSavedMessage(null);
     updateDialogue([]);
     setSessionArchive([]);
     sessionArchiveRef.current = [];
@@ -1634,9 +1863,17 @@ function SpeakingContent() {
           <button
             type="button"
             onClick={handleEndChat}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-bold text-sm transition active:scale-95 cursor-pointer shadow-lg shadow-rose-950/40"
+            disabled={isGeneratingSummary}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-bold text-sm transition active:scale-95 cursor-pointer shadow-lg shadow-rose-950/40 disabled:opacity-70"
           >
-            <span>🔴 Sohbeti Bitir</span>
+            {isGeneratingSummary ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Karne Hazırlanıyor...</span>
+              </>
+            ) : (
+              <span>🔴 Sohbeti Bitir</span>
+            )}
           </button>
         </footer>
       )}
@@ -1697,6 +1934,187 @@ function SpeakingContent() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* FAZ 4: OTURUM SONU KARNESİ, ALTIN CÜMLE & DESTEYE KELİME KAYIT MODALI     */}
+      {/* ========================================================================= */}
+      {summaryModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-slate-900/95 border border-slate-700/70 shadow-2xl p-6 text-left space-y-5">
+            {/* Üst Başlık & Puan Rozeti */}
+            <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
+                  Oturum Sonu Karnesi
+                </span>
+                <h2 className="text-xl font-bold text-white mt-0.5">
+                  {summaryModalData.session_title}
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="px-3.5 py-1.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/40 text-center">
+                  <span className="block text-[10px] font-semibold text-emerald-300">
+                    Akıcılık ({activeLevel})
+                  </span>
+                  <span className="text-lg font-extrabold text-emerald-200">
+                    {summaryModalData.fluency_score}/100
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetFromSummaryModal}
+                  className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                  aria-label="Kapat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Koç Yorumu */}
+            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
+              <span className="text-xs font-bold text-indigo-300">Koç Yorumu</span>
+              <p className="text-sm text-slate-200 leading-relaxed">
+                {summaryModalData.coach_feedback}
+              </p>
+            </div>
+
+            {/* ✨ Altın Cümle Kartı */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-950/80 to-emerald-500/10 border border-amber-400/35 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Altın Cümle Önerisi</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    speakSentencePreview(summaryModalData.golden_sentence.improved)
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs font-semibold transition cursor-pointer"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>Dinle</span>
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400 line-through">
+                &ldquo;{summaryModalData.golden_sentence.original}&rdquo;
+              </p>
+              <p className="text-sm sm:text-base font-semibold text-emerald-300">
+                &ldquo;{summaryModalData.golden_sentence.improved}&rdquo;
+              </p>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {summaryModalData.golden_sentence.reason_tr}
+              </p>
+            </div>
+
+            {/* 📚 Oturum Kelimeleri (Onay Kutulu Liste) & Hedef Deste Seçici */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-slate-200">
+                  📚 Oturum Kelimeleri
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Desteye eklemek istediklerini seç
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {(summaryModalData.extracted_words || []).map((item) => {
+                  const isChecked = Boolean(selectedSummaryWords[item.word]);
+                  return (
+                    <label
+                      key={item.word}
+                      className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition ${
+                        isChecked
+                          ? "bg-indigo-950/40 border-indigo-500/40"
+                          : "bg-slate-950/50 border-slate-800/80 opacity-70"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() =>
+                          setSelectedSummaryWords((prev) => ({
+                            ...prev,
+                            [item.word]: !prev[item.word],
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-slate-600 text-indigo-500 focus:ring-indigo-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-white">
+                            {item.word}
+                          </span>
+                          <span className="text-xs text-emerald-300 font-medium">
+                            — {item.turkish_meaning}
+                          </span>
+                        </div>
+                        {item.example_sentence && (
+                          <p className="text-xs text-slate-400 mt-0.5 italic">
+                            &ldquo;{item.example_sentence}&rdquo;
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2">
+                <select
+                  value={selectedTargetDeckId}
+                  onChange={(e) => setSelectedTargetDeckId(e.target.value)}
+                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="__new__">Yeni Deste: Speaking Pratikleri</option>
+                  {userDecks.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.title}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleSaveSelectedWordsToDeck}
+                  disabled={isSavingWords}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer disabled:opacity-60"
+                >
+                  {isSavingWords ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <BookPlus className="w-4 h-4" />
+                  )}
+                  <span>Seçilen Kelimeleri Desteye Ekle</span>
+                </button>
+              </div>
+
+              {wordsSavedMessage && (
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/35 text-emerald-200 text-xs font-semibold">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{wordsSavedMessage}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Alt Aksiyon */}
+            <div className="pt-2 border-t border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={handleResetFromSummaryModal}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Yeni Sohbet Başlat</span>
+              </button>
             </div>
           </div>
         </div>

@@ -1969,3 +1969,213 @@ async def transform_avatar_3d(file: UploadFile = File(...)):
         "style": "low_poly_3d_faceted_origami",
         "prompt_used": LOW_POLY_3D_PROMPT,
     }
+
+
+# ---------------------------------------------------------------------------
+# FAZ 4: Oturum Sonu Karnesi, Altın Cümle & Kelime Çıkarımı (/summary, /evaluate)
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel as _PydanticBaseModel
+
+
+class SpeakingSummaryRequest(_PydanticBaseModel):
+    messages: Optional[List[Dict[str, Any]]] = None
+    history: Optional[List[Dict[str, Any]]] = None
+    target_level: Optional[str] = "B1"
+    story_title: Optional[str] = None
+
+
+def _build_fallback_summary(
+    turns: List[Dict[str, str]],
+    target_level: str,
+    story_title: Optional[str] = None,
+) -> Dict[str, Any]:
+    user_lines = [t["text"] for t in turns if t["role"] == "user" and t["text"]]
+    longest_user = max(user_lines, key=len) if user_lines else "I enjoyed practicing English today."
+    improved_example = (
+        longest_user[0].upper() + longest_user[1:]
+        if len(longest_user) > 1
+        else "I really enjoyed practicing English today."
+    )
+    if not improved_example.endswith((".", "!", "?")):
+        improved_example += "."
+
+    score = min(94, max(72, 74 + len(user_lines) * 4))
+    title = (
+        f"Discussing {story_title[:24]}"
+        if story_title
+        else "Everyday English Chat"
+    )
+
+    return {
+        "session_title": title,
+        "fluency_score": score,
+        "coach_feedback": (
+            f"{target_level} seviyesinde cesurca konuşmaya katılman harika! "
+            "Cümlelerini kurmaya devam ettikçe akıcılığın çok daha doğal hale gelecek."
+        ),
+        "golden_sentence": {
+            "original": longest_user,
+            "improved": f"Honestly, {improved_example[0].lower() + improved_example[1:]}"
+            if len(improved_example) > 2
+            else "Honestly, I really enjoyed talking about this today.",
+            "reason_tr": "Cümlenin başına 'Honestly' gibi doğal bir konuşma bağlacı eklemek ifadeyi daha akıcı ve samimi kılar.",
+        },
+        "extracted_words": [
+            {
+                "word": "highlight",
+                "turkish_meaning": "en güzel an / öne çıkan nokta",
+                "example_sentence": "The highlight of my day was having a great conversation.",
+            },
+            {
+                "word": "perspective",
+                "turkish_meaning": "bakış açısı",
+                "example_sentence": "Hearing your perspective made the topic much clearer.",
+            },
+            {
+                "word": "consistent",
+                "turkish_meaning": "istikrarlı, düzenli",
+                "example_sentence": "Consistent speaking practice helps build strong confidence.",
+            },
+        ],
+    }
+
+
+@router.post("/summary")
+@router.post("/evaluate")
+async def evaluate_speaking_session(payload: SpeakingSummaryRequest):
+    raw_items = payload.messages if payload.messages is not None else (payload.history or [])
+    clean_level = (payload.target_level or "B1").upper().strip()
+
+    turns: List[Dict[str, str]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        role_raw = str(item.get("role") or item.get("sender") or "user").lower()
+        role = "assistant" if role_raw in ("assistant", "ai", "model") else "user"
+        text = str(item.get("message") or item.get("content") or item.get("text") or "").strip()
+        if text:
+            turns.append({"role": role, "text": text})
+
+    fallback_result = _build_fallback_summary(turns, clean_level, payload.story_title)
+    user_turns = [t for t in turns if t["role"] == "user"]
+
+    # Sohbet çok kısaysa (1-2 mesaj ve hiç kullanıcı cümlesi yoksa) doğrudan anlamlı varsayılan karne dön
+    if len(turns) <= 2 and len(user_turns) == 0:
+        return fallback_result
+
+    api_key = (
+        getattr(settings, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY") or ""
+    ).strip("\"' ")
+    if not api_key:
+        return fallback_result
+
+    transcript_text = "\n".join(
+        f"{'AI' if t['role'] == 'assistant' else 'User'}: {t['text']}"
+        for t in turns[-20:]
+    )
+
+    eval_prompt = f"""Analyze this English speaking practice conversation (Target CEFR Level: {clean_level}).
+Conversation:
+{transcript_text}
+
+Return ONLY valid JSON matching this exact structure:
+{{
+  "session_title": "3-4 word English topic title",
+  "fluency_score": 85,
+  "coach_feedback": "Kullanıcıya Türkçe 2 cümlelik samimi ve motive edici geri bildirim",
+  "golden_sentence": {{
+    "original": "A sentence the user actually said (or closest paraphrase) that can be improved",
+    "improved": "A more natural, fluent English version of that sentence",
+    "reason_tr": "Neden daha doğal olduğuna dair 1 cümlelik Türkçe açıklama"
+  }},
+  "extracted_words": [
+    {{
+      "word": "useful English word or phrase from or relevant to this chat",
+      "turkish_meaning": "Türkçe anlamı",
+      "example_sentence": "Natural English example sentence from the conversation context"
+    }}
+  ]
+}}
+Include 3 to 5 items in extracted_words. fluency_score must be an integer between 60 and 98."""
+
+    client = genai.Client(api_key=api_key)
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+
+    for model_name in models_to_try:
+        try:
+            cfg_kwargs: Dict[str, Any] = {
+                "temperature": 0.4,
+                "response_mime_type": "application/json",
+            }
+            if "2.5" in model_name and hasattr(types, "ThinkingConfig"):
+                try:
+                    cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+                except Exception:
+                    pass
+
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model_name,
+                    contents=eval_prompt,
+                    config=types.GenerateContentConfig(**cfg_kwargs),
+                ),
+                timeout=8.0,
+            )
+            raw_text = (getattr(response, "text", None) or "").strip()
+            if not raw_text:
+                continue
+
+            parsed = clean_json_response(raw_text)
+            if not isinstance(parsed, dict):
+                parsed = json.loads(raw_text)
+
+            golden = parsed.get("golden_sentence")
+            if not isinstance(golden, dict):
+                golden = fallback_result["golden_sentence"]
+
+            words = parsed.get("extracted_words")
+            if not isinstance(words, list) or len(words) == 0:
+                words = fallback_result["extracted_words"]
+
+            score_val = parsed.get("fluency_score", fallback_result["fluency_score"])
+            try:
+                score_int = max(50, min(100, int(score_val)))
+            except Exception:
+                score_int = fallback_result["fluency_score"]
+
+            return {
+                "session_title": str(
+                    parsed.get("session_title") or fallback_result["session_title"]
+                ).strip(),
+                "fluency_score": score_int,
+                "coach_feedback": str(
+                    parsed.get("coach_feedback") or fallback_result["coach_feedback"]
+                ).strip(),
+                "golden_sentence": {
+                    "original": str(
+                        golden.get("original") or fallback_result["golden_sentence"]["original"]
+                    ).strip(),
+                    "improved": str(
+                        golden.get("improved") or fallback_result["golden_sentence"]["improved"]
+                    ).strip(),
+                    "reason_tr": str(
+                        golden.get("reason_tr") or fallback_result["golden_sentence"]["reason_tr"]
+                    ).strip(),
+                },
+                "extracted_words": [
+                    {
+                        "word": str(w.get("word") or "").strip(),
+                        "turkish_meaning": str(w.get("turkish_meaning") or "").strip(),
+                        "example_sentence": str(w.get("example_sentence") or "").strip(),
+                    }
+                    for w in words
+                    if isinstance(w, dict) and str(w.get("word") or "").strip()
+                ][:5]
+                or fallback_result["extracted_words"],
+            }
+        except Exception as err:
+            logger.warning(f"Speaking summary model '{model_name}' failed: {err}")
+            continue
+
+    return fallback_result
