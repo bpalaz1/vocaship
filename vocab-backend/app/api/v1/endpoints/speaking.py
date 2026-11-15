@@ -13,7 +13,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any, Union
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Depends, status, WebSocket, WebSocketDisconnect
+from google import genai
 from google.genai import types
+from app.core.config import settings
 from app.core.database import get_db
 from app.services.gamification_service import award_xp
 from app.schemas.speaking import (
@@ -983,7 +985,7 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
         persona_tone_rules = (
             "SENİN KİMLİĞİN: ALEX (Sakin, güven veren, son derece sabırlı yetişkin mentör)\n"
             "- Sakin, anlayışlı, derin dinleyen ve güven veren bir yetişkin mentör ve sohbet arkadaşısın.\n"
-            "- Kullanıcıyı asla aceleye getirme veya tedirgin etme. Kahve sohbeti rahatlığında ('I see what you mean...', 'That is a very thoughtful point...', 'Take your time, you are doing great.') konuş.\n"
+            "- Kullanıcıyı asla aceleye getirme veya tedirgin etme. Kahve sohbeti rahatlığında doğal, samimi ve destekleyici konuş.\n"
             "- Samimi, yapıcı ve güven verici bir tonda kal."
         )
 
@@ -1106,12 +1108,12 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
 
     formatted_history = "\n".join(history_lines) if history_lines else "(Start of natural conversation)"
 
-    dynamic_sys_instruction = f"""Sen kullanıcının samimi, dostane ve doğal bir İngilizce sohbet arkadaşısın.
+    dynamic_sys_instruction = f"""Sen samimi, zeki ve gerçek bir insan gibi sohbet eden bir konuşma arkadaşısın. Kullanıcının söylediği şeye doğrudan yorum yap, fikrini söyle ve sohbeti ilerleten doğal bir takip sorusu sor. Maksimum 2-3 cümle kur. Asla klişe şablonlar kullanma.
 
 KESİN KONUŞMA KURALLARI:
 - Kullanıcının söylediği cümleyi tırnak içinde tekrarlama ('You mentioned...' gibi robotik kalıplar YASAK).
-- Asla 'what is your favorite thing about that?' kalıbını kullanma.
-- Gerçek bir insan gibi önce kullanıcının fikrine 1 kısa cümleyle samimi bir tepki/yorum ver, ardından konuyla ilgili doğal ve farklı bir takip sorusu sor.
+- Asla 'what is your favorite thing about that?' veya benzeri klişe şablonlar kullanma.
+- Yalnızca doğal İngilizce düz metin (plain text) yanıt ver; JSON, markdown kod bloğu veya etiket yazma.
 - Asla bir önceki mesajda söylediğin cümleyi tekrar etme ve ağır analizler ya da uzun paragraflar yazma.
 
 {persona_tone_rules}
@@ -1121,8 +1123,7 @@ STT (SES TANIMA) TÜRK ÖZEL İSİM & BAĞLAM DÜZELTMESİ:
 - Kullanıcının bahsettiği konuyu (örn: İzmir, Fil İsmail / elephant Ismail, hava durumu, spor, günlük yaşam vb.) asla değiştirmeden doğal sohbeti sürdür.
 
 SOHBET GEÇMİŞİ VE TEKRAR ENGELİ:
-- Asla bir önceki mesajda söylediğin cümleyi tekrar etme. Kullanıcının son cümlesine (örneğin hava durumu, ruh hali, günlük olaylar) doğrudan, samimi ve 1-2 kısa cümleyle karşılık ver.
-{f'- Bir önceki turda söylediğin cümle şuydu (BUNU ASLA TEKRARLAMA): "{last_assistant_message}"' if last_assistant_message else ''}
+{f'- Bir önceki turda söylediğin cümle şuydu (BUNU ASLA TEKRARLAMA): "{last_assistant_message}"' if last_assistant_message else '- Konuşma geçmişindeki kendi cümlelerini asla tekrarlama.'}
 
 CANLI TARİH VE ANLIK HAVA DURUMU BİLGİSİ (Open-Meteo Canlı Veri):
 - Bugünün Tarihi ve Saati: {current_date_str}
@@ -1130,15 +1131,7 @@ CANLI TARİH VE ANLIK HAVA DURUMU BİLGİSİ (Open-Meteo Canlı Veri):
 
 KESİN GUARDRAIL (POZİTİF GÜNDEM FİLTRESİ):
 - Siyaset, savaş, ekonomik kriz ve şiddet konularına girme; yalnızca pozitif günlük yaşam, hava durumu, spor, bilim ve kültür konularında konuş.
-{story_instruction}
-Çıktıyı bu JSON şemasında ver:
-{{
-  "assistant_reply": "İngilizce seslendirilecek samimi, dostane yanıt (1-2 kısa cümle ve doğal bir takip sorusuyla biten)",
-  "hint_suggestions": [
-    "O anki soruya cevap verirken kullanılabilecek 1. kısa cümle başlatıcı ipucu",
-    "O anki soruya cevap verirken kullanılabilecek 2. kısa cümle başlatıcı ipucu"
-  ]
-}}"""
+{story_instruction}"""
 
     user_turn_prompt = f"""Son Konuşma Akışı:
 {formatted_history}
@@ -1146,10 +1139,7 @@ KESİN GUARDRAIL (POZİTİF GÜNDEM FİLTRESİ):
 Kullanıcının Son Cümlesi:
 "{user_text}"
 
-GÖREV:
-Asla bir önceki mesajda söylediğin cümleyi tekrar etme. Kullanıcının son cümlesine ("{user_text}") doğrudan, samimi ve 1-2 kısa cümleyle karşılık ver ve sohbeti sürdürecek doğal bir soru sor. O anki soruya özel 2 cümle önerisini hint_suggestions alanında üret.
-
-Return valid JSON matching the schema."""
+Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (maksimum 2-3 cümle) yanıt ver."""
 
     gemini_contents.append(
         types.Content(
@@ -1158,90 +1148,75 @@ Return valid JSON matching the schema."""
         )
     )
 
-    # Sadece güncel haber/spor/bilim/olay sorulduğunda Google Search Grounding aç (hava durumu zaten 30 dk önbellekte)
-    user_lower_check = user_text.lower()
-    needs_live_search = any(
-        kw in user_lower_check
-        for kw in ["news", "sport", "football", "basketball", "match", "score", "science", "today's", "current events", "latest", "champion", "olympic"]
-    )
-
     story_title_for_hints = None
     if isinstance(payload.story_context, dict):
         story_title_for_hints = payload.story_context.get("title")
 
-    response_dict: Dict[str, Any] = {}
-    try:
-        response_dict = await asyncio.wait_for(
-            async_call_speaking_gemini(
-                gemini_contents,
-                system_instruction=dynamic_sys_instruction,
-                use_search=needs_live_search,
-            ),
-            timeout=5.0,
+    api_key = (
+        getattr(settings, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY") or ""
+    ).strip("\"' ")
+    if not api_key:
+        logger.error("Gemini speaking error: GEMINI_API_KEY is empty.")
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini bağlantı hatası: GEMINI_API_KEY tanımlı değil.",
         )
-    except Exception as first_err:
-        logger.error(f"Primary Gemini speaking call error: {first_err}")
-        print(f"[Speaking Gemini Primary Error]: {first_err}")
+
+    client = genai.Client(api_key=api_key)
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+    assistant_reply = ""
+    last_error: Optional[Exception] = None
+
+    for model_name in models_to_try:
         try:
-            response_dict = await asyncio.wait_for(
-                async_call_speaking_gemini(
-                    gemini_contents,
-                    system_instruction=dynamic_sys_instruction,
-                    use_search=False,
-                ),
-                timeout=4.5,
-            )
-        except Exception as second_err:
-            logger.error(f"Secondary Gemini speaking call error: {second_err}")
-            print(f"[Speaking Gemini Secondary Error]: {second_err}")
-            if story_title_for_hints:
-                dynamic_err_reply = (
-                    f"That's a really interesting thought about '{story_title_for_hints}'! "
-                    f"What part of the story stood out to you the most?"
-                )
-            else:
-                dynamic_err_reply = random.choice([
-                    "That sounds really interesting! How did you first get into that?",
-                    "I see what you mean! What made you think about that today?",
-                ])
-            response_dict = {
-                "assistant_reply": dynamic_err_reply,
-                "hint_suggestions": build_default_hints(clean_level, story_title_for_hints),
-                "updated_level": detected_level_change,
+            cfg_kwargs: Dict[str, Any] = {
+                "temperature": 0.75,
+                "system_instruction": dynamic_sys_instruction,
             }
+            if "2.5" in model_name and hasattr(types, "ThinkingConfig"):
+                try:
+                    cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+                except Exception:
+                    pass
 
-    # Algılanan seviye değişimi (LLM veya deterministik dedektör)
-    llm_updated_lvl = response_dict.get("updated_level")
-    if llm_updated_lvl and str(llm_updated_lvl).strip().upper() in ["A1", "A2", "B1", "B2", "C1"]:
-        final_updated_level = str(llm_updated_lvl).strip().upper()
-    else:
-        final_updated_level = detected_level_change
-
-    reply_message = str(
-        response_dict.get("assistant_reply")
-        or response_dict.get("reply_message")
-        or ""
-    ).strip()
-    if not reply_message:
-        reply_message = random.choice([
-            "That sounds really interesting! How did you first get into that?",
-            "I see what you mean! What made you think about that today?",
-        ])
-    assistant_reply = reply_message
-
-    # Hint Suggestions (2 pratik cümle başlatıcı kalıp)
-    raw_hints = response_dict.get("hint_suggestions")
-    hint_suggestions: List[str] = []
-    if isinstance(raw_hints, list):
-        hint_suggestions = [str(h).strip() for h in raw_hints if h and str(h).strip()]
-    if len(hint_suggestions) < 2:
-        default_hints = build_default_hints(final_updated_level or clean_level, story_title_for_hints)
-        for dh in default_hints:
-            if dh not in hint_suggestions:
-                hint_suggestions.append(dh)
-            if len(hint_suggestions) >= 2:
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model_name,
+                    contents=gemini_contents,
+                    config=types.GenerateContentConfig(**cfg_kwargs),
+                ),
+                timeout=6.0,
+            )
+            raw_text = (getattr(response, "text", None) or "").strip()
+            if raw_text:
+                # Eğer model yine de JSON döndürdüyse içinden assistant_reply çıkar, aksi halde düz metni al
+                if raw_text.startswith("{") or raw_text.startswith("```"):
+                    parsed = parse_flexible_speaking_response(raw_text)
+                    candidate = str(
+                        parsed.get("assistant_reply")
+                        or parsed.get("reply_message")
+                        or ""
+                    ).strip()
+                    assistant_reply = candidate or raw_text
+                else:
+                    assistant_reply = raw_text
                 break
-    hint_suggestions = hint_suggestions[:2]
+            raise ValueError(f"{model_name} returned empty response.")
+        except Exception as model_err:
+            last_error = model_err
+            logger.error(f"Gemini speaking model '{model_name}' failed: {model_err}")
+            print(f"[Speaking Gemini Error - {model_name}]: {model_err}")
+
+    if not assistant_reply:
+        err_msg = str(last_error or "Unknown Gemini error")
+        logger.error(f"All Gemini speaking models failed: {err_msg}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Gemini bağlantı hatası: {err_msg}",
+        )
+
+    final_updated_level = detected_level_change
+    hint_suggestions = build_default_hints(final_updated_level or clean_level, story_title_for_hints)[:2]
 
     # Recasting Notu
     recast_raw = response_dict.get("recast_note")

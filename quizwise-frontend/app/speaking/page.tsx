@@ -855,7 +855,7 @@ function SpeakingContent() {
       const updatedDialogue = [...dialogueRef.current, userTurn];
       updateDialogue(updatedDialogue);
 
-      const formattedHistoryPayload = updatedDialogue.slice(-8).map((d) => ({
+      const formattedHistoryPayload = updatedDialogue.map((d) => ({
         role: d.role,
         message: d.message,
         content: d.message,
@@ -870,7 +870,7 @@ function SpeakingContent() {
         );
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 7500);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         let res: Response;
         try {
@@ -879,6 +879,7 @@ function SpeakingContent() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               user_message: cleanText,
+              message: cleanText,
               transcript: cleanText,
               user_transcript: cleanText,
               scenario_id: activeStoryTitle ? "story_debate" : "casual_coffee",
@@ -940,32 +941,29 @@ function SpeakingContent() {
             return;
           }
         }
-        throw new Error(`HTTP ${res.status}`);
+        let errDetail = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          if (errJson?.detail) {
+            errDetail = String(errJson.detail);
+          }
+        } catch {}
+        throw new Error(errDetail);
       } catch (err) {
-        console.warn("Speaking respond error:", err);
+        const errMessage = err instanceof Error ? err.message : "Sunucu bağlantı hatası";
+        console.warn("Speaking respond error:", errMessage);
         isAiSpeakingRef.current = false;
         isThinkingRef.current = false;
-        const dynamicOfflineReply = activeStoryTitle
-          ? `That's a really interesting point about "${activeStoryTitle}"! What part of the story stood out to you the most?`
-          : "That sounds really interesting! How did you first get into that?";
-        const assistantTurn: DialogueTurn = {
-          role: "assistant",
-          message: dynamicOfflineReply,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        };
-        updateDialogue([...updatedDialogue, assistantTurn]);
-        setAiMessage(dynamicOfflineReply);
-        addToSessionArchive({
-          speaker: "AI",
-          text: dynamicOfflineReply,
-          timestamp: assistantTurn.timestamp || now,
-        });
+        setIsAiSpeaking(false);
         setIsThinking(false);
-        isThinkingRef.current = false;
-        speakAiResponse(dynamicOfflineReply);
+        setMicError(errMessage);
+        if (sessionStateRef.current === "active") {
+          setTimeout(() => {
+            if (sessionStateRef.current === "active" && !isAiSpeakingRef.current) {
+              startListening();
+            }
+          }, 650);
+        }
       } finally {
         setIsThinking(false);
         isThinkingRef.current = false;
