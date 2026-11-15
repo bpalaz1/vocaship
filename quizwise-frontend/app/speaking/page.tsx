@@ -459,7 +459,7 @@ function SpeakingContent() {
         setMicVolume(60);
         setTimeout(() => setMicVolume(20), 220);
 
-        // Kullanıcı 1.5 saniye (1500ms) sustuğunda biriken cümleyi otomatik gönder
+        // Kullanıcı 1.4 saniye (1400ms) sustuğunda biriken cümleyi otomatik gönder (3 kelimeden az gürültüyü filtrele)
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
         }
@@ -476,6 +476,15 @@ function SpeakingContent() {
             .trim();
 
           const completedSentence = stripAiEchoFromUserText(rawCompleted);
+          const wordCount = completedSentence.split(/\s+/).filter(Boolean).length;
+
+          if (wordCount < 3) {
+            transcriptBufferRef.current = "";
+            currentSessionFinalRef.current = "";
+            latestInterimRef.current = "";
+            setUserTranscript("");
+            return;
+          }
 
           if (
             completedSentence &&
@@ -488,7 +497,7 @@ function SpeakingContent() {
             latestInterimRef.current = "";
             sendMessageRef.current(completedSentence);
           }
-        }, 1500);
+        }, 1400);
       };
 
       recognition.onerror = (e: any) => {
@@ -667,7 +676,7 @@ function SpeakingContent() {
             latestInterimRef.current = "";
             startListening();
           }
-        }, 650);
+        }, 600);
       };
 
       // Metin uzunluğuna göre dinamik maksimum güvenlik zamanlayıcısı (Zero-Deadlock)
@@ -1251,10 +1260,17 @@ function SpeakingContent() {
                 />
               )}
 
-              <div
+              <button
+                type="button"
+                onClick={() => {
+                  if (isAiSpeaking) {
+                    interruptAi();
+                  }
+                }}
+                disabled={!isAiSpeaking}
                 className={`w-48 h-48 sm:w-56 sm:h-56 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative shadow-2xl select-none ${
                   isAiSpeaking
-                    ? "bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 shadow-indigo-500/60 ring-4 ring-indigo-400/50 animate-pulse"
+                    ? "cursor-pointer active:scale-95 bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 shadow-indigo-500/60 ring-4 ring-indigo-400/50 animate-pulse"
                     : isThinking
                     ? "bg-gradient-to-tr from-amber-600 via-indigo-600 to-purple-600 shadow-purple-500/50 ring-4 ring-purple-400/40"
                     : "bg-gradient-to-tr from-emerald-600 via-teal-600 to-cyan-500 shadow-emerald-500/50 ring-4 ring-emerald-400/40"
@@ -1265,6 +1281,9 @@ function SpeakingContent() {
                     <Volume2 className="w-11 h-11 mb-2 text-white animate-pulse" />
                     <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
                       🔊 Konuşuyor...
+                    </span>
+                    <span className="text-[10px] text-indigo-200 mt-1">
+                      (Söz kesmek için dokun)
                     </span>
                   </div>
                 ) : isThinking ? (
@@ -1282,7 +1301,7 @@ function SpeakingContent() {
                     </span>
                   </div>
                 )}
-              </div>
+              </button>
             </div>
 
             {/* AI Mesajı + Canlı Transkript Kutusu */}

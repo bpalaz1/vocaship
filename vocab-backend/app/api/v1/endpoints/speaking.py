@@ -1064,8 +1064,8 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
         else:
             story_instruction = f"\nAKTİF HİKAYE / REFERANS BAĞLAMI:\n{str(payload.story_context)[:500]}\n"
 
-    # Konuşma geçmişindeki son 6 mesajı hem okunabilir metin hem de Gemini 'contents' akışı olarak hazırla
-    recent_turns = raw_history[-6:]
+    # Konuşma geçmişindeki son 8 mesajı hem okunabilir metin hem de Gemini 'contents' akışı olarak hazırla
+    recent_turns = raw_history[-8:]
     history_lines = []
     gemini_contents: List[types.Content] = []
     last_assistant_message = ""
@@ -1108,7 +1108,7 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
 
     formatted_history = "\n".join(history_lines) if history_lines else "(Start of natural conversation)"
 
-    dynamic_sys_instruction = f"""Sen samimi, zeki ve gerçek bir insan gibi sohbet eden bir konuşma arkadaşısın. Kullanıcının söylediği şeye doğrudan yorum yap, fikrini söyle ve sohbeti ilerleten doğal bir takip sorusu sor. Maksimum 2-3 cümle kur. Asla klişe şablonlar kullanma.
+    dynamic_sys_instruction = f"""Sen samimi, zeki ve gerçek bir insan gibi sohbet eden bir dil partnerisin (Seviye: {clean_level}). Kullanıcının söylediği şeye doğrudan yorum yap, fikrini söyle ve sohbeti ilerleten doğal bir takip sorusu sor. Maksimum 2 kısa cümle kur. Asla klişe şablonlar veya kullanıcının cümlesini tırnak içinde tekrarlayan robotik kalıplar kullanma.
 
 KESİN KONUŞMA KURALLARI:
 - Kullanıcının söylediği cümleyi tırnak içinde tekrarlama ('You mentioned...' gibi robotik kalıplar YASAK).
@@ -1212,7 +1212,7 @@ Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (mak
         logger.error(f"All Gemini speaking models failed: {err_msg}")
         raise HTTPException(
             status_code=502,
-            detail=f"Gemini bağlantı hatası: {err_msg}",
+            detail=f"Gemini API Hatası: {err_msg}",
         )
 
     final_updated_level = detected_level_change
