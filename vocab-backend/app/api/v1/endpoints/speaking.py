@@ -2015,6 +2015,7 @@ def _build_fallback_summary(
 
 @router.post("/summary")
 @router.post("/evaluate")
+@router.post("/analyze")
 async def evaluate_speaking_session(payload: SpeakingSummaryRequest):
     raw_items = payload.messages if payload.messages is not None else (payload.history or [])
     clean_level = (payload.target_level or "B1").upper().strip()
