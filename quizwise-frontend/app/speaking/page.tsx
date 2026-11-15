@@ -322,11 +322,8 @@ function SpeakingContent() {
         `We just finished reading "${activeStoryTitle}"! What moment or character decision caught your attention the most?`
       );
     }
-    const firstName = syncedProfile.displayName && syncedProfile.displayName !== "Konuşmacı"
-      ? ` ${syncedProfile.displayName}`
-      : "";
-    return `Hey${firstName}! Great to see you. What has been the highlight of your day so far?`;
-  }, [activeStoryTitle, storyOpeningQuestion, syncedProfile.displayName]);
+    return "Hey there! Great to see you. What has been the highlight of your day so far?";
+  }, [activeStoryTitle, storyOpeningQuestion]);
 
   // 🎯 Hedef Kelime Avcısı (Yalnızca Hikaye Modunda Göster)
   const targetWordsList = useMemo<string[]>(() => {
@@ -604,7 +601,7 @@ function SpeakingContent() {
         setMicVolume(60);
         setTimeout(() => setMicVolume(20), 220);
 
-        // Kullanıcı 1.4 saniye (1400ms) sustuğunda biriken cümleyi otomatik gönder (3 kelimeden az gürültüyü filtrele)
+        // Kullanıcı 2.0 saniye (2000ms) sustuğunda biriken tüm cümleyi tek tur olarak gönder (3 kelimeden az gürültüyü filtrele)
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
         }
@@ -642,7 +639,7 @@ function SpeakingContent() {
             latestInterimRef.current = "";
             sendMessageRef.current(completedSentence);
           }
-        }, 1400);
+        }, 2000);
       };
 
       recognition.onerror = (e: any) => {
@@ -1072,7 +1069,14 @@ function SpeakingContent() {
             setStarterHints([]);
           }
 
-          const replyText = (data.assistant_reply || data.reply_message || "").trim();
+          const replyText = String(
+            data.assistant_reply ||
+              data.reply_message ||
+              data.reply ||
+              data.response ||
+              data.message ||
+              ""
+          ).trim();
           if (replyText) {
             const assistantTurn: DialogueTurn = {
               role: "assistant",
@@ -1443,7 +1447,7 @@ function SpeakingContent() {
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-indigo-300 text-xs font-semibold transition active:scale-95 cursor-pointer"
               >
                 <Volume2 className="w-3.5 h-3.5" />
-                <span>🔊 Tekrar Dinle</span>
+                <span>Tekrar Dinle</span>
               </button>
             )}
           </div>
@@ -1532,7 +1536,7 @@ function SpeakingContent() {
                   <div className="flex flex-col items-center justify-center p-2">
                     <Loader2 className="w-8 h-8 mb-1.5 text-white animate-spin" />
                     <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
-                      Yanıtlıyor...
+                      Düşünüyor...
                     </span>
                   </div>
                 ) : (
@@ -1558,7 +1562,7 @@ function SpeakingContent() {
             }`}
           >
             <Lightbulb className="w-4 h-4 text-amber-400" />
-            <span>💡 Ne Diyebilirim?</span>
+            <span>Ne Diyebilirim?</span>
           </button>
         </div>
 
