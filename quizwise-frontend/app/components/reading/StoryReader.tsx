@@ -611,13 +611,13 @@ export default function StoryReader({
         stopAudio();
         if (typeof window !== "undefined") {
             const vocabList = Array.isArray(story.target_vocabulary)
-                ? story.target_vocabulary.map((v) =>
+                ? story.target_vocabulary.map((v: any) =>
                     typeof v === "string" ? v : v.word
                 )
                 : [];
 
             const storyLevel = (story as any).cefr || story.level || "B1";
-            const storySnippet = (story.content || "").slice(0, 800);
+            const storySnippet = (story.content || "").slice(0, 450);
 
             const storyContext = {
                 storyId: story.id,
@@ -633,8 +633,7 @@ export default function StoryReader({
 
             sessionStorage.setItem("vocaship_active_story_context", JSON.stringify(storyContext));
             sessionStorage.setItem("active_story_context", JSON.stringify(storyContext));
-            const sTitle = encodeURIComponent(story.title || "");
-            router.push('/speaking?mode=story_debate&title=' + sTitle + '&level=' + encodeURIComponent(storyLevel));
+            router.push(`/speaking?mode=story_debate&storyId=${encodeURIComponent(story.id || "")}`);
         }
     }, [stopAudio, story, router]);
 
@@ -2202,7 +2201,7 @@ export default function StoryReader({
                         title="Bu metni ve temalarını Gemini ile sesli tartış"
                     >
                         <Mic className="w-4 h-4 text-violet-200" />
-                        <span>🎙️ Bu Hikayeyi Gemini ile Tartış</span>
+                        <span>🎙️ Bu Hikayeyi Karakterle Tartış</span>
                     </button>
 
                     {!isCompleted ? (

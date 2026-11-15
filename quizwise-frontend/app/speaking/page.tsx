@@ -48,6 +48,7 @@ interface ActiveStoryContext {
   content?: string;
   target_vocabulary?: string[];
   target_words?: string[];
+  targetWords?: string[];
   topic?: string;
 }
 
@@ -205,6 +206,7 @@ function SpeakingContent() {
   const activeStoryTitle = isExplicitStoryMode
     ? storyContext?.title || urlTitle || null
     : null;
+  const isStoryLevelLocked = Boolean(isExplicitStoryMode && storyContext?.level);
   const activeLevel = (
     storyContext?.level ||
     userProfile?.study_level ||
@@ -312,7 +314,7 @@ function SpeakingContent() {
     };
   }, [isExplicitStoryMode, activeStoryTitle, storyContext, activeLevel]);
 
-  // İlk Selamlama Cümlesi
+  // Sıcak Yerel Buz Kırıcı (Warm Local Icebreaker)
   const openingGreeting = useMemo(() => {
     if (activeStoryTitle) {
       return (
@@ -320,8 +322,45 @@ function SpeakingContent() {
         `We just finished reading "${activeStoryTitle}"! What moment or character decision caught your attention the most?`
       );
     }
-    return "Hey! Great to see you. How is your day going today?";
-  }, [activeStoryTitle, storyOpeningQuestion]);
+    const firstName = syncedProfile.displayName && syncedProfile.displayName !== "Konuşmacı"
+      ? ` ${syncedProfile.displayName}`
+      : "";
+    return `Hey${firstName}! Great to see you. What has been the highlight of your day so far?`;
+  }, [activeStoryTitle, storyOpeningQuestion, syncedProfile.displayName]);
+
+  // 🎯 Hedef Kelime Avcısı (Target Word Hunter)
+  const targetWordsList = useMemo<string[]>(() => {
+    const rawStoryWords =
+      storyContext?.targetWords || storyContext?.target_words || storyContext?.target_vocabulary || [];
+    const normalizedStory: string[] = rawStoryWords
+      .map((w: any) => (typeof w === "string" ? w : w?.word || ""))
+      .map((w: string) => w.trim())
+      .filter(Boolean);
+    if (normalizedStory.length > 0) {
+      return Array.from(new Set<string>(normalizedStory)).slice(0, 6);
+    }
+    return Array.from(new Set<string>(deckTargetWords.map((d) => d.word).filter(Boolean))).slice(0, 6);
+  }, [storyContext, deckTargetWords]);
+
+  const huntedTargetWords = useMemo(() => {
+    const combinedUserSpeech = [
+      ...dialogue.filter((d) => d.role === "user").map((d) => d.message),
+      userTranscript,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const matched = new Set<string>();
+    for (const word of targetWordsList) {
+      const cleanWord = word.toLowerCase().trim();
+      if (!cleanWord) continue;
+      const escaped = cleanWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`\\b${escaped}`, "i").test(combinedUserSpeech)) {
+        matched.add(word);
+      }
+    }
+    return matched;
+  }, [targetWordsList, dialogue, userTranscript]);
 
   useEffect(() => {
     const activeAiText = aiMessage || openingGreeting;
@@ -1309,7 +1348,12 @@ function SpeakingContent() {
         {activeStoryTitle && (
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 border border-violet-500/30 text-violet-300 text-xs font-medium backdrop-blur-md">
             <BookOpen className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-            <span className="truncate max-w-[160px]">{activeStoryTitle}</span>
+            <span className="truncate max-w-[140px]">{activeStoryTitle}</span>
+            {isStoryLevelLocked && (
+              <span className="px-1.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-400/40 text-[10px] font-bold text-violet-200">
+                🔒 {activeLevel}
+              </span>
+            )}
             <button
               type="button"
               onClick={handleExitStoryMode}
@@ -1512,6 +1556,30 @@ function SpeakingContent() {
                 <span className="font-medium leading-snug">&ldquo;{phrase}&rdquo;</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* 🎯 Hedef Kelime Avcısı (Kompakt Takip Şeridi) */}
+        {targetWordsList.length > 0 && (
+          <div className="w-full max-w-xl mt-3 px-3 py-2 rounded-2xl bg-slate-900/55 border border-slate-800/80 flex items-center justify-center flex-wrap gap-1.5">
+            <span className="text-[11px] font-bold text-amber-300 mr-1">
+              🎯 {huntedTargetWords.size}/{targetWordsList.length}
+            </span>
+            {targetWordsList.map((word) => {
+              const isHunted = huntedTargetWords.has(word);
+              return (
+                <span
+                  key={word}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
+                    isHunted
+                      ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-200"
+                      : "bg-slate-900/80 border-slate-700/70 text-slate-300"
+                  }`}
+                >
+                  {isHunted ? `✓ ${word}` : word}
+                </span>
+              );
+            })}
           </div>
         )}
 
