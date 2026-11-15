@@ -36,6 +36,7 @@ from app.schemas.speaking import (
     SpeakingArchiveResponse,
 )
 from app.services.ai_service import get_client, clean_json_response
+from app.services.gemini_service import async_get_working_gemini_response
 from app.services.quota_service import check_and_consume_quota
 
 logger = logging.getLogger(__name__)
@@ -1152,67 +1153,38 @@ Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (mak
     if isinstance(payload.story_context, dict):
         story_title_for_hints = payload.story_context.get("title")
 
-    api_key = (
-        os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", "") or ""
-    ).strip().strip("\"'")
-    if not api_key:
-        logger.error("Gemini speaking error: GEMINI_API_KEY is empty.")
-        raise HTTPException(
-            status_code=502,
-            detail="Gemini bağlantı hatası: GEMINI_API_KEY tanımlı değil.",
-        )
-
-    client = genai.Client(api_key=api_key)
-    models_to_try = ["gemini-2.5-flash"]
     assistant_reply = ""
-    last_error: Optional[Exception] = None
-
-    for model_name in models_to_try:
-        try:
-            cfg_kwargs: Dict[str, Any] = {
-                "temperature": 0.75,
-                "system_instruction": dynamic_sys_instruction,
-            }
-            if "2.5" in model_name and hasattr(types, "ThinkingConfig"):
-                try:
-                    cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-                except Exception:
-                    pass
-
-            response = await asyncio.wait_for(
-                client.aio.models.generate_content(
-                    model=model_name,
-                    contents=gemini_contents,
-                    config=types.GenerateContentConfig(**cfg_kwargs),
-                ),
-                timeout=6.0,
-            )
-            raw_text = (getattr(response, "text", None) or "").strip()
-            if raw_text:
-                # Eğer model yine de JSON döndürdüyse içinden assistant_reply çıkar, aksi halde düz metni al
-                if raw_text.startswith("{") or raw_text.startswith("```"):
-                    parsed = parse_flexible_speaking_response(raw_text)
-                    candidate = str(
-                        parsed.get("assistant_reply")
-                        or parsed.get("reply_message")
-                        or ""
-                    ).strip()
-                    assistant_reply = candidate or raw_text
-                else:
-                    assistant_reply = raw_text
-                break
-            raise ValueError(f"{model_name} returned empty response.")
-        except Exception as model_err:
-            last_error = model_err
-            logger.error(f"Gemini speaking model '{model_name}' failed: {model_err}")
-            print(f"[Speaking Gemini Error - {model_name}]: {model_err}")
-
-    if not assistant_reply:
-        err_msg = str(last_error or "Unknown Gemini error")
+    try:
+        raw_text = await async_get_working_gemini_response(
+            prompt=user_turn_prompt,
+            json_mode=False,
+            system_instruction=dynamic_sys_instruction,
+            contents=gemini_contents,
+            timeout_seconds=10.0,
+        )
+        if raw_text:
+            if raw_text.startswith("{") or raw_text.startswith("```"):
+                parsed = parse_flexible_speaking_response(raw_text)
+                candidate = str(
+                    parsed.get("assistant_reply")
+                    or parsed.get("reply_message")
+                    or ""
+                ).strip()
+                assistant_reply = candidate or raw_text
+            else:
+                assistant_reply = raw_text
+    except Exception as gemini_err:
+        err_msg = str(gemini_err)
         logger.error(f"All Gemini speaking models failed: {err_msg}")
         raise HTTPException(
             status_code=502,
             detail=f"Gemini API Hatası: {err_msg}",
+        )
+
+    if not assistant_reply:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini API Hatası: Boş yanıt döndü.",
         )
 
     final_updated_level = detected_level_change
@@ -2064,12 +2036,6 @@ async def evaluate_speaking_session(payload: SpeakingSummaryRequest):
     if len(turns) <= 2 and len(user_turns) == 0:
         return fallback_result
 
-    api_key = (
-        os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", "") or ""
-    ).strip().strip("\"'")
-    if not api_key:
-        return fallback_result
-
     transcript_text = "\n".join(
         f"{'AI' if t['role'] == 'assistant' else 'User'}: {t['text']}"
         for t in turns[-20:]
@@ -2099,83 +2065,63 @@ Return ONLY valid JSON matching this exact structure:
 }}
 Include 3 to 5 items in extracted_words. fluency_score must be an integer between 60 and 98."""
 
-    client = genai.Client(api_key=api_key)
-    models_to_try = ["gemini-2.5-flash"]
+    try:
+        raw_text = await async_get_working_gemini_response(
+            prompt=eval_prompt,
+            json_mode=True,
+            timeout_seconds=10.0,
+        )
+        if not raw_text:
+            return fallback_result
 
-    for model_name in models_to_try:
+        parsed = clean_json_response(raw_text)
+        if not isinstance(parsed, dict):
+            parsed = json.loads(raw_text)
+
+        golden = parsed.get("golden_sentence")
+        if not isinstance(golden, dict):
+            golden = fallback_result["golden_sentence"]
+
+        words = parsed.get("extracted_words")
+        if not isinstance(words, list) or len(words) == 0:
+            words = fallback_result["extracted_words"]
+
+        score_val = parsed.get("fluency_score", fallback_result["fluency_score"])
         try:
-            cfg_kwargs: Dict[str, Any] = {
-                "temperature": 0.4,
-                "response_mime_type": "application/json",
-            }
-            if "2.5" in model_name and hasattr(types, "ThinkingConfig"):
-                try:
-                    cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-                except Exception:
-                    pass
+            score_int = max(50, min(100, int(score_val)))
+        except Exception:
+            score_int = fallback_result["fluency_score"]
 
-            response = await asyncio.wait_for(
-                client.aio.models.generate_content(
-                    model=model_name,
-                    contents=eval_prompt,
-                    config=types.GenerateContentConfig(**cfg_kwargs),
-                ),
-                timeout=8.0,
-            )
-            raw_text = (getattr(response, "text", None) or "").strip()
-            if not raw_text:
-                continue
-
-            parsed = clean_json_response(raw_text)
-            if not isinstance(parsed, dict):
-                parsed = json.loads(raw_text)
-
-            golden = parsed.get("golden_sentence")
-            if not isinstance(golden, dict):
-                golden = fallback_result["golden_sentence"]
-
-            words = parsed.get("extracted_words")
-            if not isinstance(words, list) or len(words) == 0:
-                words = fallback_result["extracted_words"]
-
-            score_val = parsed.get("fluency_score", fallback_result["fluency_score"])
-            try:
-                score_int = max(50, min(100, int(score_val)))
-            except Exception:
-                score_int = fallback_result["fluency_score"]
-
-            return {
-                "session_title": str(
-                    parsed.get("session_title") or fallback_result["session_title"]
+        return {
+            "session_title": str(
+                parsed.get("session_title") or fallback_result["session_title"]
+            ).strip(),
+            "fluency_score": score_int,
+            "coach_feedback": str(
+                parsed.get("coach_feedback") or fallback_result["coach_feedback"]
+            ).strip(),
+            "golden_sentence": {
+                "original": str(
+                    golden.get("original") or fallback_result["golden_sentence"]["original"]
                 ).strip(),
-                "fluency_score": score_int,
-                "coach_feedback": str(
-                    parsed.get("coach_feedback") or fallback_result["coach_feedback"]
+                "improved": str(
+                    golden.get("improved") or fallback_result["golden_sentence"]["improved"]
                 ).strip(),
-                "golden_sentence": {
-                    "original": str(
-                        golden.get("original") or fallback_result["golden_sentence"]["original"]
-                    ).strip(),
-                    "improved": str(
-                        golden.get("improved") or fallback_result["golden_sentence"]["improved"]
-                    ).strip(),
-                    "reason_tr": str(
-                        golden.get("reason_tr") or fallback_result["golden_sentence"]["reason_tr"]
-                    ).strip(),
-                },
-                "extracted_words": [
-                    {
-                        "word": str(w.get("word") or "").strip(),
-                        "turkish_meaning": str(w.get("turkish_meaning") or "").strip(),
-                        "example_sentence": str(w.get("example_sentence") or "").strip(),
-                    }
-                    for w in words
-                    if isinstance(w, dict) and str(w.get("word") or "").strip()
-                ][:5]
-                or fallback_result["extracted_words"],
-            }
-        except Exception as err:
-            logger.warning(f"Speaking summary model '{model_name}' failed: {err}")
-            continue
-
-    return fallback_result
+                "reason_tr": str(
+                    golden.get("reason_tr") or fallback_result["golden_sentence"]["reason_tr"]
+                ).strip(),
+            },
+            "extracted_words": [
+                {
+                    "word": str(w.get("word") or "").strip(),
+                    "turkish_meaning": str(w.get("turkish_meaning") or "").strip(),
+                    "example_sentence": str(w.get("example_sentence") or "").strip(),
+                }
+                for w in words
+                if isinstance(w, dict) and str(w.get("word") or "").strip()
+            ][:5]
+            or fallback_result["extracted_words"],
+        }
+    except Exception as err:
+        logger.warning(f"Speaking summary dynamic Gemini failed: {err}")
+        return fallback_result
