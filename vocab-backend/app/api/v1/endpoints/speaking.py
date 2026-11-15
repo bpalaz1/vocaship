@@ -1153,8 +1153,8 @@ Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (mak
         story_title_for_hints = payload.story_context.get("title")
 
     api_key = (
-        getattr(settings, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY") or ""
-    ).strip("\"' ")
+        os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", "") or ""
+    ).strip().strip("\"'")
     if not api_key:
         logger.error("Gemini speaking error: GEMINI_API_KEY is empty.")
         raise HTTPException(
@@ -2065,8 +2065,8 @@ async def evaluate_speaking_session(payload: SpeakingSummaryRequest):
         return fallback_result
 
     api_key = (
-        getattr(settings, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY") or ""
-    ).strip("\"' ")
+        os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", "") or ""
+    ).strip().strip("\"'")
     if not api_key:
         return fallback_result
 
