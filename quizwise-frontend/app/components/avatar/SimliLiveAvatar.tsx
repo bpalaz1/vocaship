@@ -1,11 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import {
-  SimliClient,
-  generateSimliSessionToken,
-  generateIceServers,
-} from "simli-client";
+// @ts-ignore - Optional external package
+import { SimliClient, generateSimliSessionToken, generateIceServers } from "simli-client";
 import { Radio, Sparkles, WifiOff, Mic } from "lucide-react";
 import type { AvatarAnimationState } from "./AvatarDisplay";
 

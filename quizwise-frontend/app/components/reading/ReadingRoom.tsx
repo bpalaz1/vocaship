@@ -41,6 +41,7 @@ interface Deck {
 interface ReadingRoomProps {
   decks: Deck[];
   selectedDeckId: string;
+  stories?: any[];
   initialStory?: any;
   onBack?: () => void;
   onShareStory?: (story: any) => void;
@@ -402,6 +403,7 @@ function StoryCardItem({
 export default function ReadingRoom({
   decks,
   selectedDeckId,
+  stories,
   initialStory,
   onBack,
   onShareStory,
@@ -487,7 +489,7 @@ export default function ReadingRoom({
   const inProgressStories = progressList.filter((p) => p.status === "in_progress");
   const completedStories = progressList.filter((p) => p.status === "completed");
 
-  // Kullanıcı hikayelerini de içeren birleşik koleksiyon
+  // Kullanıcı hikayelerini ve varsa dışarıdan iletilen/yerel yedek hikayeleri içeren birleşik koleksiyon
   const allAvailableStories = useMemo(() => {
     const formattedUserStories = (userStories || []).map((us) => ({
       ...us,
@@ -502,8 +504,20 @@ export default function ReadingRoom({
       desc: us.desc || (us.content ? us.content.slice(0, 110) + "..." : ""),
     }));
 
-    return [...formattedUserStories, ...ALL_STORIES];
-  }, [userStories]);
+    const baseStories = Array.isArray(stories) && stories.length > 0 ? [...stories, ...ALL_STORIES] : ALL_STORIES;
+    const seenIds = new Set<string>();
+    const combined: any[] = [];
+
+    for (const item of [...formattedUserStories, ...baseStories]) {
+      if (!item) continue;
+      const key = String(item.id || item.title || "").trim();
+      if (key && seenIds.has(key)) continue;
+      if (key) seenIds.add(key);
+      combined.push(item);
+    }
+
+    return combined;
+  }, [userStories, stories]);
 
   // Filtrelenmiş hikayeler
   const filteredStories = useMemo(() => {

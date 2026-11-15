@@ -331,7 +331,7 @@ export default function Home() {
         setFolders(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Backend sunucusuna erişilemiyor, yerel modda devam ediliyor.");
     }
   };
 
@@ -369,7 +369,7 @@ export default function Home() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Backend sunucusuna erişilemiyor, yerel modda devam ediliyor.");
     }
   };
 

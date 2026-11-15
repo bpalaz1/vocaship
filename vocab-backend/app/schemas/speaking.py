@@ -29,22 +29,24 @@ class SpeakingFeedback(BaseModel):
 
 
 class SpeakingRespondRequest(BaseModel):
-    user_transcript: str = Field(..., description="Spoken transcript from the user")
-    history: List[Dict[str, Any]] = Field(
+    user_message: str = Field(default="", description="User spoken/written message")
+    transcript: Optional[str] = Field(default=None, description="Optional alias for user spoken transcript")
+    user_transcript: Optional[str] = Field(default="", description="Spoken transcript from the user")
+    history: Optional[List[Dict[str, Any]]] = Field(
         default=[],
         description="List of previous dialogue turns (e.g. [{'role': 'assistant', 'content': '...'}])",
     )
-    persona: str = Field(
+    persona: Optional[str] = Field(
         default="sparky",
         description="Persona identifier: 'sparky' (cheerful kids/mascot) or 'alex' (calm adult mentor)",
     )
     target_level: str = Field(
-        default="A1",
+        default="B1",
         description="Target CEFR level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1'",
     )
     story_context: Optional[Union[Dict[str, Any], str]] = Field(
         default=None,
-        description="Optional story context (title, level, target_words) or raw string summary",
+        description="Optional story context (title, level, snippet, target_words) or raw string summary",
     )
     # Geriye dönük uyumluluk alanları
     scenario_id: Optional[str] = Field(
@@ -72,6 +74,9 @@ class SpeakingRespondRequest(BaseModel):
         description="Boundary of allowed topics",
     )
 
+    class Config:
+        extra = "ignore"
+
 
 class SpeakingMetrics(BaseModel):
     fluency: int = Field(default=85, ge=0, le=100, description="Fluency score (0-100)")
@@ -82,7 +87,11 @@ class SpeakingMetrics(BaseModel):
 class SpeakingRespondResponse(BaseModel):
     assistant_reply: str = Field(
         ...,
-        description="Seslendirilecek doğal, insani yanıt ve kısa takip sorusu (2-3 cümle)",
+        description="Seslendirilecek doğal, insani yanıt ve kısa takip sorusu (1-2 cümle)",
+    )
+    hint_suggestions: List[str] = Field(
+        default=[],
+        description="Kullanıcının 'Ne Diyebilirim?' ipucu kartlarında görebileceği 2 pratik cümle başlatıcı kalıp",
     )
     recast_note: Optional[str] = Field(
         default=None,
@@ -99,6 +108,10 @@ class SpeakingRespondResponse(BaseModel):
     level_label: Optional[str] = Field(
         default="A1 Doğal Alternatif",
         description="Aktif CEFR seviyesine uygun alternatif başlığı",
+    )
+    updated_level: Optional[str] = Field(
+        default=None,
+        description="Kullanıcının konuşma esnasında sesli/yazılı talebiyle güncellenen yeni CEFR seviyesi ('A1' | 'A2' | 'B1' | 'B2' | 'C1' | None)",
     )
     target_words_spotted: List[str] = Field(
         default=[],
@@ -222,15 +235,23 @@ class GenerateStoryQuestionsResponse(BaseModel):
 
 
 class InitStoryDebateRequest(BaseModel):
-    story_title: str = Field(..., description="Hikayenin başlığı")
+    story_title: Optional[str] = Field(default="Story Discussion", description="Hikayenin başlığı")
+    title: Optional[str] = Field(default=None, description="Hikayenin başlığı (alternatif alan)")
     story_snippet: Optional[str] = Field(default="", description="Hikayenin özeti veya içeriği")
+    snippet: Optional[str] = Field(default=None, description="Hikayenin özeti (alternatif alan)")
     level: Optional[str] = Field(default="B1", description="CEFR Seviyesi (A1, A2, B1, B2, C1, C2)")
+    target_vocabulary: Optional[List[str]] = Field(default=[], description="Hikayedeki hedef kelimeler")
+
+    class Config:
+        extra = "ignore"
 
 
 class InitStoryDebateResponse(BaseModel):
     story_title: str
     level: str
     initial_question: str
+    assistant_reply: str = ""
+    hint_suggestions: List[str] = []
 
 
 class SpeakingArchiveCreate(BaseModel):

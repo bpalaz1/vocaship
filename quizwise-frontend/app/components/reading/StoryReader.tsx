@@ -330,7 +330,11 @@ export default function StoryReader({
     const activeAudioRef = useRef<HTMLAudioElement | null>(null);
     const audioRef = activeAudioRef;
     const chainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const wordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const ttsAbortControllerRef = useRef<AbortController | null>(null);
+    const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
     const playbackSessionRef = useRef<number>(0);
+    const [activeWordIndex, setActiveWordIndex] = useState<number | null>(null);
 
     // Etkileşim & İlerleme State'leri
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -521,9 +525,19 @@ export default function StoryReader({
     // Ses akışını ve zamanlayıcıları sıfır gecikmeyle durdurma (Session Invalidation)
     const stopAudio = useCallback(() => {
         playbackSessionRef.current += 1;
+        if (ttsAbortControllerRef.current) {
+            try {
+                ttsAbortControllerRef.current.abort();
+            } catch {}
+            ttsAbortControllerRef.current = null;
+        }
         if (chainTimerRef.current) {
             clearTimeout(chainTimerRef.current);
             chainTimerRef.current = null;
+        }
+        if (wordTimerRef.current) {
+            clearInterval(wordTimerRef.current);
+            wordTimerRef.current = null;
         }
         if (activeAudioRef.current) {
             const aud = activeAudioRef.current;
@@ -543,6 +557,54 @@ export default function StoryReader({
                 window.speechSynthesis.cancel();
             } catch {}
         }
+        utteranceRef.current = null;
+        setActiveWordIndex(null);
+    }, []);
+
+    // Seçili ses karakterine (Jenny, Aria, Guy, Ryan, Ana, Maisie) uygun tarayıcı sesini eşleştir
+    const matchBrowserVoiceForCharacter = useCallback((voiceId: string): SpeechSynthesisVoice | null => {
+        if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+        const allVoices = window.speechSynthesis.getVoices();
+        if (!allVoices || allVoices.length === 0) return null;
+
+        const enVoices = allVoices.filter((v) => v.lang.toLowerCase().startsWith("en"));
+        const pool = enVoices.length > 0 ? enVoices : allVoices;
+
+        const idLower = (voiceId || "en-US-JennyNeural").toLowerCase();
+        const isUK = idLower.includes("en-gb") || idLower.includes("ryan") || idLower.includes("maisie");
+        const isMale = idLower.includes("guy") || idLower.includes("ryan") || idLower.includes("christopher") || idLower.includes("david");
+
+        // 1. Doğrudan karakter ismiyle (Jenny, Aria, Guy, Ryan, Ana, Maisie) eşleşen Natural/Online ses ara
+        const charKeywords = ["jenny", "aria", "guy", "ryan", "ana", "maisie"].filter((k) =>
+            idLower.includes(k)
+        );
+        for (const kw of charKeywords) {
+            const exactChar = pool.find((v) => v.name.toLowerCase().includes(kw));
+            if (exactChar) return exactChar;
+        }
+
+        // 2. Aksan (en-US / en-GB) ve cinsiyet (Kadın / Erkek) öncelik listesi
+        const preferredNames = isMale
+            ? isUK
+                ? ["ryan", "google uk english male", "daniel", "arthur", "oliver", "george", "david", "guy", "male"]
+                : ["guy", "christopher", "david", "alex", "google us english", "daniel", "male"]
+            : isUK
+            ? ["sonia", "libby", "maisie", "google uk english female", "hazel", "martha", "serena", "female"]
+            : ["jenny", "aria", "ana", "samantha", "zira", "google us english", "victoria", "ava", "allison", "female"];
+
+        const accentPool = pool.filter((v) =>
+            isUK ? v.lang.toLowerCase().includes("gb") || v.lang.toLowerCase().includes("uk") : v.lang.toLowerCase().includes("us")
+        );
+        const searchPools = accentPool.length > 0 ? [accentPool, pool] : [pool];
+
+        for (const currentPool of searchPools) {
+            for (const pName of preferredNames) {
+                const found = currentPool.find((v) => v.name.toLowerCase().includes(pName));
+                if (found) return found;
+            }
+        }
+
+        return accentPool[0] || pool[0] || null;
     }, []);
 
     const handleDebateStory = useCallback(() => {
@@ -554,41 +616,59 @@ export default function StoryReader({
                 )
                 : [];
 
+            const storyLevel = (story as any).cefr || story.level || "B1";
+            const storySnippet = (story.content || "").slice(0, 800);
+
             const storyContext = {
                 storyId: story.id,
                 title: story.title,
-                snippet: (story.content || "").slice(0, 350),
+                level: storyLevel,
+                snippet: storySnippet,
+                content: storySnippet,
+                target_vocabulary: vocabList,
                 targetWords: vocabList,
-                level: story.level || "B1",
                 topic: story.topic || "",
-                content: story.content || "",
                 full_vocabulary: story.target_vocabulary || [],
             };
 
-            sessionStorage.setItem("active_story_context", JSON.stringify(storyContext));
             sessionStorage.setItem("vocaship_active_story_context", JSON.stringify(storyContext));
-            const storyLevel = (story as any).cefr || story.level || "B1";
-            const sId = encodeURIComponent(story.id || story.title || "");
+            sessionStorage.setItem("active_story_context", JSON.stringify(storyContext));
             const sTitle = encodeURIComponent(story.title || "");
-            router.push('/speaking?storyId=' + sId + '&level=' + encodeURIComponent(storyLevel) + '&title=' + sTitle);
+            router.push('/speaking?mode=story_debate&title=' + sTitle + '&level=' + encodeURIComponent(storyLevel));
         }
     }, [stopAudio, story, router]);
 
     const playSentenceAudioRef = useRef<(index: number) => void>(() => {});
 
-    // Sıralı Cümle Oynatma Zinciri (Sequential Playback Queue) & Ham Metin Entegrasyonu
-    const playSentenceAudio = useCallback(
+    // Kesintisiz Ses Oynatma & 1.5 Saniye Fallback + Canlı Karaoke Kelime Takibi (handlePlayAudio)
+    const handlePlayAudio = useCallback(
         (index: number) => {
             if (typeof window === "undefined") return;
             if (index < 0 || index >= allSentences.length) {
                 setIsPlaying(false);
                 setActiveSentenceIdx(0);
                 activeSentenceIdxRef.current = 0;
+                setActiveWordIndex(null);
                 stopAudio();
                 return;
             }
 
-            // Önceki ses işlemlerini temizle
+            // Yeni cümle başlatmadan önce önceki tüm ses ve kuyrukları temizle (Chrome speechSynthesis bug koruması)
+            const sessionId = ++playbackSessionRef.current;
+            if (ttsAbortControllerRef.current) {
+                try {
+                    ttsAbortControllerRef.current.abort();
+                } catch {}
+                ttsAbortControllerRef.current = null;
+            }
+            if (chainTimerRef.current) {
+                clearTimeout(chainTimerRef.current);
+                chainTimerRef.current = null;
+            }
+            if (wordTimerRef.current) {
+                clearInterval(wordTimerRef.current);
+                wordTimerRef.current = null;
+            }
             if (audioRef.current) {
                 try {
                     audioRef.current.onplay = null;
@@ -600,10 +680,16 @@ export default function StoryReader({
                 } catch {}
                 audioRef.current = null;
             }
+            if ("speechSynthesis" in window) {
+                try {
+                    window.speechSynthesis.cancel();
+                } catch {}
+            }
 
             const sentenceItem = allSentences[index];
-            // 2. Metin parametresi doğrudan o anki cümlenin ham metninden (allSentences[idx].text) beslenir
             const sentenceText = sentenceItem?.text?.trim();
+            const tokens = sentenceItem?.tokens || [];
+
             if (!sentenceText) {
                 if (index < allSentences.length - 1) {
                     const nextIdx = index + 1;
@@ -614,13 +700,15 @@ export default function StoryReader({
                     setIsPlaying(false);
                     setActiveSentenceIdx(0);
                     activeSentenceIdxRef.current = 0;
+                    setActiveWordIndex(null);
                 }
                 return;
             }
 
-            // İndeksi senkron güncelle
+            // İndeksi ve ilk kelime vurgusunu senkron güncelle
             setActiveSentenceIdx(index);
             activeSentenceIdxRef.current = index;
+            setActiveWordIndex(0);
             setIsPlaying(true);
 
             // Kitap Modu aktifse okunan cümlenin olduğu sayfayı anında aç
@@ -643,7 +731,6 @@ export default function StoryReader({
                 } catch {}
             }, 60);
 
-            const emotion = detectSentenceEmotion(sentenceText);
             const voice = selectedVoiceRef.current || personaDefaultVoice;
             const speed = playbackRateRef.current || 1.0;
             const rateStr =
@@ -653,59 +740,210 @@ export default function StoryReader({
                     ? `+${Math.round((speed - 1) * 100)}%`
                     : `-${Math.round((1 - speed) * 100)}%`;
 
+            // Sıradaki cümleye geçiş yardımcı fonksiyonu
+            const advanceToNextSentence = () => {
+                if (playbackSessionRef.current !== sessionId) return;
+                if (wordTimerRef.current) {
+                    clearInterval(wordTimerRef.current);
+                    wordTimerRef.current = null;
+                }
+                if (index < allSentences.length - 1) {
+                    const nextIdx = index + 1;
+                    setActiveSentenceIdx(nextIdx);
+                    activeSentenceIdxRef.current = nextIdx;
+                    playSentenceAudioRef.current(nextIdx);
+                } else {
+                    setIsPlaying(false);
+                    setActiveSentenceIdx(0);
+                    activeSentenceIdxRef.current = 0;
+                    setActiveWordIndex(null);
+                }
+            };
+
+            // Tarayıcı Yerleşik Web Speech API Fallback (onboundary Canlı Karaoke Kelime Takibi ile)
+            const playBrowserSpeechFallback = () => {
+                if (playbackSessionRef.current !== sessionId) return;
+                if (!("speechSynthesis" in window)) {
+                    setIsPlaying(false);
+                    setActiveWordIndex(null);
+                    return;
+                }
+
+                try {
+                    // Önceki askıda kalmış ses kuyruğunu temizle (Chrome speechSynthesis bug koruması)
+                    window.speechSynthesis.cancel();
+
+                    const utterance = new SpeechSynthesisUtterance(sentenceText);
+                    utteranceRef.current = utterance;
+
+                    const matchedVoice = matchBrowserVoiceForCharacter(voice);
+                    if (matchedVoice) {
+                        utterance.voice = matchedVoice;
+                        utterance.lang = matchedVoice.lang || (voice.includes("en-GB") ? "en-GB" : "en-US");
+                    } else {
+                        utterance.lang = voice.includes("en-GB") ? "en-GB" : "en-US";
+                    }
+
+                    // Kullanıcının seçtiği hız ayarına (0.75x, 1x, 1.25x) bağla
+                    utterance.rate = speed;
+                    if (voice.toLowerCase().includes("ana") || voice.toLowerCase().includes("maisie")) {
+                        utterance.pitch = 1.12;
+                    }
+
+                    let boundaryFired = false;
+
+                    // Canlı Karaoke Kelime Takibi (onboundary)
+                    utterance.onboundary = (event: SpeechSynthesisEvent) => {
+                        if (playbackSessionRef.current !== sessionId) return;
+                        if (typeof event.charIndex === "number") {
+                            boundaryFired = true;
+                            const prefix = sentenceText.slice(0, event.charIndex);
+                            const wordsBefore = prefix.trim() ? prefix.trim().split(/\s+/).length : 0;
+                            const wordIdx = prefix.endsWith(" ") || prefix.length === 0
+                                ? wordsBefore
+                                : Math.max(0, wordsBefore - 1);
+                            setActiveWordIndex(Math.min(Math.max(0, tokens.length - 1), wordIdx));
+                        }
+                    };
+
+                    // Eğer kullanılan ses motoru onboundary desteklemiyorsa kelime vurgusunu süreye göre ilerlet
+                    if (tokens.length > 0) {
+                        const estWordMs = Math.max(140, Math.round((320 / speed)));
+                        let fallbackWordIdx = 0;
+                        if (wordTimerRef.current) clearInterval(wordTimerRef.current);
+                        wordTimerRef.current = setInterval(() => {
+                            if (playbackSessionRef.current !== sessionId) {
+                                if (wordTimerRef.current) clearInterval(wordTimerRef.current);
+                                return;
+                            }
+                            if (!boundaryFired) {
+                                fallbackWordIdx = Math.min(tokens.length - 1, fallbackWordIdx + 1);
+                                setActiveWordIndex(fallbackWordIdx);
+                            }
+                        }, estWordMs);
+                    }
+
+                    utterance.onend = () => {
+                        advanceToNextSentence();
+                    };
+
+                    utterance.onerror = () => {
+                        if (playbackSessionRef.current !== sessionId) return;
+                        if (wordTimerRef.current) {
+                            clearInterval(wordTimerRef.current);
+                            wordTimerRef.current = null;
+                        }
+                        setIsPlaying(false);
+                        setActiveWordIndex(null);
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                } catch {
+                    setIsPlaying(false);
+                    setActiveWordIndex(null);
+                }
+            };
+
+            // 1. Önce Backend Nöral TTS (/api/v1/tts/stream) isteğini 1.5 saniyelik AbortController timeout ile dene
             const encodedText = encodeURIComponent(sentenceText);
             const baseUrl = API_BASE || "http://127.0.0.1:8000";
             const streamUrl = `${baseUrl}/api/v1/tts/stream?text=${encodedText}&voice=${encodeURIComponent(
                 voice
             )}&rate=${encodeURIComponent(rateStr)}`;
 
-            const audio = new Audio(streamUrl);
-            audio.playbackRate = speed;
-            audioRef.current = audio;
+            const controller = new AbortController();
+            ttsAbortControllerRef.current = controller;
+            const timeoutId = setTimeout(() => controller.abort(), 1500);
 
-            audio.onplay = () => {
-                setIsPlaying(true);
-            };
+            (async () => {
+                try {
+                    const res = await fetch(streamUrl, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (playbackSessionRef.current !== sessionId) return;
 
-            // 1. Sıralı Cümle Oynatma Zinciri (Sequential Playback Queue):
-            audio.onended = () => {
-                if (activeSentenceIdxRef.current < allSentences.length - 1) {
-                    const nextIdx = activeSentenceIdxRef.current + 1;
-                    setActiveSentenceIdx(nextIdx);
-                    activeSentenceIdxRef.current = nextIdx;
-                    playSentenceAudioRef.current(nextIdx); // Sıradaki cümleyi otomatik çal
-                } else {
-                    setIsPlaying(false);
-                    setActiveSentenceIdx(0);
-                    activeSentenceIdxRef.current = 0;
+                    if (!res.ok) {
+                        throw new Error(`TTS HTTP ${res.status}`);
+                    }
+
+                    const audioBlob = await res.blob();
+                    if (playbackSessionRef.current !== sessionId) return;
+                    if (!audioBlob || audioBlob.size === 0) {
+                        throw new Error("Empty TTS audio blob");
+                    }
+
+                    const objectUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(objectUrl);
+                    audio.playbackRate = speed;
+                    audioRef.current = audio;
+
+                    audio.onplay = () => {
+                        if (playbackSessionRef.current !== sessionId) return;
+                        setIsPlaying(true);
+                        setActiveWordIndex(0);
+                    };
+
+                    // Nöral seste kelime takibini ses süresine göre eşzamanlı ilerlet
+                    audio.ontimeupdate = () => {
+                        if (playbackSessionRef.current !== sessionId || tokens.length === 0) return;
+                        const dur = audio.duration;
+                        if (dur && isFinite(dur) && dur > 0) {
+                            const ratio = Math.min(0.999, Math.max(0, audio.currentTime / dur));
+                            const wIdx = Math.floor(ratio * tokens.length);
+                            setActiveWordIndex(wIdx);
+                        }
+                    };
+
+                    audio.onended = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        advanceToNextSentence();
+                    };
+
+                    audio.onerror = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        console.warn("Nöral TTS ses oynatılamadı, tarayıcı ses motoruna geçiliyor.");
+                        playBrowserSpeechFallback();
+                    };
+
+                    await audio.play();
+                } catch {
+                    clearTimeout(timeoutId);
+                    if (playbackSessionRef.current !== sessionId) return;
+                    // Backend kapalıysa, hata verirse veya 1.5 saniye içinde dönmezse HİÇ BEKLEMEDEN tarayıcı sesine geç
+                    playBrowserSpeechFallback();
                 }
-            };
-
-            // SIFIR FALLBACK: Kesinlikle robotik tarayıcı sesi yok. Servis erişilemezse loglanır ve güvenle durdurulur.
-            audio.onerror = (e) => {
-                console.error("Nöral TTS servisine ulaşılamadı (Port 8000 kontrol edilmeli):", e);
-                setIsPlaying(false);
-            };
-
-            audio.play().catch((err) => {
-                console.warn("Otomatik oynatma tarayıcı tarafından engellendi:", err);
-                setIsPlaying(false);
-            });
+            })();
         },
-        [allSentences, stopAudio, readerView, pages, currentPage]
+        [allSentences, stopAudio, readerView, pages, currentPage, personaDefaultVoice, matchBrowserVoiceForCharacter]
     );
 
-    playSentenceAudioRef.current = playSentenceAudio;
-    const speakSentence = playSentenceAudio;
+    const playSentenceAudio = handlePlayAudio;
+    playSentenceAudioRef.current = handlePlayAudio;
+    const speakSentence = handlePlayAudio;
 
     const togglePlayPause = () => {
         if (typeof window === "undefined") return;
         if (isPlaying) {
             setIsPlaying(false);
+            setActiveWordIndex(null);
+            if (audioRef.current) {
+                try {
+                    audioRef.current.pause();
+                } catch {}
+            }
+            if ("speechSynthesis" in window) {
+                try {
+                    window.speechSynthesis.cancel();
+                } catch {}
+            }
             stopAudio();
         } else {
+            if ("speechSynthesis" in window) {
+                try {
+                    window.speechSynthesis.cancel();
+                } catch {}
+            }
             setIsPlaying(true);
-            playSentenceAudio(activeSentenceIdx);
+            handlePlayAudio(activeSentenceIdx);
         }
     };
 
@@ -747,6 +985,8 @@ export default function StoryReader({
         playbackRateRef.current = speed;
         if (activeAudioRef.current) {
             activeAudioRef.current.playbackRate = speed;
+        } else if (isPlaying && typeof window !== "undefined" && "speechSynthesis" in window && window.speechSynthesis.speaking) {
+            handlePlayAudio(activeSentenceIdx);
         }
     };
 
@@ -1393,15 +1633,15 @@ export default function StoryReader({
                         )}
                     </div>
 
-                    {/* Bu Hikayeyi Karakterle Tartış (Hızlı Erişim) */}
+                    {/* Bu Hikayeyi Gemini ile Tartış (Hızlı Erişim) */}
                     <button
                         type="button"
                         onClick={handleDebateStory}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-sm shadow-indigo-600/30 transition cursor-pointer"
-                        title="Bu metni AI Speaking Lounge'da sesli tartış"
+                        title="Bu metni Gemini ile sesli tartış"
                     >
                         <Mic className="w-3.5 h-3.5 text-violet-200" />
-                        <span className="hidden sm:inline">🎙️ Karakterle Tartış</span>
+                        <span className="hidden sm:inline">🎙️ Gemini ile Tartış</span>
                     </button>
 
                     {/* [ 💾 Kütüphaneme Ekle ] Butonu */}
@@ -1483,6 +1723,7 @@ export default function StoryReader({
                                                 {sent.tokens.map((token, wIdx) => {
                                                     const cleaned = cleanWord(token).toLowerCase();
                                                     const isSavedWord = savedWords.has(cleaned);
+                                                    const isActiveSpokenWord = isSpeaking && activeWordIndex === wIdx;
                                                     const isTargetVocab =
                                                         story.target_vocabulary?.some(
                                                             (v) => (typeof v === "string" ? v : v.word).toLowerCase() === cleaned
@@ -1499,7 +1740,9 @@ export default function StoryReader({
                                                                 handleWordClick(token, sent.text, sent.paragraphIndex);
                                                             }}
                                                             className={`cursor-pointer inline rounded px-0.5 transition-colors ${
-                                                                isSavedWord
+                                                                isActiveSpokenWord
+                                                                    ? "bg-amber-400/25 text-amber-200 rounded px-1 ring-1 ring-amber-400/40"
+                                                                    : isSavedWord
                                                                     ? themeStyles.wordSaved
                                                                     : isTargetVocab
                                                                     ? themeStyles.wordTarget
@@ -1615,6 +1858,7 @@ export default function StoryReader({
                                                     {sent.tokens.map((token, wIdx) => {
                                                         const cleaned = cleanWord(token).toLowerCase();
                                                         const isSavedWord = savedWords.has(cleaned);
+                                                        const isActiveSpokenWord = isSpeaking && activeWordIndex === wIdx;
                                                         const isTargetVocab =
                                                             story.target_vocabulary?.some(
                                                                 (v) => (typeof v === "string" ? v : v.word).toLowerCase() === cleaned
@@ -1631,7 +1875,9 @@ export default function StoryReader({
                                                                     handleWordClick(token, sent.text, pIdx);
                                                                 }}
                                                                 className={`cursor-pointer inline rounded px-0.5 transition-colors ${
-                                                                    isSavedWord
+                                                                    isActiveSpokenWord
+                                                                        ? "bg-amber-400/25 text-amber-200 rounded px-1 ring-1 ring-amber-400/40"
+                                                                        : isSavedWord
                                                                         ? themeStyles.wordSaved
                                                                         : isTargetVocab
                                                                         ? themeStyles.wordTarget
@@ -1892,10 +2138,10 @@ export default function StoryReader({
                                             type="button"
                                             onClick={handleDebateStory}
                                             className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-indigo-600/25 transition active:scale-95 cursor-pointer"
-                                            title="Bu hikayeyi AI Speaking Lounge'da sesli tartış"
+                                            title="Bu hikayeyi Gemini ile sesli tartış"
                                         >
                                             <Mic className="w-4 h-4 text-violet-200" />
-                                            <span>🎙️ Karakterle Tartış</span>
+                                            <span>🎙️ Bu Hikayeyi Gemini ile Tartış</span>
                                         </button>
 
                                         <button
@@ -1948,15 +2194,15 @@ export default function StoryReader({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                    {/* [ 🎙️ Bu Hikayeyi Karakterle Tartış ] */}
+                    {/* [ 🎙️ Bu Hikayeyi Gemini ile Tartış ] */}
                     <button
                         type="button"
                         onClick={handleDebateStory}
                         className="flex items-center space-x-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition hover:scale-[1.02] active:scale-95 cursor-pointer ring-1 ring-violet-400/40"
-                        title="Bu metni ve temalarını AI Speaking Lounge'da sesli tartış"
+                        title="Bu metni ve temalarını Gemini ile sesli tartış"
                     >
                         <Mic className="w-4 h-4 text-violet-200" />
-                        <span>🎙️ Bu Hikayeyi Karakterle Tartış</span>
+                        <span>🎙️ Bu Hikayeyi Gemini ile Tartış</span>
                     </button>
 
                     {!isCompleted ? (
@@ -2000,12 +2246,12 @@ export default function StoryReader({
                                 <span className="hidden sm:inline">5s</span>
                             </button>
 
-                            {/* Oynat / Durdur (⏯) */}
+                            {/* Dinle / Durdur (⏯) */}
                             <button
                                 type="button"
                                 onClick={togglePlayPause}
-                                title={isPlaying ? t("audio_pause", "Duraklat") : t("audio_play", "Oynat")}
-                                aria-label={isPlaying ? t("audio_pause", "Duraklat") : t("audio_play", "Oynat")}
+                                title={isPlaying ? t("audio_pause", "Durdur") : t("audio_play", "Dinle")}
+                                aria-label={isPlaying ? t("audio_pause", "Durdur") : t("audio_play", "Dinle")}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-md cursor-pointer ${isPlaying
                                         ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
                                         : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30"
@@ -2014,12 +2260,12 @@ export default function StoryReader({
                                 {isPlaying ? (
                                     <>
                                         <Pause className="w-4 h-4 fill-current" />
-                                        <span>{t("audio_pause", "Duraklat")}</span>
+                                        <span>{t("audio_pause", "Durdur")}</span>
                                     </>
                                 ) : (
                                     <>
                                         <Play className="w-4 h-4 fill-current" />
-                                        <span>{t("audio_play", "Oynat")}</span>
+                                        <span>{t("audio_play", "Dinle")}</span>
                                     </>
                                 )}
                             </button>

@@ -423,7 +423,8 @@ export function detectSentenceEmotion(
 
 /**
  * Edge-TTS Yüksek Kaliteli Nöral Ses Akışı Çalar.
- * /api/v1/tts/stream üzerinden canlı MP3 stream alır ve sıfır gecikmeyle oynatır.
+ * /api/v1/tts/stream üzerinden 1.5s AbortController timeout ile dener;
+ * yanıt dönmezse anında window.speechSynthesis motoruna geçer.
  */
 export function playNeuralTTS(
   text: string,
@@ -463,41 +464,7 @@ export function playNeuralTTS(
     emotion
   )}&rate=${encodeURIComponent(rateStr)}`;
 
-  const audio = new Audio(audioUrl);
-  audio.playbackRate = speed;
-  currentNeuralAudio = audio;
-
   const tokens = optimizedText.split(/\s+/).filter(Boolean);
-
-  audio.onplay = () => {
-    if (currentToken !== activeSpeechToken) return;
-    options?.onStart?.();
-    options?.onBoundary?.(0, 0);
-
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("vocaship:tts-start"));
-    }
-
-    // Kelime kelime karaoke takibi simülasyonu
-    if (tokens.length > 0 && options?.onBoundary) {
-      const estimatedDurationSec = Math.max(1.2, (tokens.length * 0.35) / speed);
-      const stepMs = Math.max(120, (estimatedDurationSec * 1000) / tokens.length);
-      let currentWord = 0;
-      if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
-      karaokeIntervalTimer = setInterval(() => {
-        if (currentToken !== activeSpeechToken) {
-          if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
-          return;
-        }
-        currentWord++;
-        if (currentWord < tokens.length) {
-          options?.onBoundary?.(currentWord, 0);
-        } else {
-          if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
-        }
-      }, stepMs);
-    }
-  };
 
   const finishSpeaking = () => {
     if (currentToken !== activeSpeechToken) return;
@@ -505,33 +472,66 @@ export function playNeuralTTS(
       clearInterval(karaokeIntervalTimer);
       karaokeIntervalTimer = null;
     }
-    if (currentNeuralAudio === audio) {
-      currentNeuralAudio = null;
-    }
+    currentNeuralAudio = null;
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("vocaship:tts-end"));
     }
     options?.onEnd?.();
   };
 
-  audio.onended = () => {
-    finishSpeaking();
-  };
-
-  audio.onerror = (e) => {
+  const playWebSpeechFallback = () => {
     if (currentToken !== activeSpeechToken) return;
-    console.warn("Edge-TTS Audio error, falling back to Web Speech:", e);
     if (karaokeIntervalTimer) {
       clearInterval(karaokeIntervalTimer);
       karaokeIntervalTimer = null;
     }
-
-    // Fallback: tarayıcı speechSynthesis'e güvenli geçiş
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
+        window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(optimizedText);
-        utter.lang = "en-US";
+        const voices = getVoicesList().filter((v) =>
+          v.lang.toLowerCase().startsWith("en")
+        );
+        const vLower = voice.toLowerCase();
+        const isUK = vLower.includes("en-gb") || vLower.includes("ryan") || vLower.includes("maisie");
+        const isMale = vLower.includes("guy") || vLower.includes("ryan");
+        const matched =
+          voices.find((v) =>
+            ["jenny", "aria", "guy", "ryan", "ana", "maisie"].some(
+              (k) => vLower.includes(k) && v.name.toLowerCase().includes(k)
+            )
+          ) ||
+          voices.find((v) =>
+            isMale
+              ? v.name.toLowerCase().includes("guy") ||
+                v.name.toLowerCase().includes("david") ||
+                v.name.toLowerCase().includes("male")
+              : v.name.toLowerCase().includes("jenny") ||
+                v.name.toLowerCase().includes("aria") ||
+                v.name.toLowerCase().includes("samantha") ||
+                v.name.toLowerCase().includes("zira") ||
+                v.name.toLowerCase().includes("google us english")
+          );
+        if (matched) {
+          utter.voice = matched;
+          utter.lang = matched.lang || (isUK ? "en-GB" : "en-US");
+        } else {
+          utter.lang = isUK ? "en-GB" : "en-US";
+        }
         utter.rate = speed;
+        utter.onstart = () => {
+          if (currentToken !== activeSpeechToken) return;
+          options?.onStart?.();
+          options?.onBoundary?.(0, 0);
+          window.dispatchEvent(new CustomEvent("vocaship:tts-start"));
+        };
+        utter.onboundary = (ev) => {
+          if (currentToken !== activeSpeechToken) return;
+          if (typeof ev.charIndex === "number") {
+            const wIdx = getWordIndexFromCharIndex(optimizedText, ev.charIndex);
+            options?.onBoundary?.(wIdx, ev.charIndex);
+          }
+        };
         utter.onend = () => finishSpeaking();
         utter.onerror = () => finishSpeaking();
         window.speechSynthesis.speak(utter);
@@ -539,15 +539,69 @@ export function playNeuralTTS(
       } catch {}
     }
     finishSpeaking();
-    options?.onError?.(e);
   };
 
-  audio.play().catch((err) => {
-    console.warn("Edge-TTS audio play blocked or failed:", err);
-    finishSpeaking();
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1500);
 
-  return audio;
+  fetch(audioUrl, { signal: controller.signal })
+    .then(async (res) => {
+      clearTimeout(timeoutId);
+      if (currentToken !== activeSpeechToken) return;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      if (currentToken !== activeSpeechToken) return;
+      if (!blob || blob.size === 0) throw new Error("Empty blob");
+
+      const objectUrl = URL.createObjectURL(blob);
+      const audio = new Audio(objectUrl);
+      audio.playbackRate = speed;
+      currentNeuralAudio = audio;
+
+      audio.onplay = () => {
+        if (currentToken !== activeSpeechToken) return;
+        options?.onStart?.();
+        options?.onBoundary?.(0, 0);
+        window.dispatchEvent(new CustomEvent("vocaship:tts-start"));
+
+        if (tokens.length > 0 && options?.onBoundary) {
+          const estimatedDurationSec = Math.max(1.2, (tokens.length * 0.35) / speed);
+          const stepMs = Math.max(120, (estimatedDurationSec * 1000) / tokens.length);
+          let currentWord = 0;
+          if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
+          karaokeIntervalTimer = setInterval(() => {
+            if (currentToken !== activeSpeechToken) {
+              if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
+              return;
+            }
+            currentWord++;
+            if (currentWord < tokens.length) {
+              options?.onBoundary?.(currentWord, 0);
+            } else {
+              if (karaokeIntervalTimer) clearInterval(karaokeIntervalTimer);
+            }
+          }, stepMs);
+        }
+      };
+
+      audio.onended = () => {
+        URL.revokeObjectURL(objectUrl);
+        finishSpeaking();
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        playWebSpeechFallback();
+      };
+
+      await audio.play();
+    })
+    .catch(() => {
+      clearTimeout(timeoutId);
+      playWebSpeechFallback();
+    });
+
+  return currentNeuralAudio;
 }
 
 /**

@@ -167,8 +167,12 @@ export function subscribeToActiveDeck(callback: (deckId: string) => void): () =>
  * Kullanıcının destelerini backend'den çeker, localStorage'a önbelleğe alır
  */
 export async function fetchDecksList(): Promise<DeckItem[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
   try {
-    const res = await fetch(`${API_BASE}/api/v1/decks`);
+    const res = await fetch(`${API_BASE}/api/v1/decks`, {
+      signal: controller.signal,
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
@@ -181,7 +185,9 @@ export async function fetchDecksList(): Promise<DeckItem[]> {
       }
     }
   } catch (err) {
-    console.warn("fetchDecksList network error:", err);
+    console.warn("fetchDecksList network/timeout fallback:", err);
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   // Önbelleği dene
@@ -212,9 +218,13 @@ export async function getActiveDeckCards(deckId?: string): Promise<GameWordPair[
     return PRESET_CARDS[targetId];
   }
 
-  // Backend'den kartları çek
+  // Backend'den kartları çek (3sn timeout korumalı)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
   try {
-    const res = await fetch(`${API_BASE}/api/v1/decks/${targetId}/cards`);
+    const res = await fetch(`${API_BASE}/api/v1/decks/${targetId}/cards`, {
+      signal: controller.signal,
+    });
     if (res.ok) {
       const cards = await res.json();
       if (Array.isArray(cards) && cards.length > 0) {
@@ -245,7 +255,9 @@ export async function getActiveDeckCards(deckId?: string): Promise<GameWordPair[
       }
     }
   } catch (err) {
-    console.warn(`Deck ${targetId} kartları backend'den alınamadı:`, err);
+    console.warn(`Deck ${targetId} kartları backend'den alınamadı, yerel yedek kullanılıyor:`, err);
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   // Fallback: Eğer bulunamazsa varsayılan kelimeler

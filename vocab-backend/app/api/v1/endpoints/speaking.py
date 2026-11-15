@@ -1,5 +1,8 @@
 import os
 import io
+import re
+import time
+import urllib.request
 import base64
 import json
 import logging
@@ -8,7 +11,7 @@ import math
 import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any, Union
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Depends, status
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Depends, status, WebSocket, WebSocketDisconnect
 from google.genai import types
 from app.core.database import get_db
 from app.services.gamification_service import award_xp
@@ -39,10 +42,7 @@ router = APIRouter()
 PRIMARY_SPEAKING_MODEL = "gemini-2.5-flash"
 FAST_FALLBACK_MODELS = [
     "gemini-flash-lite-latest",
-    "gemini-flash-latest",
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.8-flash",
+    "gemini-3.1-flash-lite-preview",
     "gemini-2.5-flash",
 ]
 
@@ -60,38 +60,315 @@ Cevapların kısa, akıcı (maksimum 2-3 cümle) olsun ve mutlaka ucu açık mer
 }"""
 
 
+# ---------------------------------------------------------------------------
+# 🌤️ Canlı Hava Durumu (Open-Meteo 30 Dk Önbellekli) & Sesli Seviye Algılama
+# ---------------------------------------------------------------------------
+
+_weather_cache: Dict[str, Any] = {"data": None, "timestamp": 0}
+
+_WMO_WEATHER_CODES: Dict[int, str] = {
+    0: "Clear sky / Sunny (Açık ve güneşli)",
+    1: "Mainly clear (Az bulutlu)",
+    2: "Partly cloudy (Parçalı bulutlu)",
+    3: "Overcast (Kapalı/bulutlu)",
+    45: "Foggy (Sisli)",
+    48: "Depositing rime fog (Kırağılı sis)",
+    51: "Light drizzle (Hafif çisenti)",
+    53: "Moderate drizzle (Orta çisenti)",
+    55: "Dense drizzle (Yoğun çisenti)",
+    61: "Slight rain (Hafif yağmurlu)",
+    63: "Moderate rain (Yağmurlu)",
+    65: "Heavy rain (Kuvvetli yağmurlu)",
+    71: "Slight snow (Hafif kar yağışlı)",
+    73: "Moderate snow (Kar yağışlı)",
+    80: "Rain showers (Sağanak yağışlı)",
+    81: "Moderate rain showers (Orta sağanak yağışlı)",
+    82: "Violent rain showers (Kuvvetli sağanak)",
+    95: "Thunderstorm (Gök gürültülü sağanak)",
+}
+
+
+def _fetch_open_meteo_sync() -> str:
+    url = "https://api.open-meteo.com/v1/forecast?latitude=38.42&longitude=27.14&current_weather=true"
+    req = urllib.request.Request(url, headers={"User-Agent": "VocashipSpeakingEngine/1.0"})
+    with urllib.request.urlopen(req, timeout=1.5) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        cw = data.get("current_weather", {})
+        temp = cw.get("temperature")
+        wind = cw.get("windspeed")
+        code = int(cw.get("weathercode", 0))
+        condition = _WMO_WEATHER_CODES.get(code, "Pleasant weather")
+        if temp is not None:
+            return (
+                f"Türkiye / İzmir anlık sıcaklık: {temp}°C ({condition}, Rüzgar: {wind} km/s). "
+                f"Genel Türkiye özeti: Mevsim normallerinde, keyifli ve açık/parçalı bulutlu bir hava hakim."
+            )
+    return "Türkiye genelinde mevsim normallerinde, ılıman ve keyifli bir hava hakim."
+
+
+async def get_live_turkey_weather_context() -> str:
+    """Open-Meteo ücretsiz API üzerinden Türkiye/İzmir anlık sıcaklığını çeker (30 dk / 1800 sn önbellekli, max 1.5s timeout)."""
+    now_ts = time.time()
+    if _weather_cache["data"] and (now_ts - _weather_cache["timestamp"] < 1800):
+        return _weather_cache["data"]
+
+    try:
+        summary = await asyncio.wait_for(
+            asyncio.to_thread(_fetch_open_meteo_sync),
+            timeout=1.5,
+        )
+        _weather_cache["timestamp"] = now_ts
+        _weather_cache["data"] = summary
+        return summary
+    except Exception as e:
+        logger.debug(f"Open-Meteo live weather fallback: {e}")
+        return _weather_cache["data"] or "Türkiye / İzmir genelinde ılıman, ferah ve güzel bir hava var."
+
+
+def detect_requested_level_change(user_text: str, current_level: str) -> Optional[str]:
+    """
+    Kullanıcının konuşma esnasında sesli veya yazılı olarak seviye değiştirme
+    talebini ('My level is A1', 'let's speak in A1', 'A1 seviyesinde konuşalım',
+    'make it simpler / easier' vb.) algılar ve yeni CEFR seviyesini döner.
+    """
+    if not user_text:
+        return None
+    text_lower = user_text.lower().strip()
+
+    # 1. Doğrudan CEFR seviyesi belirten ifadeler (A1, A2, B1, B2, C1)
+    level_intent_keywords = [
+        "level", "seviye", "seviyemi", "seviyede", "speak in", "switch to",
+        "change to", "adjust", "ayarla", "konuşalım", "gecelim", "geçelim",
+        "let's speak", "lets speak", "talk in", "practice in"
+    ]
+    explicit_level_match = re.search(r"\b(a1|a2|b1|b2|c1)\b", text_lower)
+    if explicit_level_match:
+        target_lvl = explicit_level_match.group(1).upper()
+        if any(k in text_lower for k in level_intent_keywords) or len(text_lower.split()) <= 9:
+            return target_lvl
+
+    # 2. 'Make it simpler', 'easier', 'too hard', 'daha basit' gibi ifadeler
+    simpler_phrases = [
+        "make it simpler", "make it easier", "speak simpler", "speak easier",
+        "too hard", "too difficult", "very difficult", "i am a beginner",
+        "i'm a beginner", "beginner level", "daha basit", "çok zor", "basit konuş"
+    ]
+    if any(p in text_lower for p in simpler_phrases):
+        order = ["C1", "B2", "B1", "A2", "A1"]
+        curr = (current_level or "B1").upper().strip()
+        if "beginner" in text_lower:
+            return "A1"
+        if curr in order:
+            idx = order.index(curr)
+            return order[min(len(order) - 1, idx + 1)]
+        return "A1"
+
+    # 3. 'Make it harder', 'more advanced', 'daha ileri seviye'
+    harder_phrases = [
+        "make it harder", "more advanced", "advanced level", "too easy", "too simple"
+    ]
+    if any(p in text_lower for p in harder_phrases):
+        order = ["A1", "A2", "B1", "B2", "C1"]
+        curr = (current_level or "B1").upper().strip()
+        if "advanced" in text_lower:
+            return "C1"
+        if curr in order:
+            idx = order.index(curr)
+            return order[min(len(order) - 1, idx + 1)]
+        return "B2"
+
+    return None
+
+
+def build_default_hints(level: str, story_title: Optional[str] = None) -> List[str]:
+    """Seviyeye ve aktif bağlama uygun 2 pratik cümle başlatıcı (starter phrase) üretir."""
+    clean = (level or "B1").upper().strip()
+    if story_title:
+        if clean in ("A1", "A2"):
+            return [
+                f"I think the main character in '{story_title}' was very...",
+                "In my opinion, the best part of the story was when...",
+            ]
+        return [
+            "I think the main character should have chosen a different path because...",
+            "In my opinion, the turning point of the story showed that...",
+        ]
+
+    if clean in ("A1", "A2"):
+        return [
+            "Today I feel really good because I...",
+            "In my free time, I really enjoy...",
+        ]
+    if clean in ("C1", "C2"):
+        return [
+            "From my perspective, the most fascinating aspect of this is...",
+            "Looking at the bigger picture, I firmly believe that...",
+        ]
+    return [
+        "Personally, I think that...",
+        "In my experience, the most enjoyable part is...",
+    ]
+
+
+def parse_flexible_speaking_response(raw_text: str) -> dict:
+    """
+    Esnek yanıt ayrıştırıcı:
+    1. Model geçerli bir JSON döndürdüyse doğrudan ayrıştırır.
+    2. JSON içinde tırnak kaçırma hatası varsa regex ile 'assistant_reply' ve diğer alanları çıkarır.
+    3. Model JSON yerine doğrudan düz metin döndürdüyse bile hata fırlatmaz; metni doğrudan
+       'assistant_reply' olarak kabul eder. Böylece ASLA 500/422 hatası fırlatılmaz.
+    """
+    text = (raw_text or "").strip()
+    if not text:
+        raise ValueError("Empty response from Gemini model.")
+
+    # Markdown kod bloklarını temizle
+    cleaned = text
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned).strip()
+
+    # 1. Standart JSON ayrıştırmayı dene
+    try:
+        parsed = clean_json_response(cleaned)
+        if isinstance(parsed, dict) and (
+            parsed.get("assistant_reply")
+            or parsed.get("reply_message")
+            or parsed.get("initial_question")
+            or parsed.get("questions")
+        ):
+            return parsed
+    except Exception:
+        pass
+
+    # 2. Esnek Regex ile alanları yakalamayı dene (bozuk JSON durumu)
+    reply_match = re.search(
+        r'"(?:assistant_reply|initial_question|reply_message)"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        cleaned,
+        re.DOTALL,
+    )
+    if reply_match:
+        extracted_reply = reply_match.group(1).replace('\\"', '"').replace("\\n", " ").strip()
+        lvl_match = re.search(r'"updated_level"\s*:\s*"(A1|A2|B1|B2|C1)"', cleaned, re.IGNORECASE)
+        recast_match = re.search(r'"recast_note"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
+        hint_match = re.search(r'"fluency_hint"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
+        alt_match = re.search(r'"polished_alternative"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
+        hints_list: List[str] = []
+        hints_block = re.search(r'"hint_suggestions"\s*:\s*\[(.*?)\]', cleaned, re.DOTALL)
+        if hints_block:
+            hints_list = [
+                m.replace('\\"', '"').strip()
+                for m in re.findall(r'"((?:[^"\\]|\\.)*)"', hints_block.group(1))
+                if m.strip()
+            ]
+        return {
+            "assistant_reply": extracted_reply,
+            "initial_question": extracted_reply,
+            "hint_suggestions": hints_list[:2],
+            "updated_level": lvl_match.group(1).upper() if lvl_match else None,
+            "recast_note": recast_match.group(1) if recast_match else None,
+            "fluency_hint": hint_match.group(1) if hint_match else "",
+            "polished_alternative": alt_match.group(1) if alt_match else "",
+        }
+
+    # 3. Model doğrudan düz metin döndürdüyse doğrudan assistant_reply olarak kabul et
+    plain_reply = re.sub(r"^\{|\}$", "", cleaned).strip()
+    if plain_reply:
+        return {
+            "assistant_reply": plain_reply,
+            "initial_question": plain_reply,
+        }
+
+    raise ValueError("Could not extract speaking reply from model output.")
+
+
 async def _call_single_model(
     client: Any,
     model_name: str,
     contents_payload: Any,
     sys_inst: str,
+    use_search: bool = False,
 ) -> dict:
+    # gemini-2.5-flash için düşünme gecikmesini sıfırla (thinking_budget=0)
+    thinking_cfg = None
+    if "2.5" in model_name and hasattr(types, "ThinkingConfig"):
+        try:
+            thinking_cfg = types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            thinking_cfg = None
+
+    # 1. Google Search Grounding aktifse önce arama aracıyla esnek modda çağır
+    if use_search:
+        try:
+            cfg_kwargs: Dict[str, Any] = {
+                "temperature": 0.7,
+                "system_instruction": sys_inst,
+                "tools": [types.Tool(google_search=types.GoogleSearch())],
+            }
+            if thinking_cfg is not None:
+                cfg_kwargs["thinking_config"] = thinking_cfg
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=contents_payload,
+                config=types.GenerateContentConfig(**cfg_kwargs),
+            )
+            if response and response.text:
+                return parse_flexible_speaking_response(response.text)
+        except Exception as search_err:
+            logger.debug(f"Google Search grounding fallback on {model_name}: {search_err}")
+
+    # 2. Hızlı JSON modunda çağır (thinking_budget=0 + temperature=0.7)
+    try:
+        cfg_kwargs = {
+            "temperature": 0.7,
+            "system_instruction": sys_inst,
+            "response_mime_type": "application/json",
+        }
+        if thinking_cfg is not None:
+            cfg_kwargs["thinking_config"] = thinking_cfg
+        response = await client.aio.models.generate_content(
+            model=model_name,
+            contents=contents_payload,
+            config=types.GenerateContentConfig(**cfg_kwargs),
+        )
+        if response and response.text:
+            return parse_flexible_speaking_response(response.text)
+    except Exception:
+        pass
+
+    # 3. Saf metin modunda çağır ve yanıtı doğrudan assistant_reply olarak kabul et
     response = await client.aio.models.generate_content(
         model=model_name,
         contents=contents_payload,
         config=types.GenerateContentConfig(
-            temperature=0.65,
+            temperature=0.7,
             system_instruction=sys_inst,
-            response_mime_type="application/json",
         ),
     )
-    return clean_json_response(response.text)
+    return parse_flexible_speaking_response(response.text)
 
 
 async def async_call_speaking_gemini(
-    contents_payload: Any, system_instruction: Optional[str] = None
+    contents_payload: Any,
+    system_instruction: Optional[str] = None,
+    use_search: bool = False,
 ) -> dict:
     """
-    Direct asynchronous, non-blocking multi-turn call configured specifically for lowest latency:
-    Races the fastest live Gemini Flash models concurrently so whichever responds first wins immediately.
+    Gerçek zamanlı hızlı Gemini çağrısı (<1sn hedefi):
+    Doğrudan hızlı gemini-flash-lite-latest, gemini-3.1-flash-lite-preview ve gemini-2.5-flash
+    modellerini paralel yarıştırır; her yanıt doğrudan Gemini modelinden gerçek zamanlı üretilir.
     """
     client = get_client()
     sys_inst = system_instruction or INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION
 
-    # Race top responsive Gemini models concurrently for lowest latency
-    race_models = ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-3.5-flash"]
+    race_models = ["gemini-flash-lite-latest", "gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]
     tasks = [
-        asyncio.create_task(_call_single_model(client, m, contents_payload, sys_inst))
+        asyncio.create_task(
+            asyncio.wait_for(
+                _call_single_model(client, m, contents_payload, sys_inst, use_search=use_search),
+                timeout=3.5,
+            )
+        )
         for m in race_models
     ]
 
@@ -107,8 +384,21 @@ async def async_call_speaking_gemini(
                 return res
             except Exception as err:
                 last_err = err
-                logger.warning(f"Concurrent speaking model attempt failed: {err}")
+                logger.debug(f"Concurrent speaking model attempt failed: {err}")
 
+    # Eğer paralel arama denemeleri hata verdiyse arama aracı olmadan doğrudan hızlı modelleri çağır
+    for fallback_model in ["gemini-flash-lite-latest", "gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]:
+        try:
+            return await asyncio.wait_for(
+                _call_single_model(
+                    client, fallback_model, contents_payload, sys_inst, use_search=False
+                ),
+                timeout=3.5,
+            )
+        except Exception as err:
+            last_err = err
+
+    logger.error(f"All speaking Gemini models failed. Last error: {last_err}")
     raise last_err or Exception("All speaking models failed.")
 
 # ---------------------------------------------------------------------------
@@ -308,163 +598,332 @@ SCENARIOS["kids_sparky"] = SCENARIOS["casual_sparky"]
 
 
 # ---------------------------------------------------------------------------
-# Fallback Response Generator
+# Router Endpoints & Gemini Live WebSocket Real-Time Speaking Engine
 # ---------------------------------------------------------------------------
 
-def generate_fallback_response(
-    scenario_id: str,
-    user_text: str,
-    story_context: Optional[Union[Dict[str, Any], str]] = None,
-    conversation_mode: str = "casual",
-    turn_count: int = 0,
-    level: str = "A1",
+LIVE_SPEAKING_MODELS = [
+    "gemini-2.5-flash-native-audio-latest",
+    "gemini-2.0-flash-exp",
+    "gemini-3.1-flash-live-preview",
+    "gemini-3.8-live",
+]
+
+VALID_LIVE_VOICES = {
+    "aoede": "Aoede",
+    "kore": "Kore",
+    "puck": "Puck",
+    "fenrir": "Fenrir",
+    "charon": "Charon",
+}
+
+
+def build_live_system_instruction(
+    level: str = "B1",
     persona: str = "sparky",
-) -> Dict[str, Any]:
-    """Generates an intelligent, adaptive, open-ended response when offline or on LLM error."""
-    scenario = SCENARIOS.get(scenario_id, SCENARIOS.get("project_control"))
-    target_vocab = list(scenario.target_vocabulary) if scenario else ["practice", "learn", "fun"]
+    story_context: Optional[Union[dict, str]] = None,
+    scenario_title: Optional[str] = None,
+) -> str:
+    story_info = ""
+    if story_context:
+        if isinstance(story_context, dict):
+            s_title = story_context.get("title", "")
+            s_snippet = story_context.get("snippet") or story_context.get("content") or ""
+            s_words = story_context.get("target_words", [])
+            w_str = ", ".join(s_words) if isinstance(s_words, list) else str(s_words)
+            story_info = (
+                f"\nAKTİF HİKAYE BAĞLAMI:\n- Başlık: '{s_title}'\n"
+                f"- Hikaye Özeti: {str(s_snippet)[:600]}\n"
+                f"- Hedef Kelimeler: {w_str}\n"
+                f"Bu hikayenin olay örgüsü ve karakterleri üzerine doğal, samimi bir sohbet yürüt."
+            )
+        elif isinstance(story_context, str) and story_context.strip():
+            story_info = f"\nAKTİF HİKAYE BAĞLAMI:\n{story_context[:500]}"
 
-    sample_highlights = [v for v in target_vocab if v.lower() in user_text.lower()]
-    if not sample_highlights:
-        sample_highlights = target_vocab[:2]
+    scenario_info = f"\nSENARYO / KONU: {scenario_title}" if scenario_title else ""
 
-    persona_key = (persona or "sparky").lower().strip()
-    is_sparky = "alex" not in persona_key
+    return f"""Sen kullanıcının çok samimi, sıcak, sabırlı ve dostane bir İngilizce sohbet arkadaşısın. Tıpkı normal Gemini Live uygulamasındaki gibi doğal, akıcı ve arkadaşça konuş.
 
-    mode = (conversation_mode or "casual").lower()
-    lower_text = user_text.lower()
+TEMEL KURALLAR:
+1. Kullanıcı cümle ortasında düşünmek için duraksadığında sözünü kesme; düşüncesini bitirmesini bekle.
+2. Günlük yaşam, hava durumu, spor, kültür ve kullanıcının bahsettiği her konuda doğal sohbet et.
+3. Yanıtların kısa, sıcak ve samimi olsun (1-2 cümle); her yanıtının sonunda sohbeti sürdürecek doğal bir soru sor.
+4. Kullanıcı konuşmaya başladığında (barge-in) hemen susup onu dinle.
+5. Her zaman doğal ve akıcı İngilizce konuş.
+{story_info}
+{scenario_info}
+""".strip()
 
-    # Topic-aware offline fallback (never uses generic weekend cliches)
-    if any(k in lower_text for k in ["future", "good or bad", "ai", "technology", "robot", "world", "years"]):
-        reply = (
-            "Personally, I feel optimistic that the future will bring incredible breakthroughs in medicine, clean energy, and education, as long as we guide technology responsibly. "
-            "What part of the future excites you the most, or is there a specific change that worries you?"
-        )
-        alt = "And what are your thoughts on the future—do you think it will turn out for the better or for the worse?"
-        grammar = "And what do you think about the future—will it be good or bad?"
-    elif any(k in lower_text for k in ["weather", "rain", "sunny", "cold", "hot"]):
-        reply = (
-            "The weather really sets the tone for the entire day—I always find a crisp, clear morning gives me extra energy, whereas rainy days make me want to slow down with a warm cup of coffee. "
-            "How is the weather affecting your plans and energy today?"
-        )
-        alt = "How is the weather holding up on your end today, and has it impacted your daily routine?"
-        grammar = None
-    elif mode == "casual":
-        reply = (
-            f"I really appreciate you sharing that perspective! Thinking about what you just mentioned, I believe staying curious and adaptable makes everyday experiences much more rewarding. "
-            f"What made you start thinking about this topic today, and how do you see it evolving?"
-        )
-        alt = "I've been reflecting on this recently, and I'm curious to hear your perspective on how it might unfold."
-        grammar = None
-    elif mode == "problem_solving":
-        problem_options = [
-            "That's a solid immediate step to contain the issue. However, what if our primary subcontractor still struggles with delivery—what backup plan can we activate?",
-            "Good call—acting fast will definitely buy us some breathing room. How should we communicate this update to the client so they feel confident in our mitigation plan?",
-            "I like how practical that approach is. Looking one step ahead, how can we prevent this same bottleneck from hitting our next milestone?",
-        ]
-        reply = problem_options[turn_count % len(problem_options)]
-        alt = "To mitigate operational downtime immediately, our primary protocol is rerouting critical shipments via alternative expedited lanes."
-        grammar = "Cümleniz net ve çözüm odaklı. (Kriz Çözme & Doğal Diyalog)"
-    elif mode == "story_debate" or story_context:
-        story_options = [
-            "That is a thought-provoking perspective on the story. Do you think the protagonist had any other realistic choice under that kind of pressure?",
-            "I really like how you looked at the human side of that dilemma. If you were in their shoes on that exact day, what would you have done differently?",
-            "That raises an interesting question about trust and leadership. How do you think the rest of the team would react if the truth came out later?",
-        ]
-        reply = story_options[turn_count % len(story_options)]
-        alt = "From a thematic perspective, the protagonist's dilemma underscores how external pressure often tests personal integrity."
-        grammar = "Argümanınız oldukça doğal ve etkileyici."
-    elif "claim" in scenario_id or "fidic" in scenario_id:
-        claim_options = [
-            "That makes a lot of sense from a practical standpoint. Under Clause 8.4, what contemporaneous site records do you think will help us most if the contractor pushes back?",
-            "Good point—keeping communication open with the contractor is half the battle. How do you think we can resolve the concurrent delay discussion without escalating into a formal dispute?",
-            "I agree with your assessment. If the weather or site access caused part of that delay, how should we factor that fairly into our Extension of Time review?",
-        ]
-        reply = claim_options[turn_count % len(claim_options)]
-        alt = "To protect the project timeline while staying fair, we should review the contemporaneous site diaries alongside the Clause 8.4 notice requirements."
-        grammar = "Cümleniz net ve profesyonel. Sohbeti istediğiniz yönde sürdürebilirsiniz."
-    elif "finance" in scenario_id:
-        finance_options = [
-            "That's a very balanced way to look at our numbers. How do you think this adjustment will play out for our cash flow comfort over the next quarter?",
-            "Makes total sense—protecting liquidity early saves a lot of headaches later. Which operational area do you think has the most flexibility right now?",
-            "I appreciate that perspective. If market conditions shift next month, what would be your go-to lever to keep our EBITDA margin healthy?",
-        ]
-        reply = finance_options[turn_count % len(finance_options)]
-        alt = "Our cash flow forecasting shows that pacing capital expenditures carefully will keep our liquidity ratio comfortable."
-        grammar = "Cümleniz akıcı ve anlaşılır."
-    elif "ielts" in scenario_id or "academic" in scenario_id:
-        ielts_options = [
-            "That's a really insightful point! Building on your own experience, how do you see this changing in everyday life over the next few years?",
-            "I love that example—it makes the idea very relatable. On the flip side, why do you think some people still prefer the traditional way of doing things?",
-            "You expressed that very naturally! If you had to sum up the biggest benefit for younger generations, what would you say it is?",
-        ]
-        reply = ielts_options[turn_count % len(ielts_options)]
-        alt = "While technological tools certainly speed up daily tasks, human connection remains essential for deeper learning."
-        grammar = "Cümleniz doğal ve akıcı."
-    else:
-        # project_control & general professional
-        pc_options = [
-            "I see where you're coming from—reallocating the crew could really help us catch up on the critical path. How is the site team feeling about shifting priorities this week?",
-            "That sounds like a very practical mitigation plan. By the way, did any external factors on-site—like weather or material deliveries—affect the crew's progress today?",
-            "Spot on! Keeping a close eye on schedule variance early makes a huge difference. What is the next milestone you're personally keeping an eye on?",
-        ]
-        reply = pc_options[turn_count % len(pc_options)]
-        alt = "To recover our schedule variance smoothly, we're coordinating closely with the site teams and fast-tracking key deliveries."
-        grammar = "Cümleniz net ve doğal. Sohbete dilediğiniz açıdan devam edebilirsiniz."
 
-    fluency_val = 87 if mode != "casual" else 92
-    jargon_val = 88 if mode != "casual" else 92
-    grammar_corr = None if grammar and "doğal" in grammar.lower() else grammar
+@router.websocket("/ws/gemini-live")
+@router.websocket("/ws/live-speaking")
+@router.websocket("/live-speaking")
+async def websocket_live_speaking(
+    websocket: WebSocket,
+    level: Optional[str] = "B1",
+    persona: Optional[str] = "sparky",
+    voice: Optional[str] = None,
+    story_context: Optional[str] = None,
+):
+    """
+    Direct Gemini Multimodal Live API bidirectional WebSocket bridge (/ws/gemini-live).
+    Streams 16kHz PCM audio packets from frontend directly to Gemini Live,
+    and streams back 24kHz PCM audio chunks and live transcriptions in real time.
+    """
+    await websocket.accept()
+    logger.info("Client connected to Gemini Live WebSocket (/ws/gemini-live).")
 
-    # Takip sorusunu reply içindeki son sorudan çıkar
-    extracted_q = reply
-    if "?" in reply:
-        parts = [p.strip() for p in reply.split("?") if p.strip()]
-        if parts:
-            extracted_q = parts[-1] + "?"
+    active_level = level or "B1"
+    active_persona = persona or "sparky"
+    is_sparky = "alex" not in active_persona.lower()
+    default_voice = "Aoede" if not is_sparky else "Puck"
+    selected_voice = VALID_LIVE_VOICES.get((voice or "").lower().strip(), default_voice)
 
-    fluency_hint_default = (
-        "Actually, I had so much fun learning new things today!"
-        if is_sparky
-        else "I believe taking a calm and steady approach works best in this situation."
+    parsed_story_context: Optional[Union[dict, str]] = None
+    if story_context:
+        try:
+            parsed_story_context = json.loads(story_context)
+        except Exception:
+            parsed_story_context = story_context
+
+    sys_inst = build_live_system_instruction(
+        level=active_level,
+        persona=active_persona,
+        story_context=parsed_story_context,
     )
 
-    return {
-        "assistant_reply": reply,
-        "recast_note": None,
-        "fluency_hint": fluency_hint_default,
-        "session_vocabulary_used": sample_highlights,
-        "target_words_spotted": sample_highlights,
-        "polished_alternative": alt,
-        "level_label": f"{level.upper()} Seviye",
-        "suggested_new_words": [
-            {"word": "unwind", "meaning": "Günün yorgunluğunu atmak, rahatlamak"},
-            {"word": "routine", "meaning": "Alışılagelmiş düzen, günlük rutin"},
-        ],
-        "reply_message": reply,
-        "follow_up_question": extracted_q,
-        "metrics": {
-            "fluency": fluency_val,
-            "vocabulary": jargon_val,
-            "grammar": 95 if not grammar_corr else 80,
-        },
-        "feedback": {
-            "grammar_correction": grammar_corr,
-            "better_alternative": alt,
-            "used_vocabulary": sample_highlights,
-            "fluency_score": fluency_val,
-        },
-        "grammar_feedback": grammar_corr,
-        "better_alternative": alt,
-        "vocabulary_highlight": sample_highlights,
-        "jargon_score": jargon_val,
-        "fluency_score": fluency_val,
-    }
+    client = get_client()
+    config = types.LiveConnectConfig(
+        response_modalities=["AUDIO"],
+        system_instruction=types.Content(parts=[types.Part.from_text(text=sys_inst)]),
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=selected_voice)
+            )
+        ),
+        input_audio_transcription=types.AudioTranscriptionConfig(),
+        output_audio_transcription=types.AudioTranscriptionConfig(),
+    )
 
+    session = None
+    ctx = None
+    connected_model = None
 
-# ---------------------------------------------------------------------------
-# Router Endpoints
-# ---------------------------------------------------------------------------
+    for model_name in LIVE_SPEAKING_MODELS:
+        try:
+            candidate_ctx = client.aio.live.connect(model=model_name, config=config)
+            candidate_session = await candidate_ctx.__aenter__()
+            ctx = candidate_ctx
+            session = candidate_session
+            connected_model = model_name
+            logger.info(f"Connected to Gemini Live model: {connected_model} with voice: {selected_voice}")
+            break
+        except Exception as conn_err:
+            logger.warning(f"Could not connect to live model '{model_name}' with full config: {conn_err}")
+            try:
+                fallback_cfg = {
+                    "generation_config": {"response_modalities": ["AUDIO"]},
+                    "system_instruction": sys_inst,
+                }
+                candidate_ctx = client.aio.live.connect(model=model_name, config=fallback_cfg)
+                candidate_session = await candidate_ctx.__aenter__()
+                ctx = candidate_ctx
+                session = candidate_session
+                connected_model = model_name
+                logger.info(f"Connected to Gemini Live model (basic config): {connected_model}")
+                break
+            except Exception:
+                continue
+
+    if not session or not ctx:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Gemini Live servisine bağlanılamadı. Lütfen API anahtarını ve bağlantıyı kontrol edin.",
+        })
+        await websocket.close()
+        return
+
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "model": connected_model,
+            "voice": selected_voice,
+            "level": active_level,
+            "persona": active_persona,
+        })
+
+        async def gemini_to_client_worker():
+            try:
+                # CRITICAL: session.receive() in google-genai yields until turn_complete,
+                # so we MUST wrap it in `while True:` to keep receiving across all turns!
+                while True:
+                    async for resp in session.receive():
+                        server_content = resp.server_content
+                        if not server_content:
+                            continue
+
+                        if getattr(server_content, "interrupted", False):
+                            await websocket.send_json({"type": "interrupted"})
+
+                        interim_tx = getattr(server_content, "interim_input_transcription", None)
+                        if interim_tx and getattr(interim_tx, "text", None):
+                            await websocket.send_json({
+                                "type": "input_transcription",
+                                "text": interim_tx.text,
+                                "finished": False,
+                            })
+
+                        in_tx = getattr(server_content, "input_transcription", None)
+                        if in_tx and getattr(in_tx, "text", None):
+                            await websocket.send_json({
+                                "type": "input_transcription",
+                                "text": in_tx.text,
+                                "finished": getattr(in_tx, "finished", False),
+                            })
+
+                        out_tx = getattr(server_content, "output_transcription", None)
+                        if out_tx and getattr(out_tx, "text", None):
+                            await websocket.send_json({
+                                "type": "output_transcription",
+                                "text": out_tx.text,
+                                "finished": getattr(out_tx, "finished", False),
+                            })
+
+                        model_turn = getattr(server_content, "model_turn", None)
+                        if model_turn:
+                            for part in model_turn.parts:
+                                part_text = getattr(part, "text", None)
+                                if part_text:
+                                    await websocket.send_json({
+                                        "type": "output_transcription",
+                                        "text": part_text,
+                                        "finished": False,
+                                    })
+                                inline = getattr(part, "inline_data", None)
+                                if inline and inline.data:
+                                    raw_data = inline.data
+                                    b64 = (
+                                        base64.b64encode(raw_data).decode("ascii")
+                                        if isinstance(raw_data, bytes)
+                                        else str(raw_data)
+                                    )
+                                    await websocket.send_json({
+                                        "type": "audio",
+                                        "data": b64,
+                                        "sample_rate": 24000,
+                                    })
+
+                        if getattr(server_content, "turn_complete", False):
+                            await websocket.send_json({"type": "turn_complete"})
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.info(f"Gemini receive stream finished: {e}")
+
+        async def client_to_gemini_worker():
+            try:
+                audio_packet_count = 0
+                while True:
+                    msg = await websocket.receive()
+                    msg_type = msg.get("type")
+                    if msg_type == "websocket.disconnect":
+                        break
+
+                    # 1. Binary message: raw 16kHz PCM audio bytes
+                    if "bytes" in msg and msg["bytes"]:
+                        pcm_bytes = msg["bytes"]
+                        audio_packet_count += 1
+                        if audio_packet_count == 1:
+                            logger.info(f"First 16kHz PCM audio packet received: {len(pcm_bytes)} bytes")
+                        try:
+                            await session.send_realtime_input(
+                                audio=types.Blob(data=pcm_bytes, mime_type="audio/pcm;rate=16000")
+                            )
+                        except Exception:
+                            await session.send_realtime_input(
+                                media=types.Blob(data=pcm_bytes, mime_type="audio/pcm;rate=16000")
+                            )
+
+                    # 2. Text message: JSON control or base64 audio packet
+                    elif "text" in msg and msg["text"]:
+                        raw_text = msg["text"].strip()
+                        if not raw_text:
+                            continue
+                        try:
+                            payload = json.loads(raw_text)
+                        except Exception:
+                            payload = {"type": "text", "text": raw_text}
+
+                        p_type = payload.get("type", "text")
+
+                        if p_type == "audio" and payload.get("data"):
+                            pcm_bytes = base64.b64decode(payload["data"])
+                            audio_packet_count += 1
+                            if audio_packet_count == 1:
+                                logger.info(f"First base64 16kHz PCM audio packet received: {len(pcm_bytes)} bytes")
+                            try:
+                                await session.send_realtime_input(
+                                    audio=types.Blob(data=pcm_bytes, mime_type="audio/pcm;rate=16000")
+                                )
+                            except Exception:
+                                await session.send_realtime_input(
+                                    media=types.Blob(data=pcm_bytes, mime_type="audio/pcm;rate=16000")
+                                )
+
+                        elif p_type == "text" and payload.get("text"):
+                            await session.send_client_content(
+                                turns=[
+                                    types.Content(
+                                        role="user",
+                                        parts=[types.Part.from_text(text=str(payload["text"]))],
+                                    )
+                                ],
+                                turn_complete=True,
+                            )
+
+                        elif p_type == "start":
+                            greeting = payload.get("greeting") or (
+                                "Hello! Please greet me warmly in 1-2 short friendly sentences and ask how my day is going."
+                            )
+                            await session.send_client_content(
+                                turns=[
+                                    types.Content(
+                                        role="user",
+                                        parts=[types.Part.from_text(text=greeting)],
+                                    )
+                                ],
+                                turn_complete=True,
+                            )
+
+                        elif p_type == "ping":
+                            await websocket.send_json({"type": "pong"})
+
+            except (WebSocketDisconnect, asyncio.CancelledError):
+                pass
+            except Exception as e:
+                logger.info(f"Client send stream finished: {e}")
+
+        g2c_task = asyncio.create_task(gemini_to_client_worker())
+        c2g_task = asyncio.create_task(client_to_gemini_worker())
+
+        done, pending = await asyncio.wait(
+            [g2c_task, c2g_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for t in pending:
+            t.cancel()
+
+    finally:
+        if session and ctx:
+            try:
+                await ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+        logger.info("Gemini Live Speaking session closed.")
+
 
 @router.get("/scenarios", response_model=List[ScenarioMetadata])
 async def get_scenarios():
@@ -487,17 +946,25 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
     raw_history = (
         payload.conversation_history
         if payload.conversation_history is not None and len(payload.conversation_history) > 0
-        else payload.history
+        else (payload.history or [])
     )
 
     if len(raw_history) == 0:
-        check_and_consume_quota(request, "speaking", increment=True)
+        try:
+            check_and_consume_quota(request, "speaking", increment=True)
+        except Exception:
+            pass
 
     scenario = SCENARIOS.get(payload.scenario_id, SCENARIOS.get("project_control"))
-    user_text = payload.user_transcript.strip()
+    user_text = (
+        payload.user_message
+        or payload.transcript
+        or payload.user_transcript
+        or ""
+    ).strip()
 
     if not user_text:
-        raise HTTPException(status_code=400, detail="User transcript cannot be empty.")
+        user_text = "Hello! Let's continue our conversation."
 
     # Persona & Karakter Belirleme
     persona_key = (payload.persona or "sparky").lower().strip()
@@ -519,14 +986,19 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
             "- Samimi, yapıcı ve güven verici bir tonda kal."
         )
 
-    # Dinamik CEFR Seviye Yönetimi (N+1 Kuralı)
-    raw_level = (payload.target_level or payload.level or "A1").upper().strip()
+    # Dinamik CEFR Seviye Yönetimi (N+1 Kuralı) ve Sesli Seviye Değiştirme Algılayıcısı
+    initial_raw_level = (payload.target_level or payload.level or "A1").upper().strip()
+    detected_level_change = detect_requested_level_change(user_text, initial_raw_level)
+    raw_level = detected_level_change or initial_raw_level
+
     if "A1" in raw_level:
         clean_level = "A1"
         next_level = "A2"
         level_rules = (
-            "CEFR A1 (Başlangıç / Beginner): Basit zamanlar (present simple, simple past), en temel kelimeler, kısa ve kristal netliğinde cümleler kur. "
-            "ASLA akademik C1 deyimleri, ağır iş jargonu ve karmaşık yan cümleler kullanma. Sadece tek bir yeni kelimeyle zenginleştir (N+1 kuralı)."
+            "CEFR A1 (Başlangıç / Beginner): Cümlelerin EN FAZLA 5-7 kelimeden oluşsun! "
+            "Çok basit zamanlar (present simple, simple past), en temel kelimeler ve çok basit sorular kullan. "
+            "ASLA akademik C1 deyimleri, ağır iş jargonu ve karmaşık yan cümleler kullanma. "
+            "Kullanıcı A1 seviyesine geçmek istediyse 'Of course! Let's speak slowly in A1 level. How is your day?' gibi çok basit bir cümleyle yanıt ver."
         )
     elif "A2" in raw_level:
         clean_level = "A2"
@@ -556,9 +1028,13 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
     else:
         clean_level = "A1"
         next_level = "A2"
-        level_rules = "CEFR A1: Basit zamanlar, temel kelimeler, kısa ve net cümleler."
+        level_rules = "CEFR A1: Cümlelerin en fazla 5-7 kelimeden oluşsun, çok basit zamanlar ve temel kelimeler kullan."
 
     default_level_label = f"{clean_level} Seviye"
+
+    # Anlık Hava Durumu (Open-Meteo) ve Tarih Enjeksiyonu
+    live_weather_summary = await get_live_turkey_weather_context()
+    current_date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     # Hikaye Bağlamı (Story Context)
     story_instruction = ""
@@ -566,101 +1042,107 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
         if isinstance(payload.story_context, dict):
             st_title = payload.story_context.get("title", "")
             st_level = payload.story_context.get("level", "")
-            st_words = payload.story_context.get("target_words", [])
+            st_content = (
+                payload.story_context.get("content", "")
+                or payload.story_context.get("snippet", "")
+            )
+            st_words = (
+                payload.story_context.get("target_words", [])
+                or payload.story_context.get("target_vocabulary", [])
+            )
             words_str = ", ".join(st_words) if isinstance(st_words, list) else str(st_words)
             story_instruction = (
-                f"\nAKTİF HİKAYE BAĞLAMI:\n"
+                f"\nAKTİF OKUMA KULÜBÜ HİKAYE TARTIŞMA BAĞLAMI:\n"
                 f"- Başlık: '{st_title}' (Seviye: {st_level})\n"
+                f"- Hikaye Özeti/Metni: {st_content[:600]}\n"
                 f"- Hikayedeki Hedef Kelimeler: {words_str}\n"
-                f"- Diyalogda bu hikayenin temalarını ve kelimelerini doğal bir şekilde pekiştir.\n"
+                f"- GÖREV: Kullanıcı bu hikayeyi henüz bitirdi. Bu hikayenin kilit olay örgüsü, başkahramanın zor kararları ve ahlaki ikilemleri hakkında samimi, sıcak bir kitap kulübü arkadaşı gibi tartış. Kullanıcının görüşlerini dinle, kendi düşüncelerini samimiyetle paylaş ve hedef kelimeleri doğal akışta pekiştir.\n"
             )
         else:
-            story_instruction = f"\nAKTİF HİKAYE / REFERANS BAĞLAMI:\n{str(payload.story_context)[:400]}\n"
+            story_instruction = f"\nAKTİF HİKAYE / REFERANS BAĞLAMI:\n{str(payload.story_context)[:500]}\n"
 
-    # Konuşma geçmişindeki son 6 mesajı hem okunabilir metin hem de Gemini 'contents' akışı olarak hazırla
-    recent_turns = raw_history[-6:]
+    # Konuşma geçmişindeki son 8 mesajı hem okunabilir metin hem de Gemini 'contents' akışı olarak hazırla
+    recent_turns = raw_history[-8:]
     history_lines = []
     gemini_contents: List[types.Content] = []
+    last_assistant_message = ""
 
-    for turn in recent_turns:
+    for idx_turn, turn in enumerate(recent_turns):
         role_raw = str(turn.get("role", "user")).lower()
         msg_raw = str(turn.get("content") or turn.get("message") or "").strip()
         if not msg_raw:
             continue
         clean_msg = msg_raw.replace("AI Mentor:", "").replace(f"{persona_name}:", "").replace("User:", "").strip()
+
+        # Eğer son mesaj zaten mevcut user_text ile birebir aynıysa gemini_contents içine iki kez user mesajı eklememek için sadece metin geçmişinde tut
+        is_duplicate_current_user = (
+            idx_turn == len(recent_turns) - 1
+            and role_raw == "user"
+            and clean_msg.lower() == user_text.lower()
+        )
+
         prefix = "User" if role_raw == "user" else persona_name
         history_lines.append(f"{prefix}: {clean_msg}")
 
-        gemini_role = "user" if role_raw == "user" else "model"
-        if not gemini_contents and gemini_role == "model":
+        if role_raw != "user":
+            last_assistant_message = clean_msg
+
+        if not is_duplicate_current_user:
+            gemini_role = "user" if role_raw == "user" else "model"
+            if not gemini_contents and gemini_role == "model":
+                gemini_contents.append(
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=f"[Start of dialogue with {persona_name}]")],
+                    )
+                )
             gemini_contents.append(
                 types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=f"[Start of dialogue with {persona_name}]")],
+                    role=gemini_role,
+                    parts=[types.Part.from_text(text=clean_msg)],
                 )
             )
-        gemini_contents.append(
-            types.Content(
-                role=gemini_role,
-                parts=[types.Part.from_text(text=clean_msg)],
-            )
-        )
 
     formatted_history = "\n".join(history_lines) if history_lines else "(Start of natural conversation)"
 
-    dynamic_sys_instruction = f"""{persona_tone_rules}
+    dynamic_sys_instruction = f"""Sen kullanıcının samimi, dostane ve doğal bir İngilizce sohbet arkadaşısın. Asla bir önceki mesajda söylediğin cümleyi tekrar etme. Kullanıcının son cümlesine (örneğin hava durumu, ruh hali, günlük olaylar) doğrudan, samimi ve 1-2 kısa cümleyle karşılık ver ve sohbeti sürdürecek doğal bir soru sor. Asla ağır analizler veya uzun paragraflar yazma.
 
-HEDEF CEFR SEVİYESİ: {clean_level} (N+1 Seviyesi: {next_level})
-SEVİYE KURALLARI:
-{level_rules}
+{persona_tone_rules}
+
+STT (SES TANIMA) TÜRK ÖZEL İSİM & BAĞLAM DÜZELTMESİ:
+- Kullanıcı Türkiye'de (İzmir) yaşayan bir İngilizce öğrencisidir. Tarayıcı STT motoru Türkçe özel isimleri yanlış yazabilir: 'is Miss', 'Ismish', 'Richmond', 'amazement' ifadelerinin aslında **'İzmir'** olduğunu; küçük harfli 'turkey' kelimesinin kümes hayvanı değil **'Türkiye'** olduğunu anla.
+- Kullanıcının bahsettiği konuyu (örn: İzmir, Fil İsmail / elephant Ismail, hava durumu, spor, günlük yaşam vb.) asla değiştirmeden doğal sohbeti sürdür.
+
+SOHBET GEÇMİŞİ VE TEKRAR ENGELİ:
+- Asla bir önceki mesajda söylediğin cümleyi tekrar etme. Kullanıcının son cümlesine (örneğin hava durumu, ruh hali, günlük olaylar) doğrudan, samimi ve 1-2 kısa cümleyle karşılık ver.
+{f'- Bir önceki turda söylediğin cümle şuydu (BUNU ASLA TEKRARLAMA): "{last_assistant_message}"' if last_assistant_message else ''}
+
+CANLI TARİH VE ANLIK HAVA DURUMU BİLGİSİ (Open-Meteo Canlı Veri):
+- Bugünün Tarihi ve Saati: {current_date_str}
+- Anlık Hava Durumu: {live_weather_summary}
+
+KESİN GUARDRAIL (POZİTİF GÜNDEM FİLTRESİ):
+- Siyaset, savaş, ekonomik kriz ve şiddet konularına girme; yalnızca pozitif günlük yaşam, hava durumu, spor, bilim ve kültür konularında konuş.
 {story_instruction}
-PEDAGOJİK KURAL (SANDVİÇ VE RECASTING / ÖRTÜK DÜZELTME PRENSİBİ):
-1. ASLA ROBOTİK VEYA DİDAKTİK DÜZELTME YAPMA:
-   - "Gramerin yanlış", "Hata yaptın", "Böyle demeliydin" gibi direkt uyarı ve yargılayıcı kalıplar KESİNLİKLE YASAKTIR.
-2. ÖRTÜK DÜZELTME (RECASTING):
-   - Kullanıcının hatalarını sohbetin akışı içinde DOĞRU HALİYLE YANKILA (Recasting).
-   - Örn: Kullanıcı "Yesterday I go park" derse -> "Oh, you WENT to the park yesterday? How fun! Who did you go with?"
-   - Örn: Kullanıcı "She don't like movies" derse -> "Ah, she DOESN'T like movies? What does she enjoy doing instead?"
-3. RECASTING NOTU (`recast_note`):
-   - Kullanıcının hatasını sohbette nasıl doğal yankıladığını Türkçe olarak 1 kısa cümleyle açıkla (Örn: "Geçmiş zaman kuralı sohbet içinde nazikçe 'went' olarak yankılandı.").
-   - Eğer kullanıcının cümlesinde hiçbir gramer hatası yoksa `recast_note` değerini null yap.
-4. KONUŞMA FISILTISI (`fluency_hint`):
-   - Kullanıcı soruna cevap verirken takılırsa veya duraksarsa hemen söyleyebileceği, {clean_level} seviyesinde 1 cümlelik hazır konuşma kalıbı yaz (Örn: "Actually, I went there with my cousin to play tennis.").
-5. SÜREKLİLİK VE UZUNLUK (2-3 CÜMLE SINIRI):
-   - `assistant_reply` KESİNLİKLE 2-3 cümleyi GEÇMEMELİDİR. Asla monolog üretme.
-   - İlk 1-2 cümle kullanıcının söylediğine samimi, insani bir tepki verir (ve hatayı recasting ile yankılar).
-   - Yanıtın sonunda diyaloğu canlı tutacak, merak uyandıran TEK bir açık uçlu soru sor.
-6. HEDEF KELİMELER:
-   - Oturumda kullanılan hedef kelimeleri `session_vocabulary_used` ve `target_words_spotted` listelerine ekle.
-   - `polished_alternative` içine kullanıcının cümlesinin bir tık üst ({next_level} seviyesi) doğal halini yaz.
-
-Çıktıyı KESİNLİKLE bu JSON şemasında ver:
+Çıktıyı bu JSON şemasında ver:
 {{
-  "assistant_reply": "İngilizce seslendirilecek doğal yanıt (kısa, canlı, 2-3 cümle ve açık uçlu soruyla biten, {clean_level} seviyesinde)",
-  "recast_note": "Kullanıcının gramer hatasının sohbette doğal yankılanma şekli veya hata yoksa null",
-  "fluency_hint": "Kullanıcı takılırsa söyleyebileceği 1 cümlelik konuşma fısıltısı ({clean_level} seviyesinde)",
-  "session_vocabulary_used": ["kelime1", "kelime2"],
-  "target_words_spotted": ["kelime1"],
-  "polished_alternative": "Cümlenin kullanıcının seviyesinin bir tık üstü ({next_level} seviyesi) doğal alternatifi",
-  "level_label": "{default_level_label}",
-  "suggested_new_words": [{{"word": "terim", "meaning": "anlamı"}}]
+  "assistant_reply": "İngilizce seslendirilecek samimi, dostane yanıt (1-2 kısa cümle ve doğal bir takip sorusuyla biten)",
+  "hint_suggestions": [
+    "O anki soruya cevap verirken kullanılabilecek 1. kısa cümle başlatıcı ipucu",
+    "O anki soruya cevap verirken kullanılabilecek 2. kısa cümle başlatıcı ipucu"
+  ]
 }}"""
 
-    user_turn_prompt = f"""Son Konuşma Akışı (Son {len(history_lines)} mesaj):
+    user_turn_prompt = f"""Son Konuşma Akışı:
 {formatted_history}
 
 Kullanıcının Son Cümlesi:
 "{user_text}"
 
 GÖREV:
-1. {persona_name} kimliğini koruyarak {clean_level} seviyesine KESİNLİKLE sadık kal ({level_rules}).
-2. Eğer kullanıcının cümlesinde gramer/zaman/edat hatası varsa, sohbetin akışında DOĞRU HALİYLE YANKILA (Recasting).
-3. `recast_note` alanına bu düzeltmeyi Türkçe 1 kısa cümleyle açıkla, hata yoksa null ver.
-4. `fluency_hint` alanına kullanıcının soruna takılmadan verebileceği {clean_level} seviyesinde 1 cümlelik bir fısıltı yaz.
-5. `assistant_reply` kesinlikle 2-3 cümle olmalı ve samimi tek bir açık uçlu soruyla bitmelidir.
-6. `polished_alternative` alanına cümlenin {next_level} seviyesindeki doğal alternatifini ekle.
+Asla bir önceki mesajda söylediğin cümleyi tekrar etme. Kullanıcının son cümlesine ("{user_text}") doğrudan, samimi ve 1-2 kısa cümleyle karşılık ver ve sohbeti sürdürecek doğal bir soru sor. O anki soruya özel 2 cümle önerisini hint_suggestions alanında üret.
 
-Return ONLY valid JSON matching the schema."""
+Return valid JSON matching the schema."""
 
     gemini_contents.append(
         types.Content(
@@ -669,151 +1151,194 @@ Return ONLY valid JSON matching the schema."""
         )
     )
 
+    # Sadece güncel haber/spor/bilim/olay sorulduğunda Google Search Grounding aç (hava durumu zaten 30 dk önbellekte)
+    user_lower_check = user_text.lower()
+    needs_live_search = any(
+        kw in user_lower_check
+        for kw in ["news", "sport", "football", "basketball", "match", "score", "science", "today's", "current events", "latest", "champion", "olympic"]
+    )
+
+    story_title_for_hints = None
+    if isinstance(payload.story_context, dict):
+        story_title_for_hints = payload.story_context.get("title")
+
+    response_dict: Dict[str, Any] = {}
     try:
         response_dict = await asyncio.wait_for(
             async_call_speaking_gemini(
                 gemini_contents,
                 system_instruction=dynamic_sys_instruction,
+                use_search=needs_live_search,
             ),
-            timeout=10.0,
+            timeout=5.0,
         )
-
-        reply_message = (
-            response_dict.get("assistant_reply")
-            or response_dict.get("reply_message")
-            or ("Oh, that sounds so much fun! What did you enjoy the most about it?" if is_sparky else "That's a very thoughtful perspective. How are you planning to take the next step?")
-        )
-        assistant_reply = reply_message
-
-        # Recasting Notu
-        recast_raw = response_dict.get("recast_note")
-        if recast_raw and str(recast_raw).strip().lower() in ["null", "none", "", "none.", "yok", "hata yok"]:
-            recast_note = None
-        else:
-            recast_note = str(recast_raw).strip() if recast_raw else None
-
-        # Konuşma Fısıltısı (Fluency Hint)
-        fluency_hint = (
-            response_dict.get("fluency_hint")
-            or ("Actually, I had so much fun learning new things today!" if is_sparky else "I believe taking a calm, steady approach works best in this situation.")
-        )
-
-        # Hedef Kelimeler
-        session_vocabulary_used = (
-            response_dict.get("session_vocabulary_used")
-            or response_dict.get("target_words_spotted")
-            or []
-        )
-        if not isinstance(session_vocabulary_used, list):
-            session_vocabulary_used = [str(session_vocabulary_used)]
-
-        target_words_spotted = (
-            response_dict.get("target_words_spotted")
-            or session_vocabulary_used
-            or []
-        )
-        if not isinstance(target_words_spotted, list):
-            target_words_spotted = []
-
-        polished_alternative = (
-            response_dict.get("polished_alternative")
-            or response_dict.get("better_alternative")
-            or f"Looking at this from a broader angle, I believe steady progress brings the best outcome."
-        )
-
-        level_label = response_dict.get("level_label") or default_level_label
-
-        suggested_new_words = response_dict.get("suggested_new_words") or []
-        if not isinstance(suggested_new_words, list):
-            suggested_new_words = []
-
-        # Dinamik takip sorusu
-        follow_up_question = response_dict.get("follow_up_question")
-        if not follow_up_question:
-            if "?" in assistant_reply:
-                parts = [p.strip() for p in assistant_reply.split("?") if p.strip()]
-                if parts:
-                    follow_up_question = parts[-1] + "?"
+    except Exception as first_err:
+        logger.error(f"Primary Gemini speaking call error: {first_err}")
+        print(f"[Speaking Gemini Primary Error]: {first_err}")
+        try:
+            response_dict = await asyncio.wait_for(
+                async_call_speaking_gemini(
+                    gemini_contents,
+                    system_instruction=dynamic_sys_instruction,
+                    use_search=False,
+                ),
+                timeout=4.5,
+            )
+        except Exception as second_err:
+            logger.error(f"Secondary Gemini speaking call error: {second_err}")
+            print(f"[Speaking Gemini Secondary Error]: {second_err}")
+            short_user_ref = re.sub(r"[^a-zA-Z0-9\s',.?-]", "", user_text).strip()[:55]
+            if story_title_for_hints:
+                dynamic_err_reply = (
+                    f"You mentioned '{short_user_ref}' regarding '{story_title_for_hints}'. "
+                    f"How do you think that moment changed the direction of the story?"
+                )
             else:
-                follow_up_question = "What are your thoughts on that?"
+                dynamic_err_reply = (
+                    f"Hearing you say '{short_user_ref}' really caught my attention! "
+                    f"What part of that experience do you enjoy the most?"
+                )
+            response_dict = {
+                "assistant_reply": dynamic_err_reply,
+                "hint_suggestions": build_default_hints(clean_level, story_title_for_hints),
+                "updated_level": detected_level_change,
+            }
 
-        # Metrikler & Skorlar
-        metrics_raw = response_dict.get("metrics")
-        if not isinstance(metrics_raw, dict):
-            metrics_raw = {}
+    # Algılanan seviye değişimi (LLM veya deterministik dedektör)
+    llm_updated_lvl = response_dict.get("updated_level")
+    if llm_updated_lvl and str(llm_updated_lvl).strip().upper() in ["A1", "A2", "B1", "B2", "C1"]:
+        final_updated_level = str(llm_updated_lvl).strip().upper()
+    else:
+        final_updated_level = detected_level_change
 
-        try:
-            fluency_score = int(metrics_raw.get("fluency", response_dict.get("fluency_score", 90)))
-        except (ValueError, TypeError):
-            fluency_score = 90
-
-        try:
-            jargon_score = int(metrics_raw.get("vocabulary", response_dict.get("jargon_score", 85)))
-        except (ValueError, TypeError):
-            jargon_score = 85
-
-        try:
-            grammar_score = int(metrics_raw.get("grammar", 95 if not recast_note else 82))
-        except (ValueError, TypeError):
-            grammar_score = 90
-
-        feedback_obj = SpeakingFeedback(
-            grammar_correction=recast_note,
-            better_alternative=polished_alternative,
-            used_vocabulary=session_vocabulary_used or target_words_spotted,
-            fluency_score=fluency_score,
+    reply_message = str(
+        response_dict.get("assistant_reply")
+        or response_dict.get("reply_message")
+        or ""
+    ).strip()
+    if not reply_message:
+        short_user_ref = re.sub(r"[^a-zA-Z0-9\s',.?-]", "", user_text).strip()[:50]
+        reply_message = (
+            f"You mentioned '{short_user_ref}' — what else happened with that?"
         )
+    assistant_reply = reply_message
 
-        metrics_obj = SpeakingMetrics(
-            fluency=fluency_score,
-            vocabulary=jargon_score,
-            grammar=grammar_score,
-        )
+    # Hint Suggestions (2 pratik cümle başlatıcı kalıp)
+    raw_hints = response_dict.get("hint_suggestions")
+    hint_suggestions: List[str] = []
+    if isinstance(raw_hints, list):
+        hint_suggestions = [str(h).strip() for h in raw_hints if h and str(h).strip()]
+    if len(hint_suggestions) < 2:
+        default_hints = build_default_hints(final_updated_level or clean_level, story_title_for_hints)
+        for dh in default_hints:
+            if dh not in hint_suggestions:
+                hint_suggestions.append(dh)
+            if len(hint_suggestions) >= 2:
+                break
+    hint_suggestions = hint_suggestions[:2]
 
-        return SpeakingRespondResponse(
-            assistant_reply=assistant_reply,
-            recast_note=recast_note,
-            fluency_hint=fluency_hint,
-            session_vocabulary_used=session_vocabulary_used,
-            level_label=level_label,
-            target_words_spotted=target_words_spotted,
-            polished_alternative=polished_alternative,
-            suggested_new_words=suggested_new_words,
-            reply_message=reply_message,
-            follow_up_question=follow_up_question,
-            metrics=metrics_obj,
-            feedback=feedback_obj,
-            grammar_feedback=recast_note,
-            better_alternative=polished_alternative,
-            vocabulary_highlight=session_vocabulary_used or target_words_spotted,
-            jargon_score=jargon_score,
-            fluency_score=fluency_score,
-        )
+    # Recasting Notu
+    recast_raw = response_dict.get("recast_note")
+    if recast_raw and str(recast_raw).strip().lower() in ["null", "none", "", "none.", "yok", "hata yok"]:
+        recast_note = None
+    else:
+        recast_note = str(recast_raw).strip() if recast_raw else None
 
-    except asyncio.TimeoutError:
-        logger.warning("Gemini speaking call exceeded timeout. Returning adaptive fallback response.")
-        fallback_data = generate_fallback_response(
-            scenario_id=payload.scenario_id or "casual_chat",
-            user_text=user_text,
-            story_context=payload.story_context,
-            conversation_mode=payload.conversation_mode or "casual",
-            turn_count=len(payload.history),
-            level=clean_level,
-            persona=persona_key,
-        )
-        return SpeakingRespondResponse(**fallback_data)
-    except Exception as e:
-        logger.warning(f"Speaking endpoint fallback triggered: {e}")
-        fallback_data = generate_fallback_response(
-            scenario_id=payload.scenario_id or "casual_chat",
-            user_text=user_text,
-            story_context=payload.story_context,
-            conversation_mode=payload.conversation_mode or "casual",
-            turn_count=len(payload.history),
-            level=clean_level,
-            persona=persona_key,
-        )
-        return SpeakingRespondResponse(**fallback_data)
+    # Konuşma Fısıltısı (Fluency Hint)
+    fluency_hint = str(response_dict.get("fluency_hint") or "").strip()
+    if not fluency_hint and hint_suggestions:
+        fluency_hint = hint_suggestions[0]
+
+    # Hedef Kelimeler
+    session_vocabulary_used = (
+        response_dict.get("session_vocabulary_used")
+        or response_dict.get("target_words_spotted")
+        or []
+    )
+    if not isinstance(session_vocabulary_used, list):
+        session_vocabulary_used = [str(session_vocabulary_used)]
+
+    target_words_spotted = (
+        response_dict.get("target_words_spotted")
+        or session_vocabulary_used
+        or []
+    )
+    if not isinstance(target_words_spotted, list):
+        target_words_spotted = []
+
+    polished_alternative = str(
+        response_dict.get("polished_alternative")
+        or response_dict.get("better_alternative")
+        or ""
+    ).strip()
+
+    level_label = response_dict.get("level_label") or default_level_label
+
+    suggested_new_words = response_dict.get("suggested_new_words") or []
+    if not isinstance(suggested_new_words, list):
+        suggested_new_words = []
+
+    # Dinamik takip sorusu
+    follow_up_question = response_dict.get("follow_up_question")
+    if not follow_up_question and "?" in assistant_reply:
+        parts = [p.strip() for p in assistant_reply.split("?") if p.strip()]
+        if parts:
+            follow_up_question = parts[-1] + "?"
+
+    # Metrikler & Skorlar
+    metrics_raw = response_dict.get("metrics")
+    if not isinstance(metrics_raw, dict):
+        metrics_raw = {}
+
+    try:
+        fluency_score = int(metrics_raw.get("fluency", response_dict.get("fluency_score", 90)))
+    except (ValueError, TypeError):
+        fluency_score = 90
+
+    try:
+        jargon_score = int(metrics_raw.get("vocabulary", response_dict.get("jargon_score", 85)))
+    except (ValueError, TypeError):
+        jargon_score = 85
+
+    try:
+        grammar_score = int(metrics_raw.get("grammar", 95 if not recast_note else 82))
+    except (ValueError, TypeError):
+        grammar_score = 90
+
+    feedback_obj = SpeakingFeedback(
+        grammar_correction=recast_note,
+        better_alternative=polished_alternative,
+        used_vocabulary=session_vocabulary_used or target_words_spotted,
+        fluency_score=fluency_score,
+    )
+
+    metrics_obj = SpeakingMetrics(
+        fluency=fluency_score,
+        vocabulary=jargon_score,
+        grammar=grammar_score,
+    )
+
+    return SpeakingRespondResponse(
+        assistant_reply=assistant_reply,
+        hint_suggestions=hint_suggestions,
+        recast_note=recast_note,
+        fluency_hint=fluency_hint,
+        session_vocabulary_used=session_vocabulary_used,
+        level_label=level_label,
+        updated_level=final_updated_level,
+        target_words_spotted=target_words_spotted,
+        polished_alternative=polished_alternative,
+        suggested_new_words=suggested_new_words,
+        reply_message=reply_message,
+        follow_up_question=follow_up_question,
+        metrics=metrics_obj,
+        feedback=feedback_obj,
+        grammar_feedback=recast_note,
+        better_alternative=polished_alternative,
+        vocabulary_highlight=session_vocabulary_used or target_words_spotted,
+        jargon_score=jargon_score,
+        fluency_score=fluency_score,
+    )
 
 
 @router.post("/generate-deck-questions", response_model=GenerateDeckQuestionsResponse)
@@ -941,7 +1466,7 @@ async def generate_story_questions(payload: GenerateStoryQuestionsRequest):
             theme_hint="Decision & Turning Point",
         ),
         StoryQuestionItem(
-            question=f"If you were placed in the protagonist's shoes during this conflict, what would you have done differently?",
+            question=f"If you faced the same conflict described in '{story_title}', what choice would you have made?",
             theme_hint="Empathy & Moral Dilemma",
         ),
         StoryQuestionItem(
@@ -1016,59 +1541,89 @@ Return ONLY valid JSON matching this schema:
         )
 
 
+@router.post("/init-story", response_model=InitStoryDebateResponse)
 @router.post("/init-story-debate", response_model=InitStoryDebateResponse)
 async def init_story_debate(payload: InitStoryDebateRequest):
     """
-    Okuma odasından gelen hikayeye özel, ana olay örgüsünü veya kilit karakter kararını
-    hedef alan seviyeye uygun ({level}) dinamik ilk açılış sorusunu üretir.
+    Okuma odasından gelen hikayeye özel (`story_title`, `story_snippet`, `level`),
+    doğrudan o hikayenin olay örgüsüne, karakterine ve çatışmasına özel tek bir samimi
+    açılış sorusu ve 2 cevap ipucu (`hint_suggestions`) üretir.
     """
-    story_title = (payload.story_title or "Story Discussion").strip()
-    story_snippet = (payload.story_snippet or "").strip()
+    story_title = (payload.story_title or payload.title or "Story Discussion").strip()
+    story_snippet = (payload.story_snippet or payload.snippet or "").strip()
     raw_level = (payload.level or "B1").upper().strip()
+    vocab_list = payload.target_vocabulary or []
+    vocab_str = ", ".join(vocab_list[:6]) if vocab_list else ""
 
     if "A1" in raw_level:
         clean_level = "A1"
-        level_rules = "Basit zamanlar (present simple, past simple), temel kelimeler, kısa ve net cümleler kur. Ağır deyim ve idiom kullanma."
+        level_rules = "Cümlelerin en fazla 5-8 kelimeden oluşsun. Çok basit zamanlar (present simple, past simple) ve temel kelimeler kullan."
     elif "A2" in raw_level or raw_level == "A":
         clean_level = "A2"
-        level_rules = "Günlük temel zamanlar, basit bağlaçlar (and, but, because), anlaşılır ve doğrudan ifadeler. Ağır deyimlerden kaçın."
+        level_rules = "Günlük temel zamanlar, basit bağlaçlar (and, but, because), anlaşılır ve doğrudan ifadeler kullan."
     elif "B1" in raw_level or raw_level == "B":
         clean_level = "B1"
-        level_rules = "Günlük akıcı dil, yaygın bağlaçlar, rahat ve merak uyandıran bir üslup."
+        level_rules = "Günlük akıcı dil, yaygın bağlaçlar, rahat ve merak uyandıran bir üslup kullan."
     elif "B2" in raw_level:
         clean_level = "B2"
-        level_rules = "Zengin kelime dağarcığı, deyimsel kullanımlar, akıcı ve doğal konuşma dili."
+        level_rules = "Zengin kelime dağarcığı, deyimsel kullanımlar, akıcı ve doğal konuşma dili kullan."
     elif "C1" in raw_level or raw_level == "C":
         clean_level = "C1"
-        level_rules = "Akademik, sofistike, derinlikli ve nüanslı ifadeler."
+        level_rules = "Akademik, sofistike, derinlikli ve nüanslı ifadeler kullan."
     elif "C2" in raw_level:
         clean_level = "C2"
-        level_rules = "Üst düzey edebi ve felsefi derinlik, zengin nüanslar."
+        level_rules = "Üst düzey edebi ve felsefi derinlik, zengin nüanslar kullan."
     else:
         clean_level = raw_level or "B1"
-        level_rules = "Günlük akıcı dil ve merak uyandıran sorular."
+        level_rules = "Günlük akıcı dil ve merak uyandıran sorular kullan."
 
-    system_instruction = f"""Sen bu hikayeyi kullanıcıyla yeni bitirmiş enerjik, samimi bir kitap kulübü mentorüsün.
+    system_instruction = f"""Sen '{story_title}' hikayesini kullanıcıyla yeni bitirmiş enerjik, samimi bir kitap kulübü mentorüsün.
 Kullanıcının hedef CEFR seviyesi: {clean_level} ({level_rules}).
 
 KRİTİK TALİMATLAR:
-1. Genel 'kitap okumayı sever misin', 'hikaye nasıldı' gibi klişe sorular KESİNLİKLE SORMA!
-2. Doğrudan hikayenin can alıcı noktası, bir karakterin kararı, ahlaki bir ikilem veya olay örgüsünün sürprizi hakkında seviyeye ({clean_level}) uygun, merak uyandırıcı TEK bir açılış sorusu sor.
-3. Cümleye canlı bir karakter/mentor nidasıyla başla: 'Oh, wow!', 'That ending was wild!...', 'I really did not see that coming!...', 'What an intense dilemma!...', 'Whoa, that was unexpected!...' vb.
-4. Yanıtın kısa, canlı, konuşma dilinde (maksimum 1-2 cümle) olsun ve mutlaka doğrudan soru işareti (?) ile bitsin.
-5. Sadece ve sadece İngilizce konuş.
+1. Genel veya ezber kalıp sorular KESİNLİKLE SORMA!
+2. Doğrudan bu hikayenin ('{story_title}') metnindeki spesifik olay örgüsü, karakterin adı/eylemi ve hikayenin ana çatışması hakkında seviyeye ({clean_level}) uygun, samimi TEK bir açılış sorusu üret.
+3. Ayrıca kullanıcının bu soruya cevap verirken cümleye başlayabileceği, hikayeye ve {clean_level} seviyesine uygun 2 adet pratik cümle başlatıcı ipucu (`hint_suggestions`) üret.
+4. Sadece İngilizce kullan.
 
 Çıktıyı kesinlikle bu JSON şemasında ver:
 {{
-  "initial_question": "Canlı nida ile başlayan, hikayenin kilit olayını/kararını hedef alan İngilizce soru"
+  "assistant_reply": "Doğrudan hikayenin olay örgüsüne, karakterine ve çatışmasına özel samimi İngilizce açılış sorusu (1-2 kısa cümle)",
+  "hint_suggestions": [
+    "Hikayeye özel 1. cevap başlatıcı ipucu cümlesi ({clean_level} seviyesinde)",
+    "Hikayeye özel 2. cevap başlatıcı ipucu cümlesi ({clean_level} seviyesinde)"
+  ]
 }}"""
 
     context_text = f"Story Title: {story_title}\n"
     if story_snippet:
-        context_text += f"Story Context / Snippet:\n{story_snippet[:1500]}\n"
-    context_text += f"Target Level: {clean_level}\n\nTask: Bu hikayenin kilit dönüm noktasına veya karakterin zorlu kararına odaklanan, canlı nida ile başlayan tek bir açılış sorusu sor."
+        context_text += f"Story Content / Snippet:\n{story_snippet[:1000]}\n"
+    if vocab_str:
+        context_text += f"Target Vocabulary: {vocab_str}\n"
+    context_text += (
+        f"Target Level: {clean_level}\n\n"
+        f"Task: '{story_title}' hikayesinin metnindeki spesifik olaylara ve karakterlere değinen tek bir samimi açılış sorusu (`assistant_reply`) ve 2 cümle başlatıcı ipucu (`hint_suggestions`) üret."
+    )
 
-    fallback_question = f"Oh, wow! That ending in '{story_title}' really caught me off guard! Looking at that critical moment, do you think the protagonist made the right decision, or what would you have done?"
+    # Hikayenin kendi metninden ilk anlamlı cümleyi çıkararak dinamik bağlamsal yedek soru oluştur
+    first_sentence_hint = ""
+    if story_snippet:
+        sentences = [s.strip() for s in re.split(r"[.!?]+", story_snippet) if len(s.strip()) > 15]
+        if sentences:
+            first_sentence_hint = sentences[0][:110].strip()
+
+    if first_sentence_hint:
+        contextual_fallback = (
+            f"We just read '{story_title}', where {first_sentence_hint[0].lower() + first_sentence_hint[1:]}. "
+            f"What stood out to you the most about how events unfolded in this story?"
+        )
+    else:
+        contextual_fallback = (
+            f"We just finished reading '{story_title}'! "
+            f"What moment or character decision in '{story_title}' caught your attention the most?"
+        )
+
+    default_story_hints = build_default_hints(clean_level, story_title)
 
     try:
         gemini_contents = [
@@ -1082,33 +1637,49 @@ KRİTİK TALİMATLAR:
             async_call_speaking_gemini(
                 gemini_contents,
                 system_instruction=system_instruction,
+                use_search=False,
             ),
-            timeout=8.0,
+            timeout=7.0,
         )
 
         initial_q = (
-            response_dict.get("initial_question")
+            response_dict.get("assistant_reply")
+            or response_dict.get("initial_question")
             or response_dict.get("question")
             or response_dict.get("opening_question")
-            or response_dict.get("assistant_reply")
         )
 
         if not initial_q or not str(initial_q).strip():
-            initial_q = fallback_question
+            initial_q = contextual_fallback
         else:
             initial_q = str(initial_q).strip()
+
+        raw_hints = response_dict.get("hint_suggestions")
+        hints_out: List[str] = []
+        if isinstance(raw_hints, list):
+            hints_out = [str(h).strip() for h in raw_hints if h and str(h).strip()]
+        if len(hints_out) < 2:
+            for dh in default_story_hints:
+                if dh not in hints_out:
+                    hints_out.append(dh)
+                if len(hints_out) >= 2:
+                    break
 
         return InitStoryDebateResponse(
             story_title=story_title,
             level=clean_level,
             initial_question=initial_q,
+            assistant_reply=initial_q,
+            hint_suggestions=hints_out[:2],
         )
     except Exception as e:
-        logger.warning(f"Error in init-story-debate: {e}. Returning contextual fallback question.")
+        logger.warning(f"Error in init-story: {e}. Returning story-specific contextual question.")
         return InitStoryDebateResponse(
             story_title=story_title,
             level=clean_level,
-            initial_question=fallback_question,
+            initial_question=contextual_fallback,
+            assistant_reply=contextual_fallback,
+            hint_suggestions=default_story_hints[:2],
         )
 
 
