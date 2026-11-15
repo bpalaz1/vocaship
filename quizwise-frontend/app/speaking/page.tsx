@@ -328,19 +328,24 @@ function SpeakingContent() {
     return `Hey${firstName}! Great to see you. What has been the highlight of your day so far?`;
   }, [activeStoryTitle, storyOpeningQuestion, syncedProfile.displayName]);
 
-  // 🎯 Hedef Kelime Avcısı (Target Word Hunter)
+  // 🎯 Hedef Kelime Avcısı (Yalnızca Hikaye Modunda Göster)
   const targetWordsList = useMemo<string[]>(() => {
+    if (!isExplicitStoryMode || !storyContext) {
+      return [];
+    }
     const rawStoryWords =
-      storyContext?.targetWords || storyContext?.target_words || storyContext?.target_vocabulary || [];
+      storyContext.targetWords || storyContext.target_words || storyContext.target_vocabulary || [];
     const normalizedStory: string[] = rawStoryWords
       .map((w: any) => (typeof w === "string" ? w : w?.word || ""))
       .map((w: string) => w.trim())
       .filter(Boolean);
-    if (normalizedStory.length > 0) {
-      return Array.from(new Set<string>(normalizedStory)).slice(0, 6);
-    }
-    return Array.from(new Set<string>(deckTargetWords.map((d) => d.word).filter(Boolean))).slice(0, 6);
-  }, [storyContext, deckTargetWords]);
+    return Array.from(new Set<string>(normalizedStory)).slice(0, 6);
+  }, [isExplicitStoryMode, storyContext]);
+
+  // Render Sunucusunu Arka Planda Uyandır (Cold Start Koruması)
+  useEffect(() => {
+    fetch(`${API_BASE}/health`).catch(() => {});
+  }, []);
 
   const huntedTargetWords = useMemo(() => {
     const combinedUserSpeech = [
@@ -816,7 +821,7 @@ function SpeakingContent() {
             latestInterimRef.current = "";
             startListening();
           }
-        }, 600);
+        }, 900);
       };
 
       // Metin uzunluğuna göre dinamik maksimum güvenlik zamanlayıcısı (Zero-Deadlock)
@@ -1011,15 +1016,12 @@ function SpeakingContent() {
       }));
 
       try {
-        const targetWordsToSend = Array.from(
-          new Set([
-            ...deckTargetWords.slice(0, 8).map((w) => w.word),
-            ...(storyContext?.target_vocabulary || []),
-          ])
-        );
+        const targetWordsToSend = activeStoryTitle
+          ? Array.from(new Set(storyContext?.targetWords || storyContext?.target_vocabulary || []))
+          : [];
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort("timeout"), 25000);
 
         let res: Response;
         try {
@@ -1105,19 +1107,37 @@ function SpeakingContent() {
         } catch {}
         throw new Error(errDetail);
       } catch (err) {
-        const errMessage = err instanceof Error ? err.message : "Sunucu bağlantı hatası";
-        console.warn("Speaking respond error:", errMessage);
+        const rawErr =
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+            ? `${err.name}: ${err.message}`
+            : "Sunucu bağlantı hatası";
+        const isAbortOrTimeout =
+          err === "timeout" ||
+          (err instanceof Error && err.name === "AbortError") ||
+          rawErr.toLowerCase().includes("abort") ||
+          rawErr.toLowerCase().includes("timeout");
+
+        console.warn("Speaking respond error:", rawErr);
         isAiSpeakingRef.current = false;
         isThinkingRef.current = false;
         setIsAiSpeaking(false);
         setIsThinking(false);
-        setMicError(errMessage);
+
+        if (isAbortOrTimeout) {
+          setMicError("Sunucu uyanıyor, tekrar deneyebilirsin...");
+        } else {
+          const cleanErr = err instanceof Error ? err.message : "Sunucu bağlantı hatası";
+          setMicError(cleanErr);
+        }
+
         if (sessionStateRef.current === "active") {
           setTimeout(() => {
             if (sessionStateRef.current === "active" && !isAiSpeakingRef.current) {
               startListening();
             }
-          }, 650);
+          }, 900);
         }
       } finally {
         setIsThinking(false);
