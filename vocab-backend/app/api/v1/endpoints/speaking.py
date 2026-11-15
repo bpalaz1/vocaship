@@ -606,7 +606,7 @@ SCENARIOS["kids_sparky"] = SCENARIOS["casual_sparky"]
 
 LIVE_SPEAKING_MODELS = [
     "gemini-2.5-flash-native-audio-latest",
-    "gemini-2.0-flash-exp",
+    "gemini-2.5-flash",
     "gemini-3.1-flash-live-preview",
     "gemini-3.8-live",
 ]
@@ -1163,7 +1163,7 @@ Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (mak
         )
 
     client = genai.Client(api_key=api_key)
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+    models_to_try = ["gemini-2.5-flash"]
     assistant_reply = ""
     last_error: Optional[Exception] = None
 
@@ -2100,7 +2100,7 @@ Return ONLY valid JSON matching this exact structure:
 Include 3 to 5 items in extracted_words. fluency_score must be an integer between 60 and 98."""
 
     client = genai.Client(api_key=api_key)
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+    models_to_try = ["gemini-2.5-flash"]
 
     for model_name in models_to_try:
         try:
