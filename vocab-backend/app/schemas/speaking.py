@@ -30,11 +30,16 @@ class SpeakingFeedback(BaseModel):
 
 class SpeakingRespondRequest(BaseModel):
     user_message: str = Field(default="", description="User spoken/written message")
+    message: Optional[str] = Field(default="", description="Optional alias for user message")
     transcript: Optional[str] = Field(default=None, description="Optional alias for user spoken transcript")
     user_transcript: Optional[str] = Field(default="", description="Spoken transcript from the user")
     history: Optional[List[Dict[str, Any]]] = Field(
         default=[],
         description="List of previous dialogue turns (e.g. [{'role': 'assistant', 'content': '...'}])",
+    )
+    messages: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Optional alias for conversation history turns",
     )
     persona: Optional[str] = Field(
         default="sparky",

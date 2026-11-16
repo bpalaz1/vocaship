@@ -28,10 +28,9 @@ import {
   GameWordPair,
 } from "../utils/activeDeckStore";
 import { saveSpeakingArchiveSession } from "../actions/speakingArchive";
+import { resilientFetch } from "../config";
 
-// Dinamik Backend API Adresi
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export interface DialogueTurn {
   role: "assistant" | "user";
@@ -278,6 +277,34 @@ function SpeakingContent() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechSessionRef = useRef<number>(0);
+
+  // Sayfa değiştiğinde veya bileşen ayrıldığında aktif sesleri ve dinlemeyi temizle
+  useEffect(() => {
+    return () => {
+      speechSessionRef.current += 1;
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (audioFailsafeTimerRef.current) clearTimeout(audioFailsafeTimerRef.current);
+      if (restartListenTimerRef.current) clearTimeout(restartListenTimerRef.current);
+      if (speechWatchIntervalRef.current) clearInterval(speechWatchIntervalRef.current);
+      if (audioRef.current) {
+        try {
+          audioRef.current.onended = null;
+          audioRef.current.onerror = null;
+          audioRef.current.pause();
+          audioRef.current.src = "";
+        } catch {}
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {}
+      }
+      try {
+        recognitionRef.current?.abort();
+      } catch {}
+    };
+  }, []);
 
   // Diyalog Geçmişi & Arşiv
   const [dialogue, setDialogue] = useState<DialogueTurn[]>([]);
@@ -317,7 +344,7 @@ function SpeakingContent() {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/speaking/init-story`, {
+        const res = await resilientFetch(`${API_BASE}/api/v1/speaking/init-story`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -371,7 +398,7 @@ function SpeakingContent() {
 
   // Render Sunucusunu Arka Planda Uyandır (Cold Start Koruması)
   useEffect(() => {
-    fetch(`${API_BASE}/docs`).catch(() => {});
+    fetch(`${API_BASE}/health`).catch(() => {});
   }, []);
 
   const huntedTargetWords = useMemo(() => {
@@ -798,18 +825,17 @@ function SpeakingContent() {
         } catch {}
       }
 
+      const sessionId = ++speechSessionRef.current;
       let hasFinishedTurn = false;
       let objectUrl: string | null = null;
-      const ttsAbortController = new AbortController();
-      const ttsTimeoutId = setTimeout(() => ttsAbortController.abort(), 1500);
+      let activeChunkAbort: AbortController | null = null;
 
       // 3 yönlü kilit açıcı: HTML5 audio onended/onerror, speechSynthesis onend/onerror veya maksimum güvenlik zamanlayıcısı
       const unlockAndListen = () => {
         if (hasFinishedTurn) return;
         hasFinishedTurn = true;
-        clearTimeout(ttsTimeoutId);
         try {
-          ttsAbortController.abort();
+          activeChunkAbort?.abort();
         } catch {}
 
         if (objectUrl) {
@@ -828,6 +854,8 @@ function SpeakingContent() {
           speechWatchIntervalRef.current = null;
         }
 
+        if (speechSessionRef.current !== sessionId) return;
+
         try {
           recognitionRef.current?.abort();
         } catch {}
@@ -842,17 +870,29 @@ function SpeakingContent() {
           clearTimeout(restartListenTimerRef.current);
         }
         restartListenTimerRef.current = setTimeout(() => {
-          if (sessionStateRef.current === "active" && !isAiSpeakingRef.current) {
+          if (
+            speechSessionRef.current === sessionId &&
+            sessionStateRef.current === "active" &&
+            !isAiSpeakingRef.current
+          ) {
             transcriptBufferRef.current = "";
             currentSessionFinalRef.current = "";
             latestInterimRef.current = "";
             startListening();
           }
-        }, 900);
+        }, 700);
       };
 
+      // Metni cümle parçalarına böl ve onended ile sıralı oynat (sequential player)
+      const rawChunks = clean.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) || [clean];
+      const chunks = rawChunks.map((c) => c.trim()).filter(Boolean);
+      if (chunks.length === 0) {
+        unlockAndListen();
+        return;
+      }
+
       // Metin uzunluğuna göre dinamik maksimum güvenlik zamanlayıcısı (Zero-Deadlock)
-      const safetyMs = Math.max(4000, clean.length * 85);
+      const safetyMs = Math.max(6000, clean.length * 105);
       audioFailsafeTimerRef.current = setTimeout(() => {
         unlockAndListen();
       }, safetyMs);
@@ -860,111 +900,137 @@ function SpeakingContent() {
       const storedVoice =
         typeof window !== "undefined" ? localStorage.getItem("vocaship_neural_voice") : null;
       const targetVoice = storedVoice || "en-US-JennyNeural";
-      const streamUrl = `${API_BASE}/api/v1/tts/stream?text=${encodeURIComponent(
-        clean
-      )}&voice=${encodeURIComponent(targetVoice)}&rate=-2%`;
 
-      let fallbackTriggered = false;
-
-      // Tarayıcı yerleşik ses motoru fallback
-      const playBrowserSpeechFallback = () => {
-        if (fallbackTriggered || hasFinishedTurn) return;
-        fallbackTriggered = true;
-
-        if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      const playChunkAt = (chunkIndex: number) => {
+        if (hasFinishedTurn || speechSessionRef.current !== sessionId) return;
+        if (chunkIndex >= chunks.length) {
           unlockAndListen();
           return;
         }
 
-        try {
-          // Chrome kilitlenme bug'ını önlemek için önce kuyruğu temizle
-          window.speechSynthesis.cancel();
+        const chunkText = chunks[chunkIndex];
+        let chunkAdvanced = false;
+        const advanceNext = () => {
+          if (chunkAdvanced || hasFinishedTurn || speechSessionRef.current !== sessionId) return;
+          chunkAdvanced = true;
+          if (speechWatchIntervalRef.current) {
+            clearInterval(speechWatchIntervalRef.current);
+            speechWatchIntervalRef.current = null;
+          }
+          if (objectUrl) {
+            try {
+              URL.revokeObjectURL(objectUrl);
+            } catch {}
+            objectUrl = null;
+          }
+          playChunkAt(chunkIndex + 1);
+        };
 
-          const utterance = new SpeechSynthesisUtterance(clean);
-          utteranceRef.current = utterance;
-          const targetLang = targetVoice.includes("en-GB") ? "en-GB" : "en-US";
-          utterance.lang = targetLang;
-          utterance.rate = 0.95;
-
-          const voices = window.speechSynthesis.getVoices();
-          if (voices && voices.length > 0) {
-            const preferred =
-              voices.find(
-                (v) =>
-                  v.lang.startsWith(targetLang) &&
-                  (v.name.includes("Natural") ||
-                    v.name.includes("Jenny") ||
-                    v.name.includes("Aria") ||
-                    v.name.includes("Google"))
-              ) ||
-              voices.find((v) => v.lang.startsWith(targetLang)) ||
-              voices.find((v) => v.lang.startsWith("en"));
-            if (preferred) {
-              utterance.voice = preferred;
-            }
+        const playBrowserChunkFallback = () => {
+          if (chunkAdvanced || hasFinishedTurn || speechSessionRef.current !== sessionId) return;
+          if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+            advanceNext();
+            return;
           }
 
-          utterance.onend = () => unlockAndListen();
-          utterance.onerror = () => unlockAndListen();
-          window.speechSynthesis.speak(utterance);
+          try {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(chunkText);
+            utteranceRef.current = utterance;
+            const targetLang = targetVoice.includes("en-GB") ? "en-GB" : "en-US";
+            utterance.lang = targetLang;
+            utterance.rate = 0.90;
 
-          let startedSpeaking = false;
-          let ticks = 0;
-          speechWatchIntervalRef.current = setInterval(() => {
-            ticks++;
-            if (window.speechSynthesis.speaking) {
-              startedSpeaking = true;
-            } else if (startedSpeaking || ticks > 8) {
-              unlockAndListen();
+            const voices = window.speechSynthesis.getVoices();
+            if (voices && voices.length > 0) {
+              const preferred =
+                voices.find(
+                  (v) =>
+                    v.lang.startsWith(targetLang) &&
+                    (v.name.includes("Natural") ||
+                      v.name.includes("Jenny") ||
+                      v.name.includes("Aria") ||
+                      v.name.includes("Google"))
+                ) ||
+                voices.find((v) => v.lang.startsWith(targetLang)) ||
+                voices.find((v) => v.lang.startsWith("en"));
+              if (preferred) {
+                utterance.voice = preferred;
+              }
             }
-          }, 250);
-        } catch {
-          unlockAndListen();
-        }
+
+            utterance.onend = () => advanceNext();
+            utterance.onerror = () => advanceNext();
+            window.speechSynthesis.speak(utterance);
+
+            let startedSpeaking = false;
+            let ticks = 0;
+            if (speechWatchIntervalRef.current) clearInterval(speechWatchIntervalRef.current);
+            speechWatchIntervalRef.current = setInterval(() => {
+              ticks++;
+              if (window.speechSynthesis.speaking) {
+                startedSpeaking = true;
+              } else if (startedSpeaking || ticks > 10) {
+                advanceNext();
+              }
+            }, 250);
+          } catch {
+            advanceNext();
+          }
+        };
+
+        const streamUrl = `${API_BASE}/api/v1/tts/stream?text=${encodeURIComponent(
+          chunkText
+        )}&voice=${encodeURIComponent(targetVoice)}&rate=-2%`;
+        const chunkAbortController = new AbortController();
+        activeChunkAbort = chunkAbortController;
+        const chunkTimeoutId = setTimeout(() => chunkAbortController.abort(), 1500);
+
+        fetch(streamUrl, { signal: chunkAbortController.signal })
+          .then(async (res) => {
+            clearTimeout(chunkTimeoutId);
+            if (!res.ok) {
+              throw new Error(`TTS HTTP ${res.status}`);
+            }
+            const blob = await res.blob();
+            if (hasFinishedTurn || speechSessionRef.current !== sessionId) return;
+            if (!blob || blob.size === 0) {
+              throw new Error("Empty TTS audio blob");
+            }
+
+            objectUrl = URL.createObjectURL(blob);
+            const audio = new Audio(objectUrl);
+            audioRef.current = audio;
+
+            audio.onplay = () => {
+              if (speechSessionRef.current !== sessionId) return;
+              isAiSpeakingRef.current = true;
+              setIsAiSpeaking(true);
+              try {
+                recognitionRef.current?.abort();
+              } catch {}
+              recognitionRef.current = null;
+              stopListening();
+            };
+
+            audio.onended = () => advanceNext();
+            audio.onerror = () => {
+              console.warn("Nöral TTS oynatılamadı, tarayıcı ses motoruna geçiliyor.");
+              playBrowserChunkFallback();
+            };
+
+            await audio.play();
+          })
+          .catch(() => {
+            clearTimeout(chunkTimeoutId);
+            if (!hasFinishedTurn && speechSessionRef.current === sessionId) {
+              console.warn("Nöral TTS yanıt vermedi, tarayıcı ses motoruna geçiliyor.");
+              playBrowserChunkFallback();
+            }
+          });
       };
 
-      // 1. Aşama: Maksimum 1500 ms zaman aşımı ile backend nöral TTS'i dene
-      fetch(streamUrl, { signal: ttsAbortController.signal })
-        .then(async (res) => {
-          clearTimeout(ttsTimeoutId);
-          if (!res.ok) {
-            throw new Error(`TTS HTTP ${res.status}`);
-          }
-          const blob = await res.blob();
-          if (hasFinishedTurn) return;
-          if (!blob || blob.size === 0) {
-            throw new Error("Empty TTS audio blob");
-          }
-
-          objectUrl = URL.createObjectURL(blob);
-          const audio = new Audio(objectUrl);
-          audioRef.current = audio;
-
-          audio.onplay = () => {
-            isAiSpeakingRef.current = true;
-            setIsAiSpeaking(true);
-            try {
-              recognitionRef.current?.abort();
-            } catch {}
-            recognitionRef.current = null;
-            stopListening();
-          };
-
-          audio.onended = () => unlockAndListen();
-          audio.onerror = () => {
-            console.warn("Nöral TTS oynatılamadı, tarayıcı ses motoruna geçiliyor.");
-            playBrowserSpeechFallback();
-          };
-
-          await audio.play();
-        })
-        .catch(() => {
-          clearTimeout(ttsTimeoutId);
-          if (!hasFinishedTurn) {
-            console.warn("Nöral TTS yanıt vermedi (1.5s/hata), tarayıcı ses motoruna geçiliyor.");
-            playBrowserSpeechFallback();
-          }
-        });
+      playChunkAt(0);
     },
     [stopListening, startListening]
   );
@@ -1396,7 +1462,7 @@ function SpeakingContent() {
         : `${API_BASE}/api/v1/decks`;
 
       const [summaryRes, decksRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/speaking/summary`, {
+        resilientFetch(`${API_BASE}/api/v1/speaking/summary`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1405,7 +1471,7 @@ function SpeakingContent() {
             story_title: activeStoryTitle,
           }),
         }).catch(() => null),
-        fetch(decksUrl).catch(() => null),
+        resilientFetch(decksUrl).catch(() => null),
       ]);
 
       let finalSummary: SpeakingSummaryData = localFallbackSummary;
@@ -1471,7 +1537,7 @@ function SpeakingContent() {
         if (existingPractice) {
           targetDeckId = existingPractice.id;
         } else {
-          const createRes = await fetch(`${API_BASE}/api/v1/decks`, {
+          const createRes = await resilientFetch(`${API_BASE}/api/v1/decks`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1492,7 +1558,7 @@ function SpeakingContent() {
 
       let savedCount = 0;
       for (const item of chosenWords) {
-        const res = await fetch(`${API_BASE}/api/v1/decks/cards`, {
+        const res = await resilientFetch(`${API_BASE}/api/v1/decks/cards`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

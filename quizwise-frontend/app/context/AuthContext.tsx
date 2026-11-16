@@ -40,7 +40,7 @@ export const AUTH_USER_STORAGE_KEY = "vorego_auth_user";
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getAuthEndpoint(path: "login" | "register" | "upgrade-pro"): string {
-  const cleaned = (API_BASE || "http://localhost:8000").replace(/\/+$/, "");
+  const cleaned = (API_BASE || process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com").replace(/\/+$/, "");
   if (cleaned.endsWith("/api/v1")) {
     return `${cleaned}/auth/${path}`;
   }

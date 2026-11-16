@@ -845,7 +845,7 @@ export default function StoryReader({
 
             // 1. Önce Backend Nöral TTS (/api/v1/tts/stream) isteğini 1.5 saniyelik AbortController timeout ile dene
             const encodedText = encodeURIComponent(sentenceText);
-            const baseUrl = API_BASE || "http://127.0.0.1:8000";
+            const baseUrl = API_BASE;
             const streamUrl = `${baseUrl}/api/v1/tts/stream?text=${encodedText}&voice=${encodeURIComponent(
                 voice
             )}&rate=${encodeURIComponent(rateStr)}`;

@@ -73,3 +73,22 @@ app.include_router(tts.router, prefix="/tts", tags=["TTS"])
 @app.get("/")
 async def root():
     return {"message": "Vocaship Backend Calisiyor"}
+
+
+@app.get("/health")
+async def root_health_check():
+    return {"status": "ok"}
+
+
+app.openapi()
+for _route_obj in list(app.routes):
+    if not hasattr(_route_obj, "path"):
+        _ctx = getattr(_route_obj, "include_context", None)
+        _prefix = getattr(_ctx, "prefix", "") if _ctx else ""
+        try:
+            setattr(_route_obj, "path", _prefix or "")
+        except Exception:
+            pass
+        for _cand in getattr(_route_obj, "_effective_candidates", []) or []:
+            if hasattr(_cand, "path") and _cand not in app.routes:
+                app.routes.append(_cand)

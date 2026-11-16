@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Copy, Check, Share2, Users, Sparkles, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { API_BASE, resilientFetch } from "../config";
 
 export interface ShareModalProps {
     isOpen: boolean;
@@ -60,7 +61,7 @@ export default function ShareModal({
                     data: data || null,
                 };
 
-                const res = await fetch("http://localhost:8000/api/v1/share/create", {
+                const res = await resilientFetch(`${API_BASE}/api/v1/share/create`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),

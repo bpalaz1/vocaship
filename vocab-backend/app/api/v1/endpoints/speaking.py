@@ -950,7 +950,11 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
     raw_history = (
         payload.conversation_history
         if payload.conversation_history is not None and len(payload.conversation_history) > 0
-        else (payload.history or [])
+        else (
+            payload.history
+            if payload.history is not None and len(payload.history) > 0
+            else (payload.messages or [])
+        )
     )
 
     if len(raw_history) == 0:
@@ -962,6 +966,7 @@ async def respond_to_speech(payload: SpeakingRespondRequest, request: Request):
     scenario = SCENARIOS.get(payload.scenario_id, SCENARIOS.get("project_control"))
     user_text = (
         payload.user_message
+        or getattr(payload, "message", None)
         or payload.transcript
         or payload.user_transcript
         or ""
@@ -1154,38 +1159,41 @@ Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (mak
         story_title_for_hints = payload.story_context.get("title")
 
     assistant_reply = ""
+    response_dict: Dict[str, Any] = {}
     try:
         raw_text = await async_get_working_gemini_response(
             prompt=user_turn_prompt,
             json_mode=False,
             system_instruction=dynamic_sys_instruction,
             contents=gemini_contents,
-            timeout_seconds=10.0,
+            timeout_seconds=18.0,
         )
         if raw_text:
-            if raw_text.startswith("{") or raw_text.startswith("```"):
-                parsed = parse_flexible_speaking_response(raw_text)
-                candidate = str(
-                    parsed.get("assistant_reply")
-                    or parsed.get("reply_message")
-                    or ""
-                ).strip()
-                assistant_reply = candidate or raw_text
-            else:
-                assistant_reply = raw_text
-    except Exception as gemini_err:
-        err_msg = str(gemini_err)
-        logger.error(f"All Gemini speaking models failed: {err_msg}")
+            try:
+                response_dict = parse_flexible_speaking_response(raw_text)
+            except Exception:
+                response_dict = {"assistant_reply": raw_text.strip()}
+            candidate = str(
+                response_dict.get("assistant_reply")
+                or response_dict.get("reply_message")
+                or ""
+            ).strip()
+            assistant_reply = candidate or raw_text.strip()
+    except Exception as e:
+        err_detail = f"Gemini API Hatası ({type(e).__name__}): {str(e)}"
+        logger.error(f"All Gemini speaking models failed: {err_detail}")
         raise HTTPException(
             status_code=502,
-            detail=f"Gemini API Hatası: {err_msg}",
+            detail=err_detail,
         )
 
     if not assistant_reply:
         raise HTTPException(
             status_code=502,
-            detail="Gemini API Hatası: Boş yanıt döndü.",
+            detail="Gemini API Hatası (ValueError): Model boş yanıt döndürdü.",
         )
+
+    reply_message = assistant_reply
 
     final_updated_level = detected_level_change
     hint_suggestions = build_default_hints(final_updated_level or clean_level, story_title_for_hints)[:2]

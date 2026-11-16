@@ -70,7 +70,7 @@ function ClassroomContent() {
   const { user } = useAuth();
 
   const currentUserId = userProfile?.id || "00000000-0000-0000-0000-000000000001";
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com").replace(/\/+$/, "");
 
   // PRO Yetki Kontrolü
   const isUserPro =

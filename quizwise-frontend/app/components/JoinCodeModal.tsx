@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { X, ArrowRight, Loader2, KeyRound, AlertCircle, Sparkles } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { API_BASE, resilientFetch } from "../config";
 
 interface JoinCodeModalProps {
     isOpen: boolean;
@@ -37,7 +38,7 @@ export default function JoinCodeModal({ isOpen, onClose, onJoinSuccess }: JoinCo
         setError(null);
 
         try {
-            const res = await fetch(`http://localhost:8000/api/v1/share/${encodeURIComponent(trimmed)}`);
+            const res = await resilientFetch(`${API_BASE}/api/v1/share/${encodeURIComponent(trimmed)}`);
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.detail || t("error_connection_failed", "Geçersiz veya süresi dolmuş katılım kodu."));

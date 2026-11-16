@@ -37,10 +37,8 @@ router.include_router(folders_router, prefix="/folders", tags=["Folders"])
 router.include_router(share_router, tags=["Share & Classroom Code"])
 router.include_router(gamification_router, prefix="/gamification", tags=["Gamification & XP"])
 router.include_router(classroom_router, prefix="/classroom", tags=["Classroom & Teacher"])
-router.include_router(speaking_router, prefix="/speaking", tags=["Speaking Lounge"])
 router.include_router(avatar_router, prefix="/avatar", tags=["Avatar Studio"])
 router.include_router(translate_router, prefix="/translate", tags=["Live Translator"])
-router.include_router(tts_router, prefix="/tts", tags=["Neural TTS & Emotion Voice"])
 router.include_router(career_hubs_router, tags=["Specialized Career Hubs"])
 
 
