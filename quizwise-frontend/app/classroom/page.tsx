@@ -361,18 +361,33 @@ function ClassroomContent() {
                     {t("cls_empty_hdr", "🎓 Sınıflarım")}
                   </h2>
                   <p className={`text-sm leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-                    {t("cls_empty_desc", "Henüz aktif bir sınıfınız bulunmuyor. Derslerinizi yönetmek, materyal paylaşmak ve akıllı tahtayı kullanmak için ilk sınıfınızı oluşturun.")}
+                    {t("cls_empty_zero_desc", "Henüz aktif bir sınıfınız yok. Yeni sınıf oluşturabilir veya PIN ile bir derse katılabilirsiniz.")}
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleOpenCreateClass}
-                  className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm sm:text-base flex items-center gap-2.5 shadow-xl shadow-indigo-600/35 hover:scale-105 active:scale-95 transition cursor-pointer ring-4 ring-indigo-500/20 animate-pulse"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span>{t("cls_new_btn", "+ Yeni Sınıf Oluştur")}</span>
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateClass}
+                    className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm flex items-center gap-2.5 shadow-xl shadow-indigo-600/35 hover:scale-105 active:scale-95 transition cursor-pointer"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>{t("cls_new_btn", "+ Yeni Sınıf Oluştur")}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowJoinPinModal(true)}
+                    className={`px-5 py-3.5 rounded-2xl border font-bold text-sm flex items-center gap-2 transition hover:scale-105 active:scale-95 cursor-pointer ${
+                      isDark
+                        ? "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200"
+                        : "bg-white hover:bg-slate-50 border-slate-300 text-slate-800"
+                    }`}
+                  >
+                    <KeyRound className="w-4 h-4 text-indigo-400" />
+                    <span>{t("cls_join_pin", "PIN ile Katıl")}</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-6 animate-in fade-in duration-200">

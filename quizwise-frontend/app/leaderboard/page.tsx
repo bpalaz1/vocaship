@@ -28,26 +28,7 @@ import ClassroomLeaderboard, {
 } from "../components/leaderboard/ClassroomLeaderboard";
 import JoinCodeModal from "../components/games/JoinCodeModal";
 
-const DEFAULT_CLASSES: ClassroomInfo[] = [
-  {
-    id: "cls-1",
-    name: "10-A İngilizce",
-    code: "7A2-5K9",
-    studentCount: 24,
-  },
-  {
-    id: "cls-2",
-    name: "Genel Pratik Grubu",
-    code: "3M8-2B1",
-    studentCount: 16,
-  },
-  {
-    id: "cls-3",
-    name: "9-B Dil Sınıfı",
-    code: "9T4-6A0",
-    studentCount: 19,
-  },
-];
+const DEFAULT_CLASSES: ClassroomInfo[] = [];
 
 export default function LeaderboardPage() {
   const { user } = useAuth();
@@ -62,7 +43,7 @@ export default function LeaderboardPage() {
 
   // Sınıf Bilgileri
   const [classes, setClasses] = useState<ClassroomInfo[]>(DEFAULT_CLASSES);
-  const [activeClassId, setActiveClassId] = useState<string>("cls-1");
+  const [activeClassId, setActiveClassId] = useState<string>("");
   const [isJoinCodeModalOpen, setIsJoinCodeModalOpen] = useState(false);
 
   // Çift Sayaç Puanları (Dual-Ledger)

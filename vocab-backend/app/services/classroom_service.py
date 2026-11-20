@@ -67,24 +67,7 @@ IN_MEMORY_TEACHER_STORIES: List[Dict[str, Any]] = [
 ]
 
 # Sınıf Yönetimi & Öğretmen Portalı Bellek İçi Havuzları
-IN_MEMORY_CLASSES: List[Dict[str, Any]] = [
-    {
-        "id": "cls-1",
-        "name": "C1 Advanced Business & Engineering English",
-        "grade_level": "C1 Advanced",
-        "code": "VRG-2535",
-        "student_count": 18,
-        "created_at": "2026-10-20T10:00:00Z"
-    },
-    {
-        "id": "cls-2",
-        "name": "FIDIC & EPC Project Control Lab",
-        "grade_level": "C1-C2 Executive",
-        "code": "VRG-8492",
-        "student_count": 12,
-        "created_at": "2026-10-22T14:30:00Z"
-    }
-]
+IN_MEMORY_CLASSES: List[Dict[str, Any]] = []
 
 IN_MEMORY_ASSIGNMENTS: List[Dict[str, Any]] = [
     {
