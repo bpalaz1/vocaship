@@ -84,11 +84,11 @@ def create_class(
     return new_class
 
 @router.get("/classes", response_model=List[ClassroomResponse])
-def get_classes(db: Client = Depends(get_db)):
+def get_classes(user_id: Optional[str] = None, db: Client = Depends(get_db)):
     """
-    Eğitmenin sınıflarını ve katılım kodlarını listeler.
+    Eğitmenin veya öğrencinin gerçek sınıflarını ve katılım kodlarını listeler.
     """
-    return classroom_service.list_classrooms(db=db)
+    return classroom_service.list_classrooms(db=db, user_id=user_id)
 
 # =========================================================================
 # 2. AI İLE OTOMATİK METİN ANALİZİ VE ÖDEV ÇIKARTMA

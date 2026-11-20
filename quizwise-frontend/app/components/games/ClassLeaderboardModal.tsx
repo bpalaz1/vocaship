@@ -60,10 +60,7 @@ const DEFAULT_CLASS_10A_ALLTIME: StudentLeaderboardEntry[] = [
   { rank: 5, name: "Caner Aydın", avatar: "🦅", xp: 3600, level: 4 },
 ];
 
-const DEFAULT_CLASSES = [
-  { id: "class_10a", name: "10-A İngilizce (İleri Düzey)" },
-  { id: "class_weekend", name: "Hafta Sonu YDS / IELTS Kulübü" },
-];
+const DEFAULT_CLASSES: Array<{ id: string; name: string }> = [];
 
 export default function ClassLeaderboardModal({
   isOpen,

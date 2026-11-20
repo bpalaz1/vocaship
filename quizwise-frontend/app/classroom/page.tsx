@@ -162,24 +162,70 @@ function ClassroomContent() {
     };
   }, []);
 
-  // 1. LocalStorage & Backend Sınıf / Zaman Tüneli Yükleme
+  // 1. LocalStorage & Backend Sınıf Yükleme (Sahte demo sınıflarını temizle)
   useEffect(() => {
-    try {
-      if (typeof window !== "undefined") {
-        const savedClasses = localStorage.getItem("vocaship_classes");
-        if (savedClasses) {
-          const parsed = JSON.parse(savedClasses);
-          if (Array.isArray(parsed)) {
-            setClassrooms(parsed);
+    const DEMO_CLASS_NAMES = new Set([
+      "10-A İngilizce",
+      "Genel Pratik Grubu",
+      "9-B Dil Sınıfı",
+      "C1 Advanced Business & Engineering English",
+      "FIDIC & EPC Project Control Lab",
+    ]);
+
+    const loadClasses = async () => {
+      let localList: ClassroomItem[] = [];
+      try {
+        if (typeof window !== "undefined") {
+          const savedClasses = localStorage.getItem("vocaship_classes");
+          if (savedClasses) {
+            const parsed = JSON.parse(savedClasses);
+            if (Array.isArray(parsed)) {
+              localList = parsed.filter(
+                (c: any) => c && c.name && !DEMO_CLASS_NAMES.has(String(c.name).trim())
+              );
+              if (localList.length !== parsed.length) {
+                localStorage.setItem("vocaship_classes", JSON.stringify(localList));
+              }
+            }
           }
         }
+      } catch (e) {
+        console.warn("Storage load error:", e);
       }
-    } catch (e) {
-      console.warn("Storage load error:", e);
-    } finally {
+
+      try {
+        const res = await fetch(
+          `${apiUrl}/api/v1/classroom/classes?user_id=${encodeURIComponent(currentUserId)}`
+        ).catch(() => null);
+        if (res && res.ok) {
+          const remoteList = await res.json();
+          if (Array.isArray(remoteList)) {
+            const seenIds = new Set(localList.map((c) => c.id));
+            const merged = [...localList];
+            for (const rc of remoteList) {
+              if (rc && rc.id && !seenIds.has(rc.id) && !DEMO_CLASS_NAMES.has(String(rc.name || "").trim())) {
+                merged.push({
+                  id: rc.id,
+                  name: rc.name,
+                  code: rc.code || rc.invite_slug || "VRG-0000",
+                  student_count: rc.student_count ?? 0,
+                  teacher_id: rc.teacher_id,
+                  created_at: rc.created_at,
+                });
+                seenIds.add(rc.id);
+              }
+            }
+            localList = merged;
+          }
+        }
+      } catch {}
+
+      setClassrooms(localList);
       setIsLoaded(true);
-    }
-  }, []);
+    };
+
+    loadClasses();
+  }, [apiUrl, currentUserId]);
 
   // Timeline Verisini Çek
   const fetchTimeline = async () => {

@@ -224,17 +224,60 @@ def create_classroom(name: str, grade_level: str = "Intermediate", db=None) -> D
 
     return new_cls
 
-def list_classrooms(db=None) -> List[Dict[str, Any]]:
-    """Eğitmenin tüm sınıflarını listeler."""
+_DEMO_CLASS_NAMES = {
+    "10-A İngilizce",
+    "Genel Pratik Grubu",
+    "9-B Dil Sınıfı",
+    "C1 Advanced Business & Engineering English",
+    "FIDIC & EPC Project Control Lab",
+}
+
+
+def list_classrooms(db=None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Kullanıcının yalnızca gerçek oluşturduğu veya katıldığı sınıfları listeler."""
+    rows: List[Dict[str, Any]] = []
     if db:
         try:
-            res = db.table("classrooms").select("*").order("created_at", desc=True).execute()
-            if res.data:
-                return res.data
+            for tbl in ("classes", "classrooms"):
+                try:
+                    res = db.table(tbl).select("*").order("created_at", desc=True).execute()
+                    if res.data:
+                        rows.extend(res.data)
+                except Exception:
+                    pass
         except Exception as e:
             print(f"[DB Classroom Select]: {e}")
 
-    return IN_MEMORY_CLASSES
+    if not rows:
+        rows = list(IN_MEMORY_CLASSES)
+
+    # Sahte demo sınıfları her koşulda ele
+    cleaned: List[Dict[str, Any]] = []
+    seen_ids = set()
+    for r in rows:
+        rid = r.get("id")
+        rname = str(r.get("name") or "").strip()
+        if not rid or rid in seen_ids or rname in _DEMO_CLASS_NAMES:
+            continue
+        seen_ids.add(rid)
+        cleaned.append(r)
+
+    if not user_id:
+        return cleaned
+
+    joined_class_ids = set()
+    if db:
+        try:
+            att = db.table("session_attendees").select("class_id").eq("user_id", user_id).execute()
+            if att.data:
+                joined_class_ids = {a.get("class_id") for a in att.data if a.get("class_id")}
+        except Exception:
+            pass
+
+    return [
+        c for c in cleaned
+        if c.get("teacher_id") == user_id or c.get("id") in joined_class_ids
+    ]
 
 def create_assignment(data: dict, db=None) -> Dict[str, Any]:
     """Sınıfa yeni bir ödev bağlar."""
