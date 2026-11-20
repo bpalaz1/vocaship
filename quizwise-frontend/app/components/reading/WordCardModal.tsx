@@ -163,8 +163,12 @@ export default function WordCardModal({
         const controller = new AbortController();
         const cleanWord = word.toLowerCase().trim();
 
-        // 1. Hikayeden gelen hazır Türkçe karşılık varsa ve Türkçe seçiliyse öncelikli kullan
-        if (nativeLang === "tr" && initialTranslation) {
+        // 1. Hikayeden gelen geçerli bir Türkçe karşılık varsa ve Türkçe seçiliyse öncelikli kullan
+        if (
+            nativeLang === "tr" &&
+            initialTranslation &&
+            !initialTranslation.toLowerCase().includes("anlam bulunamad")
+        ) {
             setLoading(false);
             setData({
                 phonetic: QUICK_LOOKUP[cleanWord]?.phonetic || `/${cleanWord}/`,
@@ -216,14 +220,61 @@ export default function WordCardModal({
             return;
         }
 
-        // 4. Hafızada yoksa önceki dilin anlamını hemen temizle ve Backend hafıza-öncelikli servisi çağır
+        // 4. Hafızada yoksa Backend (/ai/lookup -> /ai/enrich) ve ardından MyMemory + DictionaryAPI yedeğini çalıştır
         async function fetchMeaning() {
             setData(null);
             setLoading(true);
+
+            let resolvedTranslation = "";
+            let resolvedDefinition = "";
+            let resolvedPhonetic = "";
+            let resolvedPartOfSpeech = "";
+            let resolvedExampleTarget = "";
+            let resolvedExampleNative = "";
+            let resolvedSource = "memory_cache";
+
+            const extractFromPayload = (json: any) => {
+                if (!json || typeof json !== "object") return;
+                const firstMeaning = Array.isArray(json.meanings) ? json.meanings[0] : null;
+                const rawTr =
+                    json.turkish_meaning ||
+                    json.meaning ||
+                    json.translation ||
+                    (typeof firstMeaning === "string"
+                        ? firstMeaning
+                        : firstMeaning?.translation || firstMeaning?.definition) ||
+                    "";
+                const rawDef =
+                    (typeof firstMeaning === "object" && firstMeaning?.definition) ||
+                    json.definition ||
+                    "";
+                if (rawTr && String(rawTr).trim().toLowerCase() !== cleanWord.toLowerCase()) {
+                    resolvedTranslation = String(rawTr).trim();
+                }
+                if (rawDef) resolvedDefinition = String(rawDef).trim();
+                if (json.phonetic) resolvedPhonetic = String(json.phonetic).trim();
+                if (typeof firstMeaning === "object" && firstMeaning?.part_of_speech) {
+                    resolvedPartOfSpeech = String(firstMeaning.part_of_speech);
+                }
+                if (Array.isArray(json.example_sentences) && json.example_sentences[0]) {
+                    resolvedExampleTarget = json.example_sentences[0].target || json.example_sentences[0].en || "";
+                    resolvedExampleNative = json.example_sentences[0].native || json.example_sentences[0].tr || "";
+                }
+                if (json.source) resolvedSource = String(json.source);
+            };
+
+            const authToken =
+                typeof window !== "undefined"
+                    ? localStorage.getItem("vorego_auth_token") || localStorage.getItem("token")
+                    : null;
+            const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+            if (authToken) authHeaders["Authorization"] = `Bearer ${authToken}`;
+
             try {
-                const res = await fetch(`${API_BASE}/api/v1/ai/lookup`, {
+                // 4a. /api/v1/ai/lookup
+                const lookupRes = await fetch(`${API_BASE}/api/v1/ai/lookup`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: authHeaders,
                     signal: controller.signal,
                     body: JSON.stringify({
                         word: cleanWord,
@@ -231,80 +282,111 @@ export default function WordCardModal({
                         native_lang: nativeLang,
                         context_hint: contextSentence || undefined,
                     }),
-                });
+                }).catch(() => null);
 
-                if (res.ok) {
-                    const json = await res.json();
-                    if (isMounted) {
-                        const rawTranslation =
-                            json.meanings?.[0]?.translation ||
-                            json.translation ||
-                            json.turkish_meaning ||
-                            "";
+                if (lookupRes && lookupRes.ok) {
+                    extractFromPayload(await lookupRes.json().catch(() => null));
+                }
 
-                        const rawDefinition =
-                            json.meanings?.[0]?.definition ||
-                            json.definition ||
-                            "";
+                // 4b. Boşsa /api/v1/ai/enrich dene
+                if (!resolvedTranslation) {
+                    const enrichRes = await fetch(`${API_BASE}/api/v1/ai/enrich`, {
+                        method: "POST",
+                        headers: authHeaders,
+                        signal: controller.signal,
+                        body: JSON.stringify({
+                            word: cleanWord,
+                            context: contextSentence || undefined,
+                            target_lang: nativeLang,
+                        }),
+                    }).catch(() => null);
 
-                        const cleanTranslation =
-                            rawTranslation && rawTranslation.toLowerCase() !== cleanWord.toLowerCase()
-                                ? rawTranslation
-                                : "";
-
-                        if (cleanTranslation) {
-                            setCachedWordEntry({
-                                word: cleanWord,
-                                targetLang: "en",
-                                nativeLang,
-                                phonetic: json.phonetic || `/${cleanWord}/`,
-                                translation: cleanTranslation,
-                                definition: rawDefinition,
-                                exampleTarget:
-                                    json.example_sentences?.[0]?.target ||
-                                    json.example_sentences?.[0]?.en ||
-                                    "",
-                                exampleNative:
-                                    json.example_sentences?.[0]?.native ||
-                                    json.example_sentences?.[0]?.tr ||
-                                    "",
-                                source: json.source || "memory_cache",
-                            });
-                        }
-
-                        setData({
-                            phonetic: json.phonetic || `/${cleanWord}/`,
-                            translation: cleanTranslation,
-                            definition: rawDefinition,
-                            meanings: [
-                                {
-                                    translation: cleanTranslation,
-                                    definition: rawDefinition,
-                                    part_of_speech: json.meanings?.[0]?.part_of_speech || "",
-                                }
-                            ],
-                        });
-                    }
-                } else {
-                    if (isMounted) {
-                        setData({
-                            phonetic: `/${cleanWord}/`,
-                            translation: "",
-                            definition: "",
-                            meanings: [{ translation: t("meaning_not_found", "Anlam bulunamadı"), definition: "" }]
-                        });
+                    if (enrichRes && enrichRes.ok) {
+                        extractFromPayload(await enrichRes.json().catch(() => null));
                     }
                 }
-            } catch (err: any) {
-                if (err?.name === "AbortError") return;
-                if (isMounted) {
-                    setData({
-                        phonetic: `/${cleanWord}/`,
-                        translation: "",
-                        definition: "",
-                        meanings: [{ translation: t("err_server_conn", "Bağlantı kurulamadı"), definition: "" }]
+
+                // 4c. Ücretsiz MyMemory Translation API yedeği (hiçbir zaman "Anlam bulunamadı" bırakma)
+                if (!resolvedTranslation) {
+                    const langPair = `en|${nativeLang || "tr"}`;
+                    const fallbackRes = await fetch(
+                        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanWord)}&langpair=${langPair}`,
+                        { signal: controller.signal }
+                    ).catch(() => null);
+
+                    if (fallbackRes && fallbackRes.ok) {
+                        const fallbackData = await fallbackRes.json().catch(() => null);
+                        const translatedText = fallbackData?.responseData?.translatedText;
+                        if (
+                            translatedText &&
+                            typeof translatedText === "string" &&
+                            !translatedText.toUpperCase().includes("MYMEMORY WARNING")
+                        ) {
+                            resolvedTranslation = translatedText.trim();
+                            resolvedSource = "mymemory";
+                        }
+                    }
+                }
+
+                // 4d. Fonetik veya İngilizce tanım eksikse DictionaryAPI üzerinden gerçek IPA çek
+                if (!resolvedPhonetic || resolvedPhonetic === `/${cleanWord}/` || !resolvedDefinition) {
+                    const dictRes = await fetch(
+                        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`,
+                        { signal: controller.signal }
+                    ).catch(() => null);
+
+                    if (dictRes && dictRes.ok) {
+                        const dictJson = await dictRes.json().catch(() => null);
+                        const entry = Array.isArray(dictJson) ? dictJson[0] : null;
+                        if (entry) {
+                            const ipa =
+                                entry.phonetic ||
+                                entry.phonetics?.find((p: any) => p?.text)?.text ||
+                                "";
+                            if (ipa && (!resolvedPhonetic || resolvedPhonetic === `/${cleanWord}/`)) {
+                                resolvedPhonetic = ipa;
+                            }
+                            const dictDef = entry.meanings?.[0]?.definitions?.[0]?.definition || "";
+                            if (dictDef && !resolvedDefinition) {
+                                resolvedDefinition = dictDef;
+                            }
+                            if (!resolvedPartOfSpeech && entry.meanings?.[0]?.partOfSpeech) {
+                                resolvedPartOfSpeech = entry.meanings[0].partOfSpeech;
+                            }
+                        }
+                    }
+                }
+
+                if (!isMounted) return;
+
+                if (resolvedTranslation) {
+                    setCachedWordEntry({
+                        word: cleanWord,
+                        targetLang: "en",
+                        nativeLang,
+                        phonetic: resolvedPhonetic || `/${cleanWord}/`,
+                        translation: resolvedTranslation,
+                        definition: resolvedDefinition,
+                        exampleTarget: resolvedExampleTarget,
+                        exampleNative: resolvedExampleNative,
+                        source: resolvedSource,
                     });
                 }
+
+                setData({
+                    phonetic: resolvedPhonetic || `/${cleanWord}/`,
+                    translation: resolvedTranslation,
+                    definition: resolvedDefinition,
+                    meanings: [
+                        {
+                            translation: resolvedTranslation,
+                            definition: resolvedDefinition,
+                            part_of_speech: resolvedPartOfSpeech,
+                        },
+                    ],
+                });
+            } catch (err: any) {
+                if (err?.name === "AbortError") return;
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -430,9 +512,9 @@ export default function WordCardModal({
                 </div>
 
                 {loading ? (
-                    <div className="flex items-center gap-2 text-slate-400 my-4 text-sm">
+                    <div className="flex items-center gap-2 text-indigo-300 my-4 text-sm font-medium">
                         <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                        {t("loading_meaning", "Anlam getiriliyor...")}
+                        <span>{t("translating_loading", "Çevriliyor...")}</span>
                     </div>
                 ) : (
                     <div className="space-y-2.5">
