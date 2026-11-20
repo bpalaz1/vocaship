@@ -788,8 +788,20 @@ export default function DeckStudyPage() {
   if (cards.length === 0) {
     return (
       <div className="min-h-screen bg-[#0B0F19] flex flex-col items-center justify-center px-4 py-20 text-center">
-        <div className="w-16 h-16 rounded-3xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mb-4">
-          <BrainCircuit className="w-8 h-8" />
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-800 via-indigo-950/60 to-slate-900 border border-emerald-400/35 flex items-center justify-center mx-auto mb-5 shadow-[0_0_25px_rgba(16,185,129,0.15)]">
+          <svg width="32" height="32" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="emptyVGrad" x1="14" y1="14" x2="66" y2="66" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#10B981" />
+                <stop offset="50%" stopColor="#0EA5E9" />
+                <stop offset="100%" stopColor="#6366F1" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M16 18 L30 18 L40 50 L50 18 L64 18 L45 64 L35 64 Z"
+              fill="url(#emptyVGrad)"
+            />
+          </svg>
         </div>
         <h2 className="text-xl font-bold text-white mb-2">
           {t("study_empty_deck_title")}
@@ -813,7 +825,7 @@ export default function DeckStudyPage() {
             className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold text-xs shadow-sm transition"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>{t("study_back_library")}</span>
+            <span>{t("nav_library", "Kelime Havuzu")}</span>
           </Link>
         </div>
         {addWordModalNode}
@@ -855,7 +867,7 @@ export default function DeckStudyPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold shadow-xs transition shrink-0"
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-indigo-300" />
-                <span>{t("study_back_library")}</span>
+                <span>{t("nav_library", "Kelime Havuzu")}</span>
               </Link>
               <span className="text-[11px] font-mono font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 rounded-lg shrink-0">
                 {currentIndex + 1} / {cards.length}
