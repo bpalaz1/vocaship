@@ -77,6 +77,37 @@ interface ActiveStoryContext {
   topic?: string;
 }
 
+const HINT_PAIRS: Array<[string, string]> = [
+  ["Actually, I think...", "One reason I feel that way is..."],
+  ["To be honest, I usually...", "What I like most about it is..."],
+  ["That's a great question! For me...", "Another thing to consider is..."],
+  ["In my daily life, I often...", "It really depends on..."],
+  ["I've always wanted to...", "The main benefit for me is..."],
+  ["If I had to choose, I would...", "On the other hand, sometimes..."],
+  ["Lately, I've noticed that...", "Looking at it from another angle..."],
+  ["When that happens, I tend to...", "What surprises me most is..."],
+  ["For instance, just the other day...", "At the same time, I believe..."],
+  ["The first thing that comes to mind is...", "Comparing that to before, I think..."],
+  ["Whenever I get the chance, I love...", "What makes it special for me is..."],
+  ["From my point of view...", "Looking ahead, I'm hoping to..."],
+];
+
+function isStaleStaticHint(text: string): boolean {
+  const lower = (text || "").trim().toLowerCase();
+  return (
+    !lower ||
+    lower.startsWith("personally, i") ||
+    lower.includes("enjoyable part")
+  );
+}
+
+function isSameHintPair(a: [string, string], b: [string, string]): boolean {
+  return (
+    a[0].trim().toLowerCase() === b[0].trim().toLowerCase() &&
+    a[1].trim().toLowerCase() === b[1].trim().toLowerCase()
+  );
+}
+
 function buildContextualHints(
   currentAiPrompt: string,
   storyTitle: string | null,
@@ -196,11 +227,37 @@ function SpeakingContent() {
     }>
   >([]);
   const [isHintBoxOpen, setIsHintBoxOpen] = useState<boolean>(false);
-  const [dynamicHints, setDynamicHints] = useState<[string, string]>([
-    "Actually, my day has been...",
-    "I would love to talk about...",
-  ]);
+  const [dynamicHints, setDynamicHints] = useState<[string, string]>(HINT_PAIRS[0]);
   const backendHintsForMessageRef = useRef<string>("");
+  const hintPairIndexRef = useRef<number>(0);
+  const lastDisplayedHintsRef = useRef<[string, string]>(HINT_PAIRS[0]);
+  const lastHintTurnKeyRef = useRef<string>("");
+
+  const applyFreshHints = useCallback((candidate?: [string, string] | null) => {
+    const prev = lastDisplayedHintsRef.current;
+    if (
+      candidate &&
+      candidate[0]?.trim() &&
+      candidate[1]?.trim() &&
+      !isStaleStaticHint(candidate[0]) &&
+      !isStaleStaticHint(candidate[1]) &&
+      !isSameHintPair(candidate, prev)
+    ) {
+      const nextPair: [string, string] = [candidate[0].trim(), candidate[1].trim()];
+      lastDisplayedHintsRef.current = nextPair;
+      setDynamicHints(nextPair);
+      return;
+    }
+
+    let nextIdx = (hintPairIndexRef.current + 1) % HINT_PAIRS.length;
+    if (isSameHintPair(HINT_PAIRS[nextIdx], prev)) {
+      nextIdx = (nextIdx + 1) % HINT_PAIRS.length;
+    }
+    hintPairIndexRef.current = nextIdx;
+    const rotated = HINT_PAIRS[nextIdx];
+    lastDisplayedHintsRef.current = rotated;
+    setDynamicHints(rotated);
+  }, []);
 
   // FAZ 4: Oturum Sonu Karnesi & Desteye Kelime Kaydı
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
@@ -1261,13 +1318,35 @@ function SpeakingContent() {
               : null;
 
           if (incomingHints) {
+            const candidatePair: [string, string] = [
+              String(incomingHints[0] || "").trim(),
+              String(incomingHints[1] || "").trim(),
+            ];
             backendHintsForMessageRef.current = replyText;
-            setDynamicHints([String(incomingHints[0]), String(incomingHints[1])]);
+            if (
+              !isStaleStaticHint(candidatePair[0]) &&
+              !isStaleStaticHint(candidatePair[1]) &&
+              !isSameHintPair(candidatePair, lastDisplayedHintsRef.current)
+            ) {
+              applyFreshHints(candidatePair);
+            } else {
+              const ctxPair = buildContextualHints(
+                replyText,
+                activeStoryTitle,
+                activeLevel,
+                dialogueRef.current.length + 1
+              );
+              applyFreshHints(ctxPair);
+            }
           } else if (replyText) {
             backendHintsForMessageRef.current = "";
-            setDynamicHints(
-              buildContextualHints(replyText, activeStoryTitle, activeLevel, dialogueRef.current.length + 1)
+            const ctxPair = buildContextualHints(
+              replyText,
+              activeStoryTitle,
+              activeLevel,
+              dialogueRef.current.length + 1
             );
+            applyFreshHints(ctxPair);
           }
           if (replyText) {
             const assistantTurn: DialogueTurn = {
@@ -1716,13 +1795,38 @@ function SpeakingContent() {
   useEffect(() => {
     const activePrompt = aiMessage || openingGreeting;
     if (!activePrompt) return;
-    if (backendHintsForMessageRef.current && backendHintsForMessageRef.current === activePrompt) {
+    const phase = isListening ? "listening" : isAiSpeaking ? "speaking" : "idle";
+    const turnKey = `${dialogue.length}::${activePrompt}::${phase}`;
+    if (lastHintTurnKeyRef.current === turnKey) return;
+    lastHintTurnKeyRef.current = turnKey;
+
+    // Yeni bir AI mesajında backend zaten taze ipucu verdiyse aynı mesaj için tekrar ezme;
+    // ancak sıra kullanıcıya (listening) veya yeni bir tura geçtiğinde mutlaka taze çift üret.
+    if (
+      phase !== "listening" &&
+      backendHintsForMessageRef.current &&
+      backendHintsForMessageRef.current === activePrompt
+    ) {
       return;
     }
-    setDynamicHints(
-      buildContextualHints(activePrompt, activeStoryTitle, activeLevel, dialogue.length)
+
+    const ctxPair = buildContextualHints(
+      activePrompt,
+      activeStoryTitle,
+      activeLevel,
+      dialogue.length + (phase === "listening" ? 1 : 0)
     );
-  }, [aiMessage, openingGreeting, activeStoryTitle, activeLevel, dialogue.length]);
+    applyFreshHints(ctxPair);
+  }, [
+    aiMessage,
+    openingGreeting,
+    activeStoryTitle,
+    activeLevel,
+    dialogue.length,
+    isListening,
+    isAiSpeaking,
+    applyFreshHints,
+  ]);
 
   const activeStarterPhrases = dynamicHints;
 
