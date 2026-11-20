@@ -1703,81 +1703,77 @@ function SpeakingContent() {
       />
 
       {/* ========================================================================= */}
-      {/* ÜST YÜZEN KONTROLLER: SOL (HİKAYE) & SAĞ (TAM EKRAN + GEÇMİŞ)             */}
+      {/* ÜST YÜZEN KONTROLLER: SOL ÜST (TAM EKRAN + GEÇMİŞ + HİKAYE)               */}
       {/* ========================================================================= */}
-      <div className="relative z-30 w-full flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {activeStoryTitle && (
-            <div
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium backdrop-blur-md shadow-sm ${
-                isDark
-                  ? "bg-slate-900/80 border-violet-500/30 text-violet-300"
-                  : "bg-[#f8fafc] border-violet-300 text-violet-900"
-              }`}
-            >
-              <BookOpen className={`w-3.5 h-3.5 shrink-0 ${isDark ? "text-violet-400" : "text-violet-700"}`} />
-              <span className="truncate max-w-[140px]">{activeStoryTitle}</span>
-              {isStoryLevelLocked && (
-                <span
-                  className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${
-                    isDark
-                      ? "bg-violet-500/20 border-violet-400/40 text-violet-200"
-                      : "bg-violet-100 border-violet-300 text-violet-800"
-                  }`}
-                >
-                  🔒 {activeLevel}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={handleExitStoryMode}
-                className={`ml-1 text-[10px] font-bold cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-300" : "text-slate-500 hover:text-rose-700"}`}
-              >
-                ✕
-              </button>
-            </div>
+      <div className="absolute left-4 sm:left-6 top-4 z-30 flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          className={`px-3.5 py-2 rounded-full border shadow-sm text-xs font-semibold flex items-center gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer ${
+            isDark
+              ? "bg-slate-900/85 hover:bg-slate-800 text-slate-200 border-slate-700/70"
+              : "bg-white/90 hover:bg-white text-slate-900 border-slate-200/80"
+          }`}
+        >
+          {isFullscreen ? (
+            <>
+              <Minimize2 className={`w-3.5 h-3.5 ${isDark ? "text-cyan-400" : "text-cyan-700"}`} />
+              <span>{t("speak_exit_fullscreen", "🗗 Küçült")}</span>
+            </>
+          ) : (
+            <>
+              <Maximize2 className={`w-3.5 h-3.5 ${isDark ? "text-cyan-400" : "text-cyan-700"}`} />
+              <span>{t("speak_fullscreen", "⛶ Tam Ekran")}</span>
+            </>
           )}
-        </div>
+        </button>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm ${
+        <button
+          type="button"
+          onClick={() => {
+            loadSavedArchives();
+            setIsHistoryOpen(true);
+          }}
+          className={`px-3.5 py-2 rounded-full border shadow-sm text-xs font-semibold flex items-center gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer ${
+            isDark
+              ? "bg-slate-900/85 hover:bg-slate-800 text-slate-200 border-slate-700/70"
+              : "bg-white/90 hover:bg-white text-slate-900 border-slate-200/80"
+          }`}
+        >
+          <History className={`w-3.5 h-3.5 ${isDark ? "text-indigo-400" : "text-indigo-700"}`} />
+          <span>{t("speak_history", "📜 Geçmiş")}</span>
+        </button>
+
+        {activeStoryTitle && (
+          <div
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium backdrop-blur-md shadow-sm ${
               isDark
-                ? "bg-slate-900/85 hover:bg-slate-800 text-slate-200 border-slate-800"
-                : "bg-[#f8fafc] hover:bg-white text-slate-900 border-slate-300"
+                ? "bg-slate-900/80 border-violet-500/30 text-violet-300"
+                : "bg-[#f8fafc] border-violet-300 text-violet-900"
             }`}
           >
-            {isFullscreen ? (
-              <>
-                <Minimize2 className={`w-3.5 h-3.5 ${isDark ? "text-cyan-400" : "text-cyan-700"}`} />
-                <span>{t("speak_exit_fullscreen", "🗗 Küçült")}</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className={`w-3.5 h-3.5 ${isDark ? "text-cyan-400" : "text-cyan-700"}`} />
-                <span>{t("speak_fullscreen", "⛶ Tam Ekran")}</span>
-              </>
+            <BookOpen className={`w-3.5 h-3.5 shrink-0 ${isDark ? "text-violet-400" : "text-violet-700"}`} />
+            <span className="truncate max-w-[140px]">{activeStoryTitle}</span>
+            {isStoryLevelLocked && (
+              <span
+                className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${
+                  isDark
+                    ? "bg-violet-500/20 border-violet-400/40 text-violet-200"
+                    : "bg-violet-100 border-violet-300 text-violet-800"
+                }`}
+              >
+                🔒 {activeLevel}
+              </span>
             )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              loadSavedArchives();
-              setIsHistoryOpen(true);
-            }}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm ${
-              isDark
-                ? "bg-slate-900/85 hover:bg-slate-800 text-slate-200 border-slate-800"
-                : "bg-[#f8fafc] hover:bg-white text-slate-900 border-slate-300"
-            }`}
-          >
-            <History className={`w-3.5 h-3.5 ${isDark ? "text-indigo-400" : "text-indigo-700"}`} />
-            <span>{t("speak_history", "📜 Geçmiş")}</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={handleExitStoryMode}
+              className={`ml-1 text-[10px] font-bold cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-300" : "text-slate-500 hover:text-rose-700"}`}
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
