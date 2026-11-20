@@ -1703,31 +1703,10 @@ function SpeakingContent() {
       />
 
       {/* ========================================================================= */}
-      {/* ÜST YÜZEN KONTROLLER: SOL (@PROFİL) & SAĞ (TAM EKRAN + GEÇMİŞ)            */}
+      {/* ÜST YÜZEN KONTROLLER: SOL (HİKAYE) & SAĞ (TAM EKRAN + GEÇMİŞ)             */}
       {/* ========================================================================= */}
       <div className="relative z-30 w-full flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md shadow-sm ${
-              isDark
-                ? "bg-slate-900/80 border-slate-800/90 text-slate-200"
-                : "bg-[#f8fafc] border-slate-300 text-slate-900"
-            }`}
-          >
-            {isAvatarImageUrl ? (
-              <img
-                src={syncedProfile.avatarUrl}
-                alt={syncedProfile.displayName}
-                className="w-6 h-6 rounded-full object-cover border border-indigo-400/40"
-              />
-            ) : (
-              <span className="text-base leading-none">{syncedProfile.avatarUrl}</span>
-            )}
-            <span className={`text-xs font-semibold max-w-[120px] truncate ${isDark ? "text-slate-200" : "text-slate-900"}`}>
-              @{syncedProfile.displayName}
-            </span>
-          </div>
-
           {activeStoryTitle && (
             <div
               className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium backdrop-blur-md shadow-sm ${
