@@ -4,25 +4,24 @@ import React, { useId } from "react";
 
 interface VocaShipLogoProps {
   variant?: "horizontal" | "stacked" | "icon";
+  size?: "sm" | "lg";
   className?: string;
 }
 
-export function VocaShipLogo({ variant = "horizontal", className = "" }: VocaShipLogoProps) {
+function useVocaShipIcon(svgClassName: string, svgSize: number) {
   const rawId = useId().replace(/:/g, "");
   const leftStrokeId = `vocaLeftStroke-${rawId}`;
   const pageSailId = `vocaPageSail-${rawId}`;
   const waveLineId = `vocaWaveLine-${rawId}`;
 
-  const iconSize = variant === "stacked" ? 64 : variant === "icon" ? 36 : 32;
-
-  const iconSvg = (
+  return (
     <svg
-      width={iconSize}
-      height={iconSize}
+      width={svgSize}
+      height={svgSize}
       viewBox="0 0 120 110"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={variant === "icon" ? `w-9 h-9 shrink-0 block ${className}` : "w-8 h-8 shrink-0 block"}
+      className={svgClassName}
       aria-hidden="true"
     >
       <defs>
@@ -68,6 +67,45 @@ export function VocaShipLogo({ variant = "horizontal", className = "" }: VocaShi
       />
     </svg>
   );
+}
+
+export function VocaShipMark({
+  size = "sm",
+  className = "",
+}: {
+  size?: "sm" | "lg";
+  className?: string;
+}) {
+  const isLg = size === "lg";
+  const iconSvg = useVocaShipIcon(
+    isLg ? "w-10 h-10 shrink-0 block" : "w-8 h-8 shrink-0 block",
+    isLg ? 40 : 32
+  );
+
+  return (
+    <div
+      className={`relative flex items-center justify-center shrink-0 bg-gradient-to-br from-slate-800 via-indigo-950/60 to-slate-900 border border-emerald-400/40 ${
+        isLg
+          ? "w-16 h-16 rounded-2xl p-2.5 shadow-[0_0_25px_rgba(16,185,129,0.18)]"
+          : "w-11 h-11 rounded-xl p-1.5 shadow-[0_0_20px_rgba(16,185,129,0.18)]"
+      } ${className}`}
+    >
+      <div
+        className={`absolute inset-0 bg-emerald-400/5 pointer-events-none ${
+          isLg ? "rounded-2xl" : "rounded-xl"
+        }`}
+      />
+      <div className="relative z-10 flex items-center justify-center">{iconSvg}</div>
+    </div>
+  );
+}
+
+export function VocaShipLogo({ variant = "horizontal", size = "sm", className = "" }: VocaShipLogoProps) {
+  const iconSize = variant === "stacked" ? 64 : variant === "icon" ? 36 : 32;
+  const iconSvg = useVocaShipIcon(
+    variant === "icon" ? `w-9 h-9 shrink-0 block ${className}` : "w-8 h-8 shrink-0 block",
+    iconSize
+  );
 
   if (variant === "icon") {
     return iconSvg;
@@ -88,11 +126,7 @@ export function VocaShipLogo({ variant = "horizontal", className = "" }: VocaShi
 
   return (
     <div className={`inline-flex items-center gap-3 shrink-0 select-none ${className}`}>
-      {/* İndigo-Lacivert Cam + Zümrüt Glow İkon Kutusu */}
-      <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-slate-800 via-indigo-950/60 to-slate-900 border border-emerald-400/40 p-1.5 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.18)]">
-        <div className="absolute inset-0 rounded-xl bg-emerald-400/5 pointer-events-none" />
-        <div className="relative z-10 flex items-center justify-center">{iconSvg}</div>
-      </div>
+      <VocaShipMark size={size} />
 
       {/* Eski Kompakt Boyutuna Getirilmiş Marka & Slogan Bloğu */}
       <div className="flex flex-col justify-center leading-tight">

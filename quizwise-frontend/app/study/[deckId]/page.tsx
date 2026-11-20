@@ -28,6 +28,7 @@ import AddWordModal, {
 import PronunciationCoach from "../../components/PronunciationCoach";
 import MobileBottomTabbar from "../../components/layout/MobileBottomTabbar";
 import { useLanguage } from "../../context/LanguageContext";
+import { VocaShipMark } from "../../components/brand/VocaShipLogo";
 import { API_BASE } from "../../config";
 import { rewardSm2CardMastery } from "../../utils/rewardEngine";
 import { saveArenaMistake, removeArenaMistake } from "../../utils/arenaMistakes";
@@ -788,21 +789,7 @@ export default function DeckStudyPage() {
   if (cards.length === 0) {
     return (
       <div className="min-h-screen bg-[#0B0F19] flex flex-col items-center justify-center px-4 py-20 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-800 via-indigo-950/60 to-slate-900 border border-emerald-400/35 flex items-center justify-center mx-auto mb-5 shadow-[0_0_25px_rgba(16,185,129,0.15)]">
-          <svg width="32" height="32" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <defs>
-              <linearGradient id="emptyVGrad" x1="14" y1="14" x2="66" y2="66" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#10B981" />
-                <stop offset="50%" stopColor="#0EA5E9" />
-                <stop offset="100%" stopColor="#6366F1" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M16 18 L30 18 L40 50 L50 18 L64 18 L45 64 L35 64 Z"
-              fill="url(#emptyVGrad)"
-            />
-          </svg>
-        </div>
+        <VocaShipMark size="lg" className="mx-auto mb-5" />
         <h2 className="text-xl font-bold text-white mb-2">
           {t("study_empty_deck_title")}
         </h2>
