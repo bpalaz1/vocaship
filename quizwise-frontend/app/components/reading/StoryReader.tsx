@@ -326,8 +326,20 @@ export default function StoryReader({
     const wordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const ttsAbortControllerRef = useRef<AbortController | null>(null);
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+    const speechQueueRef = useRef<SpeechSynthesisUtterance[]>([]);
     const playbackSessionRef = useRef<number>(0);
     const [activeWordIndex, setActiveWordIndex] = useState<number | null>(null);
+
+    // Mobil Tarayıcı Uyku Modu Engelleyici (iOS Safari & Android Chrome Keep-Alive Interval)
+    useEffect(() => {
+        if (!isPlaying || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+        const keepAlive = setInterval(() => {
+            if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+            }
+        }, 4000);
+        return () => clearInterval(keepAlive);
+    }, [isPlaying]);
 
     // Etkileşim & İlerleme State'leri
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -912,11 +924,114 @@ export default function StoryReader({
     playSentenceAudioRef.current = handlePlayAudio;
     const speakSentence = handlePlayAudio;
 
+    const isMobileSpeechBrowser = () =>
+        typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    // Mobil iOS Safari & Android Chrome için tek senkron dokunuşta tüm kalan cümleleri kuyruğa ekle
+    const queueMobileSpeechFrom = useCallback(
+        (startIdx: number) => {
+            if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+            if (startIdx < 0 || startIdx >= allSentences.length) {
+                setIsPlaying(false);
+                setActiveWordIndex(null);
+                return;
+            }
+
+            const sessionId = ++playbackSessionRef.current;
+            const speed = playbackRateRef.current;
+            const voice = selectedVoiceRef.current || personaDefaultVoice;
+            const matchedVoice = matchBrowserVoiceForCharacter(voice);
+
+            if (wordTimerRef.current) {
+                clearInterval(wordTimerRef.current);
+                wordTimerRef.current = null;
+            }
+
+            try {
+                window.speechSynthesis.cancel();
+                const unlockUtterance = new SpeechSynthesisUtterance("");
+                unlockUtterance.volume = 0;
+                window.speechSynthesis.speak(unlockUtterance);
+            } catch {}
+
+            speechQueueRef.current = [];
+            setIsPlaying(true);
+
+            for (let idx = startIdx; idx < allSentences.length; idx++) {
+                const sentItem = allSentences[idx];
+                const sentText = (sentItem?.text || "").trim();
+                if (!sentText) continue;
+
+                const tokens = sentText.split(/\s+/).filter(Boolean);
+                const utt = new SpeechSynthesisUtterance(sentText);
+                if (matchedVoice) {
+                    utt.voice = matchedVoice;
+                    utt.lang = matchedVoice.lang || (voice.includes("en-GB") ? "en-GB" : "en-US");
+                } else {
+                    utt.lang = voice.includes("en-GB") ? "en-GB" : "en-US";
+                }
+                utt.rate = speed;
+                if (voice.toLowerCase().includes("ana") || voice.toLowerCase().includes("maisie")) {
+                    utt.pitch = 1.12;
+                }
+
+                utt.onstart = () => {
+                    if (playbackSessionRef.current !== sessionId) return;
+                    utteranceRef.current = utt;
+                    setActiveSentenceIdx(idx);
+                    activeSentenceIdxRef.current = idx;
+                    setActiveWordIndex(0);
+                    setIsPlaying(true);
+                };
+
+                utt.onboundary = (event: SpeechSynthesisEvent) => {
+                    if (playbackSessionRef.current !== sessionId) return;
+                    if (typeof event.charIndex === "number" && tokens.length > 0) {
+                        const prefix = sentText.slice(0, event.charIndex);
+                        const wordsBefore = prefix.trim() ? prefix.trim().split(/\s+/).length : 0;
+                        const wordIdx = prefix.endsWith(" ") || prefix.length === 0
+                            ? wordsBefore
+                            : Math.max(0, wordsBefore - 1);
+                        setActiveWordIndex(Math.min(Math.max(0, tokens.length - 1), wordIdx));
+                    }
+                };
+
+                utt.onend = () => {
+                    if (playbackSessionRef.current !== sessionId) return;
+                    if (idx >= allSentences.length - 1) {
+                        setIsPlaying(false);
+                        setActiveSentenceIdx(0);
+                        activeSentenceIdxRef.current = 0;
+                        setActiveWordIndex(null);
+                        speechQueueRef.current = [];
+                    }
+                };
+
+                utt.onerror = () => {
+                    if (playbackSessionRef.current !== sessionId) return;
+                    if (idx >= allSentences.length - 1) {
+                        setIsPlaying(false);
+                        setActiveWordIndex(null);
+                        speechQueueRef.current = [];
+                    }
+                };
+
+                speechQueueRef.current.push(utt);
+                if (idx === startIdx) {
+                    utteranceRef.current = utt;
+                }
+                window.speechSynthesis.speak(utt);
+            }
+        },
+        [allSentences, personaDefaultVoice, matchBrowserVoiceForCharacter]
+    );
+
     const togglePlayPause = () => {
         if (typeof window === "undefined") return;
         if (isPlaying) {
             setIsPlaying(false);
             setActiveWordIndex(null);
+            speechQueueRef.current = [];
             if (audioRef.current) {
                 try {
                     audioRef.current.pause();
@@ -932,10 +1047,17 @@ export default function StoryReader({
             if ("speechSynthesis" in window) {
                 try {
                     window.speechSynthesis.cancel();
+                    const unlockUtt = new SpeechSynthesisUtterance("");
+                    unlockUtt.volume = 0;
+                    window.speechSynthesis.speak(unlockUtt);
                 } catch {}
             }
-            setIsPlaying(true);
-            handlePlayAudio(activeSentenceIdx);
+            if (isMobileSpeechBrowser() && "speechSynthesis" in window) {
+                queueMobileSpeechFrom(activeSentenceIdx);
+            } else {
+                setIsPlaying(true);
+                handlePlayAudio(activeSentenceIdx);
+            }
         }
     };
 
@@ -944,7 +1066,11 @@ export default function StoryReader({
         setActiveSentenceIdx(nextIdx);
         activeSentenceIdxRef.current = nextIdx;
         if (isPlaying) {
-            playSentenceAudio(nextIdx);
+            if (isMobileSpeechBrowser() && "speechSynthesis" in window) {
+                queueMobileSpeechFrom(nextIdx);
+            } else {
+                playSentenceAudio(nextIdx);
+            }
         } else {
             stopAudio();
         }
@@ -955,7 +1081,11 @@ export default function StoryReader({
         setActiveSentenceIdx(nextIdx);
         activeSentenceIdxRef.current = nextIdx;
         if (isPlaying) {
-            playSentenceAudio(nextIdx);
+            if (isMobileSpeechBrowser() && "speechSynthesis" in window) {
+                queueMobileSpeechFrom(nextIdx);
+            } else {
+                playSentenceAudio(nextIdx);
+            }
         } else {
             stopAudio();
         }
@@ -966,7 +1096,11 @@ export default function StoryReader({
         setActiveSentenceIdx(clamped);
         activeSentenceIdxRef.current = clamped;
         if (isPlaying) {
-            playSentenceAudio(clamped);
+            if (isMobileSpeechBrowser() && "speechSynthesis" in window) {
+                queueMobileSpeechFrom(clamped);
+            } else {
+                playSentenceAudio(clamped);
+            }
         } else {
             stopAudio();
         }
@@ -978,7 +1112,11 @@ export default function StoryReader({
         if (activeAudioRef.current) {
             activeAudioRef.current.playbackRate = speed;
         } else if (isPlaying && typeof window !== "undefined" && "speechSynthesis" in window && window.speechSynthesis.speaking) {
-            handlePlayAudio(activeSentenceIdx);
+            if (isMobileSpeechBrowser()) {
+                queueMobileSpeechFrom(activeSentenceIdx);
+            } else {
+                handlePlayAudio(activeSentenceIdx);
+            }
         }
     };
 
