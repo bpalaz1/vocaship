@@ -227,11 +227,12 @@ function SpeakingContent() {
     }>
   >([]);
   const [isHintBoxOpen, setIsHintBoxOpen] = useState<boolean>(false);
-  const [dynamicHints, setDynamicHints] = useState<[string, string]>(HINT_PAIRS[0]);
-  const backendHintsForMessageRef = useRef<string>("");
+  const [hintIndex, setHintIndex] = useState<number>(0);
+  const [currentHints, setCurrentHints] = useState<[string, string]>(HINT_PAIRS[0]);
+  const prevAiSpeakingRef = useRef<boolean>(false);
+  const pendingBackendHintsRef = useRef<[string, string] | null>(null);
   const hintPairIndexRef = useRef<number>(0);
   const lastDisplayedHintsRef = useRef<[string, string]>(HINT_PAIRS[0]);
-  const lastHintTurnKeyRef = useRef<string>("");
 
   const applyFreshHints = useCallback((candidate?: [string, string] | null) => {
     const prev = lastDisplayedHintsRef.current;
@@ -245,7 +246,7 @@ function SpeakingContent() {
     ) {
       const nextPair: [string, string] = [candidate[0].trim(), candidate[1].trim()];
       lastDisplayedHintsRef.current = nextPair;
-      setDynamicHints(nextPair);
+      setCurrentHints(nextPair);
       return;
     }
 
@@ -254,9 +255,10 @@ function SpeakingContent() {
       nextIdx = (nextIdx + 1) % HINT_PAIRS.length;
     }
     hintPairIndexRef.current = nextIdx;
+    setHintIndex(nextIdx);
     const rotated = HINT_PAIRS[nextIdx];
     lastDisplayedHintsRef.current = rotated;
-    setDynamicHints(rotated);
+    setCurrentHints(rotated);
   }, []);
 
   // FAZ 4: Oturum Sonu Karnesi & Desteye Kelime Kaydı
@@ -1318,35 +1320,12 @@ function SpeakingContent() {
               : null;
 
           if (incomingHints) {
-            const candidatePair: [string, string] = [
+            pendingBackendHintsRef.current = [
               String(incomingHints[0] || "").trim(),
               String(incomingHints[1] || "").trim(),
             ];
-            backendHintsForMessageRef.current = replyText;
-            if (
-              !isStaleStaticHint(candidatePair[0]) &&
-              !isStaleStaticHint(candidatePair[1]) &&
-              !isSameHintPair(candidatePair, lastDisplayedHintsRef.current)
-            ) {
-              applyFreshHints(candidatePair);
-            } else {
-              const ctxPair = buildContextualHints(
-                replyText,
-                activeStoryTitle,
-                activeLevel,
-                dialogueRef.current.length + 1
-              );
-              applyFreshHints(ctxPair);
-            }
-          } else if (replyText) {
-            backendHintsForMessageRef.current = "";
-            const ctxPair = buildContextualHints(
-              replyText,
-              activeStoryTitle,
-              activeLevel,
-              dialogueRef.current.length + 1
-            );
-            applyFreshHints(ctxPair);
+          } else {
+            pendingBackendHintsRef.current = null;
           }
           if (replyText) {
             const assistantTurn: DialogueTurn = {
@@ -1792,43 +1771,19 @@ function SpeakingContent() {
     };
   }, [stopListening]);
 
+  // Yalnızca sıra VocaShip'e geçtiğinde (AI konuşmaya başladığında) HINT 1 & HINT 2'yi yenile;
+  // kullanıcı konuşurken (isListening) ipuçları sabit kalsın.
   useEffect(() => {
-    const activePrompt = aiMessage || openingGreeting;
-    if (!activePrompt) return;
-    const phase = isListening ? "listening" : isAiSpeaking ? "speaking" : "idle";
-    const turnKey = `${dialogue.length}::${activePrompt}::${phase}`;
-    if (lastHintTurnKeyRef.current === turnKey) return;
-    lastHintTurnKeyRef.current = turnKey;
-
-    // Yeni bir AI mesajında backend zaten taze ipucu verdiyse aynı mesaj için tekrar ezme;
-    // ancak sıra kullanıcıya (listening) veya yeni bir tura geçtiğinde mutlaka taze çift üret.
-    if (
-      phase !== "listening" &&
-      backendHintsForMessageRef.current &&
-      backendHintsForMessageRef.current === activePrompt
-    ) {
-      return;
+    if (!prevAiSpeakingRef.current && isAiSpeaking) {
+      const backendPair = pendingBackendHintsRef.current;
+      pendingBackendHintsRef.current = null;
+      applyFreshHints(backendPair);
     }
+    prevAiSpeakingRef.current = isAiSpeaking;
+  }, [isAiSpeaking, applyFreshHints]);
 
-    const ctxPair = buildContextualHints(
-      activePrompt,
-      activeStoryTitle,
-      activeLevel,
-      dialogue.length + (phase === "listening" ? 1 : 0)
-    );
-    applyFreshHints(ctxPair);
-  }, [
-    aiMessage,
-    openingGreeting,
-    activeStoryTitle,
-    activeLevel,
-    dialogue.length,
-    isListening,
-    isAiSpeaking,
-    applyFreshHints,
-  ]);
-
-  const activeStarterPhrases = dynamicHints;
+  const activeStarterPhrases = currentHints;
+  void hintIndex;
 
   const isAvatarImageUrl =
     syncedProfile.avatarUrl.startsWith("http") ||
