@@ -16,6 +16,7 @@ import { useTranslation } from "../../context/LanguageContext";
 import { API_BASE } from "../../config";
 import { playNeuralTTS } from "../../utils/tts";
 import PronunciationCoach from "../PronunciationCoach";
+import AddWordToDeckModal, { WordToDeckPayload } from "./AddWordToDeckModal";
 
 export interface TargetVocabularyItem {
   word: string;
@@ -37,23 +38,19 @@ interface TargetVocabularyFlashcardsProps {
 
 interface SingleFlashcardProps {
   item: TargetVocabularyItem;
-  decks?: Array<{ id: string; title: string }>;
-  selectedDeckId?: string;
   forceRevealed?: boolean | null;
-  onCardSaved?: (word: string) => void;
+  isSaved?: boolean;
+  onOpenAddModal: (payload: WordToDeckPayload) => void;
 }
 
 function SingleFlashcard({
   item,
-  decks,
-  selectedDeckId,
   forceRevealed = null,
-  onCardSaved,
+  isSaved = false,
+  onOpenAddModal,
 }: SingleFlashcardProps) {
   const { t, currentLang } = useTranslation();
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [isSaved, setIsSaved] = useState<boolean>(false);
 
   // Parent "Reveal All / Hide All" override
   const displayedRevealed = forceRevealed !== null ? forceRevealed : isRevealed;
@@ -88,50 +85,16 @@ function SingleFlashcard({
     playNeuralTTS(item.word, { rate: 0.95 });
   };
 
-  // 2. Desteye Kart Olarak Ekleme
-  const handleAddToDeck = async (e: React.MouseEvent) => {
+  // 2. Klasör & Deste Seçim Modalını Aç
+  const handleAddToDeck = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isSaved || isSaving) return;
-
-    const targetDeckId = selectedDeckId || (decks && decks.length > 0 ? decks[0].id : "");
-    if (!targetDeckId) {
-      alert(t("select_deck_warning", "Lütfen önce kelimelerin kaydedileceği bir deste seçin veya oluşturun."));
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const res = await fetch(`${API_BASE}/decks/cards`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deck_id: targetDeckId,
-          word: item.word,
-          phonetic: item.phonetic || null,
-          meanings: [
-            {
-              part_of_speech: "",
-              translation: meaningText,
-              definition: meaningText,
-            },
-          ],
-          example_sentences: exampleSentence ? [{ en: exampleSentence, tr: "" }] : [],
-          collocations: [],
-        }),
-      });
-
-      if (res.ok) {
-        setIsSaved(true);
-        if (onCardSaved) onCardSaved(item.word);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || "Kelime kaydedilemedi.");
-      }
-    } catch (err) {
-      console.error("Kelime ekleme hatası:", err);
-    } finally {
-      setIsSaving(false);
-    }
+    if (isSaved) return;
+    onOpenAddModal({
+      word: item.word,
+      phonetic: item.phonetic,
+      translation: meaningText,
+      exampleSentence,
+    });
   };
 
   const toggleReveal = () => {
@@ -176,20 +139,18 @@ function SingleFlashcard({
           <button
             type="button"
             onClick={handleAddToDeck}
-            disabled={isSaved || isSaving}
+            disabled={isSaved}
             className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 ${
               isSaved
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default"
                 : "bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500/50 shadow-sm"
             }`}
-            title={isSaved ? t("added_to_deck", "Desteye Eklendi") : t("add_to_deck", "+ Desteme Ekle")}
+            title={isSaved ? t("added_to_deck_badge", "Desteye Eklendi") : t("add_to_deck", "+ Desteme Ekle")}
           >
-            {isSaving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-            ) : isSaved ? (
+            {isSaved ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">{t("added_to_deck", "Destede")}</span>
+                <span>{t("added_to_deck_badge", "✓ Desteye Eklendi")}</span>
               </>
             ) : (
               <>
@@ -250,13 +211,15 @@ function SingleFlashcard({
 
 export default function TargetVocabularyFlashcards({
   vocabulary,
-  decks,
   selectedDeckId,
   onCardSaved,
   className = "",
 }: TargetVocabularyFlashcardsProps) {
   const { t } = useTranslation();
   const [globalReveal, setGlobalReveal] = useState<boolean | null>(null);
+  const [savedWordsSet, setSavedWordsSet] = useState<Set<string>>(() => new Set());
+  const [activeModalWord, setActiveModalWord] = useState<WordToDeckPayload | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   if (!vocabulary || vocabulary.length === 0) return null;
 
@@ -308,19 +271,41 @@ export default function TargetVocabularyFlashcards({
         </button>
       </div>
 
+      {/* Başarı Bildirimi (Toast) */}
+      {toastMessage && (
+        <div className="px-4 py-2.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-150">
+          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Flashcard Kartları Grid Yapısı */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
         {vocabulary.map((item, idx) => (
           <SingleFlashcard
             key={`${item.word}-${idx}`}
             item={item}
-            decks={decks}
-            selectedDeckId={selectedDeckId}
             forceRevealed={globalReveal}
-            onCardSaved={onCardSaved}
+            isSaved={savedWordsSet.has(item.word.toLowerCase().trim())}
+            onOpenAddModal={(payload) => setActiveModalWord(payload)}
           />
         ))}
       </div>
+
+      {/* Klasör & Deste Seçim Modalı */}
+      <AddWordToDeckModal
+        isOpen={Boolean(activeModalWord)}
+        wordItem={activeModalWord}
+        initialDeckId={selectedDeckId}
+        onClose={() => setActiveModalWord(null)}
+        onSuccess={(savedWord) => {
+          setSavedWordsSet((prev) => new Set(prev).add(savedWord.toLowerCase().trim()));
+          setActiveModalWord(null);
+          if (onCardSaved) onCardSaved(savedWord);
+          setToastMessage(t("read_word_added_toast", "Kelime seçilen desteye eklendi!"));
+          setTimeout(() => setToastMessage(null), 3000);
+        }}
+      />
     </div>
   );
 }
