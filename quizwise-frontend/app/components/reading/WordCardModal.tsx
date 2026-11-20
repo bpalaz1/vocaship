@@ -1,17 +1,19 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Volume2, Plus, Check, X, Loader2, ArrowLeft, Languages } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Volume2, Plus, Check, X, Loader2, ArrowLeft, Languages, Folder } from "lucide-react";
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
 import { playNeuralTTS } from "../../utils/tts";
 import PronunciationCoach from "../PronunciationCoach";
 import { rewardReadingWordAdded } from "../../utils/rewardEngine";
 import { getCachedWordEntry, setCachedWordEntry } from "../../utils/wordMemoryCache";
+import { fetchDecksList, fetchFoldersList, FolderItem } from "../../utils/activeDeckStore";
 
 interface Deck {
     id: string;
     title: string;
+    folder_id?: string | null;
 }
 
 interface WordCardModalProps {
@@ -94,9 +96,67 @@ export default function WordCardModal({
             part_of_speech?: string;
         }>;
     } | null>(null);
+    const [folders, setFolders] = useState<FolderItem[]>([]);
+    const [allDecks, setAllDecks] = useState<Deck[]>(decks);
+    const [selectedFolderId, setSelectedFolderId] = useState<string>("all");
     const [targetDeck, setTargetDeck] = useState(selectedDeckId || (decks[0]?.id ?? ""));
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        const loadFoldersAndDecks = async () => {
+            try {
+                const [fRes, dRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/v1/folders`).catch(() => null),
+                    fetch(`${API_BASE}/api/v1/decks`).catch(() => null),
+                ]);
+                let fList: FolderItem[] = fRes && fRes.ok ? await fRes.json().catch(() => []) : [];
+                let dList: Deck[] = dRes && dRes.ok ? await dRes.json().catch(() => []) : [];
+                if (!Array.isArray(fList) || fList.length === 0) {
+                    fList = await fetchFoldersList().catch(() => []);
+                }
+                if (!Array.isArray(dList) || dList.length === 0) {
+                    const fallbackDecks = await fetchDecksList().catch(() => []);
+                    dList = fallbackDecks.length > 0 ? fallbackDecks : decks;
+                }
+                if (!active) return;
+                setFolders(fList);
+                setAllDecks(dList);
+                if (selectedDeckId && dList.some((d) => d.id === selectedDeckId)) {
+                    setTargetDeck(selectedDeckId);
+                } else if (dList.length > 0) {
+                    setTargetDeck((prev) => (prev && dList.some((d) => d.id === prev) ? prev : dList[0].id));
+                }
+            } catch {}
+        };
+        loadFoldersAndDecks();
+        return () => {
+            active = false;
+        };
+    }, [decks, selectedDeckId]);
+
+    const folderNameById = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const f of folders) map[f.id] = f.name;
+        return map;
+    }, [folders]);
+
+    const filteredDecks = useMemo(() => {
+        if (selectedFolderId === "all") return allDecks;
+        if (selectedFolderId === "none") return allDecks.filter((d) => !d.folder_id);
+        return allDecks.filter((d) => d.folder_id === selectedFolderId);
+    }, [allDecks, selectedFolderId]);
+
+    useEffect(() => {
+        if (filteredDecks.length === 0) {
+            setTargetDeck("");
+            return;
+        }
+        if (!filteredDecks.some((d) => d.id === targetDeck)) {
+            setTargetDeck(filteredDecks[0].id);
+        }
+    }, [filteredDecks, targetDeck]);
 
     useEffect(() => {
         let isMounted = true;
@@ -425,17 +485,47 @@ export default function WordCardModal({
 
                 <div className="pt-2 border-t border-slate-800/80 space-y-3">
                     <div>
+                        <label className="text-xs text-slate-400 flex items-center gap-1.5 mb-1.5">
+                            <Folder className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{t("read_folder_filter_lbl", "Klasör Seçimi")}</span>
+                        </label>
+                        <select
+                            value={selectedFolderId}
+                            onChange={(e) => setSelectedFolderId(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                        >
+                            <option value="all">{t("read_all_folders_opt", "Tüm Klasörler / Genel")}</option>
+                            <option value="none">{t("read_general_no_folder", "Genel (Klasörsüz)")}</option>
+                            {folders.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                    📁 {f.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
                         <label className="text-xs text-slate-400 block mb-1.5">{t("label_target_deck", "Hedef Deste")}</label>
                         <select
                             value={targetDeck}
                             onChange={(e) => setTargetDeck(e.target.value)}
                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                         >
-                            {decks.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                    {d.title}
-                                </option>
-                            ))}
+                            {filteredDecks.length === 0 ? (
+                                <option value="">{t("read_no_decks_in_folder", "Bu klasörde deste bulunamadı")}</option>
+                            ) : (
+                                filteredDecks.map((d) => {
+                                    const fLabel =
+                                        d.folder_id && folderNameById[d.folder_id]
+                                            ? `📁 ${folderNameById[d.folder_id]}`
+                                            : t("read_general_badge", "Genel");
+                                    return (
+                                        <option key={d.id} value={d.id}>
+                                            {d.title} ({fLabel})
+                                        </option>
+                                    );
+                                })
+                            )}
                         </select>
                     </div>
 

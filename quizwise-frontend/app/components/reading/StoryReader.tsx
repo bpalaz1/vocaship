@@ -1862,21 +1862,37 @@ export default function StoryReader({
                                                             (tw: any) => (typeof tw === "string" ? tw : tw.word).toLowerCase() === cleaned
                                                         );
 
+                                                    const isClickableWord = /[a-zA-ZÀ-ÿ'-]+/.test(token);
                                                     return (
                                                         <span
                                                             key={wIdx}
+                                                            role={isClickableWord ? "button" : undefined}
+                                                            tabIndex={isClickableWord ? 0 : undefined}
                                                             onClick={(e) => {
+                                                                if (!isClickableWord) return;
                                                                 e.stopPropagation();
                                                                 handleWordClick(token, sent.text, sent.paragraphIndex);
                                                             }}
-                                                            className={`cursor-pointer inline rounded px-0.5 transition-colors ${
+                                                            onKeyDown={(e) => {
+                                                                if (!isClickableWord) return;
+                                                                if (e.key === "Enter" || e.key === " ") {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    handleWordClick(token, sent.text, sent.paragraphIndex);
+                                                                }
+                                                            }}
+                                                            className={`inline rounded px-0.5 transition-colors ${
+                                                                isClickableWord ? "cursor-pointer " : ""
+                                                            }${
                                                                 isActiveSpokenWord
                                                                     ? "bg-amber-400/25 text-amber-200 rounded px-1 ring-1 ring-amber-400/40"
                                                                     : isSavedWord
                                                                     ? themeStyles.wordSaved
                                                                     : isTargetVocab
                                                                     ? themeStyles.wordTarget
-                                                                    : themeStyles.wordHover
+                                                                    : isClickableWord
+                                                                    ? "hover:bg-indigo-500/20 hover:text-indigo-600 dark:hover:text-indigo-300"
+                                                                    : ""
                                                             }`}
                                                         >
                                                             {token}{" "}
@@ -1997,21 +2013,37 @@ export default function StoryReader({
                                                                 (tw: any) => (typeof tw === "string" ? tw : tw.word).toLowerCase() === cleaned
                                                             );
 
+                                                        const isClickableWord = /[a-zA-ZÀ-ÿ'-]+/.test(token);
                                                         return (
                                                             <span
                                                                 key={wIdx}
+                                                                role={isClickableWord ? "button" : undefined}
+                                                                tabIndex={isClickableWord ? 0 : undefined}
                                                                 onClick={(e) => {
+                                                                    if (!isClickableWord) return;
                                                                     e.stopPropagation();
                                                                     handleWordClick(token, sent.text, pIdx);
                                                                 }}
-                                                                className={`cursor-pointer inline rounded px-0.5 transition-colors ${
+                                                                onKeyDown={(e) => {
+                                                                    if (!isClickableWord) return;
+                                                                    if (e.key === "Enter" || e.key === " ") {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        handleWordClick(token, sent.text, pIdx);
+                                                                    }
+                                                                }}
+                                                                className={`inline rounded px-0.5 transition-colors ${
+                                                                    isClickableWord ? "cursor-pointer " : ""
+                                                                }${
                                                                     isActiveSpokenWord
                                                                         ? "bg-amber-400/25 text-amber-200 rounded px-1 ring-1 ring-amber-400/40"
                                                                         : isSavedWord
                                                                         ? themeStyles.wordSaved
                                                                         : isTargetVocab
                                                                         ? themeStyles.wordTarget
-                                                                        : themeStyles.wordHover
+                                                                        : isClickableWord
+                                                                        ? "hover:bg-indigo-500/20 hover:text-indigo-600 dark:hover:text-indigo-300"
+                                                                        : ""
                                                                 }`}
                                                             >
                                                                 {token}{" "}
