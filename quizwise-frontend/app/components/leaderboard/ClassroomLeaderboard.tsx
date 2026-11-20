@@ -14,6 +14,7 @@ import {
   Flame,
   CheckCircle2,
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface ClassmateMember {
   rank: number;
@@ -73,6 +74,7 @@ export default function ClassroomLeaderboard({
   onSwitchClass,
   availableClasses = [],
 }: ClassroomLeaderboardProps) {
+  const { t } = useLanguage();
   const filterMultiplier =
     activityFilter === "reading" ? 0.6 : activityFilter === "games" ? 0.4 : 1.0;
 
@@ -102,7 +104,7 @@ export default function ClassroomLeaderboard({
     // Kullanıcıyı ekle
     list.push({
       rank: 0,
-      name: `${currentUser.name} (Sen)`,
+      name: `${currentUser.name} (${t("lb_you", "Sen")})`,
       avatar: currentUser.avatar,
       weeklyXp: baseWeekly,
       totalXp: currentUser.totalXp,
@@ -155,11 +157,10 @@ export default function ClassroomLeaderboard({
 
         <div className="max-w-md mx-auto space-y-2">
           <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-            Henüz Bir Sınıfta Değilsin!
+            {t("lb_cls_empty_title", "Henüz Bir Sınıfta Değilsin!")}
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-            Öğretmeninin veya okulunun verdiği 6 haneli sınıf PIN kodunu girerek
-            sınıf arkadaşlarınla izole akran yarışına katıl ve haftalık podyumda yerini al.
+            {t("lb_cls_empty_desc", "Öğretmeninin veya okulunun verdiği 6 haneli sınıf PIN kodunu girerek sınıf arkadaşlarınla izole akran yarışına katıl ve haftalık podyumda yerini al.")}
           </p>
         </div>
 
@@ -170,7 +171,7 @@ export default function ClassroomLeaderboard({
             className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
           >
             <KeyRound className="w-4 h-4 text-amber-300" />
-            <span>🔑 Sınıf Kodu Gir & Katıl</span>
+            <span>{t("lb_cls_enter_join", "🔑 Sınıf Kodu Gir & Katıl")}</span>
           </button>
         </div>
 
@@ -179,30 +180,30 @@ export default function ClassroomLeaderboard({
           <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-1">
             <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold">
               <Trophy className="w-3.5 h-3.5" />
-              <span>Sınıf Podyumu</span>
+              <span>{t("lb_cls_feat1_t", "Sınıf Podyumu")}</span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Yalnızca kendi sınıf arkadaşlarınla haftalık kupa mücadelesi ver.
+              {t("lb_cls_feat1_d", "Yalnızca kendi sınıf arkadaşlarınla haftalık kupa mücadelesi ver.")}
             </p>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-1">
             <div className="flex items-center gap-1.5 text-indigo-400 text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Adil Akran Kümeleri</span>
+              <span>{t("lb_cls_feat2_t", "Adil Akran Kümeleri")}</span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Milyonlarca yabancı yerine sadece tanıdığın arkadaşlarınla yarış.
+              {t("lb_cls_feat2_d", "Milyonlarca yabancı yerine sadece tanıdığın arkadaşlarınla yarış.")}
             </p>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-1">
             <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
               <Zap className="w-3.5 h-3.5" />
-              <span>Çift Sayaç Puanı</span>
+              <span>{t("lb_cls_feat3_t", "Çift Sayaç Puanı")}</span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Kalıcı XP ile seviye atla, haftalık puanla sınıf birinciliğini kap.
+              {t("lb_cls_feat3_d", "Kalıcı XP ile seviye atla, haftalık puanla sınıf birinciliğini kap.")}
             </p>
           </div>
         </div>
@@ -231,11 +232,11 @@ export default function ClassroomLeaderboard({
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1">
                 <Users className="w-3 h-3 text-slate-400" />
-                <span>{classmateList.length} Öğrenci</span>
+                <span>{classmateList.length} {t("lb_cls_student_unit", "Öğrenci")}</span>
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Haftalık sınıf içi yarış • Sıfırlanma: Pazar 23:59
+              {t("lb_cls_reset_sub", "Haftalık sınıf içi yarış • Sıfırlanma: Pazar 23:59")}
             </p>
           </div>
         </div>
@@ -262,8 +263,8 @@ export default function ClassroomLeaderboard({
             className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
           >
             <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Yeni Sınıfa Katıl</span>
-            <span className="sm:hidden">Sınıf Kodu</span>
+            <span className="hidden sm:inline">{t("lb_cls_join_new", "Yeni Sınıfa Katıl")}</span>
+            <span className="sm:hidden">{t("lb_cls_pin_short", "Sınıf Kodu")}</span>
           </button>
         </div>
       </div>
@@ -291,7 +292,7 @@ export default function ClassroomLeaderboard({
             {/* Podyum Bloğu */}
             <div className="w-full h-20 sm:h-24 mt-2 rounded-t-2xl bg-gradient-to-t from-slate-900 to-slate-800/80 border-t-2 border-x border-slate-400/40 flex flex-col items-center justify-center">
               <span className="text-lg sm:text-xl">🥈</span>
-              <span className="text-[10px] font-bold text-slate-300">2. Gümüş</span>
+              <span className="text-[10px] font-bold text-slate-300">{t("lb_cls_2nd_silver", "2. Gümüş")}</span>
             </div>
           </div>
         )}
@@ -320,7 +321,7 @@ export default function ClassroomLeaderboard({
               <div className="absolute inset-0 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
               <span className="text-2xl sm:text-3xl">🥇</span>
               <span className="text-[10px] font-black text-amber-300 tracking-wide">
-                1. Şampiyon
+                {t("lb_cls_1st_champ", "1. Şampiyon")}
               </span>
             </div>
           </div>
@@ -347,7 +348,7 @@ export default function ClassroomLeaderboard({
             {/* Podyum Bloğu */}
             <div className="w-full h-16 sm:h-20 mt-2 rounded-t-2xl bg-gradient-to-t from-slate-900 to-slate-800/80 border-t-2 border-x border-amber-600/40 flex flex-col items-center justify-center">
               <span className="text-lg sm:text-xl">🥉</span>
-              <span className="text-[10px] font-bold text-amber-400">3. Bronz</span>
+              <span className="text-[10px] font-bold text-amber-400">{t("lb_cls_3rd_bronze", "3. Bronz")}</span>
             </div>
           </div>
         )}
@@ -357,12 +358,12 @@ export default function ClassroomLeaderboard({
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl backdrop-blur-md">
         <div className="px-4 py-3 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between text-xs font-bold text-slate-400">
           <div className="flex items-center gap-4">
-            <span className="w-8 text-center">Sıra</span>
-            <span>Öğrenci</span>
+            <span className="w-8 text-center">{t("lb_col_rank", "Sıra")}</span>
+            <span>{t("lb_col_student", "Öğrenci")}</span>
           </div>
           <div className="flex items-center gap-6">
-            <span className="hidden sm:inline">Kalıcı Toplam</span>
-            <span>Bu Hafta</span>
+            <span className="hidden sm:inline">{t("lb_col_perm_total", "Kalıcı Toplam")}</span>
+            <span>{t("lb_col_this_week", "Bu Hafta")}</span>
           </div>
         </div>
 
@@ -417,7 +418,7 @@ export default function ClassroomLeaderboard({
                       </span>
                       {isMe && (
                         <span className="px-1.5 py-0.2 rounded-md bg-amber-400 text-slate-950 font-black text-[9px] uppercase tracking-wider">
-                          Sen
+                          {t("lb_you", "Sen")}
                         </span>
                       )}
                     </div>
@@ -428,7 +429,7 @@ export default function ClassroomLeaderboard({
                       <span>•</span>
                       <span className="flex items-center gap-0.5">
                         <Flame className="w-2.5 h-2.5 text-orange-400" />
-                        <span>Sınıf İçi</span>
+                        <span>{t("lb_cls_in_class", "Sınıf İçi")}</span>
                       </span>
                     </div>
                   </div>
@@ -441,7 +442,7 @@ export default function ClassroomLeaderboard({
                       <Zap className="w-3 h-3 text-indigo-400" />
                       <span>{member.totalXp.toLocaleString()} XP</span>
                     </span>
-                    <span className="text-[9px] text-slate-500">Kalıcı</span>
+                    <span className="text-[9px] text-slate-500">{t("lb_perm_lbl", "Kalıcı")}</span>
                   </div>
 
                   <div className="flex flex-col items-end min-w-[75px]">
@@ -457,7 +458,7 @@ export default function ClassroomLeaderboard({
                       {member.weeklyXp.toLocaleString()} XP
                     </span>
                     <span className="text-[9px] font-semibold text-emerald-400">
-                      Bu Hafta
+                      {t("lb_col_this_week", "Bu Hafta")}
                     </span>
                   </div>
                 </div>

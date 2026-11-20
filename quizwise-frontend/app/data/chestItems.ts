@@ -1,8 +1,15 @@
 /**
- * 50 Parçalık Zengin Koleksiyon Veri Havuzu (30 Maskot Avatarı + 20 Efsanevi Ekipman)
- * 4 Kademeli Baraj Eşiği (20 / 100 / 300 / 500 Kelime)
- * Çifte Kilit Doğrulaması & Sihirli Toz (Dust Crafting) Altyapısı
+ * Bütünleşik Sandık Mağazası & Koleksiyon Havuzu
+ * Tüm karakterler ve ekipmanlar 4 kademede tek havuzda birleştirilmiştir.
+ * Tek geçerli para birimi: Altın (🪙). Kayıpsız sandık açılışı.
  */
+
+import {
+  MUSEUM_ITEMS,
+  getMuseumItemBuff,
+  MuseumCategory,
+  MuseumPassiveBuff,
+} from "./museumItems";
 
 export type ItemType = "avatar" | "equipment";
 export type ItemRarity = "common" | "rare" | "epic" | "legendary";
@@ -17,16 +24,20 @@ export interface ChestItem {
   type: ItemType;
   rarity: ItemRarity;
   chestTier: 1 | 2 | 3 | 4;
+  category?: MuseumCategory;
+  source?: "chest" | "museum";
   icon: string;
-  image: string; // Vektörel SVG veya /avatars/... görseli
+  image: string; // Vektörel SVG
   description: {
     tr: string;
     en: string;
   };
+  storyLore?: string;
   bonusEffect?: {
     tr: string;
     en: string;
   };
+  passiveBuff?: MuseumPassiveBuff;
 }
 
 export interface ChestDefinition {
@@ -45,18 +56,6 @@ export interface ChestDefinition {
   description: string;
   itemIds: string[];
 }
-
-// =============================================================================
-// SİHİRLİ TOZ (DUST) DÖNÜŞÜM & SENTEZ DEĞERLERİ
-// =============================================================================
-export const DUST_REWARDS: Record<ItemRarity, number> = {
-  common: 15,
-  rare: 30,
-  epic: 60,
-  legendary: 150,
-};
-
-export const DUST_CRAFT_COST = 100; // 100 Toz ile istenen eksik kart sentezlenir
 
 // =============================================================================
 // 4 KADEMELİ TEMATİK SANDIK TANIMLARI
@@ -185,7 +184,7 @@ export const CHESTS: ChestDefinition[] = [
 // =============================================================================
 // 50 PARÇALIK TAM KOLEKSİYON HAVUZU (30 MASKOT + 20 EKİPMAN)
 // =============================================================================
-export const CHEST_ITEMS: ChestItem[] = [
+export const CORE_CHEST_ITEMS: ChestItem[] = [
   // ---------------------------------------------------------------------------
   // TIER 1: DOĞA & KEŞİF SANDIĞI (15 Parça: 10 Maskot + 5 Ekipman)
   // ---------------------------------------------------------------------------
@@ -873,19 +872,163 @@ export const CHEST_ITEMS: ChestItem[] = [
   },
 ];
 
+const CORE_CREATURE_IDS = new Set([
+  "fox_sparky",
+  "chicken_chuck",
+  "river_beaver",
+  "forest_frog",
+  "night_owl",
+  "baby_panda",
+  "apprentice_cat",
+  "cheerful_squirrel",
+  "wise_turtle",
+  "mountain_goat",
+  "stone_golem",
+  "winged_pegasus",
+  "armored_bear",
+  "cave_troll",
+  "cyber_cat",
+  "plasma_alien",
+  "ancient_lava_dragon_ignis",
+  "golden_phoenix",
+  "cosmic_dragon_bahamut",
+]);
+
+const CORE_RELIC_IDS = new Set([
+  "bronze_dagger",
+  "knight_steel_shield",
+  "flaming_dict_sword",
+  "wind_boots",
+  "gravity_belt",
+  "quantum_visor",
+  "ancient_wisdom_shield",
+  "volcanic_dragon_staff",
+]);
+
+const CORE_MONUMENT_IDS = new Set([
+  "wooden_dict_pen",
+  "apprentice_notebook",
+  "nature_compass",
+  "leaf_amulet",
+  "silver_quill",
+  "ancient_scroll",
+  "laser_pen",
+  "cosmic_compass",
+  "cosmic_gold_pen",
+]);
+
+function classifyCoreItemCategory(item: ChestItem): MuseumCategory {
+  if (CORE_CREATURE_IDS.has(item.id)) return "creatures";
+  if (CORE_RELIC_IDS.has(item.id)) return "relics";
+  if (CORE_MONUMENT_IDS.has(item.id)) return "monuments";
+  return item.type === "avatar" ? "heroes" : "relics";
+}
+
+// Tüm müze karakterlerini, ejderhaları, kaleleri ve silahları eksiksiz olarak Sandık Mağazası havuzuna birleştir
+const _usedIds = new Set(CORE_CHEST_ITEMS.map((item) => item.id));
+const _mergedMuseumEntries: ChestItem[] = MUSEUM_ITEMS.map((m) => {
+  const uniqueId = _usedIds.has(m.id) ? `museum_${m.id}` : m.id;
+  _usedIds.add(uniqueId);
+  const buff = getMuseumItemBuff(m);
+  return {
+    id: uniqueId,
+    name: { tr: m.title, en: m.title, de: m.title },
+    type: m.category === "heroes" || m.category === "creatures" ? "avatar" : "equipment",
+    rarity: m.rarity,
+    chestTier: m.salonId,
+    category: m.category,
+    source: "museum",
+    icon: m.avatarIcon,
+    image: m.avatarIcon,
+    description: { tr: m.description, en: m.storyLore || m.description },
+    storyLore: m.storyLore,
+    bonusEffect: { tr: buff.label, en: buff.label },
+    passiveBuff: buff,
+  };
+});
+
+export type BaseCollectionFilter = "all" | "mascots" | "equipment" | "future";
+
+export function getBaseCollectionGroup(
+  item: ChestItem
+): Exclude<BaseCollectionFilter, "all"> {
+  if (item.type === "equipment") return "equipment";
+  if (item.chestTier >= 3) return "future";
+  return "mascots";
+}
+
+export const BASE_CHEST_ITEMS: ChestItem[] = CORE_CHEST_ITEMS.map((item) => {
+  const category = item.category || classifyCoreItemCategory(item);
+  const passiveBuff =
+    item.passiveBuff ||
+    getMuseumItemBuff({
+      id: item.id,
+      salonId: item.chestTier,
+      title: item.name.tr,
+      category,
+      rarity: item.rarity,
+      description: item.description.tr,
+      storyLore: item.description.en,
+      avatarIcon: item.icon,
+    });
+  return {
+    ...item,
+    category,
+    source: item.source || ("chest" as const),
+    passiveBuff,
+  };
+});
+
+export const EPIC_MUSEUM_ITEMS: ChestItem[] = _mergedMuseumEntries;
+
+export const ALL_CHEST_ITEMS: ChestItem[] = [
+  ...BASE_CHEST_ITEMS,
+  ...EPIC_MUSEUM_ITEMS,
+];
+
+export const CHEST_ITEMS: ChestItem[] = ALL_CHEST_ITEMS;
+
+// Her sandık kademesinin havuzunu 50 karakter/eserlik BASE_CHEST_ITEMS havuzuyla eşitle
+CHESTS.forEach((chest) => {
+  const tierIds = BASE_CHEST_ITEMS.filter((item) => item.chestTier === chest.tier).map(
+    (item) => item.id
+  );
+  chest.itemIds = Array.from(new Set(tierIds));
+});
+
 // =============================================================================
-// ÇİFTE KİLİT KONTROL ALGORİTMASI (DUAL-GATE ALGORITHM)
+// ÇİFTE KİLİT KONTROL ALGORİTMASI (DUAL-GATE ALGORITHM — 50 ÖĞELİK GARANTİLİ HAVUZ)
 // =============================================================================
 export function checkChestAccess(
   chest: ChestDefinition,
   userLearnedWords: number = 0,
-  userGold: number = 0
+  userGold: number = 0,
+  unlockedIds: string[] = []
 ): {
   canOpen: boolean;
   wordLock: boolean;
   goldLock: boolean;
+  allUnlocked: boolean;
+  remainingLockedCount: number;
   message: string;
 } {
+  const tierItems = BASE_CHEST_ITEMS.filter(
+    (item) => item.chestTier === chest.tier || chest.itemIds.includes(item.id)
+  );
+  const lockedItems = tierItems.filter((item) => !unlockedIds.includes(item.id));
+  const remainingLockedCount = lockedItems.length;
+
+  if (remainingLockedCount === 0) {
+    return {
+      canOpen: false,
+      wordLock: false,
+      goldLock: false,
+      allUnlocked: true,
+      remainingLockedCount: 0,
+      message: "🎉 Bu kademedeki tüm karakterler ve eserler açıldı!",
+    };
+  }
+
   const wordLock = userLearnedWords < chest.requiredWords;
   const goldLock = userGold < chest.costGold;
 
@@ -894,6 +1037,8 @@ export function checkChestAccess(
       canOpen: false,
       wordLock: true,
       goldLock,
+      allUnlocked: false,
+      remainingLockedCount,
       message: `🔒 ${chest.requiredWords} Kelime Öğrenince Açılır (${userLearnedWords}/${chest.requiredWords})`,
     };
   }
@@ -903,6 +1048,8 @@ export function checkChestAccess(
       canOpen: false,
       wordLock: false,
       goldLock: true,
+      allUnlocked: false,
+      remainingLockedCount,
       message: `🪙 ${chest.costGold - userGold} Altın Daha Gerekli (${userGold}/${chest.costGold})`,
     };
   }
@@ -911,20 +1058,29 @@ export function checkChestAccess(
     canOpen: true,
     wordLock: false,
     goldLock: false,
-    message: `Açmaya Hazır! (${chest.costGold} 🪙)`,
+    allUnlocked: false,
+    remainingLockedCount,
+    message: `Açmaya Hazır! (${chest.costGold} 🪙 • ${remainingLockedCount} Kilitli Parça)`,
   };
 }
 
 /**
- * Sandıktan rastgele eşya çekme fonksiyonu
+ * Kayıpsız Sandık Açılışı:
+ * Yalnızca 50 karakter/eserlik BASE_CHEST_ITEMS havuzundaki HENÜZ KİLİDİ AÇILMAMIŞ
+ * (kilitli) eşyalardan birini garanti olarak çeker — mükerrer kart asla çıkmaz.
  */
-export function drawItemFromChest(chest: ChestDefinition): ChestItem {
-  const candidateItems = CHEST_ITEMS.filter((item) =>
-    chest.itemIds.includes(item.id)
+export function drawItemFromChest(
+  chest: ChestDefinition,
+  unlockedIds: string[] = []
+): ChestItem | null {
+  const candidateItems = BASE_CHEST_ITEMS.filter(
+    (item) =>
+      (item.chestTier === chest.tier || chest.itemIds.includes(item.id)) &&
+      !unlockedIds.includes(item.id)
   );
 
   if (candidateItems.length === 0) {
-    return CHEST_ITEMS[0];
+    return null;
   }
 
   // Nadirlik Ağırlıkları

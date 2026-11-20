@@ -5,6 +5,8 @@
  * kural tabanlı motor.
  */
 
+import { pickUiText, formatUiText } from "./uiLocale";
+
 export type GrammarRole =
   | "subject"
   | "verb"
@@ -143,24 +145,59 @@ export function decompileSentence(sentence: string): DecompiledSentence {
     .trim()
     .toLowerCase();
 
+  const roleTitle = (role: GrammarRole) => {
+    switch (role) {
+      case "subject":
+        return pickUiText({ tr: "Özne (Subject)", en: "Subject", de: "Subjekt", es: "Sujeto", fr: "Sujet" });
+      case "verb":
+        return pickUiText({ tr: "Yüklem (Verb Phrase)", en: "Verb Phrase", de: "Prädikat (Verb)", es: "Verbo / Predicado", fr: "Verbe / Prédicat" });
+      case "object":
+        return pickUiText({ tr: "Nesne / Tamlayıcı (Object / Complement)", en: "Object / Complement", de: "Objekt / Ergänzung", es: "Objeto / Complemento", fr: "Objet / Complément" });
+      case "adverbial":
+        return pickUiText({ tr: "Zarf / Koşul Öbeği (Adverbial Clause)", en: "Adverbial / Conditional Clause", de: "Adverbial- / Bedingungssatz", es: "Cláusula adverbial / condicional", fr: "Proposition circonstancielle" });
+      case "conjunction":
+        return pickUiText({ tr: "Bağlaç", en: "Conjunction", de: "Konjunktion", es: "Conjunción", fr: "Conjonction" });
+      default:
+        return pickUiText({ tr: "Öge", en: "Element", de: "Element", es: "Elemento", fr: "Élément" });
+    }
+  };
+
   // 1. Katalogda varsa doğrudan kusursuz referansı döndür
   const catalogMatch = PRE_DECOMPILED_CATALOG[cleanKey];
   if (catalogMatch && catalogMatch.components) {
     const tokens = sentence.trim().split(/\s+/);
     return {
       originalSentence: sentence,
-      components: catalogMatch.components as DecompiledComponent[],
+      components: (catalogMatch.components as DecompiledComponent[]).map((c) => ({
+        ...c,
+        titleTr: roleTitle(c.role),
+        explanationTr:
+          c.role === "subject"
+            ? pickUiText({ tr: "Cümlenin eylemini yapan 'Gerund' (fiilimsi) özne öbeği.", en: "Gerund subject phrase performing the core action of the clause.", de: "Gerundium-Subjektgruppe, die die Haupthandlung ausführt.", es: "Sujeto en gerundio que realiza la acción principal.", fr: "Groupe sujet au gérondif effectuant l'action principale." })
+            : c.role === "verb"
+            ? pickUiText({ tr: "Ana eylem fiili (Simple Present, 3. tekil şahıs).", en: "Main finite action verb (Simple Present, 3rd person singular).", de: "Hauptverb im Präsens (3. Person Singular).", es: "Verbo principal de acción (presente simple).", fr: "Verbe d'action principal (présent simple)." })
+            : pickUiText({ tr: "Yüklemin doğrudan etkilediği veya tamamladığı nesne öbeği.", en: "Object phrase directly completing the verb's requirement.", de: "Objektgruppe, die die Verbhandlung direkt vervollständigt.", es: "Objeto que completa directamente la acción del verbo.", fr: "Complément d'objet direct complétant le verbe." }),
+      })),
       tokenTags: tokens.map((token) => ({
         token,
         role: "subject",
-        roleTitleTr: "Öge",
+        roleTitleTr: pickUiText({ tr: "Öge", en: "Element", de: "Element", es: "Elemento", fr: "Élément" }),
       })),
       conjunctions: [],
-      turkishSkeleton:
-        catalogMatch.turkishSkeleton ||
-        "[Özne] ➔ [Zarf / Koşul] ➔ [Nesne] ➔ [Yüklem]",
-      structureFormula:
-        catalogMatch.structureFormula || "S + V + O + A (İngilizce Sözdizimi)",
+      turkishSkeleton: pickUiText({
+        tr: "Gecikme taleplerini yönetmek [Özne] ➔ bildirim prosedürlerine sıkı sıkıya bağlı kalmayı [Nesne] ➔ gerektirir [Yüklem].",
+        en: "[Subject: Managing delay claims] ➔ [Verb: requires] ➔ [Object: strict adherence to notification procedures].",
+        de: "[Subjekt: Managing delay claims] ➔ [Verb: requires] ➔ [Objekt: strict adherence to notification procedures].",
+        es: "[Sujeto: Managing delay claims] ➔ [Verbo: requires] ➔ [Objeto: strict adherence to notification procedures].",
+        fr: "[Sujet : Managing delay claims] ➔ [Verbe : requires] ➔ [Objet : strict adherence to notification procedures].",
+      }),
+      structureFormula: pickUiText({
+        tr: "Özne (Gerund) + Yüklem + Nesne / Edat Öbeği",
+        en: "Subject (Gerund) + Verb + Object / Prepositional Phrase",
+        de: "Subjekt (Gerund) + Verb + Objekt / Präpositionalphrase",
+        es: "Sujeto (Gerundio) + Verbo + Objeto / Frase preposicional",
+        fr: "Sujet (Gérondif) + Verbe + Objet / Groupe prépositionnel",
+      }),
     };
   }
 
@@ -237,44 +274,44 @@ export function decompileSentence(sentence: string): DecompiledSentence {
   if (adverbialPrefix) {
     components.push({
       role: "adverbial",
-      titleTr: "Zarf / Koşul Öbeği (Adverbial Clause)",
+      titleTr: roleTitle("adverbial"),
       badgeColorClass: "bg-purple-950/60 border border-purple-500/40 text-purple-200",
       cardColorClass: "border-purple-500/30 bg-purple-950/20",
       text: adverbialPrefix,
-      explanationTr: "Cümlenin nerede, ne zaman veya hangi koşul altında gerçekleştiğini bildiren giriş öbeği.",
+      explanationTr: pickUiText({ tr: "Cümlenin nerede, ne zaman veya hangi koşul altında gerçekleştiğini bildiren giriş öbeği.", en: "Introductory clause specifying where, when, or under what condition the action occurs.", de: "Einleitender Teilsatz, der Ort, Zeit oder Bedingung der Handlung angibt.", es: "Cláusula introductoria que indica dónde, cuándo o bajo qué condición ocurre la acción.", fr: "Proposition introductive précisant le lieu, le temps ou la condition de l'action." }),
     });
   }
 
   if (subjectText) {
     components.push({
       role: "subject",
-      titleTr: "Özne (Subject)",
+      titleTr: roleTitle("subject"),
       badgeColorClass: "bg-blue-950/60 border border-blue-500/40 text-blue-200",
       cardColorClass: "border-blue-500/30 bg-blue-950/20",
       text: subjectText,
-      explanationTr: "Eylemi gerçekleştiren veya durumun merkezinde yer alan ana fail ya da kavram.",
+      explanationTr: pickUiText({ tr: "Eylemi gerçekleştiren veya durumun merkezinde yer alan ana fail ya da kavram.", en: "Main agent or concept performing the action or standing at the center of the clause.", de: "Handelnder Akteur oder zentraler Begriff des Satzes.", es: "Agente principal o concepto central que realiza la acción.", fr: "Agent principal ou concept central qui accomplit l'action." }),
     });
   }
 
   if (verbText) {
     components.push({
       role: "verb",
-      titleTr: "Yüklem (Verb Phrase)",
+      titleTr: roleTitle("verb"),
       badgeColorClass: "bg-emerald-950/60 border border-emerald-500/40 text-emerald-200",
       cardColorClass: "border-emerald-500/30 bg-emerald-950/20",
       text: verbText,
-      explanationTr: "Cümlenin zamanını (Tense), modal kipini ve temel aksiyonunu yüklenen ana çekirdek.",
+      explanationTr: pickUiText({ tr: "Cümlenin zamanını (Tense), modal kipini ve temel aksiyonunu yüklenen ana çekirdek.", en: "Core verb phrase carrying tense, modality, and main action.", de: "Kernverb, das Tempus, Modalität und Haupthandlung trägt.", es: "Núcleo verbal que expresa el tiempo, el modo y la acción principal.", fr: "Noyau verbal portant le temps, la modalité et l'action principale." }),
     });
   }
 
   if (objectText) {
     components.push({
       role: "object",
-      titleTr: "Nesne / Tamlayıcı (Object / Complement)",
+      titleTr: roleTitle("object"),
       badgeColorClass: "bg-amber-950/60 border border-amber-500/40 text-amber-200",
       cardColorClass: "border-amber-500/30 bg-amber-950/20",
       text: objectText,
-      explanationTr: "Fiilin etkilediği öge, durum veya amaca dair açıklamayı tamamlayan parça.",
+      explanationTr: pickUiText({ tr: "Fiilin etkilediği öge, durum veya amaca dair açıklamayı tamamlayan parça.", en: "Element affected by the verb or completing the condition/purpose.", de: "Das vom Verb betroffene Objekt bzw. die ergänzende Aussage.", es: "Elemento afectado por el verbo o complemento de propósito.", fr: "Élément affecté par le verbe ou complétant l'énoncé." }),
     });
   }
 
@@ -287,21 +324,26 @@ export function decompileSentence(sentence: string): DecompiledSentence {
   }
 
   // Token etiketleme
+  const lblConj = roleTitle("conjunction");
+  const lblAdv = pickUiText({ tr: "Zarf / Koşul", en: "Adverbial", de: "Adverbial", es: "Adverbial", fr: "Circonstanciel" });
+  const lblSubj = pickUiText({ tr: "Özne", en: "Subject", de: "Subjekt", es: "Sujeto", fr: "Sujet" });
+  const lblVerb = pickUiText({ tr: "Yüklem", en: "Verb", de: "Verb", es: "Verbo", fr: "Verbe" });
+  const lblObj = pickUiText({ tr: "Nesne", en: "Object", de: "Objekt", es: "Objeto", fr: "Objet" });
   const tokenTags: TokenGrammarTag[] = rawWords.map((t) => {
     const clean = t.replace(/[^\w]/g, "").toLowerCase();
     if (CONJUNCTIONS.has(clean)) {
-      return { token: t, role: "conjunction", roleTitleTr: "Bağlaç" };
+      return { token: t, role: "conjunction", roleTitleTr: lblConj };
     }
     if (adverbialPrefix && adverbialPrefix.includes(t)) {
-      return { token: t, role: "adverbial", roleTitleTr: "Zarf / Koşul" };
+      return { token: t, role: "adverbial", roleTitleTr: lblAdv };
     }
     if (subjectText.includes(t)) {
-      return { token: t, role: "subject", roleTitleTr: "Özne" };
+      return { token: t, role: "subject", roleTitleTr: lblSubj };
     }
     if (verbText.includes(t)) {
-      return { token: t, role: "verb", roleTitleTr: "Yüklem" };
+      return { token: t, role: "verb", roleTitleTr: lblVerb };
     }
-    return { token: t, role: "object", roleTitleTr: "Nesne" };
+    return { token: t, role: "object", roleTitleTr: lblObj };
   });
 
   const turkishSkeleton = adverbialPrefix
@@ -309,8 +351,8 @@ export function decompileSentence(sentence: string): DecompiledSentence {
     : `[${subjectText}] ➔ [${objectText}] ➔ [${verbText}]`;
 
   const structureFormula = adverbialPrefix
-    ? "A (Zarf / Koşul) + S (Özne) + V (Yüklem) + O (Nesne)"
-    : "S (Özne) + V (Yüklem) + O (Nesne)";
+    ? formatUiText({ tr: "A ({adv}) + S ({subj}) + V ({verb}) + O ({obj})", en: "A (Adverbial) + S (Subject) + V (Verb) + O (Object)", de: "A (Adverbial) + S (Subjekt) + V (Verb) + O (Objekt)", es: "A (Adverbial) + S (Sujeto) + V (Verbo) + O (Objeto)", fr: "A (Circonstanciel) + S (Sujet) + V (Verbe) + O (Objet)" }, { adv: lblAdv, subj: lblSubj, verb: lblVerb, obj: lblObj })
+    : formatUiText({ tr: "S ({subj}) + V ({verb}) + O ({obj})", en: "S (Subject) + V (Verb) + O (Object)", de: "S (Subjekt) + V (Verb) + O (Objekt)", es: "S (Sujeto) + V (Verbo) + O (Objeto)", fr: "S (Sujet) + V (Verbe) + O (Objet)" }, { subj: lblSubj, verb: lblVerb, obj: lblObj });
 
   return {
     originalSentence: sentence,

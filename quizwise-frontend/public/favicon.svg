@@ -1,0 +1,23 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="28" fill="#0B0F19" />
+  <defs>
+    <linearGradient id="vocaLeftStroke" x1="16" y1="20" x2="48" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="55%" stop-color="#0EA5E9" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+    <linearGradient id="vocaPageSail" x1="46" y1="80" x2="96" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="45%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+    <linearGradient id="vocaWaveLine" x1="20" y1="96" x2="100" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="50%" stop-color="#0EA5E9" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+  </defs>
+  <path d="M18 22 L34 22 L52 70 L44 82 Z" stroke="url(#vocaLeftStroke)" stroke-width="5.5" stroke-linejoin="round" fill="none" />
+  <path d="M44 82 C50 52, 66 30, 96 20 C92 48, 86 64, 82 72 C66 70, 54 74, 44 82 Z" fill="url(#vocaPageSail)" />
+  <path d="M22 96 Q 42 88, 60 96 T 98 96" stroke="url(#vocaWaveLine)" stroke-width="5" stroke-linecap="round" fill="none" />
+</svg>

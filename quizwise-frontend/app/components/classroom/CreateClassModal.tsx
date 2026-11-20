@@ -22,13 +22,17 @@ import {
 import confetti from "canvas-confetti";
 import { useAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { API_BASE } from "../../config";
+import { maskIban } from "./PayoutSetupModal";
 
 export interface CreateClassModalProps {
   isOpen: boolean;
   onClose: () => void;
   onClassCreated?: (createdClass: any) => void;
   onOpenIbanSettings?: () => void;
+  onOpenPayoutModal?: () => void;
+  payoutRefreshKey?: number;
 }
 
 export default function CreateClassModal({
@@ -36,9 +40,12 @@ export default function CreateClassModal({
   onClose,
   onClassCreated,
   onOpenIbanSettings,
+  onOpenPayoutModal,
+  payoutRefreshKey = 0,
 }: CreateClassModalProps) {
   const { user } = useAuth();
-  const { userProfile, setSettingsInitialTab, setIsSettingsModalOpen } = useProfile();
+  const { userProfile } = useProfile();
+  const { t } = useLanguage();
 
   // Form Değerleri
   const [className, setClassName] = useState("");
@@ -63,7 +70,9 @@ export default function CreateClassModal({
 
   // İhtiyaç Anında IBAN Kontrolü (Lazy Onboarding)
   const [hasIban, setHasIban] = useState<boolean | null>(null);
+  const [maskedIban, setMaskedIban] = useState<string | null>(null);
   const [isCheckingIban, setIsCheckingIban] = useState<boolean>(false);
+  const [hasAutoPromptedPayout, setHasAutoPromptedPayout] = useState<boolean>(false);
 
   // İşlem Durumları
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -90,26 +99,53 @@ export default function CreateClassModal({
       setCurrency("TRY");
       setBillingType("one_time");
       setHasIban(null);
+      setMaskedIban(null);
+      setHasAutoPromptedPayout(false);
       setErrorMessage(null);
       setCreatedClassData(null);
       setIsCopied(false);
     }
   }, [isOpen]);
 
+  // Bağımsız Korumalı Hakediş Penceresini Aç
+  const handleOpenIbanModal = () => {
+    if (onOpenPayoutModal) {
+      onOpenPayoutModal();
+    } else if (onOpenIbanSettings) {
+      onOpenIbanSettings();
+    }
+  };
+
   // Ücretli seçildiğinde IBAN profilini arka planda sorgula
-  const checkTeacherIban = async () => {
+  const checkTeacherIban = async (autoPromptIfMissing: boolean = false) => {
     const userId = user?.id || userProfile?.username || "00000000-0000-0000-0000-000000000001";
     setIsCheckingIban(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/payments/payout-profile?user_id=${encodeURIComponent(userId)}`);
       if (res.ok) {
         const data = await res.json();
-        setHasIban(Boolean(data.has_profile && data.profile?.iban));
+        const valid = Boolean(data.has_profile && data.profile?.iban);
+        setHasIban(valid);
+        setMaskedIban(valid ? maskIban(data.profile.iban) : null);
+        if (!valid && autoPromptIfMissing && !hasAutoPromptedPayout) {
+          setHasAutoPromptedPayout(true);
+          handleOpenIbanModal();
+        }
       } else {
         setHasIban(false);
+        setMaskedIban(null);
+        if (autoPromptIfMissing && !hasAutoPromptedPayout) {
+          setHasAutoPromptedPayout(true);
+          handleOpenIbanModal();
+        }
       }
     } catch {
       setHasIban(false);
+      setMaskedIban(null);
+      if (autoPromptIfMissing && !hasAutoPromptedPayout) {
+        setHasAutoPromptedPayout(true);
+        handleOpenIbanModal();
+      }
     } finally {
       setIsCheckingIban(false);
     }
@@ -117,9 +153,15 @@ export default function CreateClassModal({
 
   useEffect(() => {
     if (isPaid && hasIban === null) {
-      checkTeacherIban();
+      checkTeacherIban(true);
     }
   }, [isPaid, hasIban]);
+
+  useEffect(() => {
+    if (isOpen && isPaid && payoutRefreshKey > 0) {
+      checkTeacherIban(false);
+    }
+  }, [payoutRefreshKey]);
 
   if (!isOpen) return null;
 
@@ -130,7 +172,7 @@ export default function CreateClassModal({
 
     // Ücretli ise ve IBAN yoksa engelle
     if (isPaid && hasIban === false) {
-      setErrorMessage("Ücretli ders açabilmek için önce IBAN bilgilerinizi tanımlamalısınız.");
+      setErrorMessage(t("cls_cm_err_iban", "Ücretli ders açabilmek için önce IBAN bilgilerinizi tanımlamalısınız."));
       return;
     }
 
@@ -176,13 +218,13 @@ export default function CreateClassModal({
         const err = await res.json();
         if (err.detail === "IBAN_REQUIRED") {
           setHasIban(false);
-          setErrorMessage(err.message || "Ücretli ders açmak için önce IBAN bilgilerinizi tanımlamalısınız.");
+          setErrorMessage(err.message || t("cls_cm_err_iban", "Ücretli ders açabilmek için önce IBAN bilgilerinizi tanımlamalısınız."));
         } else {
-          setErrorMessage(err.detail || err.message || "Sınıf oluşturulurken bir hata oluştu.");
+          setErrorMessage(err.detail || err.message || t("cls_cm_err_create", "Sınıf oluşturulurken bir hata oluştu."));
         }
       }
     } catch (err) {
-      setErrorMessage("Sunucu bağlantısı sağlanamadı. Lütfen tekrar deneyin.");
+      setErrorMessage(t("cls_cm_err_conn", "Sunucu bağlantısı sağlanamadı. Lütfen tekrar deneyin."));
     } finally {
       setIsSubmitting(false);
     }
@@ -197,16 +239,6 @@ export default function CreateClassModal({
     navigator.clipboard.writeText(inviteUrl);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2500);
-  };
-
-  // Ayarlar -> IBAN sekmesine yönlendir
-  const handleOpenIbanModal = () => {
-    if (onOpenIbanSettings) {
-      onOpenIbanSettings();
-    } else {
-      setSettingsInitialTab("payout");
-      setIsSettingsModalOpen(true);
-    }
   };
 
   return (
@@ -230,12 +262,14 @@ export default function CreateClassModal({
             </div>
             <div>
               <h2 className="text-base font-black text-white tracking-tight">
-                {createdClassData ? "🎉 Sınıfınız Hazır!" : "Yeni Sınıf / Ders Oluştur"}
+                {createdClassData
+                  ? t("cls_cm_ready_title", "🎉 Sınıfınız Hazır!")
+                  : t("cls_cm_new_title", "Yeni Sınıf / Ders Oluştur")}
               </h2>
               <p className="text-[11px] text-slate-400">
                 {createdClassData
-                  ? "Davet linkinizi öğrencilerinizle hemen paylaşın"
-                  : "Birebir veya grup dersinizi dakikalar içinde başlatın"}
+                  ? t("cls_cm_ready_sub", "Davet linkinizi öğrencilerinizle hemen paylaşın")
+                  : t("cls_cm_new_sub", "Birebir veya grup dersinizi dakikalar içinde başlatın")}
               </p>
             </div>
           </div>
@@ -266,10 +300,12 @@ export default function CreateClassModal({
 
               <p className="text-xs text-slate-300">
                 {createdClassData.price > 0
-                  ? `💰 Ücretli Bilet: ${createdClassData.price} ${createdClassData.currency}`
-                  : "🟢 Ücretsiz Katılım"}
+                  ? t("cls_cm_paid_badge", "💰 Ücretli Bilet: {price} {currency}")
+                      .replace("{price}", String(createdClassData.price))
+                      .replace("{currency}", String(createdClassData.currency))
+                  : t("cls_cm_free_badge", "🟢 Ücretsiz Katılım")}
                 {" • "}
-                {scheduleMode === "fixed" ? `${startDate} ${startTime}` : "Esnek Slot"}
+                {scheduleMode === "fixed" ? `${startDate} ${startTime}` : t("cls_cm_flex_slot", "Esnek Slot Seçimi")}
               </p>
             </div>
 
@@ -277,7 +313,7 @@ export default function CreateClassModal({
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                 <LinkIcon className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Öğrenci Davet Bağlantısı:</span>
+                <span>{t("cls_cm_invite_lbl", "Öğrenci Davet Bağlantısı:")}</span>
               </label>
 
               <div className="flex items-center gap-2">
@@ -302,12 +338,12 @@ export default function CreateClassModal({
                   {isCopied ? (
                     <>
                       <Check className="w-3.5 h-3.5" />
-                      <span>Kopyalandı!</span>
+                      <span>{t("cls_cm_copied", "Kopyalandı!")}</span>
                     </>
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5" />
-                      <span>Kopyala</span>
+                      <span>{t("copy", "Kopyala")}</span>
                     </>
                   )}
                 </button>
@@ -320,7 +356,7 @@ export default function CreateClassModal({
                 onClick={onClose}
                 className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-white font-bold text-xs transition cursor-pointer"
               >
-                Sınıflarıma Dön
+                {t("cls_cm_back_classes", "Sınıflarıma Dön")}
               </button>
             </div>
           </div>
@@ -332,14 +368,14 @@ export default function CreateClassModal({
             {/* 1. Sınıf / Ders Adı */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-300">
-                Sınıf / Ders Başlığı
+                {t("cls_cm_title_lbl", "Sınıf / Ders Başlığı")}
               </label>
               <input
                 type="text"
                 required
                 value={className}
                 onChange={(e) => setClassName(e.target.value)}
-                placeholder="Örn: IELTS Okuma & Kelime Grubu veya Ahmet ile Birebir"
+                placeholder={t("cls_cm_title_ph", "Örn: IELTS Okuma & Kelime Grubu veya Ahmet ile Birebir")}
                 className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -347,9 +383,9 @@ export default function CreateClassModal({
             {/* 2. Zamanlama Tipi: Sabit Tarih vs Esnek Slot */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                <span>Zamanlama Modeli</span>
+                <span>{t("cls_cm_sched_model", "Zamanlama Modeli")}</span>
                 <span className="text-[10px] text-slate-400 font-normal">
-                  Yerel Saat: {userTimezone}
+                  {t("cls_cm_local_time", "Yerel Saat:")} {userTimezone}
                 </span>
               </label>
 
@@ -365,8 +401,8 @@ export default function CreateClassModal({
                 >
                   <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
                   <div>
-                    <div className="text-xs font-bold">Sabit Tarihli</div>
-                    <div className="text-[10px] opacity-75">Tek / Belirli Saat</div>
+                    <div className="text-xs font-bold">{t("cls_cm_fixed_date", "Sabit Tarihli")}</div>
+                    <div className="text-[10px] opacity-75">{t("cls_cm_fixed_sub", "Tek / Belirli Saat")}</div>
                   </div>
                 </button>
 
@@ -381,8 +417,8 @@ export default function CreateClassModal({
                 >
                   <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
                   <div>
-                    <div className="text-xs font-bold">Esnek Slot Seçimi</div>
-                    <div className="text-[10px] opacity-75">Öğrenci Müsaitlikten Seçer</div>
+                    <div className="text-xs font-bold">{t("cls_cm_flex_slot", "Esnek Slot Seçimi")}</div>
+                    <div className="text-[10px] opacity-75">{t("cls_cm_flex_slot_sub", "Öğrenci Müsaitlikten Seçer")}</div>
                   </div>
                 </button>
               </div>
@@ -390,7 +426,7 @@ export default function CreateClassModal({
               {scheduleMode === "fixed" ? (
                 <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
                   <div className="space-y-1 col-span-1">
-                    <label className="text-[10px] font-bold text-slate-400">Tarih</label>
+                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_date_lbl", "Tarih")}</label>
                     <input
                       type="date"
                       required
@@ -401,7 +437,7 @@ export default function CreateClassModal({
                   </div>
 
                   <div className="space-y-1 col-span-1">
-                    <label className="text-[10px] font-bold text-slate-400">Saat</label>
+                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_time_lbl", "Saat")}</label>
                     <input
                       type="time"
                       required
@@ -412,22 +448,22 @@ export default function CreateClassModal({
                   </div>
 
                   <div className="space-y-1 col-span-1">
-                    <label className="text-[10px] font-bold text-slate-400">Süre</label>
+                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_duration", "Süre")}</label>
                     <select
                       value={durationMinutes}
                       onChange={(e) => setDurationMinutes(Number(e.target.value))}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none"
                     >
-                      <option value={30}>30 Dk</option>
-                      <option value={45}>45 Dk</option>
-                      <option value={60}>60 Dk</option>
-                      <option value={90}>90 Dk</option>
+                      <option value={30}>30 {t("cls_min_short", "dk")}</option>
+                      <option value={45}>45 {t("cls_min_short", "dk")}</option>
+                      <option value={60}>60 {t("cls_min_short", "dk")}</option>
+                      <option value={90}>90 {t("cls_min_short", "dk")}</option>
                     </select>
                   </div>
                 </div>
               ) : (
                 <div className="p-3 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 text-xs text-indigo-300">
-                  📅 Öğrencileriniz ders biletini aldıktan sonra takviminizdeki açık saatlerden uygun olanı seçecektir.
+                  {t("cls_cm_flex_note", "📅 Öğrencileriniz ders biletini aldıktan sonra takviminizdeki açık saatlerden uygun olanı seçecektir.")}
                 </div>
               )}
             </div>
@@ -435,7 +471,7 @@ export default function CreateClassModal({
             {/* 3. Katılım Modeli (Tek Karar Anahtarı: Ücretsiz vs Ücretli) */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-300">
-                Katılım & Fiyatlandırma Modeli
+                {t("cls_cm_pricing_hdr", "Katılım & Fiyatlandırma Modeli")}
               </label>
 
               <div className="grid grid-cols-2 gap-2">
@@ -450,8 +486,8 @@ export default function CreateClassModal({
                 >
                   <span className="text-lg">🟢</span>
                   <div>
-                    <div className="text-xs font-bold">Ücretsiz Sınıf</div>
-                    <div className="text-[10px] opacity-75">Topluluk & Serbest Katılım</div>
+                    <div className="text-xs font-bold">{t("cls_cm_free_class", "Ücretsiz Sınıf")}</div>
+                    <div className="text-[10px] opacity-75">{t("cls_cm_free_sub", "Topluluk & Serbest Katılım")}</div>
                   </div>
                 </button>
 
@@ -459,7 +495,11 @@ export default function CreateClassModal({
                   type="button"
                   onClick={() => {
                     setIsPaid(true);
-                    if (hasIban === null) checkTeacherIban();
+                    if (hasIban === false) {
+                      handleOpenIbanModal();
+                    } else if (hasIban === null) {
+                      checkTeacherIban(true);
+                    }
                   }}
                   className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center gap-2.5 ${
                     isPaid
@@ -469,8 +509,8 @@ export default function CreateClassModal({
                 >
                   <span className="text-lg">💰</span>
                   <div>
-                    <div className="text-xs font-bold">Ücretli Ders</div>
-                    <div className="text-[10px] opacity-75">Bilet / Abonelik Geliri</div>
+                    <div className="text-xs font-bold">{t("cls_cm_paid_class", "Ücretli Ders")}</div>
+                    <div className="text-[10px] opacity-75">{t("cls_cm_paid_sub", "Bilet / Abonelik Geliri")}</div>
                   </div>
                 </button>
               </div>
@@ -480,7 +520,7 @@ export default function CreateClassModal({
                 <div className="space-y-3 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 animate-in fade-in">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2 space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400">Bilet Tutarı</label>
+                      <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_ticket_amount", "Bilet Tutarı")}</label>
                       <input
                         type="number"
                         min={1}
@@ -491,7 +531,7 @@ export default function CreateClassModal({
                     </div>
 
                     <div className="col-span-1 space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400">Para Birimi</label>
+                      <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_currency_lbl", "Para Birimi")}</label>
                       <select
                         value={currency}
                         onChange={(e) => setCurrency(e.target.value as any)}
@@ -505,7 +545,7 @@ export default function CreateClassModal({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400">Ödeme Modeli</label>
+                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_pay_model", "Ödeme Modeli")}</label>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <button
                         type="button"
@@ -516,7 +556,7 @@ export default function CreateClassModal({
                             : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
                         }`}
                       >
-                        Tek Seferlik Bilet
+                        {t("cls_cm_one_time", "Tek Seferlik Bilet")}
                       </button>
 
                       <button
@@ -528,7 +568,7 @@ export default function CreateClassModal({
                             : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
                         }`}
                       >
-                        Aylık Düzenli Abonelik
+                        {t("cls_cm_monthly_sub", "Aylık Düzenli Abonelik")}
                       </button>
                     </div>
                   </div>
@@ -541,14 +581,14 @@ export default function CreateClassModal({
               isCheckingIban ? (
                 <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-400 flex items-center justify-center gap-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  <span>IBAN profiliniz kontrol ediliyor...</span>
+                  <span>{t("cls_cm_checking_iban", "IBAN profiliniz kontrol ediliyor...")}</span>
                 </div>
               ) : hasIban === false ? (
                 <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs space-y-2 animate-in fade-in">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
-                      Ücretli ders açabilmek ve hakedişinizin doğrudan hesabınıza yatması için önce IBAN bilginizi tanımlamalısınız.
+                      {t("cls_cm_iban_warn", "Ücretli ders açabilmek ve hakedişinizin doğrudan hesabınıza yatması için önce IBAN bilginizi tanımlamalısınız.")}
                     </p>
                   </div>
 
@@ -558,13 +598,29 @@ export default function CreateClassModal({
                     className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95"
                   >
                     <CreditCard className="w-3.5 h-3.5 text-slate-950" />
-                    <span>💳 Hemen IBAN Tanımla</span>
+                    <span>{t("cls_cm_define_iban", "💳 Hemen IBAN Tanımla")}</span>
                   </button>
                 </div>
               ) : hasIban === true ? (
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Hakediş IBAN profiliniz tanımlı. Bilet gelirleri hesabınıza aktarılacaktır.</span>
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="truncate">
+                      {t("cls_cm_iban_ready", "Hakediş IBAN tanımlı")}{" "}
+                      {maskedIban ? (
+                        <strong className="font-mono text-emerald-200">
+                          ({maskedIban})
+                        </strong>
+                      ) : null}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenIbanModal}
+                    className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-bold text-[10px] shrink-0 transition cursor-pointer"
+                  >
+                    {t("cls_cm_update", "Güncelle")}
+                  </button>
                 </div>
               ) : null
             )}
@@ -584,7 +640,7 @@ export default function CreateClassModal({
                 disabled={isSubmitting}
                 className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold transition cursor-pointer"
               >
-                Vazgeç
+                {t("cancel", "Vazgeç")}
               </button>
 
               <button
@@ -595,12 +651,12 @@ export default function CreateClassModal({
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Oluşturuluyor...</span>
+                    <span>{t("cls_cm_creating", "Oluşturuluyor...")}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Sınıfı Oluştur & Link Al</span>
+                    <span>{t("cls_cm_submit", "Sınıfı Oluştur & Link Al")}</span>
                   </>
                 )}
               </button>

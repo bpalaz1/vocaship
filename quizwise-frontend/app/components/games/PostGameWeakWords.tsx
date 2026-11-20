@@ -14,6 +14,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface WeakWordItem {
   word: string;
@@ -67,9 +68,10 @@ const DEFAULT_WEAK_WORDS: WeakWordItem[] = [
 
 export default function PostGameWeakWords({
   weakWords = DEFAULT_WEAK_WORDS,
-  className = "10-A İngilizce",
+  className = "10-A",
   isHost = false,
 }: PostGameWeakWordsProps) {
+  const { t } = useLanguage();
   const [expandedWord, setExpandedWord] = useState<string | null>(weakWords[0]?.word || null);
   const [savedWords, setSavedWords] = useState<Record<string, boolean>>({});
 
@@ -110,13 +112,13 @@ export default function PostGameWeakWords({
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-              <span>📊 Bu Oyunda Sınıfın En Çok Zorlandığı 3 Kelime</span>
+              <span>{t("game_weak_top3_title", "📊 Bu Oyunda Sınıfın En Çok Zorlandığı 3 Kelime")}</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                Sınıf Röntgeni
+                {t("game_weak_xray_badge", "Sınıf Röntgeni")}
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              {className} • Bu kelimeler öğrencilerin %40'ından fazlası tarafından yanlış yapıldı.
+              {className} • {t("game_weak_40pct_sub", "Bu kelimeler öğrencilerin %40'ından fazlası tarafından yanlış yapıldı.")}
             </p>
           </div>
         </div>
@@ -124,7 +126,7 @@ export default function PostGameWeakWords({
         {isHost && (
           <span className="px-3 py-1.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold flex items-center gap-1.5">
             <BookOpen className="w-3.5 h-3.5" />
-            <span>1 Dakikalık Telafi Dersi Modu</span>
+            <span>{t("game_weak_1min_mode", "1 Dakikalık Telafi Dersi Modu")}</span>
           </span>
         )}
       </div>
@@ -181,11 +183,11 @@ export default function PostGameWeakWords({
                   <div className="flex flex-col items-end">
                     <span className="text-sm font-black font-mono text-rose-400 flex items-center gap-1">
                       <span>%{item.failRate}</span>
-                      <span className="text-[10px] text-rose-300/80 font-normal">Hata Oranı</span>
+                      <span className="text-[10px] text-rose-300/80 font-normal">{t("game_weak_fail_rate", "Hata Oranı")}</span>
                     </span>
                     {item.wrongCount && (
                       <span className="text-[10px] text-slate-500">
-                        {item.wrongCount} öğrenci takıldı
+                        {t("game_weak_students_stuck", "{n} öğrenci takıldı", { n: item.wrongCount })}
                       </span>
                     )}
                   </div>
@@ -198,7 +200,7 @@ export default function PostGameWeakWords({
                         : "bg-slate-800 hover:bg-slate-750 text-slate-200"
                     }`}
                   >
-                    <span>{isExpanded ? "Kapat" : "🔍 Anlatımı Aç"}</span>
+                    <span>{isExpanded ? t("close", "Kapat") : t("game_weak_open_explain", "🔍 Anlatımı Aç")}</span>
                     {isExpanded ? (
                       <ChevronUp className="w-3.5 h-3.5" />
                     ) : (
@@ -217,7 +219,7 @@ export default function PostGameWeakWords({
                     <div className="space-y-2 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
-                          Türkçe Karşılık & Fonetik
+                          {t("game_weak_meaning_phon", "Anlam & Fonetik")}
                         </span>
                         <button
                           type="button"
@@ -225,7 +227,7 @@ export default function PostGameWeakWords({
                           className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                         >
                           <Volume2 className="w-3.5 h-3.5" />
-                          <span>Sesli Dinlet</span>
+                          <span>{t("game_listen_aloud", "Sesli Dinlet")}</span>
                         </button>
                       </div>
                       <p className="text-sm font-bold text-white">{item.meaning}</p>
@@ -235,7 +237,7 @@ export default function PostGameWeakWords({
                     {/* Sağ: Örnek Cümle */}
                     <div className="space-y-2 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
                       <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider block">
-                        Cümle İçi Kullanım
+                        {t("game_weak_usage_in_sent", "Cümle İçi Kullanım")}
                       </span>
                       {item.exampleEn && (
                         <p className="text-xs sm:text-sm text-slate-200 italic font-serif">
@@ -254,7 +256,7 @@ export default function PostGameWeakWords({
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                     <p className="text-[11px] text-slate-400 flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Bu kelime dersten sonra bireysel testlerde tekrar sorulacaktır.</span>
+                      <span>{t("game_weak_reappear_note", "Bu kelime dersten sonra bireysel testlerde tekrar sorulacaktır.")}</span>
                     </p>
 
                     <button
@@ -270,12 +272,12 @@ export default function PostGameWeakWords({
                       {isSaved ? (
                         <>
                           <Check className="w-3.5 h-3.5" />
-                          <span>İntikam Arenasına Eklendi!</span>
+                          <span>{t("game_weak_added_revenge", "İntikam Arenasına Eklendi!")}</span>
                         </>
                       ) : (
                         <>
                           <BookmarkPlus className="w-3.5 h-3.5" />
-                          <span>🎯 İntikam Arenasına / Desteye Ekle</span>
+                          <span>{t("game_weak_add_revenge", "🎯 İntikam Arenasına / Desteye Ekle")}</span>
                         </>
                       )}
                     </button>

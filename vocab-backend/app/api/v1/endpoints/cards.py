@@ -35,7 +35,9 @@ async def submit_review_result(card_id: str, payload: ReviewResultRequest):
         result = process_card_review_result(
             card_id=card_id,
             is_correct=payload.is_correct,
-            rating=payload.rating
+            rating=payload.rating,
+            force_clear=payload.force_clear,
+            meaning=payload.meaning,
         )
         return result
     except ValueError as ve:

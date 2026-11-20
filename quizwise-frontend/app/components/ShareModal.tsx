@@ -54,7 +54,7 @@ export default function ShareModal({
                 const payload = {
                     item_type: itemType,
                     item_id: itemId || deck?.id || story?.id || "",
-                    title: title || deck?.title || story?.title || "Paylaşılan İçerik",
+                    title: title || deck?.title || story?.title || t("share_default_title", "Paylaşılan İçerik"),
                     deck: deck || null,
                     cards: cards || null,
                     story: story || null,

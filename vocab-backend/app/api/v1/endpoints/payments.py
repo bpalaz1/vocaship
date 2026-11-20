@@ -1,13 +1,18 @@
+import os
 import uuid
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from datetime import datetime, timezone, timedelta
+from typing import Optional, Dict, Any, Literal
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends, Query, status
 from supabase import Client
 from app.core.database import get_db
+from app.core.local_db import LocalDatabaseClient
 from app.schemas.classroom import PayoutProfileUpsert, CheckoutRequest, WebhookPaymentRequest
 from app.services import payment_service
 
 router = APIRouter()
+_local_payment_db = LocalDatabaseClient()
+PRO_CHECKOUT_SESSIONS: Dict[str, Dict[str, Any]] = {}
 
 # Bellek içi yedek havuz (Veritabanı veya ağ kesintilerinde bile çalışmayı garanti eder)
 IN_MEMORY_PAYOUT_PROFILES: Dict[str, Dict[str, Any]] = {}
@@ -215,5 +220,166 @@ def get_teacher_earnings_endpoint(
         raise HTTPException(status_code=400, detail="teacher_id parametresi zorunludur.")
 
     return payment_service.get_teacher_earnings(teacher_id=teacher_id.strip(), db=db)
+
+
+# =========================================================================
+# BİREYSEL PRO ÜYELİK ÖDEMESİ & SINIF BİLETİ ONAY AKIŞI
+# =========================================================================
+
+class UpgradeProCheckoutRequest(BaseModel):
+    user_id: str
+    plan_period: Literal["monthly", "yearly"] = "monthly"
+    provider: Literal["iyzico", "stripe", "sandbox"] = "sandbox"
+
+
+class ConfirmProCheckoutRequest(BaseModel):
+    user_id: str
+    transaction_id: Optional[str] = None
+    plan_period: Literal["monthly", "yearly"] = "monthly"
+
+
+class ConfirmClassCheckoutRequest(BaseModel):
+    user_id: str
+    class_id: str
+    session_id: Optional[str] = None
+    transaction_id: Optional[str] = None
+
+
+@router.post("/upgrade-pro", status_code=status.HTTP_200_OK)
+def create_pro_checkout_endpoint(payload: UpgradeProCheckoutRequest):
+    """
+    Bireysel PRO üyelik ödemesi için İyzico / Stripe veya Sandbox checkout oturumu oluşturur.
+    """
+    if not payload.user_id.strip():
+        raise HTTPException(status_code=400, detail="user_id zorunludur.")
+
+    amount = 1790.0 if payload.plan_period == "yearly" else 199.0
+    tx_id = f"pro-{uuid.uuid4().hex[:12]}"
+
+    iyzico_key = os.getenv("IYZICO_API_KEY")
+    stripe_key = os.getenv("STRIPE_SECRET_KEY")
+
+    resolved_provider = payload.provider
+    if payload.provider == "iyzico" and not iyzico_key:
+        resolved_provider = "sandbox"
+    elif payload.provider == "stripe" and not stripe_key:
+        resolved_provider = "sandbox"
+
+    checkout_url = (
+        f"/payments/sandbox?tx={tx_id}&plan={payload.plan_period}&provider={resolved_provider}"
+        if resolved_provider == "sandbox"
+        else f"/payments/{resolved_provider}/checkout?tx={tx_id}&plan={payload.plan_period}"
+    )
+
+    session_data = {
+        "success": True,
+        "transaction_id": tx_id,
+        "user_id": payload.user_id.strip(),
+        "plan_period": payload.plan_period,
+        "provider": resolved_provider,
+        "amount": amount,
+        "currency": "TRY",
+        "checkout_url": checkout_url,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    PRO_CHECKOUT_SESSIONS[tx_id] = session_data
+    return session_data
+
+
+@router.post("/confirm-pro", status_code=status.HTTP_200_OK)
+def confirm_pro_checkout_endpoint(
+    payload: ConfirmProCheckoutRequest,
+    db: Client = Depends(get_db),
+):
+    """
+    PRO üyelik ödemesini onaylar ve kullanıcının is_pro, plan_tier, subscription_status
+    ve pro_expires_at alanlarını günceller.
+    """
+    user_id = payload.user_id.strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id zorunludur.")
+
+    period = payload.plan_period
+    if payload.transaction_id and payload.transaction_id in PRO_CHECKOUT_SESSIONS:
+        sess = PRO_CHECKOUT_SESSIONS[payload.transaction_id]
+        sess["status"] = "completed"
+        period = sess.get("plan_period", period)
+
+    days = 365 if period == "yearly" else 30
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+    update_fields = {
+        "is_pro": True,
+        "plan_tier": "pro",
+        "subscription_status": "active",
+        "pro_expires_at": expires_at,
+    }
+
+    if db:
+        try:
+            db.table("users").update(update_fields).eq("id", user_id).execute()
+        except Exception as exc:
+            print(f"[DB Confirm PRO Update Warning]: {exc}")
+
+    try:
+        _local_payment_db.table("users").update(update_fields).eq("id", user_id).execute()
+    except Exception as exc:
+        print(f"[LocalDB Confirm PRO Update Warning]: {exc}")
+
+    return {
+        "success": True,
+        "user_id": user_id,
+        "transaction_id": payload.transaction_id,
+        "is_pro": True,
+        "plan_tier": "pro",
+        "subscription_status": "active",
+        "pro_expires_at": expires_at,
+    }
+
+
+@router.post("/confirm-class", status_code=status.HTTP_200_OK)
+def confirm_class_checkout_endpoint(
+    payload: ConfirmClassCheckoutRequest,
+    db: Client = Depends(get_db),
+):
+    """
+    Ücretli sınıf/ders bilet ödemesini onaylar ve öğrenciye payment_status='paid' bileti tanımlar.
+    """
+    if payload.transaction_id:
+        result = payment_service.process_successful_payment(
+            transaction_id=payload.transaction_id.strip(),
+            db=db,
+            custom_data=payload.model_dump(),
+        )
+        if "error" not in result:
+            return result
+
+    if not payload.user_id.strip() or not payload.class_id.strip():
+        raise HTTPException(status_code=400, detail="user_id ve class_id zorunludur.")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    attendee_row = {
+        "id": str(uuid.uuid4()),
+        "class_id": payload.class_id.strip(),
+        "session_id": payload.session_id,
+        "user_id": payload.user_id.strip(),
+        "payment_status": "paid",
+        "joined_at": now_iso,
+        "created_at": now_iso,
+    }
+    if db:
+        try:
+            db.table("session_attendees").insert(attendee_row).execute()
+        except Exception as exc:
+            print(f"[DB Confirm Class Insert Warning]: {exc}")
+
+    return {
+        "success": True,
+        "class_id": payload.class_id.strip(),
+        "user_id": payload.user_id.strip(),
+        "payment_status": "paid",
+        "access_granted": True,
+    }
 
 

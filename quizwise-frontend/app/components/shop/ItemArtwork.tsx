@@ -2,6 +2,8 @@
 
 import React from "react";
 import { ChestItem, ItemRarity, ItemType } from "../../data/chestItems";
+import { MUSEUM_ITEMS, MuseumCategory, MuseumSalonId } from "../../data/museumItems";
+import { renderArtifactSvg } from "./artifactSvg";
 
 export interface ItemArtworkProps {
   item:
@@ -17,6 +19,7 @@ export interface ItemArtworkProps {
   className?: string;
   size?: "sm" | "md" | "lg" | "xl";
   showGlow?: boolean;
+  isSilhouette?: boolean;
 }
 
 // =============================================================================
@@ -67,6 +70,7 @@ export default function ItemArtwork({
   className = "",
   size = "md",
   showGlow = true,
+  isSilhouette = false,
 }: ItemArtworkProps) {
   const rarity: ItemRarity = (item.rarity as ItemRarity) || "common";
   const theme = RARITY_THEMES[rarity] || RARITY_THEMES.common;
@@ -78,34 +82,54 @@ export default function ItemArtwork({
     xl: "w-28 h-28 text-lg",
   }[size];
 
+  const displayName =
+    typeof item.name === "string"
+      ? item.name
+      : item.name?.tr || item.name?.en || item.id;
+
   return (
     <div
       className={`relative rounded-2xl overflow-hidden flex items-center justify-center border transition-all duration-300 group select-none ${sizeClasses} ${
-        showGlow ? theme.glowClass : ""
-      } ${theme.borderClass} bg-gradient-to-b ${theme.bgGradient} ${className}`}
+        isSilhouette
+          ? "bg-slate-950/90 border-slate-800/90 shadow-inner"
+          : `${showGlow ? theme.glowClass : ""} ${theme.borderClass} bg-gradient-to-b ${theme.bgGradient}`
+      } ${className}`}
     >
       {/* 1. Arka Plan Dinamik Radyal Işık Efekti */}
-      <div
-        className="absolute inset-0 opacity-40 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle at 50% 40%, ${theme.accentColor} 0%, transparent 70%)`,
-        }}
-      />
+      {!isSilhouette && (
+        <div
+          className="absolute inset-0 opacity-40 pointer-events-none"
+          style={{
+            background: `radial-gradient(circle at 50% 40%, ${theme.accentColor} 0%, transparent 70%)`,
+          }}
+        />
+      )}
 
       {/* 2. Nadirlik Parıltı Noktaları */}
-      {rarity === "legendary" && (
+      {!isSilhouette && rarity === "legendary" && (
         <>
           <span className="absolute top-1 left-1.5 w-1 h-1 rounded-full bg-amber-300 animate-ping opacity-75" />
           <span className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-yellow-200 animate-pulse opacity-80" />
         </>
       )}
-      {rarity === "epic" && (
+      {!isSilhouette && rarity === "epic" && (
         <span className="absolute top-1.5 right-1.5 w-1 h-1 rounded-full bg-fuchsia-300 animate-pulse opacity-70" />
       )}
 
-      {/* 3. Özel Vektörel SVG Çizimi */}
-      <div className="w-full h-full p-1.5 flex items-center justify-center relative z-10">
-        <ItemSvgRenderer itemId={item.id} rarity={rarity} type={item.type} icon={item.icon} />
+      {/* 3. Özel Vektörel SVG Çizimi (Kilitli ise karartılmış silüet) */}
+      <div
+        className={`w-full h-full p-1.5 flex items-center justify-center relative z-10 ${
+          isSilhouette ? "brightness-50 contrast-150 saturate-0 opacity-60" : ""
+        }`}
+      >
+        <ItemSvgRenderer
+          itemId={item.id}
+          rarity={rarity}
+          type={item.type}
+          icon={item.icon}
+          title={displayName}
+          isSilhouette={isSilhouette}
+        />
       </div>
     </div>
   );
@@ -114,16 +138,20 @@ export default function ItemArtwork({
 // =============================================================================
 // HER BİR EŞYANIN KENDİ KİMLİĞİNE ÖZGÜ VEKTÖREL SVG RENDERER'I
 // =============================================================================
-function ItemSvgRenderer({
+export function ItemSvgRenderer({
   itemId,
   rarity,
   type,
   icon,
+  title = "",
+  isSilhouette = false,
 }: {
   itemId: string;
   rarity: ItemRarity;
   type?: string;
   icon?: string;
+  title?: string;
+  isSilhouette?: boolean;
 }) {
   switch (itemId) {
     // -------------------------------------------------------------------------
@@ -1011,27 +1039,32 @@ function ItemSvgRenderer({
       );
 
     // -------------------------------------------------------------------------
-    // GENEL FALLBACK (Eğer yeni veya bilinmeyen bir ID gelirse)
+    // MÜZEDEN BİRLEŞTİRİLEN VE DİĞER TÜM EŞYALAR İÇİN BENZERSİZ ÖZEL SVG ÜRETİCİ
     // -------------------------------------------------------------------------
-    default:
-      if (type === "equipment") {
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full filter drop-shadow">
-            <circle cx="50" cy="50" r="32" fill="#1E293B" stroke="#64748B" strokeWidth="2" />
-            <text x="50" y="60" fontSize="32" textAnchor="middle" fill="#FFFFFF">
-              {icon || "⚔️"}
-            </text>
-          </svg>
-        );
-      }
-      return (
-        <svg viewBox="0 0 100 100" className="w-full h-full filter drop-shadow">
-          <circle cx="50" cy="50" r="32" fill="#1E293B" stroke="#64748B" strokeWidth="2" />
-          <text x="50" y="60" fontSize="32" textAnchor="middle" fill="#FFFFFF">
-            {icon || "🦊"}
-          </text>
-        </svg>
+    default: {
+      const strippedId = itemId.replace(/^museum_/, "");
+      const museumMatch = MUSEUM_ITEMS.find(
+        (m) => m.id === itemId || m.id === strippedId
       );
+      if (museumMatch) {
+        return renderArtifactSvg(museumMatch, isSilhouette);
+      }
+      const fallbackCat: MuseumCategory =
+        type === "equipment" ? "relics" : "heroes";
+      return renderArtifactSvg(
+        {
+          id: itemId,
+          salonId: 1 as MuseumSalonId,
+          title: title || itemId,
+          category: fallbackCat,
+          rarity,
+          description: "",
+          storyLore: "",
+          avatarIcon: icon || "🦊",
+        },
+        isSilhouette
+      );
+    }
   }
 }
 

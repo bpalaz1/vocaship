@@ -15,6 +15,7 @@ import {
   Clock,
   CheckCircle2,
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface DeckItem {
   id: string;
@@ -52,6 +53,7 @@ export default function RecentActivityList({
   onCreateDeck,
   currentFolderId,
 }: RecentActivityListProps) {
+  const { t } = useLanguage();
   // Klasör haritası
   const folderMap = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -77,13 +79,13 @@ export default function RecentActivityList({
           </div>
           <div>
             <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <span>Son Etkinlikler & Destelerim</span>
+              <span>{t("dash_recent_hdr", "Son Etkinlikler & Destelerim")}</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-normal">
-                {displayedDecks.length} deste
+                {displayedDecks.length} {t("lib_decks_unit", "deste")}
               </span>
             </h2>
             <p className="text-xs text-slate-400">
-              Son çalışılan deste ve klasörlerinizin güncel listesi
+              {t("dash_recent_sub", "Son çalışılan deste ve klasörlerinizin güncel listesi")}
             </p>
           </div>
         </div>
@@ -94,7 +96,7 @@ export default function RecentActivityList({
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-semibold transition active:scale-95 cursor-pointer shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Yeni Deste</span>
+          <span className="hidden sm:inline">{t("lib_new_deck_short", "Yeni Deste")}</span>
         </button>
       </div>
 
@@ -106,10 +108,10 @@ export default function RecentActivityList({
           </div>
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-slate-200">
-              Henüz kişisel deste bulunmuyor
+              {t("dash_no_decks", "Henüz kişisel deste bulunmuyor")}
             </h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Kendi kelime destenizi oluşturabilir veya sol paneldeki mesleki C1 hazır destelerini kitaplığınıza ekleyebilirsiniz.
+              {t("dash_no_decks_desc", "Kendi kelime destenizi oluşturabilir veya sol paneldeki mesleki C1 hazır destelerini kitaplığınıza ekleyebilirsiniz.")}
             </p>
           </div>
           <button
@@ -118,7 +120,7 @@ export default function RecentActivityList({
             className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>İlk Desteni Oluştur</span>
+            <span>{t("dash_create_first_deck", "İlk Desteni Oluştur")}</span>
           </button>
         </div>
       ) : (
@@ -154,7 +156,7 @@ export default function RecentActivityList({
                     <div className="flex items-center space-x-3 text-xs text-slate-400 mt-0.5">
                       <span className="flex items-center gap-1">
                         <Layers className="w-3 h-3 text-indigo-400" />
-                        <span>{count} kart</span>
+                        <span>{count} {t("lib_cards_unit", "kart")}</span>
                       </span>
 
                       {deck.target_lang && deck.native_lang && (
@@ -177,7 +179,7 @@ export default function RecentActivityList({
                   <button
                     type="button"
                     onClick={() => onAddWord(deck.id)}
-                    title="Kelime Ekle"
+                    title={t("btn_add_word", "Kelime Ekle")}
                     className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/50 transition cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -186,7 +188,7 @@ export default function RecentActivityList({
                   <button
                     type="button"
                     onClick={() => onShareDeck(deck)}
-                    title="Paylaş / Kod Al"
+                    title={t("btn_share_code", "Paylaş / Kod Al")}
                     className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/50 transition cursor-pointer"
                   >
                     <Share2 className="w-3.5 h-3.5" />
@@ -195,7 +197,7 @@ export default function RecentActivityList({
                   <button
                     type="button"
                     onClick={() => onDeleteDeck(deck.id)}
-                    title="Desteyi Sil"
+                    title={t("btn_delete_deck", "Desteyi Sil")}
                     className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700/50 hover:border-rose-500/30 transition cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -207,7 +209,7 @@ export default function RecentActivityList({
                     className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-md shadow-indigo-600/20 active:scale-95 cursor-pointer ml-1"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Çalış</span>
+                    <span>{t("btn_study", "Çalış")}</span>
                   </button>
                 </div>
               </div>

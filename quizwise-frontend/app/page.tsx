@@ -1,943 +1,655 @@
 "use client";
-import Link from "next/link";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  RotateCw,
-  CheckCircle2,
-  Sparkles,
-  ChevronLeft,
-  ChevronRight,
-  BrainCircuit,
-  ArrowLeft,
-  X,
+  Search,
   Plus,
-  Trash2,
-  RefreshCw,
-  Gamepad2,
-  Timer,
-  Trophy,
-  Flame,
-  Heart,
-  Zap,
-  Check,
-  AlertCircle,
-  HelpCircle,
-  Puzzle,
-  Undo2,
-  KeyRound,
+  Sparkles,
+  BookOpen,
+  CheckCircle2,
+  ArrowRight,
   Folder,
   FolderPlus,
-  GripVertical,
-  AlertTriangle,
+  Trash2,
+  X,
+  Target,
+  FolderTree,
   LayoutGrid,
   List as ListIcon,
-  FolderTree,
-  Search,
-  BookOpen,
+  GripVertical,
+  ArrowLeft,
   Edit3,
-  Volume2,
-  Languages,
-  Palette,
-  Settings,
+  Check,
+  ChevronRight,
+  ChevronDown,
+  Copy,
+  CornerDownRight,
 } from "lucide-react";
-import ReadingRoom from "./components/reading/ReadingRoom";
-import AvatarPickerModal from "./components/profile/AvatarPickerModal";
-import SettingsModal from "./components/settings/SettingsModal";
-import { useProfile } from "./context/ProfileContext";
 import { API_BASE } from "./config";
+import { useProfile } from "./context/ProfileContext";
+import { useAppTheme } from "./context/ThemeContext";
+import { useLanguage } from "./context/LanguageContext";
+import {
+  DeckItem,
+  FolderItem,
+  GameWordPair,
+  DECKS_CACHE_STORAGE_KEY,
+  FOLDERS_CACHE_STORAGE_KEY,
+  FOLDER_ORDER_STORAGE_KEY,
+  LIBRARY_VIEW_STORAGE_KEY,
+  fetchDecksList,
+  fetchFoldersList,
+  getActiveDeckCards,
+  normalizeFolderId,
+  setActiveDeckId,
+  setFolderParentInHierarchy,
+  removeFolderFromHierarchy,
+  wouldCreateFolderCycle,
+} from "./utils/activeDeckStore";
 import {
   getArenaMistakes,
-  saveArenaMistake,
-  clearArenaMistakes,
-  ArenaMistakeItem,
+  syncUnifiedWeakSpots,
+  ARENA_MISTAKES_EVENT,
 } from "./utils/arenaMistakes";
+import CreateDeckModal from "./components/CreateDeckModal";
+import AddWordModal, {
+  SupportedLanguageItem,
+  useAddWordController,
+} from "./components/AddWordModal";
+import WeakSpotRecoveryModal from "./components/WeakSpotRecoveryModal";
+import SettingsModal from "./components/settings/SettingsModal";
+import MobileBottomTabbar from "./components/layout/MobileBottomTabbar";
 
-// Desteklenen Diller
-const SUPPORTED_LANGUAGES = [
-  { code: "en", label: "İNGİLİZCE", ttsLocale: "en-US" },
-  { code: "tr", label: "TÜRKÇE", ttsLocale: "tr-TR" },
-  { code: "de", label: "ALMANCA", ttsLocale: "de-DE" },
-  { code: "es", label: "İSPANYOLCA", ttsLocale: "es-ES" },
-  { code: "fr", label: "FRANSIZCA", ttsLocale: "fr-FR" },
-  { code: "it", label: "İTALYANCA", ttsLocale: "it-IT" },
-  { code: "ru", label: "RUSÇA", ttsLocale: "ru-RU" }
+interface DueCardItem {
+  id: string;
+  deck_id?: string;
+  word?: string;
+}
+
+type FolderFilterType = "all" | string;
+type LibraryViewMode = "folder" | "grid" | "list";
+
+const FOLDER_PALETTE = [
+  { hex: "#f59e0b", label: "Kehribar", darkTint: "bg-amber-500/15", lightTint: "bg-amber-50/90", borderLeft: "border-l-amber-500", darkBorderAll: "border-amber-500/30 hover:border-amber-400", lightBorderAll: "border-amber-300 hover:border-amber-400", darkIconBg: "bg-amber-500/20 text-amber-300 border-amber-500/30", lightIconBg: "bg-amber-100 text-amber-700 border-amber-200" },
+  { hex: "#6366f1", label: "İndigo", darkTint: "bg-indigo-500/15", lightTint: "bg-indigo-50/90", borderLeft: "border-l-indigo-500", darkBorderAll: "border-indigo-500/30 hover:border-indigo-400", lightBorderAll: "border-indigo-300 hover:border-indigo-400", darkIconBg: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30", lightIconBg: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+  { hex: "#10b981", label: "Zümrüt", darkTint: "bg-emerald-500/15", lightTint: "bg-emerald-50/90", borderLeft: "border-l-emerald-500", darkBorderAll: "border-emerald-500/30 hover:border-emerald-400", lightBorderAll: "border-emerald-300 hover:border-emerald-400", darkIconBg: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", lightIconBg: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { hex: "#f43f5e", label: "Gül", darkTint: "bg-rose-500/15", lightTint: "bg-rose-50/90", borderLeft: "border-l-rose-500", darkBorderAll: "border-rose-500/30 hover:border-rose-400", lightBorderAll: "border-rose-300 hover:border-rose-400", darkIconBg: "bg-rose-500/20 text-rose-300 border-rose-500/30", lightIconBg: "bg-rose-100 text-rose-700 border-rose-200" },
+  { hex: "#8b5cf6", label: "Menekşe", darkTint: "bg-violet-500/15", lightTint: "bg-violet-50/90", borderLeft: "border-l-violet-500", darkBorderAll: "border-violet-500/30 hover:border-violet-400", lightBorderAll: "border-violet-300 hover:border-violet-400", darkIconBg: "bg-violet-500/20 text-violet-300 border-violet-500/30", lightIconBg: "bg-violet-100 text-violet-700 border-violet-200" },
+  { hex: "#06b6d4", label: "Turkuaz", darkTint: "bg-cyan-500/15", lightTint: "bg-cyan-50/90", borderLeft: "border-l-cyan-500", darkBorderAll: "border-cyan-500/30 hover:border-cyan-400", lightBorderAll: "border-cyan-300 hover:border-cyan-400", darkIconBg: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", lightIconBg: "bg-cyan-100 text-cyan-700 border-cyan-200" },
 ];
 
-interface FolderType {
-  id: string;
-  name: string;
-  color?: string;
-  deck_count?: number;
+function getFolderAccentTheme(colorHex?: string) {
+  return (
+    FOLDER_PALETTE.find(
+      (c) => c.hex.toLowerCase() === (colorHex || "").toLowerCase()
+    ) || FOLDER_PALETTE[0]
+  );
 }
 
-interface Deck {
-  id: string;
-  title: string;
-  description: string;
-  card_count: number;
-  folder_id?: string | null;
-  target_lang?: string;
-  native_lang?: string;
-}
-
-interface Flashcard {
-  id: string;
-  word: string;
-  phonetic?: string;
-  meanings: Array<{ definition: string; translation: string; part_of_speech?: string }>;
-  example_sentences: Array<{ en?: string; tr?: string; target?: string; source?: string; native?: string }>;
-  collocations?: string[];
-}
-
-interface MatchTile {
-  id: string;
-  tileId: string;
-  text: string;
-  type: "word" | "meaning";
-}
-
-interface QuizOption {
-  text: string;
-  isCorrect: boolean;
-}
-
-interface ScrambleLetter {
-  charId: string;
-  char: string;
-  isUsed: boolean;
-}
-
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const SUPPORTED_LANGUAGES: (SupportedLanguageItem & { ttsLocale: string })[] = [
+  { code: "en", label: "İNGİLİZCE", flag: "🇬🇧", ttsLocale: "en-US" },
+  { code: "tr", label: "TÜRKÇE", flag: "🇹🇷", ttsLocale: "tr-TR" },
+  { code: "de", label: "ALMANCA", flag: "🇩🇪", ttsLocale: "de-DE" },
+  { code: "es", label: "İSPANYOLCA", flag: "🇪🇸", ttsLocale: "es-ES" },
+  { code: "fr", label: "FRANSIZCA", flag: "🇫🇷", ttsLocale: "fr-FR" },
+  { code: "it", label: "İTALYANCA", flag: "🇮🇹", ttsLocale: "it-IT" },
+  { code: "ru", label: "RUSÇA", flag: "🇷🇺", ttsLocale: "ru-RU" },
+];
 
 export default function Home() {
-  const [folders, setFolders] = useState<FolderType[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"folder" | "grid" | "list">("grid");
-  const [searchQuery, setSearchQuery] = useState("");
+  const router = useRouter();
+  const { isSettingsModalOpen, setIsSettingsModalOpen } = useProfile();
+  const { isDark } = useAppTheme();
+  const { t } = useLanguage();
 
-  // Dil Seçimleri
-  const [termLang, setTermLang] = useState<string>("en");
-  const [defLang, setDefLang] = useState<string>("tr");
+  // Oyun Arenası ile Ortak Deste, Klasör ve Kelime Verileri
+  const [folders, setFolders] = useState<FolderItem[]>([]);
+  const [decks, setDecks] = useState<DeckItem[]>([]);
+  const [deckCardsMap, setDeckCardsMap] = useState<
+    Record<string, GameWordPair[]>
+  >({});
+  const [loadingDecks, setLoadingDecks] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedFolderFilter, setSelectedFolderFilter] =
+    useState<FolderFilterType>("all");
 
-  // Sürükle-Bırak
-  const [draggedDeckId, setDraggedDeckId] = useState<string | null>(null);
-  const [dragOverDeckId, setDragOverDeckId] = useState<string | null>(null);
-  const [dragOverFolderId, setDragOverFolderId] = useState<string | null | "all">(null);
+  // SM-2 & Zayıf Nokta Sayacı
+  const [dueCount, setDueCount] = useState<number>(0);
+  const [primaryDueDeckId, setPrimaryDueDeckId] = useState<string | null>(null);
+  const [weakSpotCount, setWeakSpotCount] = useState<number>(0);
 
-  const [decks, setDecks] = useState<Deck[]>([]);
-  const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
-  const [allDeckCards, setAllDeckCards] = useState<Flashcard[]>([]);
-  const [cards, setCards] = useState<Flashcard[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [sessionCompleted, setSessionCompleted] = useState(false);
+  // Klasör & Deste Modalları
+  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState("#f59e0b");
+  const [newFolderParentId, setNewFolderParentId] = useState<string>("");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<string[]>([]);
+  const [isCopyingFolder, setIsCopyingFolder] = useState(false);
+  const [contextMoveOpen, setContextMoveOpen] = useState(false);
 
-  // Oyun Arenası Hatalarım (Hatırlatma Destesi)
-  const [arenaMistakes, setArenaMistakes] = useState<ArenaMistakeItem[]>([]);
-
-  useEffect(() => {
-    const loadMistakes = () => {
-      setArenaMistakes(getArenaMistakes());
-    };
-    loadMistakes();
-
-    window.addEventListener("vocaship:arena_mistakes_updated", loadMistakes);
-    window.addEventListener("storage", loadMistakes);
-    return () => {
-      window.removeEventListener("vocaship:arena_mistakes_updated", loadMistakes);
-      window.removeEventListener("storage", loadMistakes);
-    };
-  }, []);
-
-  // Oturum puan takibi
-  const [cardRatings, setCardRatings] = useState<Record<string, number>>({});
-
-  // Mod Seçimi
-  const [currentMode, setCurrentMode] = useState<"study" | "match" | "gravity" | "quiz" | "scramble" | "hangman" | "reading">("study");
-
-  // MATCH
-  const [tiles, setTiles] = useState<MatchTile[]>([]);
-  const [selectedTile, setSelectedTile] = useState<MatchTile | null>(null);
-  const [matchedIds, setMatchedIds] = useState<string[]>([]);
-  const [wrongTileIds, setWrongTileIds] = useState<string[]>([]);
-  const [gameStartTime, setGameStartTime] = useState<number | null>(null);
-  const [elapsedTime, setElapsedTime] = useState<number>(0);
-  const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
-
-  // GRAVITY
-  const [gravityScore, setGravityScore] = useState(0);
-  const [gravityLives, setGravityLives] = useState(3);
-  const [gravityInput, setGravityInput] = useState("");
-  const [currentGravityCard, setCurrentGravityCard] = useState<Flashcard | null>(null);
-  const [asteroidTop, setAsteroidTop] = useState(0);
-  const [isGravityOver, setIsGravityOver] = useState(false);
-  const gravityInputRef = useRef<HTMLInputElement>(null);
-
-  // QUIZ
-  const [quizScore, setQuizScore] = useState(0);
-  const [quizCombo, setQuizCombo] = useState(1);
-  const [quizCardIndex, setQuizCardIndex] = useState(0);
-  const [quizOptions, setQuizOptions] = useState<QuizOption[]>([]);
-  const [quizTimeLeft, setQuizTimeLeft] = useState(5000);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [isQuizOver, setIsQuizOver] = useState(false);
-  const [quizCorrectCount, setQuizCorrectCount] = useState(0);
-
-  // SCRAMBLE
-  const [scrambleIndex, setScrambleIndex] = useState(0);
-  const [scrambleLetters, setScrambleLetters] = useState<ScrambleLetter[]>([]);
-  const [selectedLetters, setSelectedLetters] = useState<ScrambleLetter[]>([]);
-  const [scrambleScore, setScrambleScore] = useState(0);
-  const [isScrambleSuccess, setIsScrambleSuccess] = useState(false);
-  const [isScrambleWrong, setIsScrambleWrong] = useState(false);
-  const [isScrambleOver, setIsScrambleOver] = useState(false);
-
-  // HANGMAN
-  const [hangmanIndex, setHangmanIndex] = useState(0);
-  const [hangmanGuessed, setHangmanGuessed] = useState<string[]>([]);
-  const [hangmanLives, setHangmanLives] = useState(5);
-  const [hangmanScore, setHangmanScore] = useState(0);
-  const [isHangmanOver, setIsHangmanOver] = useState(false);
-  const [isHangmanSuccess, setIsHangmanSuccess] = useState(false);
-
-  // MODALLAR
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newDeckFolderId, setNewDeckFolderId] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newDeckFolderId, setNewDeckFolderId] = useState("");
+  const [isCreatingDeck, setIsCreatingDeck] = useState(false);
 
-  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
+  // Kalıcı Görünüm Seçici (Klasör / Kart / Liste) & Sürükle-Bırak State + Ref
+  const [viewMode, setViewModeState] = useState<LibraryViewMode>("grid");
+  const [draggedDeckId, setDraggedDeckId] = useState<string | null>(null);
+  const [dragOverFolderTarget, setDragOverFolderTarget] = useState<
+    string | null
+  >(null);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+  const [dragOverFolderReorderId, setDragOverFolderReorderId] = useState<
+    string | null
+  >(null);
+  const draggedDeckIdRef = useRef<string | null>(null);
+  const draggedFolderIdRef = useRef<string | null>(null);
 
-  const [isAddWordModalOpen, setIsAddWordModalOpen] = useState(false);
-  const [selectedDeckForWord, setSelectedDeckForWord] = useState<string>("");
-  const [wordInput, setWordInput] = useState("");
-  const [contextHint, setContextHint] = useState("");
-  const [isEnriching, setIsEnriching] = useState(false);
-  const [isSavingCard, setIsSavingCard] = useState(false);
-
-  const [correctionNotice, setCorrectionNotice] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-
-  const [enrichedData, setEnrichedData] = useState<{
-    word: string;
-    phonetic: string;
-    translation: string;
-    exampleEn: string;
-    exampleTr: string;
+  // Özel Sağ Tık (Context Menu) & Klasör Adı Düzenleme
+  const [contextMenu, setContextMenu] = useState<{
+    type: "deck" | "folder";
+    x: number;
+    y: number;
+    deck?: DeckItem;
+    folder?: FolderItem;
   } | null>(null);
-
-  // KART DÜZENLEME (EDIT)
-  const [isEditingCardModalOpen, setIsEditingCardModalOpen] = useState(false);
-  const [editingCardData, setEditingCardData] = useState<{
+  const [renamingFolder, setRenamingFolder] = useState<{
     id: string;
-    word: string;
-    phonetic: string;
-    translation: string;
-    exampleEn: string;
-    exampleTr: string;
+    name: string;
   } | null>(null);
-  const [isUpdatingCard, setIsUpdatingCard] = useState(false);
+  const [isRenamingFolder, setIsRenamingFolder] = useState(false);
 
-  // Global Profil & Ayarlar Modalı (ProfileContext)
-  const { userProfile, isSettingsModalOpen, setIsSettingsModalOpen } = useProfile();
-  const [isAvatarStudioOpen, setIsAvatarStudioOpen] = useState(false);
-
-  // İleri / Geri Navigasyon
-  const handlePrevCard = () => {
-    if (currentIndex > 0) {
-      setIsFlipped(false);
-      setCurrentIndex((prev) => prev - 1);
+  const setViewMode = useCallback((mode: LibraryViewMode) => {
+    setViewModeState(mode);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(LIBRARY_VIEW_STORAGE_KEY, mode);
+      } catch {}
     }
-  };
+  }, []);
 
-  const handleNextCard = () => {
-    if (currentIndex + 1 < cards.length) {
-      setIsFlipped(false);
-      setCurrentIndex((prev) => prev + 1);
+  // Zayıf Nokta & Hızlı Çalışma Seçici Modalları
+  const [isWeakSpotModalOpen, setIsWeakSpotModalOpen] = useState(false);
+  const [isQuickStudyModalOpen, setIsQuickStudyModalOpen] = useState(false);
+  const [selectedQuickFolderIds, setSelectedQuickFolderIds] = useState<
+    string[]
+  >([]);
+  const [selectedQuickSubfolderIds, setSelectedQuickSubfolderIds] = useState<
+    string[]
+  >([]);
+  const [selectedQuickDeckIds, setSelectedQuickDeckIds] = useState<string[]>(
+    []
+  );
+
+  // Desteler için gerçek kart önbelleği + API yükleyicisi (kelime araması + birebir kart sayısı için)
+  const hydrateDeckCards = useCallback(async (deckList: DeckItem[]) => {
+    if (deckList.length === 0) return;
+
+    // 1. Önce varsa yerel önbellekten anında yükle
+    if (typeof window !== "undefined") {
+      const immediateMap: Record<string, GameWordPair[]> = {};
+      for (const d of deckList) {
+        try {
+          const cached = localStorage.getItem(`vocaship_deck_cards_${d.id}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) immediateMap[d.id] = parsed;
+          }
+        } catch {}
+      }
+      if (Object.keys(immediateMap).length > 0) {
+        setDeckCardsMap((prev) => ({ ...immediateMap, ...prev }));
+      }
     }
-  };
 
-  // Klavye Kontrolleri
+    // 2. Oyun Arenası ile aynı getActiveDeckCards yardımcısıyla güncel kartları çek
+    const entries = await Promise.allSettled(
+      deckList.map(async (d) => {
+        const cards = await getActiveDeckCards(d.id, false);
+        return [d.id, cards] as const;
+      })
+    );
+
+    const nextMap: Record<string, GameWordPair[]> = {};
+    for (const res of entries) {
+      if (res.status === "fulfilled") {
+        const [deckId, cards] = res.value;
+        nextMap[deckId] = cards;
+      }
+    }
+    if (Object.keys(nextMap).length > 0) {
+      setDeckCardsMap((prev) => ({ ...prev, ...nextMap }));
+    }
+  }, []);
+
+  const refreshLibraryData = useCallback(async () => {
+    try {
+      const [fetchedFolders, fetchedDecks] = await Promise.all([
+        fetchFoldersList(),
+        fetchDecksList(),
+      ]);
+
+      // Klasörsüz (folder_id === null) veya eski hazır desteleri temizle
+      const orphanDecks = fetchedDecks.filter(
+        (d) => !d.id.startsWith("preset_") && normalizeFolderId(d.folder_id) === null
+      );
+      const cleanDecks = fetchedDecks.filter(
+        (d) => !d.id.startsWith("preset_") && normalizeFolderId(d.folder_id) !== null
+      );
+
+      setFolders(fetchedFolders);
+      setDecks(cleanDecks);
+
+      if (orphanDecks.length > 0) {
+        Promise.allSettled(
+          orphanDecks.map((d) =>
+            fetch(`${API_BASE}/decks/${encodeURIComponent(d.id)}`, {
+              method: "DELETE",
+            })
+          )
+        ).catch(() => {});
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(DECKS_CACHE_STORAGE_KEY, JSON.stringify(cleanDecks));
+            for (const od of orphanDecks) {
+              localStorage.removeItem(`vocaship_deck_cards_${od.id}`);
+            }
+          } catch {}
+        }
+      }
+
+      hydrateDeckCards(cleanDecks);
+    } finally {
+      setLoadingDecks(false);
+    }
+  }, [hydrateDeckCards]);
+
+  const fetchStudyMetrics = useCallback(async () => {
+    // Önce yerel ortak önbelleği hemen yansıt (anlık sayı tutarlılığı için)
+    const immediateLocal = getArenaMistakes();
+    setWeakSpotCount(immediateLocal.length);
+
+    try {
+      const [dueRes, unifiedMistakes] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/v1/study/due-cards?limit=50`),
+        syncUnifiedWeakSpots(),
+      ]);
+
+      if (dueRes.status === "fulfilled" && dueRes.value.ok) {
+        const dueData: DueCardItem[] = await dueRes.value.json();
+        if (Array.isArray(dueData)) {
+          setDueCount(dueData.length);
+          const firstWithDeck = dueData.find((c) => c.deck_id);
+          setPrimaryDueDeckId(firstWithDeck?.deck_id || null);
+        }
+      }
+
+      if (unifiedMistakes.status === "fulfilled") {
+        setWeakSpotCount(unifiedMistakes.value.length);
+      }
+    } catch (err) {
+      console.warn("SM-2 tekrar verileri alınamadı:", err);
+    }
+  }, []);
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) {
-        return;
-      }
-      if (!activeDeck || currentMode !== "study" || sessionCompleted) return;
+    if (typeof window !== "undefined") {
+      try {
+        const savedView = localStorage.getItem(LIBRARY_VIEW_STORAGE_KEY);
+        if (
+          savedView === "folder" ||
+          savedView === "grid" ||
+          savedView === "list"
+        ) {
+          setViewModeState(savedView);
+        }
+      } catch {}
+    }
 
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        handlePrevCard();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        handleNextCard();
-      } else if (e.key === " " || e.key === "ArrowUp" || e.key === "ArrowDown") {
-        e.preventDefault();
-        setIsFlipped((prev) => !prev);
-      }
+    refreshLibraryData();
+    fetchStudyMetrics();
+
+    const handleMistakesSync = (e: Event) => {
+      const detail = (e as CustomEvent<{ count?: number }>).detail;
+      const count =
+        typeof detail?.count === "number"
+          ? detail.count
+          : getArenaMistakes().length;
+      setWeakSpotCount(count);
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeDeck, currentMode, currentIndex, cards.length, sessionCompleted]);
+    window.addEventListener(ARENA_MISTAKES_EVENT, handleMistakesSync);
 
-  // Manuel Giriş Modu
-  const handleManualInputMode = () => {
-    const targetDeck = selectedDeckForWord || (activeDeck ? activeDeck.id : (decks.length > 0 ? decks[0].id : ""));
-    if (!targetDeck) {
-      alert("Lütfen önce bir hedef deste seçin!");
-      return;
-    }
-    if (!wordInput.trim()) {
-      alert("Lütfen bir kelime yazın!");
-      return;
-    }
+    return () => {
+      window.removeEventListener(ARENA_MISTAKES_EVENT, handleMistakesSync);
+    };
+  }, [refreshLibraryData, fetchStudyMetrics]);
 
-    setCorrectionNotice(null);
-    setSuggestions([]);
-    setEnrichedData({
-      word: wordInput.trim(),
-      phonetic: "",
-      translation: contextHint.trim() || "",
-      exampleEn: "",
-      exampleTr: "",
-    });
+  // Merkezi Hafıza Öncelikli Kelime Ekleme Kontrolcüsü (300ms debounce + anında dil değiştirme)
+  const addWordModalDecks = useMemo(
+    () =>
+      decks.map((d) => ({
+        id: d.id,
+        title: d.title,
+        card_count: deckCardsMap[d.id]?.length ?? d.card_count ?? 0,
+      })),
+    [decks, deckCardsMap]
+  );
+
+  const handleWordCardSaved = useCallback(async () => {
+    await Promise.all([refreshLibraryData(), fetchStudyMetrics()]);
+  }, [refreshLibraryData, fetchStudyMetrics]);
+
+  const addWordCtrl = useAddWordController({
+    decks: addWordModalDecks,
+    onSaved: handleWordCardSaved,
+  });
+
+  useEffect(() => {
+    if (decks.length > 0) {
+      if (
+        !addWordCtrl.selectedDeckForWord ||
+        !decks.some((d) => d.id === addWordCtrl.selectedDeckForWord)
+      ) {
+        addWordCtrl.setSelectedDeckForWord(decks[0].id);
+      }
+    } else if (addWordCtrl.selectedDeckForWord) {
+      addWordCtrl.setSelectedDeckForWord("");
+    }
+  }, [decks, addWordCtrl.selectedDeckForWord, addWordCtrl.setSelectedDeckForWord]);
+
+  // Hızlı Çalışma Modalı her açıldığında en güncel klasör ve desteleri yenile
+  useEffect(() => {
+    if (isQuickStudyModalOpen) {
+      refreshLibraryData();
+    }
+  }, [isQuickStudyModalOpen, refreshLibraryData]);
+
+  // Silinen klasör veya desteler Quick Study seçim listesinde asla kalmasın
+  useEffect(() => {
+    const activeFolderIdSet = new Set(
+      folders.map((f) => String(f.id || "").trim()).filter(Boolean)
+    );
+    const activeDeckIdSet = new Set(decks.map((d) => d.id));
+
+    setSelectedQuickFolderIds((prev) =>
+      prev.filter((id) => activeFolderIdSet.has(id))
+    );
+    setSelectedQuickSubfolderIds((prev) =>
+      prev.filter((id) => activeFolderIdSet.has(id))
+    );
+    setSelectedQuickDeckIds((prev) =>
+      prev.filter((id) => activeDeckIdSet.has(id))
+    );
+  }, [folders, decks]);
+
+  // Sağ tık menüsünü dışarı tıklandığında veya ESC tuşuyla kapat
+  useEffect(() => {
+    if (!contextMenu) return;
+    const closeMenu = () => setContextMenu(null);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("mousedown", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("mousedown", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [contextMenu]);
+
+  // Klasör ID seti
+  const validFolderIds = useMemo(
+    () => new Set(folders.map((f) => String(f.id || "").trim()).filter(Boolean)),
+    [folders]
+  );
+
+  const folderNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of folders) {
+      const id = String(f.id || "").trim();
+      if (id) m.set(id, f.name);
+    }
+    return m;
+  }, [folders]);
+
+  const folderObjMap = useMemo(() => {
+    const m = new Map<string, FolderItem>();
+    for (const f of folders) {
+      const id = String(f.id || "").trim();
+      if (id) m.set(id, f);
+    }
+    return m;
+  }, [folders]);
+
+  const getSubfolders = useCallback(
+    (parentId: string | null): FolderItem[] => {
+      const cleanParent = normalizeFolderId(parentId);
+      return folders.filter((f) => {
+        const fid = String(f.id || "").trim();
+        const pid = normalizeFolderId(f.parent_id);
+        if (!cleanParent) {
+          return !pid || pid === fid || !validFolderIds.has(pid);
+        }
+        return pid === cleanParent && fid !== cleanParent;
+      });
+    },
+    [folders, validFolderIds]
+  );
+
+  const getDescendantFolderIds = useCallback(
+    (rootFolderId: string): string[] => {
+      const result: string[] = [rootFolderId];
+      const queue: string[] = [rootFolderId];
+      const visited = new Set<string>([rootFolderId]);
+      while (queue.length > 0) {
+        const cur = queue.shift()!;
+        const children = getSubfolders(cur);
+        for (const ch of children) {
+          const cid = String(ch.id || "").trim();
+          if (cid && !visited.has(cid)) {
+            visited.add(cid);
+            result.push(cid);
+            queue.push(cid);
+          }
+        }
+      }
+      return result;
+    },
+    [getSubfolders]
+  );
+
+  const countDecksRecursive = useCallback(
+    (folderId: string): number => {
+      const idSet = new Set(getDescendantFolderIds(folderId));
+      return decks.filter((d) => {
+        const fid = normalizeFolderId(d.folder_id);
+        return fid ? idSet.has(fid) : false;
+      }).length;
+    },
+    [decks, getDescendantFolderIds]
+  );
+
+  const getBreadcrumbTrail = useCallback(
+    (folderId: string): FolderItem[] => {
+      const trail: FolderItem[] = [];
+      const visited = new Set<string>();
+      let cur: string | null = String(folderId || "").trim();
+      while (cur && !visited.has(cur)) {
+        visited.add(cur);
+        const item = folderObjMap.get(cur);
+        if (!item) break;
+        trail.unshift(item);
+        const pid = normalizeFolderId(item.parent_id);
+        cur = pid && validFolderIds.has(pid) ? pid : null;
+      }
+      return trail;
+    },
+    [folderObjMap, validFolderIds]
+  );
+
+  const toggleFolderExpand = (e: React.MouseEvent, folderId: string) => {
+    e.stopPropagation();
+    setExpandedFolderIds((prev) =>
+      prev.includes(folderId)
+        ? prev.filter((id) => id !== folderId)
+        : [...prev, folderId]
+    );
   };
 
   // Sesli Telaffuz (TTS)
-  const speakText = (text: string, langCode: string = "en", e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      alert("Tarayıcınız sesli telaffuzu desteklemiyor.");
-      return;
-    }
+  const speakText = (text: string, langCode: string = "en") => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     const langObj = SUPPORTED_LANGUAGES.find((l) => l.code === langCode);
     utterance.lang = langObj ? langObj.ttsLocale : "en-US";
-    utterance.rate = 0.9;
+    utterance.rate = 0.92;
     window.speechSynthesis.speak(utterance);
   };
 
-  const fetchFolders = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/folders`);
-      if (res.ok) {
-        const data = await res.json();
-        setFolders(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.warn("Backend sunucusuna erişilemiyor, yerel modda devam ediliyor.");
-    }
-  };
-
-  // Deste Sıralama Yardımcısı (Kullanıcının özel sıralamasını korur)
-  const sortDecksBySavedOrder = (deckArr: Deck[]): Deck[] => {
-    try {
-      const savedOrderRaw = localStorage.getItem("vocaship_deck_order");
-      if (savedOrderRaw) {
-        const savedOrder: string[] = JSON.parse(savedOrderRaw);
-        if (Array.isArray(savedOrder) && savedOrder.length > 0) {
-          const orderMap = new Map(savedOrder.map((id, index) => [id, index]));
-          return [...deckArr].sort((a, b) => {
-            const posA = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999;
-            const posB = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999;
-            return posA - posB;
-          });
-        }
-      }
-    } catch (e) {
-      console.warn("Deste sırası yüklenemedi:", e);
-    }
-    return deckArr;
-  };
-
-  const fetchDecks = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/decks`);
-      if (res.ok) {
-        const data: Deck[] = await res.json();
-        const rawArr = Array.isArray(data) ? data : [];
-        const deckArr = sortDecksBySavedOrder(rawArr);
-        setDecks(deckArr);
-        if (deckArr.length > 0) {
-          setSelectedDeckForWord((prev) => prev || deckArr[0].id);
-        }
-      }
-    } catch (err) {
-      console.warn("Backend sunucusuna erişilemiyor, yerel modda devam ediliyor.");
-    }
-  };
-
-  useEffect(() => {
-    fetchFolders();
-    fetchDecks();
-  }, []);
-
-  // MATCH Sayacı
-  useEffect(() => {
-    let interval: any;
-    if (currentMode === "match" && gameStartTime && !isGameFinished) {
-      interval = setInterval(() => setElapsedTime(Date.now() - gameStartTime), 100);
-    }
-    return () => clearInterval(interval);
-  }, [currentMode, gameStartTime, isGameFinished]);
-
-  // GRAVITY Döngüsü
-  useEffect(() => {
-    let animationFrame: any;
-    if (currentMode === "gravity" && !isGravityOver && currentGravityCard) {
-      animationFrame = setInterval(() => {
-        setAsteroidTop((prev) => {
-          if (prev >= 82) {
-            if (currentGravityCard) {
-              saveArenaMistake({
-                word: currentGravityCard.word,
-                meaning:
-                  currentGravityCard.meanings?.[0]?.translation ||
-                  currentGravityCard.meanings?.[0]?.definition ||
-                  "",
-                phonetic: currentGravityCard.phonetic,
-                gameType: "gravity",
-              });
-            }
-            setGravityLives((l) => {
-              if (l <= 1) {
-                setIsGravityOver(true);
-                return 0;
-              }
-              return l - 1;
-            });
-            pickNextGravityCard();
-            return 0;
-          }
-          const speed = 0.5 + Math.min(gravityScore * 0.05, 1.8);
-          return prev + speed;
-        });
-      }, 50);
-    }
-    return () => clearInterval(animationFrame);
-  }, [currentMode, isGravityOver, currentGravityCard, gravityScore]);
-
-  // QUIZ Geri Sayım
-  useEffect(() => {
-    let timer: any;
-    if (currentMode === "quiz" && !isQuizOver && selectedAnswer === null) {
-      timer = setInterval(() => {
-        setQuizTimeLeft((prev) => {
-          if (prev <= 100) {
-            handleQuizAnswer(-1);
-            return 5000;
-          }
-          return prev - 100;
-        });
-      }, 100);
-    }
-    return () => clearInterval(timer);
-  }, [currentMode, isQuizOver, selectedAnswer, quizCardIndex]);
-
-  // SÜRÜKLE-BIRAK (DESTE KARTLARI & KLASÖRLER)
-  const handleDragStart = (e: React.DragEvent, deckId: string) => {
-    setDraggedDeckId(deckId);
-    e.dataTransfer.setData("text/plain", deckId);
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  const handleDragEnd = () => {
-    setDraggedDeckId(null);
-    setDragOverDeckId(null);
-    setDragOverFolderId(null);
-  };
-  const handleDeckDragEnd = handleDragEnd;
-
-  // 1. Klasör üzerine sürükleme olayları
-  const handleDragOver = (e: React.DragEvent, folderTarget: string | null | "all") => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (dragOverFolderId !== folderTarget) {
-      setDragOverFolderId(folderTarget);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDragOverFolderId(null);
-  };
-
-  const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: string | null) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const deckId = e.dataTransfer.getData("text/plain") || draggedDeckId;
-    setDragOverFolderId(null);
-    setDragOverDeckId(null);
-    setDraggedDeckId(null);
-
-    if (!deckId) return;
-
-    // 1. Optimistic Update: Destedeki folder_id bilgisini anında güncelle (kullanıcı beklemesin)
-    setDecks((prev) =>
-      prev.map((d) => (d.id === deckId ? { ...d, folder_id: targetFolderId } : d))
-    );
-
-    // 2. Arka planda sunucuya PATCH isteği gönder ve sayaçları yenile
-    try {
-      const res = await fetch(`${API_BASE}/decks/${deckId}/folder`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder_id: targetFolderId }),
-      });
-
-      if (res.ok) {
-        await fetchDecks();
-        await fetchFolders();
-      }
-    } catch (err) {
-      console.error("Deste klasöre taşınamadı:", err);
-      fetchDecks();
-    }
-  };
-
-  // 2. Kartlar arası sıralama (Deck Reordering) sürükleme olayları
-  const handleDeckDragOver = (e: React.DragEvent, targetDeckId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-    if (draggedDeckId && draggedDeckId !== targetDeckId) {
-      if (dragOverDeckId !== targetDeckId) {
-        setDragOverDeckId(targetDeckId);
-      }
-    }
-  };
-
-  const handleDeckDragLeave = (e: React.DragEvent, targetDeckId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (dragOverDeckId === targetDeckId) {
-      setDragOverDeckId(null);
-    }
-  };
-
-  const handleDeckDrop = (e: React.DragEvent, targetDeckId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const sourceDeckId = e.dataTransfer.getData("text/plain") || draggedDeckId;
-    setDragOverDeckId(null);
-    setDraggedDeckId(null);
-    setDragOverFolderId(null);
-
-    if (!sourceDeckId || sourceDeckId === targetDeckId) return;
-
-    setDecks((prevDecks) => {
-      const fromIndex = prevDecks.findIndex((d) => d.id === sourceDeckId);
-      const toIndex = prevDecks.findIndex((d) => d.id === targetDeckId);
-      if (fromIndex === -1 || toIndex === -1) return prevDecks;
-
-      // arrayMove mantığıyla yeniden sırala
-      const updated = [...prevDecks];
-      const [movedItem] = updated.splice(fromIndex, 1);
-      updated.splice(toIndex, 0, movedItem);
-
-      // Sıralamayı localStorage'a kaydet
-      try {
-        const orderIds = updated.map((d) => d.id);
-        localStorage.setItem("vocaship_deck_order", JSON.stringify(orderIds));
-      } catch (err) {
-        console.warn("Deste sırası kaydedilemedi:", err);
-      }
-
-      return updated;
-    });
-  };
-
-  // KLASÖR OLUŞTURMA & SİLME
+  // Klasör Oluşturma & Silme
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFolderName.trim()) return;
-
+    if (!newFolderName.trim() || isCreatingFolder) return;
+    setIsCreatingFolder(true);
     try {
-      const res = await fetch(`${API_BASE}/folders`, {
+      const res = await fetch(`${API_BASE}/api/v1/folders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newFolderName.trim() }),
+        body: JSON.stringify({
+          name: newFolderName.trim(),
+          color: newFolderColor || "#f59e0b",
+        }),
       });
       if (res.ok) {
+        const created = await res.json().catch(() => null);
+        const targetParent = normalizeFolderId(newFolderParentId);
+        if (created?.id && targetParent) {
+          setFolderParentInHierarchy(String(created.id).trim(), targetParent);
+          setExpandedFolderIds((prev) =>
+            Array.from(new Set([...prev, targetParent]))
+          );
+        }
         setNewFolderName("");
+        setNewFolderParentId("");
         setIsCreateFolderModalOpen(false);
-        await fetchFolders();
+        await refreshLibraryData();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(`Klasör oluşturulamadı: ${err.detail || err.message || "Sunucu hatası"}`);
+        alert(
+          `Klasör oluşturulamadı: ${err.detail || err.message || "Sunucu hatası"}`
+        );
       }
-    } catch (err) {
-      console.error("Klasör oluşturma hatası:", err);
-      alert("Klasör oluşturulurken sunucuya ulaşılamadı. Lütfen ağ bağlantınızı kontrol edin.");
+    } catch {
+      alert("Klasör oluşturulurken sunucuya ulaşılamadı.");
+    } finally {
+      setIsCreatingFolder(false);
     }
   };
 
-  const handleDeleteFolder = async (folderId: string, folderName: string) => {
-    if (!window.confirm(`"${folderName}" klasörünü silmek istiyor musunuz? (İçindeki desteler silinmez).`)) return;
+  const handleDeleteFolder = async (
+    e: React.MouseEvent,
+    folderId: string,
+    folderName: string
+  ) => {
+    e.stopPropagation();
+    if (
+      !window.confirm(
+        t("lib_confirm_del_folder", undefined, { name: folderName })
+      )
+    ) {
+      return;
+    }
     try {
-      const res = await fetch(`${API_BASE}/folders/${folderId}`, { method: "DELETE" });
-      if (res.ok) {
-        if (selectedFolderId === folderId) setSelectedFolderId(null);
-        await fetchFolders();
-        await fetchDecks();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // HANGMAN
-  const setupHangmanGame = (deckCards: Flashcard[]) => {
-    if (deckCards.length === 0) return;
-    setHangmanScore(0);
-    setHangmanIndex(0);
-    setHangmanLives(5);
-    setHangmanGuessed([]);
-    setIsHangmanOver(false);
-    setIsHangmanSuccess(false);
-    setCurrentMode("hangman");
-  };
-
-  const handleHangmanGuess = (letter: string) => {
-    if (hangmanGuessed.includes(letter) || isHangmanOver || isHangmanSuccess) return;
-    const newGuessed = [...hangmanGuessed, letter];
-    setHangmanGuessed(newGuessed);
-
-    const currentWord = (cards[hangmanIndex]?.word || "").toUpperCase();
-    if (!currentWord.includes(letter)) {
-      setHangmanLives((l) => {
-        if (l <= 1) {
-          setIsHangmanOver(true);
-          return 0;
-        }
-        return l - 1;
+      const res = await fetch(`${API_BASE}/api/v1/folders/${folderId}`, {
+        method: "DELETE",
       });
-    } else {
-      const isWon = currentWord.split("").every((ch) => ch === " " || ch === "-" || newGuessed.includes(ch));
-      if (isWon) {
-        setIsHangmanSuccess(true);
-        setHangmanScore((s) => s + 20);
-        setTimeout(() => {
-          if (hangmanIndex + 1 < cards.length) {
-            setHangmanIndex((p) => p + 1);
-            setHangmanGuessed([]);
-            setHangmanLives(5);
-            setIsHangmanSuccess(false);
-          } else {
-            setIsHangmanOver(true);
+      if (res.ok) {
+        const cleanDeletedId = String(folderId || "").trim();
+        const deletedDeckIds = new Set(
+          decks
+            .filter((d) => normalizeFolderId(d.folder_id) === cleanDeletedId)
+            .map((d) => d.id)
+        );
+        removeFolderFromHierarchy(cleanDeletedId);
+        if (selectedFolderFilter === cleanDeletedId) {
+          setSelectedFolderFilter("all");
+        }
+        setSelectedQuickFolderIds((prev) =>
+          prev.filter((id) => id !== cleanDeletedId)
+        );
+        setSelectedQuickSubfolderIds((prev) =>
+          prev.filter((id) => id !== cleanDeletedId)
+        );
+        setSelectedQuickDeckIds((prev) =>
+          prev.filter((id) => !deletedDeckIds.has(id))
+        );
+        setFolders((prev) => {
+          const next = prev.filter(
+            (f) => String(f.id || "").trim() !== cleanDeletedId
+          );
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(
+                FOLDERS_CACHE_STORAGE_KEY,
+                JSON.stringify(next)
+              );
+              const nextOrder = next.map((f) => String(f.id || "").trim());
+              localStorage.setItem(
+                FOLDER_ORDER_STORAGE_KEY,
+                JSON.stringify(nextOrder)
+              );
+            } catch {}
           }
-        }, 1000);
-      }
-    }
-  };
-
-  // SCRAMBLE
-  const setupScrambleGame = (deckCards: Flashcard[]) => {
-    if (deckCards.length === 0) return;
-    setScrambleScore(0);
-    setScrambleIndex(0);
-    setIsScrambleOver(false);
-    setCurrentMode("scramble");
-    loadScrambleWord(0, deckCards);
-  };
-
-  const loadScrambleWord = (idx: number, deckCards: Flashcard[]) => {
-    const card = deckCards[idx];
-    if (!card) {
-      setIsScrambleOver(true);
-      return;
-    }
-    const cleanWord = card.word.trim().toUpperCase();
-    const lettersArr: ScrambleLetter[] = cleanWord.split("").map((ch, i) => ({
-      charId: `${ch}-${i}-${Math.random()}`,
-      char: ch,
-      isUsed: false,
-    }));
-    setScrambleLetters(lettersArr.sort(() => 0.5 - Math.random()));
-    setSelectedLetters([]);
-    setIsScrambleSuccess(false);
-    setIsScrambleWrong(false);
-  };
-
-  const handlePickLetter = (item: ScrambleLetter) => {
-    if (item.isUsed || isScrambleSuccess || isScrambleWrong) return;
-    const nextIndex = selectedLetters.length;
-    const targetWord = cards[scrambleIndex]?.word.trim().toUpperCase();
-
-    if (targetWord[nextIndex] !== item.char) {
-      setIsScrambleWrong(true);
-      setTimeout(() => setIsScrambleWrong(false), 600);
-      return;
-    }
-
-    const updatedSelected = [...selectedLetters, item];
-    setSelectedLetters(updatedSelected);
-    setScrambleLetters((prev) => prev.map((l) => (l.charId === item.charId ? { ...l, isUsed: true } : l)));
-
-    if (updatedSelected.length === targetWord.length) {
-      setIsScrambleSuccess(true);
-      setScrambleScore((s) => s + 15);
-      setTimeout(() => {
-        if (scrambleIndex + 1 < cards.length) {
-          setScrambleIndex((p) => p + 1);
-          loadScrambleWord(scrambleIndex + 1, cards);
-        } else {
-          setIsScrambleOver(true);
-        }
-      }, 700);
-    }
-  };
-
-  const handleRemoveLetter = (item: ScrambleLetter) => {
-    if (isScrambleSuccess || isScrambleWrong) return;
-    setSelectedLetters((prev) => prev.filter((l) => l.charId !== item.charId));
-    setScrambleLetters((prev) => prev.map((l) => (l.charId === item.charId ? { ...l, isUsed: false } : l)));
-  };
-
-  // SPEED QUIZ
-  const setupSpeedQuiz = (deckCards: Flashcard[]) => {
-    if (deckCards.length < 4) {
-      alert("Test modu için destede en az 4 kelime bulunmalıdır.");
-      return;
-    }
-    setQuizScore(0);
-    setQuizCombo(1);
-    setQuizCorrectCount(0);
-    setQuizCardIndex(0);
-    setSelectedAnswer(null);
-    setIsQuizOver(false);
-    setCurrentMode("quiz");
-    buildQuizQuestion(0, deckCards);
-  };
-
-  const buildQuizQuestion = (index: number, deckCards: Flashcard[]) => {
-    const current = deckCards[index];
-    if (!current) {
-      setIsQuizOver(true);
-      return;
-    }
-    const correctMeaning = current.meanings?.[0]?.translation || current.meanings?.[0]?.definition || current.word;
-    const otherCards = deckCards.filter((c) => c.id !== current.id);
-    const shuffledOthers = [...otherCards].sort(() => 0.5 - Math.random()).slice(0, 3);
-
-    const options: QuizOption[] = [
-      { text: correctMeaning, isCorrect: true },
-      ...shuffledOthers.map((c) => ({
-        text: c.meanings?.[0]?.translation || c.meanings?.[0]?.definition || c.word,
-        isCorrect: false,
-      })),
-    ].sort(() => 0.5 - Math.random());
-
-    setQuizOptions(options);
-    setSelectedAnswer(null);
-    setQuizTimeLeft(5000);
-  };
-
-  const handleQuizAnswer = (optionIdx: number) => {
-    if (selectedAnswer !== null) return;
-    setSelectedAnswer(optionIdx);
-
-    const isCorrect = optionIdx >= 0 && quizOptions[optionIdx]?.isCorrect;
-    if (isCorrect) {
-      setQuizScore((prev) => prev + 10 * quizCombo);
-      setQuizCombo((prev) => Math.min(prev + 1, 4));
-      setQuizCorrectCount((prev) => prev + 1);
-    } else {
-      setQuizCombo(1);
-      if (currentQuizCard) {
-        saveArenaMistake({
-          word: currentQuizCard.word,
-          meaning:
-            currentQuizCard.meanings?.[0]?.translation ||
-            currentQuizCard.meanings?.[0]?.definition ||
-            "",
-          phonetic: currentQuizCard.phonetic,
-          gameType: "speed_quiz",
+          return next;
         });
-      }
-    }
-
-    setTimeout(() => {
-      if (quizCardIndex + 1 < cards.length) {
-        setQuizCardIndex((prev) => prev + 1);
-        buildQuizQuestion(quizCardIndex + 1, cards);
-      } else {
-        setIsQuizOver(true);
-      }
-    }, 900);
-  };
-
-  // GRAVITY
-  const setupGravityGame = (deckCards: Flashcard[]) => {
-    if (deckCards.length < 2) {
-      alert("Yerçekimi oyunu için destede en az 2 kelime olmalıdır.");
-      return;
-    }
-    setGravityScore(0);
-    setGravityLives(3);
-    setAsteroidTop(0);
-    setGravityInput("");
-    setIsGravityOver(false);
-    setCurrentMode("gravity");
-
-    const randomCard = deckCards[Math.floor(Math.random() * deckCards.length)];
-    setCurrentGravityCard(randomCard);
-    setTimeout(() => gravityInputRef.current?.focus(), 150);
-  };
-
-  const pickNextGravityCard = () => {
-    setAsteroidTop(0);
-    setGravityInput("");
-    const remaining = cards.filter((c) => c.id !== currentGravityCard?.id);
-    const nextCard = remaining.length > 0 ? remaining[Math.floor(Math.random() * remaining.length)] : cards[0];
-    setCurrentGravityCard(nextCard);
-  };
-
-  const handleGravitySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentGravityCard || isGravityOver) return;
-
-    const userInput = gravityInput.trim().toLowerCase();
-    const correctTr = (currentGravityCard.meanings?.[0]?.translation || currentGravityCard.meanings?.[0]?.definition || "").toLowerCase();
-    const correctEn = currentGravityCard.word.toLowerCase();
-
-    if (userInput === correctTr || correctTr.includes(userInput) || userInput === correctEn) {
-      setGravityScore((s) => s + 10);
-      pickNextGravityCard();
-    } else {
-      setGravityInput("");
-    }
-  };
-
-  // MATCH
-  const setupMatchGame = (deckCards: Flashcard[]) => {
-    if (deckCards.length < 2) {
-      alert("Eşleştirme oyunu için destede en az 2 kelime olmalıdır.");
-      return;
-    }
-    const shuffled = [...deckCards].sort(() => 0.5 - Math.random()).slice(0, 6);
-    const gameTiles: MatchTile[] = [];
-
-    shuffled.forEach((c) => {
-      gameTiles.push({ id: c.id, tileId: `${c.id}-w`, text: c.word, type: "word" });
-      gameTiles.push({
-        id: c.id,
-        tileId: `${c.id}-m`,
-        text: c.meanings?.[0]?.translation || c.meanings?.[0]?.definition || c.word,
-        type: "meaning"
-      });
-    });
-
-    setTiles(gameTiles.sort(() => 0.5 - Math.random()));
-    setSelectedTile(null);
-    setMatchedIds([]);
-    setWrongTileIds([]);
-    setIsGameFinished(false);
-    setElapsedTime(0);
-    setGameStartTime(Date.now());
-    setCurrentMode("match");
-  };
-
-  const handleTileClick = (tile: MatchTile) => {
-    if (matchedIds.includes(tile.id) || wrongTileIds.length > 0) return;
-    if (!selectedTile) {
-      setSelectedTile(tile);
-      return;
-    }
-    if (selectedTile.tileId === tile.tileId) {
-      setSelectedTile(null);
-      return;
-    }
-
-    if (selectedTile.id === tile.id && selectedTile.type !== tile.type) {
-      const newMatched = [...matchedIds, tile.id];
-      setMatchedIds(newMatched);
-      setSelectedTile(null);
-      if (newMatched.length === tiles.length / 2) setIsGameFinished(true);
-    } else {
-      setWrongTileIds([selectedTile.tileId, tile.tileId]);
-
-      const cardA = allDeckCards.find((c) => c.id === selectedTile.id);
-      const cardB = allDeckCards.find((c) => c.id === tile.id);
-      if (cardA) {
-        saveArenaMistake({
-          word: cardA.word,
-          meaning:
-            cardA.meanings?.[0]?.translation ||
-            cardA.meanings?.[0]?.definition ||
-            "",
-          phonetic: cardA.phonetic,
-          gameType: "match",
+        setDecks((prev) => {
+          const next = prev.filter(
+            (d) => normalizeFolderId(d.folder_id) !== cleanDeletedId
+          );
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(
+                DECKS_CACHE_STORAGE_KEY,
+                JSON.stringify(next)
+              );
+              deletedDeckIds.forEach((did) => {
+                localStorage.removeItem(`vocaship_deck_cards_${did}`);
+              });
+            } catch {}
+          }
+          return next;
         });
-      }
-      if (cardB && cardB.id !== cardA?.id) {
-        saveArenaMistake({
-          word: cardB.word,
-          meaning:
-            cardB.meanings?.[0]?.translation ||
-            cardB.meanings?.[0]?.definition ||
-            "",
-          phonetic: cardB.phonetic,
-          gameType: "match",
-        });
-      }
-
-      setTimeout(() => {
-        setWrongTileIds([]);
-        setSelectedTile(null);
-      }, 700);
-    }
-  };
-
-  // DESTE & KART SİLME
-  const handleDeleteDeck = async (e: React.MouseEvent, deckId: string, deckTitle: string) => {
-    e.stopPropagation();
-    if (!window.confirm(`"${deckTitle}" destesini silmek istediğinize emin misiniz?`)) return;
-    try {
-      const res = await fetch(`${API_BASE}/decks/${deckId}`, { method: "DELETE" });
-      if (res.ok) {
-        await fetchDecks();
-        await fetchFolders();
+        await refreshLibraryData();
       }
     } catch (err) {
-      console.error(err);
+      console.error("Klasör silinemedi:", err);
     }
   };
 
-  const handleDeleteCurrentCard = async (e: React.MouseEvent, cardId: string, word: string) => {
-    e.stopPropagation();
-    if (!window.confirm(`"${word}" kartını desteden silmek istiyor musunuz?`)) return;
-    try {
-      const res = await fetch(`${API_BASE}/decks/cards/${cardId}`, { method: "DELETE" });
-      if (res.ok) {
-        const updated = cards.filter((c) => c.id !== cardId);
-        setCards(updated);
-        setAllDeckCards((prev) => prev.filter((c) => c.id !== cardId));
-        setIsFlipped(false);
-        if (currentIndex >= updated.length) setCurrentIndex(Math.max(0, updated.length - 1));
-        if (updated.length === 0) setSessionCompleted(true);
-        await fetchDecks();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
+  // Yeni Deste Oluşturma & Silme
   const handleCreateDeck = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
-    setIsSubmitting(true);
-    try {
-      const cleanFolderId = (newDeckFolderId && newDeckFolderId.trim() && newDeckFolderId !== "none")
-        ? newDeckFolderId.trim()
-        : null;
+    if (!newTitle.trim() || isCreatingDeck) return;
+    const cleanFolderId =
+      normalizeFolderId(newDeckFolderId) ||
+      (folders.length > 0 ? String(folders[0].id || "").trim() : null);
 
-      const res = await fetch(`${API_BASE}/decks`, {
+    if (!cleanFolderId) {
+      alert(t("lib_create_folder_first"));
+      return;
+    }
+
+    setIsCreatingDeck(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/decks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -951,2052 +663,2413 @@ export default function Home() {
         setNewDescription("");
         setNewDeckFolderId("");
         setIsCreateModalOpen(false);
-        await fetchDecks();
-        await fetchFolders();
+        await refreshLibraryData();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(`Deste oluşturulamadı: ${err.detail || err.message || "Sunucu hatası"}`);
+        alert(
+          `Deste oluşturulamadı: ${err.detail || err.message || "Sunucu hatası"}`
+        );
       }
-    } catch (err) {
-      console.error("Deste oluşturma hatası:", err);
-      alert("Deste oluşturulurken sunucuya ulaşılamadı. Lütfen ağ bağlantınızı kontrol edin.");
+    } catch {
+      alert("Deste oluşturulurken sunucuya ulaşılamadı.");
     } finally {
-      setIsSubmitting(false);
+      setIsCreatingDeck(false);
     }
   };
 
-  // AI İLE KELİME ÇEKME
-  const runFetchAi = async (searchWord: string) => {
-    const targetDeck = selectedDeckForWord || (activeDeck ? activeDeck.id : (decks.length > 0 ? decks[0].id : ""));
-    if (!targetDeck || !searchWord.trim()) return;
+  const handleDeleteDeck = async (
+    e: React.MouseEvent,
+    deckId: string,
+    deckTitle: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      !window.confirm(
+        t("lib_confirm_del_deck", undefined, { name: deckTitle })
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/decks/${deckId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        await Promise.all([refreshLibraryData(), fetchStudyMetrics()]);
+      }
+    } catch (err) {
+      console.error("Deste silinemedi:", err);
+    }
+  };
 
-    setIsEnriching(true);
-    setCorrectionNotice(null);
-    setSuggestions([]);
+  // =========================================================================
+  // SÜRÜKLE-BIRAK (MOVE) & SAĞ TIK KLASÖRE TAŞIMA İŞLEYİCİLERİ
+  // =========================================================================
+  const handleDeckDragStart = (e: React.DragEvent, deckId: string) => {
+    const cleanId = String(deckId);
+    draggedFolderIdRef.current = null;
+    draggedDeckIdRef.current = cleanId;
+    setDraggedFolderId(null);
+    setDraggedDeckId(cleanId);
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("application/x-deck-id", cleanId);
+      e.dataTransfer.setData("text/plain", cleanId);
+    } catch {}
+  };
+
+  const handleDeckDragEnd = () => {
+    draggedDeckIdRef.current = null;
+    setDraggedDeckId(null);
+    setDragOverFolderTarget(null);
+  };
+
+  const handleMoveDeckToFolder = async (
+    deckId: string,
+    targetFolder: string | null
+  ) => {
+    const nextFolderId =
+      !targetFolder || targetFolder === "all" || targetFolder === "__orphan__"
+        ? null
+        : String(targetFolder).trim();
+
+    setDecks((prev) => {
+      const next = prev.map((d) =>
+        d.id === deckId ? { ...d, folder_id: nextFolderId } : d
+      );
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(DECKS_CACHE_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+
+    if (deckId.startsWith("preset_")) return;
 
     try {
-      const aiRes = await fetch(`${API_BASE}/ai/enrich`, {
+      const res = await fetch(
+        `${API_BASE}/api/v1/decks/${encodeURIComponent(deckId)}/folder`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folder_id: nextFolderId }),
+        }
+      );
+      if (res.ok) {
+        await refreshLibraryData();
+      }
+    } catch (err) {
+      console.error("Deste klasöre taşınamadı:", err);
+    }
+  };
+
+  const handleMoveFolderDecks = async (
+    sourceFolderId: string,
+    targetFolderId: string | null
+  ) => {
+    const cleanSource = String(sourceFolderId).trim();
+    const cleanTarget =
+      !targetFolderId ||
+      targetFolderId === "all" ||
+      targetFolderId === "__orphan__"
+        ? null
+        : String(targetFolderId).trim();
+    if (!cleanSource || cleanSource === cleanTarget) return;
+
+    const movingDecks = decks.filter(
+      (d) => normalizeFolderId(d.folder_id) === cleanSource
+    );
+    if (movingDecks.length === 0) return;
+
+    setDecks((prev) => {
+      const next = prev.map((d) =>
+        normalizeFolderId(d.folder_id) === cleanSource
+          ? { ...d, folder_id: cleanTarget }
+          : d
+      );
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(DECKS_CACHE_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+
+    const backendMoving = movingDecks.filter((d) => !d.id.startsWith("preset_"));
+    if (backendMoving.length > 0) {
+      await Promise.allSettled(
+        backendMoving.map((d) =>
+          fetch(
+            `${API_BASE}/api/v1/decks/${encodeURIComponent(d.id)}/folder`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ folder_id: cleanTarget }),
+            }
+          )
+        )
+      );
+      await refreshLibraryData();
+    }
+  };
+
+  const handleFolderDragStart = (e: React.DragEvent, folderId: string) => {
+    e.stopPropagation();
+    const cleanId = String(folderId).trim();
+    draggedDeckIdRef.current = null;
+    draggedFolderIdRef.current = cleanId;
+    setDraggedDeckId(null);
+    setDraggedFolderId(cleanId);
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("application/x-folder-id", cleanId);
+      e.dataTransfer.setData("text/plain", cleanId);
+    } catch {}
+  };
+
+  const handleFolderDragEnd = () => {
+    draggedFolderIdRef.current = null;
+    setDraggedFolderId(null);
+    setDragOverFolderReorderId(null);
+    setDragOverFolderTarget(null);
+  };
+
+  const handleReorderFolders = (sourceId: string, targetId: string) => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    setFolders((prev) => {
+      const fromIdx = prev.findIndex(
+        (f) => String(f.id || "").trim() === sourceId
+      );
+      const toIdx = prev.findIndex(
+        (f) => String(f.id || "").trim() === targetId
+      );
+      if (fromIdx < 0 || toIdx < 0) return prev;
+
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIdx, 1);
+      updated.splice(toIdx, 0, moved);
+
+      if (typeof window !== "undefined") {
+        try {
+          const orderIds = updated.map((f) => String(f.id || "").trim());
+          localStorage.setItem(
+            FOLDER_ORDER_STORAGE_KEY,
+            JSON.stringify(orderIds)
+          );
+          localStorage.setItem(
+            FOLDERS_CACHE_STORAGE_KEY,
+            JSON.stringify(updated)
+          );
+        } catch {}
+      }
+      return updated;
+    });
+  };
+
+  const handleMoveFolderToParent = (
+    sourceFolderId: string,
+    targetParentId: string | null
+  ) => {
+    const cleanSource = String(sourceFolderId || "").trim();
+    const cleanParent =
+      !targetParentId ||
+      targetParentId === "all" ||
+      targetParentId === "__orphan__"
+        ? null
+        : String(targetParentId).trim();
+
+    if (!cleanSource) return;
+    if (wouldCreateFolderCycle(folders, cleanSource, cleanParent)) {
+      alert(t("lib_folder_cycle_err"));
+      return;
+    }
+
+    setFolderParentInHierarchy(cleanSource, cleanParent);
+    setFolders((prev) => {
+      const next = prev.map((f) =>
+        String(f.id || "").trim() === cleanSource
+          ? { ...f, parent_id: cleanParent }
+          : f
+      );
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(FOLDERS_CACHE_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+
+    if (cleanParent) {
+      setExpandedFolderIds((prev) =>
+        Array.from(new Set([...prev, cleanParent]))
+      );
+    }
+  };
+
+  const handleFolderDroppedOnTarget = async (
+    sourceFolderId: string,
+    targetFolderId: string | null
+  ) => {
+    const cleanSource = String(sourceFolderId).trim();
+    const cleanTarget =
+      !targetFolderId ||
+      targetFolderId === "all" ||
+      targetFolderId === "__orphan__"
+        ? null
+        : String(targetFolderId).trim();
+    if (!cleanSource || cleanSource === cleanTarget) return;
+
+    handleMoveFolderToParent(cleanSource, cleanTarget);
+  };
+
+  const handleCopyFolder = async (sourceFolder: FolderItem) => {
+    if (isCopyingFolder) return;
+    setIsCopyingFolder(true);
+    const sourceId = String(sourceFolder.id || "").trim();
+    const copyName = `${sourceFolder.name} (Kopya)`;
+    const parentId = normalizeFolderId(sourceFolder.parent_id);
+
+    try {
+      const fRes = await fetch(`${API_BASE}/api/v1/folders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          word: searchWord.trim(),
-          target_lang: termLang,
-          native_lang: defLang,
-          context_hint: contextHint.trim() || undefined
+          name: copyName,
+          color: sourceFolder.color || "#f59e0b",
         }),
       });
-
-      if (!aiRes.ok) {
-        const err = await aiRes.json().catch(() => null);
-        alert(err?.detail || "Kelime doğrulanamadı.");
+      if (!fRes.ok) {
+        alert("Klasör kopyalanamadı.");
         return;
       }
-
-      const data = await aiRes.json();
-      if (data.was_corrected) {
-        setCorrectionNotice(`'${data.original_word}' yerine '${data.word}' olarak düzeltildi.`);
+      const newFolder = await fRes.json();
+      const newFolderId = String(newFolder.id || "").trim();
+      if (parentId) {
+        setFolderParentInHierarchy(newFolderId, parentId);
       }
-      setSuggestions(data.suggestions || []);
 
-      setEnrichedData({
-        word: data.word,
-        phonetic: data.phonetic || "",
-        translation: data.meanings?.[0]?.translation || data.meanings?.[0]?.definition || "",
-        exampleEn: data.example_sentences?.[0]?.en || data.example_sentences?.[0]?.target || "",
-        exampleTr: data.example_sentences?.[0]?.tr || data.example_sentences?.[0]?.source || "",
-      });
-    } finally {
-      setIsEnriching(false);
-    }
-  };
+      const decksToCopy = decks.filter(
+        (d) =>
+          normalizeFolderId(d.folder_id) === sourceId &&
+          !d.id.startsWith("preset_")
+      );
 
-  const handleFetchAiData = async (e: React.FormEvent) => {
-    e.preventDefault();
-    runFetchAi(wordInput);
-  };
+      for (const srcDeck of decksToCopy) {
+        try {
+          const dRes = await fetch(`${API_BASE}/api/v1/decks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: srcDeck.title,
+              description: srcDeck.description || "",
+              folder_id: newFolderId,
+            }),
+          });
+          if (!dRes.ok) continue;
+          const createdDeck = await dRes.json();
 
-  const handleSaveEditedCard = async () => {
-    const targetDeck = selectedDeckForWord || (activeDeck ? activeDeck.id : (decks.length > 0 ? decks[0].id : ""));
-    if (!enrichedData || !targetDeck) return;
-    setIsSavingCard(true);
-    try {
-      const res = await fetch(`${API_BASE}/decks/cards`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deck_id: targetDeck,
-          word: enrichedData.word.trim(),
-          phonetic: enrichedData.phonetic.trim() || null,
-          meanings: [{ part_of_speech: "", translation: enrichedData.translation.trim(), definition: enrichedData.translation.trim() }],
-          example_sentences: enrichedData.exampleEn ? [{ en: enrichedData.exampleEn.trim(), tr: enrichedData.exampleTr.trim() }] : [],
-          collocations: [],
-        }),
-      });
-      if (res.ok) {
-        const newCard = await res.json();
-        setWordInput("");
-        setContextHint("");
-        setEnrichedData(null);
-        setCorrectionNotice(null);
-        setSuggestions([]);
-        setIsAddWordModalOpen(false);
-        await fetchDecks();
-
-        if (activeDeck && activeDeck.id === targetDeck) {
-          setCards((prev) => [...prev, newCard]);
-          setAllDeckCards((prev) => [...prev, newCard]);
-          if (sessionCompleted) setSessionCompleted(false);
+          const cardsRes = await fetch(
+            `${API_BASE}/api/v1/decks/${encodeURIComponent(srcDeck.id)}/cards`
+          );
+          if (cardsRes.ok) {
+            const rawCards = await cardsRes.json();
+            if (Array.isArray(rawCards) && rawCards.length > 0) {
+              await Promise.allSettled(
+                rawCards.map((c: any) =>
+                  fetch(`${API_BASE}/api/v1/decks/cards`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      deck_id: createdDeck.id,
+                      word: c.word,
+                      phonetic: c.phonetic || null,
+                      meanings: c.meanings || [],
+                      example_sentences: c.example_sentences || [],
+                      collocations: c.collocations || [],
+                    }),
+                  })
+                )
+              );
+            }
+          }
+        } catch (err) {
+          console.warn("Deste kopyalama hatası:", err);
         }
       }
+
+      await refreshLibraryData();
+    } catch (err) {
+      console.error("Klasör kopyalanamadı:", err);
+      alert("Klasör kopyalanırken bir hata oluştu.");
     } finally {
-      setIsSavingCard(false);
+      setIsCopyingFolder(false);
     }
   };
 
-  // KART DÜZENLEME (EDIT)
-  const openEditModalForCurrentCard = (card: Flashcard) => {
-    setEditingCardData({
-      id: card.id,
-      word: card.word,
-      phonetic: card.phonetic || "",
-      translation: card.meanings?.[0]?.translation || card.meanings?.[0]?.definition || "",
-      exampleEn: card.example_sentences?.[0]?.en || card.example_sentences?.[0]?.target || "",
-      exampleTr: card.example_sentences?.[0]?.tr || card.example_sentences?.[0]?.source || "",
-    });
-    setIsEditingCardModalOpen(true);
-  };
+  const handleRenameFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renamingFolder || !renamingFolder.name.trim() || isRenamingFolder) {
+      return;
+    }
+    setIsRenamingFolder(true);
+    const trimmedName = renamingFolder.name.trim();
+    const targetId = renamingFolder.id;
 
-  const handleUpdateCurrentCard = async () => {
-    if (!editingCardData) return;
-    setIsUpdatingCard(true);
     try {
-      const res = await fetch(`${API_BASE}/decks/cards/${editingCardData.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          word: editingCardData.word.trim(),
-          phonetic: editingCardData.phonetic.trim() || null,
-          meanings: [{ part_of_speech: "", translation: editingCardData.translation.trim(), definition: editingCardData.translation.trim() }],
-          example_sentences: editingCardData.exampleEn ? [{ en: editingCardData.exampleEn.trim(), tr: editingCardData.exampleTr.trim() }] : [],
-        }),
+      const res = await fetch(
+        `${API_BASE}/api/v1/folders/${encodeURIComponent(targetId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmedName }),
+        }
+      );
+      setFolders((prev) => {
+        const next = prev.map((f) =>
+          String(f.id || "").trim() === targetId
+            ? { ...f, name: trimmedName }
+            : f
+        );
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              FOLDERS_CACHE_STORAGE_KEY,
+              JSON.stringify(next)
+            );
+          } catch {}
+        }
+        return next;
       });
-
+      setRenamingFolder(null);
       if (res.ok) {
-        const updated = (c: Flashcard) =>
-          c.id === editingCardData.id
-            ? {
-              ...c,
-              word: editingCardData.word.trim(),
-              phonetic: editingCardData.phonetic.trim() || undefined,
-              meanings: [{ part_of_speech: "", translation: editingCardData.translation.trim(), definition: editingCardData.translation.trim() }],
-              example_sentences: editingCardData.exampleEn ? [{ en: editingCardData.exampleEn.trim(), tr: editingCardData.exampleTr.trim() }] : [],
-            }
-            : c;
-
-        setCards((prev) => prev.map(updated));
-        setAllDeckCards((prev) => prev.map(updated));
-        setIsEditingCardModalOpen(false);
-        setEditingCardData(null);
-      } else {
-        alert("Kart güncellenemedi.");
+        await refreshLibraryData();
       }
     } catch (err) {
-      console.error(err);
-      alert("Sunucuya ulaşılamadı.");
+      console.error("Klasör adı güncellenemedi:", err);
+      setRenamingFolder(null);
     } finally {
-      setIsUpdatingCard(false);
+      setIsRenamingFolder(false);
     }
   };
 
-  // ÇALIŞMA BAŞLATMA
-  const startStudy = async (deck: Deck) => {
-    setActiveDeck(deck);
-    setSelectedDeckForWord(deck.id);
-    setSessionCompleted(false);
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setCardRatings({});
-    setCurrentMode("study");
-
-    if (deck.id === "arena_mistakes") {
-      const currentMistakes = getArenaMistakes();
-      setAllDeckCards(currentMistakes as unknown as Flashcard[]);
-      setCards(currentMistakes as unknown as Flashcard[]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/decks/${deck.id}/cards`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setAllDeckCards(data);
-          setCards(data);
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
+  const openDeckContextMenu = (e: React.MouseEvent, deck: DeckItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const maxW = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const maxH = typeof window !== "undefined" ? window.innerHeight : 800;
+    setContextMenu({
+      type: "deck",
+      x: Math.min(e.clientX, maxW - 260),
+      y: Math.min(e.clientY, maxH - 340),
+      deck,
+    });
   };
 
-  const startStudyMistakes = (mistakesList: ArenaMistakeItem[]) => {
-    const mistakeDeck: Deck = {
-      id: "arena_mistakes",
-      title: "🎯 Oyun Arenası Hatalarım",
-      description: "Oyunlarda takıldığın kelimeler burada toplanır. Tekrar et ve pekiştir!",
-      card_count: mistakesList.length,
-    };
-    startStudy(mistakeDeck);
+  const openFolderContextMenu = (e: React.MouseEvent, folder: FolderItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMoveOpen(false);
+    const maxW = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const maxH = typeof window !== "undefined" ? window.innerHeight : 800;
+    setContextMenu({
+      type: "folder",
+      x: Math.min(e.clientX, maxW - 260),
+      y: Math.min(e.clientY, maxH - 360),
+      folder,
+    });
   };
 
-  // SEÇENEKLİ TEKRAR ÇALIŞTIRMA
-  const restartStudyFiltered = (filterType: "all" | "forgotten" | "difficult") => {
-    let filteredList: Flashcard[] = [];
+  // Sol Menü İçin İç İçe Açılır/Kapanır Klasör Ağacı
+  const renderSidebarFolderNode = (
+    folder: FolderItem,
+    depth: number = 0
+  ): React.ReactNode => {
+    const normalizedFolderId = String(folder.id || "").trim();
+    const subfolders = getSubfolders(normalizedFolderId);
+    const hasSubfolders = subfolders.length > 0;
+    const isExpanded = expandedFolderIds.includes(normalizedFolderId);
+    const isSelected = selectedFolderFilter === normalizedFolderId;
+    const isDeckTarget = dragOverFolderTarget === normalizedFolderId;
+    const isReorderTarget = dragOverFolderReorderId === normalizedFolderId;
+    const count = countDecksRecursive(normalizedFolderId);
+    const theme = getFolderAccentTheme(folder.color);
 
-    if (filterType === "all") {
-      filteredList = allDeckCards;
-    } else if (filterType === "forgotten") {
-      filteredList = allDeckCards.filter((c) => cardRatings[c.id] === 1);
-    } else if (filterType === "difficult") {
-      filteredList = allDeckCards.filter((c) => cardRatings[c.id] === 1 || cardRatings[c.id] === 3);
-    }
+    return (
+      <div key={normalizedFolderId} className="space-y-1">
+        <div
+          draggable
+          onDragStart={(e) => handleFolderDragStart(e, normalizedFolderId)}
+          onDragEnd={handleFolderDragEnd}
+          onContextMenu={(e) => openFolderContextMenu(e, folder)}
+          onDragEnter={(e) => {
+            const fId = draggedFolderIdRef.current || draggedFolderId;
+            const dId = draggedDeckIdRef.current || draggedDeckId;
+            if (
+              fId &&
+              fId !== normalizedFolderId &&
+              !wouldCreateFolderCycle(folders, fId, normalizedFolderId)
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = "move";
+              setDragOverFolderReorderId(normalizedFolderId);
+            } else if (dId) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = "move";
+              setDragOverFolderTarget(normalizedFolderId);
+            }
+          }}
+          onDragOver={(e) => {
+            const fId = draggedFolderIdRef.current || draggedFolderId;
+            const dId = draggedDeckIdRef.current || draggedDeckId;
+            if (
+              fId &&
+              fId !== normalizedFolderId &&
+              !wouldCreateFolderCycle(folders, fId, normalizedFolderId)
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = "move";
+              setDragOverFolderReorderId(normalizedFolderId);
+            } else if (dId) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = "move";
+              setDragOverFolderTarget(normalizedFolderId);
+            }
+          }}
+          onDragLeave={(e) => {
+            e.stopPropagation();
+            if (dragOverFolderTarget === normalizedFolderId) {
+              setDragOverFolderTarget(null);
+            }
+            if (dragOverFolderReorderId === normalizedFolderId) {
+              setDragOverFolderReorderId(null);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const fId =
+              draggedFolderIdRef.current ||
+              draggedFolderId ||
+              e.dataTransfer.getData("application/x-folder-id");
+            const dId =
+              draggedDeckIdRef.current ||
+              draggedDeckId ||
+              e.dataTransfer.getData("application/x-deck-id") ||
+              (!fId ? e.dataTransfer.getData("text/plain") : "");
 
-    if (filteredList.length === 0) {
-      alert("Bu grupta tekrar edilecek kelime bulunmuyor.");
-      return;
-    }
+            setDragOverFolderTarget(null);
+            setDragOverFolderReorderId(null);
+            setDraggedFolderId(null);
+            setDraggedDeckId(null);
+            draggedFolderIdRef.current = null;
+            draggedDeckIdRef.current = null;
 
-    setCards(filteredList);
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setSessionCompleted(false);
-    setCardRatings({});
-  };
-
-  // SM-2 PUANLAMA
-  const handleRating = async (rating: number) => {
-    const currentCard = cards[currentIndex];
-    if (!currentCard) return;
-
-    setCardRatings((prev) => ({ ...prev, [currentCard.id]: rating }));
-
-    try {
-      await fetch(`${API_BASE}/study/review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ card_id: currentCard.id, rating }),
-      });
-    } catch (e) {
-      console.error(e);
-    }
-    if (currentIndex + 1 < cards.length) {
-      setIsFlipped(false);
-      setTimeout(() => setCurrentIndex((p) => p + 1), 150);
-    } else {
-      setSessionCompleted(true);
-    }
-  };
-
-  const currentCard = cards[currentIndex];
-  const currentQuizCard = cards[quizCardIndex];
-  const currentScrambleCard = cards[scrambleIndex];
-  const currentHangmanCard = cards[hangmanIndex];
-
-  const forgottenCardsCount = allDeckCards.filter((c) => cardRatings[c.id] === 1).length;
-  const hardCardsCount = allDeckCards.filter((c) => cardRatings[c.id] === 1 || cardRatings[c.id] === 3).length;
-  const totalCardsCount = decks.reduce((acc, d) => acc + (d.card_count || 0), 0);
-
-  const filteredDecks = decks.filter((d) => {
-    const matchesFolder = selectedFolderId
-      ? d.folder_id && String(d.folder_id).trim().toLowerCase() === String(selectedFolderId).trim().toLowerCase()
-      : true;
-    const matchesSearch = searchQuery
-      ? d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (d.description && d.description.toLowerCase().includes(searchQuery.toLowerCase()))
-      : true;
-    return matchesFolder && matchesSearch;
-  });
-
-  const activeFolderName = folders.find((f) => String(f.id).toLowerCase() === String(selectedFolderId).toLowerCase())?.name;
-
-  return (
-    <main className="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen selection:bg-indigo-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden transition-colors duration-150">
-      {/* Yalnızca Bir Deste Açıkken Görünen Şık Deste Üst Kontrol Çubuğu */}
-      {activeDeck && (
-        <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between pb-4 mb-4 border-b border-slate-800 animate-in fade-in duration-150">
-          <div className="flex items-center space-x-3">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveDeck(null);
-                setCurrentMode("study");
-              }}
-              className="flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-medium text-xs sm:text-sm transition shadow-sm cursor-pointer active:scale-95"
-            >
-              <ArrowLeft className="w-4 h-4 text-indigo-400" />
-              <span>← Destelere Dön</span>
-            </button>
-            <h2 className="font-black text-base sm:text-lg text-white truncate max-w-xs sm:max-w-md">
-              {activeDeck.title}
-            </h2>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedDeckForWord(activeDeck.id);
-                setEnrichedData(null);
-                setCorrectionNotice(null);
-                setSuggestions([]);
-                setIsAddWordModalOpen(true);
-              }}
-              className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium shadow-md shadow-indigo-500/20 text-xs sm:text-sm transition cursor-pointer active:scale-95"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>✨ Desteye Kelime Ekle</span>
-            </button>
-          </div>
-        </header>
-      )}
-
-      {/* Main Content */}
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col overflow-x-hidden">
-        {!activeDeck ? (
-          <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
-            {/* =================================================================== */}
-            {/* A) SOL SÜTUN (Kullanıcı Paneli & Sayaçlar - w-full lg:w-72 xl:w-80) */}
-            {/* =================================================================== */}
-            <aside className="w-full lg:w-72 xl:w-80 shrink-0 lg:sticky lg:top-20">
-              <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md">
-                {/* Üst Kısım - Profil Alanı */}
-                <div
-                  onClick={() => setIsAvatarStudioOpen(true)}
-                  className="flex items-center gap-3 cursor-pointer group pb-3 border-b border-slate-800/80"
-                >
-                  {/* Sarı Çerçeveli Avatar */}
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-xl ring-2 ring-amber-400/80 border border-amber-400/50 bg-slate-950 flex items-center justify-center overflow-hidden shadow-md shadow-amber-500/10 shrink-0 group-hover:scale-105 transition-transform">
-                      {userProfile?.avatar_url && (userProfile.avatar_url.startsWith("http") || userProfile.avatar_url.startsWith("/") || userProfile.avatar_url.startsWith("data:")) ? (
-                        <img
-                          src={userProfile.avatar_url}
-                          alt="Profil Avatarı"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = "/avatars/presets/avatar_01.svg";
-                          }}
-                        />
-                      ) : userProfile?.avatar_url ? (
-                        <span className="text-2xl">{userProfile.avatar_url}</span>
-                      ) : (
-                        <span className="text-base font-bold text-amber-300">
-                          {((userProfile?.full_name || userProfile?.username || "Ö").charAt(0)).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <h3 className="font-bold text-slate-100 text-sm truncate group-hover:text-amber-300 transition-colors">
-                        {userProfile?.username ? (userProfile.username.startsWith("@") ? userProfile.username : `@${userProfile.username}`) : (userProfile?.full_name || "@ogrenci")}
-                      </h3>
-                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 font-mono">
-                        • Lv.{userProfile?.study_level || "B1"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 font-medium truncate max-w-[130px] mt-0.5">
-                      {userProfile?.full_name || "Öğrenci"}
-                    </p>
-                  </div>
-
-                  {/* Zarif ✏️ Düzenle Butonu */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsAvatarStudioOpen(true);
-                    }}
-                    title="Avatarı Değiştir"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer shrink-0"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* [ 🎨 Avatarı Değiştir ] Butonu */}
-                <button
-                  type="button"
-                  onClick={() => setIsAvatarStudioOpen(true)}
-                  className="w-full mt-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium text-xs py-2 rounded-xl shadow-md shadow-indigo-600/25 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center gap-1.5"
-                  title="Avatar Stüdyosunu Aç"
-                >
-                  <Palette className="w-3.5 h-3.5" />
-                  <span>🎨 Avatarı Değiştir</span>
-                </button>
-
-                {/* Ayraç */}
-                <div className="border-t border-slate-800 my-4" />
-
-                {/* Alt Kısım - 4 İstatistik Sayacı (Dikey Kompakt Liste) */}
-                <div className="space-y-2">
-                  {/* 1. Sayaç (Toplam Kelime) */}
-                  <div className="bg-gradient-to-br from-slate-950/80 to-indigo-950/30 border border-indigo-500/30 rounded-xl p-3 flex items-center justify-between hover:border-indigo-500/50 transition-all">
-                    <span className="text-xs font-semibold text-indigo-400 flex items-center gap-1.5">
-                      <span>📚</span>
-                      <span>Toplam Kelime</span>
-                    </span>
-                    <span className="text-xl font-black text-indigo-300 drop-shadow-[0_0_8px_rgba(165,180,252,0.3)] font-mono">
-                      {totalCardsCount}
-                    </span>
-                  </div>
-
-                  {/* 2. Sayaç (Okunan Hikaye) */}
-                  <div className="bg-gradient-to-br from-slate-950/80 to-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between hover:border-amber-500/50 transition-all">
-                    <span className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
-                      <span>📖</span>
-                      <span>Okunan Hikaye</span>
-                    </span>
-                    <span className="text-xl font-black text-amber-300 drop-shadow-[0_0_8px_rgba(252,211,77,0.3)] font-mono">
-                      12
-                    </span>
-                  </div>
-
-                  {/* 3. Sayaç (Speaking Seansı) */}
-                  <div className="bg-gradient-to-br from-slate-950/80 to-emerald-950/30 border border-emerald-500/30 rounded-xl p-3 flex items-center justify-between hover:border-emerald-500/50 transition-all">
-                    <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-                      <span>🎙️</span>
-                      <span>Speaking Seansı</span>
-                    </span>
-                    <span className="text-xl font-black text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)] font-mono">
-                      8
-                    </span>
-                  </div>
-
-                  {/* 4. Sayaç (Deste & Klasör) */}
-                  <div className="bg-gradient-to-br from-slate-950/80 to-cyan-950/30 border border-cyan-500/30 rounded-xl p-3 flex items-center justify-between hover:border-cyan-500/50 transition-all">
-                    <span className="text-xs font-semibold text-cyan-400 flex items-center gap-1.5">
-                      <span>🗂️</span>
-                      <span>Deste & Klasör</span>
-                    </span>
-                    <span className="text-xl font-black text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.3)] font-mono">
-                      {decks.length} <span className="text-xs text-slate-500 font-normal">/</span> {folders.length}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </aside>
-
-            {/* =================================================================== */}
-            {/* B) SAĞ GENİŞ SÜTUN (Arama Konsolu, Klasörler & Deste Kartları)     */}
-            {/* =================================================================== */}
-            <div className="flex-1 min-w-0 w-full space-y-6">
-              {/* Üst Konsol Barı (Arama & Aksiyonlar - Tam Genişlik) */}
-              <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full bg-slate-900/85 border border-slate-800/90 p-2.5 rounded-2xl shadow-xl backdrop-blur-md">
-                {/* Arama Çubuğu */}
-                <div className="relative flex-1 w-full">
-                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Deste veya kelime ara..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="flex-1 w-full bg-slate-950/90 border border-slate-800 focus:border-indigo-500/70 text-slate-100 placeholder-slate-500 rounded-xl pl-9 pr-8 py-2.5 text-sm outline-none transition-all"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Aksiyon Butonları */}
-                <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end shrink-0">
-                  {/* [ 📁 Klasör Aç ] */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateFolderModalOpen(true)}
-                    className="bg-slate-800/90 hover:bg-slate-800 border border-amber-500/40 text-amber-300 hover:border-amber-400 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
-                    <span>📁 Klasör Aç</span>
-                  </button>
-
-                  {/* [ ✨ Kelime Ekle ] */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (decks.length > 0 && !selectedDeckForWord) setSelectedDeckForWord(decks[0].id);
-                      setEnrichedData(null);
-                      setCorrectionNotice(null);
-                      setSuggestions([]);
-                      setIsAddWordModalOpen(true);
-                    }}
-                    className="bg-slate-800/90 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 hover:border-cyan-400 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>✨ Kelime Ekle</span>
-                  </button>
-
-                  {/* [ + Yeni Deste ] */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs sm:text-sm font-semibold px-4 py-2 rounded-xl shadow-lg shadow-indigo-600/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>+ Yeni Deste</span>
-                  </button>
-
-                  <div className="h-6 w-px bg-slate-800 mx-0.5 hidden sm:block" />
-
-                  {/* Görünüm Seçici */}
-                  <div className="flex items-center bg-slate-950/80 border border-slate-800 rounded-xl p-1">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("folder")}
-                      title="Klasör Görünümü"
-                      className={`p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                        viewMode === "folder"
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <FolderTree className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("grid")}
-                      title="Izgara Görünümü"
-                      className={`p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                        viewMode === "grid"
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("list")}
-                      title="Liste Görünümü"
-                      className={`p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                        viewMode === "list"
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <ListIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-            {/* Üst Klasör Sekmeleri Barı (Tüm Desteler, 📁 Klasörler - Sürükle-Bırak Hedefi) */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {/* Tüm Desteler Sekmesi */}
+            if (fId && fId !== normalizedFolderId) {
+              handleFolderDroppedOnTarget(fId, normalizedFolderId);
+            } else if (dId) {
+              handleMoveDeckToFolder(dId, normalizedFolderId);
+            }
+          }}
+          onClick={() => setSelectedFolderFilter(normalizedFolderId)}
+          className={`w-full px-2.5 py-2 rounded-xl text-xs font-medium transition flex items-center justify-between gap-1 group cursor-pointer border border-l-4 ${
+            isDeckTarget || isReorderTarget
+              ? isDark
+                ? "ring-2 ring-amber-400 bg-amber-500/20 border-dashed border-amber-400 border-l-amber-500 text-amber-200 scale-[1.02]"
+                : "ring-2 ring-amber-400 bg-amber-50 border-dashed border-amber-400 border-l-amber-500 text-amber-900 scale-[1.02]"
+              : isSelected
+              ? isDark
+                ? `${theme.darkTint} ${theme.darkBorderAll} ${theme.borderLeft} text-white font-bold shadow-xs`
+                : `${theme.lightTint} ${theme.lightBorderAll} ${theme.borderLeft} text-slate-900 font-bold shadow-xs`
+              : isDark
+              ? `bg-slate-950/70 hover:bg-slate-800/80 text-slate-300 hover:text-white ${theme.darkBorderAll} ${theme.borderLeft}`
+              : `bg-[#f8fafc] hover:bg-slate-100 text-slate-700 hover:text-slate-900 ${theme.lightBorderAll} ${theme.borderLeft}`
+          } ${draggedFolderId === normalizedFolderId ? "opacity-50" : ""}`}
+        >
+          <span className="flex items-center gap-1.5 min-w-0">
+            {hasSubfolders ? (
               <button
                 type="button"
-                onClick={() => setSelectedFolderId(null)}
-                onDragOver={(e) => handleDragOver(e, "all")}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDropOnFolder(e, null)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  selectedFolderId === null
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400"
-                    : "bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white"
-                } ${
-                  dragOverFolderId === "all"
-                    ? "ring-2 ring-amber-400 scale-105 border-dashed border-amber-400 bg-amber-500/15 text-amber-300"
-                    : ""
+                onClick={(e) => toggleFolderExpand(e, normalizedFolderId)}
+                aria-label={isExpanded ? "Alt klasörleri gizle" : "Alt klasörleri aç"}
+                className={`p-0.5 rounded shrink-0 cursor-pointer ${isDark ? "hover:bg-slate-700/70 text-slate-400" : "hover:bg-slate-200 text-slate-500"}`}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5" />
+                )}
+              </button>
+            ) : (
+              <GripVertical className={`w-3 h-3 shrink-0 pointer-events-none ${isDark ? "text-slate-600 group-hover:text-slate-400" : "text-slate-400 group-hover:text-slate-600"}`} />
+            )}
+            <span
+              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 pointer-events-none ${isDark ? theme.darkIconBg : theme.lightIconBg}`}
+            >
+              <Folder className="w-3 h-3" />
+            </span>
+            <span className="truncate pointer-events-none">{folder.name}</span>
+          </span>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={(e) =>
+                handleDeleteFolder(e, normalizedFolderId, folder.name)
+              }
+              title={t("lib_delete_folder_title")}
+              className={`opacity-0 group-hover:opacity-100 p-1 rounded transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400" : "text-slate-400 hover:text-rose-600"}`}
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md border pointer-events-none ${isDark ? "bg-slate-900 text-slate-300 border-slate-800" : "bg-slate-100 text-slate-700 border-slate-300"}`}>
+              {count}
+            </span>
+          </div>
+        </div>
+
+        {hasSubfolders && isExpanded && depth < 6 && (
+          <div className="pl-3.5 border-l-2 border-amber-400/40 ml-2.5 space-y-1">
+            {subfolders.map((child) => renderSidebarFolderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Klasör Vitrini İçin Renkli Klasör Kartı (Kök & Alt Klasörlerde Ortak)
+  const renderFolderCard = (folder: FolderItem) => {
+    const fid = String(folder.id || "").trim();
+    const recursiveDeckCount = countDecksRecursive(fid);
+    const subfolderCount = getSubfolders(fid).length;
+    const directDecks = decks.filter(
+      (d) => normalizeFolderId(d.folder_id) === fid
+    );
+    const folderWordCount = directDecks.reduce(
+      (sum, d) => sum + getRealDeckWordCount(d),
+      0
+    );
+    const isDropTarget =
+      dragOverFolderTarget === fid || dragOverFolderReorderId === fid;
+    const theme = getFolderAccentTheme(folder.color);
+
+    return (
+      <div
+        key={fid}
+        draggable
+        onDragStart={(e) => handleFolderDragStart(e, fid)}
+        onDragEnd={handleFolderDragEnd}
+        onContextMenu={(e) => openFolderContextMenu(e, folder)}
+        onClick={() => setSelectedFolderFilter(fid)}
+        onDragEnter={(e) => {
+          const fId = draggedFolderIdRef.current || draggedFolderId;
+          const dId = draggedDeckIdRef.current || draggedDeckId;
+          const canDropFolder =
+            Boolean(fId) &&
+            fId !== fid &&
+            !wouldCreateFolderCycle(folders, String(fId), fid);
+          if (!dId && !canDropFolder) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          setDragOverFolderTarget(fid);
+        }}
+        onDragOver={(e) => {
+          const fId = draggedFolderIdRef.current || draggedFolderId;
+          const dId = draggedDeckIdRef.current || draggedDeckId;
+          const canDropFolder =
+            Boolean(fId) &&
+            fId !== fid &&
+            !wouldCreateFolderCycle(folders, String(fId), fid);
+          if (!dId && !canDropFolder) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          setDragOverFolderTarget(fid);
+        }}
+        onDragLeave={(e) => {
+          e.stopPropagation();
+          if (dragOverFolderTarget === fid) {
+            setDragOverFolderTarget(null);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const fId =
+            draggedFolderIdRef.current ||
+            draggedFolderId ||
+            e.dataTransfer.getData("application/x-folder-id");
+          const dId =
+            draggedDeckIdRef.current ||
+            draggedDeckId ||
+            e.dataTransfer.getData("application/x-deck-id") ||
+            (!fId ? e.dataTransfer.getData("text/plain") : "");
+
+          setDragOverFolderTarget(null);
+          setDragOverFolderReorderId(null);
+          setDraggedFolderId(null);
+          setDraggedDeckId(null);
+          draggedFolderIdRef.current = null;
+          draggedDeckIdRef.current = null;
+
+          if (fId && fId !== fid) {
+            handleFolderDroppedOnTarget(fId, fid);
+          } else if (dId) {
+            handleMoveDeckToFolder(dId, fid);
+          }
+        }}
+        className={`p-5 rounded-3xl border border-l-4 transition-all cursor-pointer group flex flex-col justify-between space-y-4 ${
+          isDark
+            ? "bg-slate-900/90 shadow-lg hover:shadow-xl"
+            : "bg-[#f8fafc] shadow-sm hover:shadow-md"
+        } ${
+          isDropTarget
+            ? isDark
+              ? "ring-2 ring-amber-400 border-dashed border-amber-400 border-l-amber-500 bg-amber-500/15 scale-[1.02]"
+              : "ring-2 ring-amber-400 border-dashed border-amber-400 border-l-amber-500 bg-amber-50 scale-[1.02]"
+            : isDark
+            ? `${theme.darkBorderAll} ${theme.borderLeft}`
+            : `${theme.lightBorderAll} ${theme.borderLeft}`
+        } ${draggedFolderId === fid ? "opacity-50" : ""}`}
+      >
+        <div className="flex items-center justify-between">
+          <div
+            className={`w-11 h-11 rounded-2xl border flex items-center justify-center group-hover:scale-110 transition pointer-events-none ${isDark ? theme.darkIconBg : theme.lightIconBg}`}
+          >
+            <Folder className="w-5 h-5" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            {subfolderCount > 0 && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border pointer-events-none ${isDark ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"}`}>
+                {t("lib_subfolder_count", undefined, { count: subfolderCount })}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedFolderFilter(fid);
+                setNewDeckFolderId(fid);
+                setIsCreateModalOpen(true);
+              }}
+              title={t("lib_add_deck_to_folder")}
+              className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                isDark
+                  ? "bg-slate-800 hover:bg-indigo-600/30 text-slate-200 hover:text-indigo-200 border-slate-700 hover:border-indigo-500/50"
+                  : "bg-slate-100 hover:bg-indigo-100 text-slate-800 hover:text-indigo-800 border-slate-300 hover:border-indigo-400"
+              }`}
+            >
+              <Plus className="w-3 h-3" />
+              <span>{t("lib_add_deck_to_folder")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => handleDeleteFolder(e, fid, folder.name)}
+              title={t("lib_delete_folder_title")}
+              className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400 hover:bg-rose-500/15" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="pointer-events-none">
+          <h3 className={`text-base font-black transition truncate ${isDark ? "text-white group-hover:text-indigo-300" : "text-slate-900 group-hover:text-indigo-700"}`}>
+            {folder.name}
+          </h3>
+          <p className={`text-xs mt-1 font-mono ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+            {recursiveDeckCount} {t("decks_count_suffix")} • {folderWordCount} {t("lib_word_unit")}
+          </p>
+        </div>
+
+        <div className={`pt-3 border-t flex items-center justify-between text-xs font-bold pointer-events-none ${isDark ? "border-slate-800 text-slate-300 group-hover:text-indigo-300" : "border-slate-200 text-slate-700 group-hover:text-indigo-700"}`}>
+          <span>{t("lib_open_folder")}</span>
+          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
+        </div>
+      </div>
+    );
+  };
+
+  // Hem Deste Başlığı/Açıklaması Hem İçindeki Kelimelerde Canlı Arama + Klasör Filtresi
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+
+  const deckSearchResults = useMemo(() => {
+    return decks
+      .map((deck) => {
+        const deckFolderId = normalizeFolderId(deck.folder_id);
+        let matchesFolder = true;
+        if (selectedFolderFilter !== "all") {
+          matchesFolder =
+            deckFolderId === String(selectedFolderFilter || "").trim();
+        }
+        if (!matchesFolder) return null;
+
+        const cards = deckCardsMap[deck.id];
+        const matchedWords = trimmedQuery
+          ? (cards || []).filter(
+              (c) =>
+                c.word.toLowerCase().includes(trimmedQuery) ||
+                c.meaning.toLowerCase().includes(trimmedQuery)
+            )
+          : [];
+
+        const matchesMeta =
+          !trimmedQuery ||
+          deck.title.toLowerCase().includes(trimmedQuery) ||
+          (deck.description &&
+            deck.description.toLowerCase().includes(trimmedQuery));
+
+        if (!matchesMeta && matchedWords.length === 0) return null;
+
+        const realCardCount = Array.isArray(cards)
+          ? cards.length
+          : deck.card_count || 0;
+
+        return {
+          deck,
+          matchedWords,
+          realCardCount,
+        };
+      })
+      .filter(
+        (
+          entry
+        ): entry is {
+          deck: DeckItem;
+          matchedWords: GameWordPair[];
+          realCardCount: number;
+        } => entry !== null
+      );
+  }, [decks, deckCardsMap, selectedFolderFilter, trimmedQuery]);
+
+  const heroWaitingCount = dueCount > 0 ? dueCount : weakSpotCount;
+
+  const getRealDeckWordCount = useCallback(
+    (deck: DeckItem): number => {
+      const cards = deckCardsMap[deck.id];
+      return Array.isArray(cards) ? cards.length : deck.card_count || 0;
+    },
+    [deckCardsMap]
+  );
+
+  // Hızlı Çalışma Seçici Yardımcıları (Klasör + Alt Klasör + Deste Çoklu Seçim)
+  const getRecursiveFolderStats = useCallback(
+    (rootFolderId: string) => {
+      const idSet = new Set(getDescendantFolderIds(rootFolderId));
+      const matched = decks.filter((d) => {
+        const fid = normalizeFolderId(d.folder_id);
+        return Boolean(fid && idSet.has(fid));
+      });
+      const wordCount = matched.reduce(
+        (sum, d) => sum + getRealDeckWordCount(d),
+        0
+      );
+      return { deckCount: matched.length, wordCount };
+    },
+    [decks, getDescendantFolderIds, getRealDeckWordCount]
+  );
+
+  const modalSubfolders = useMemo(() => {
+    if (selectedQuickFolderIds.length === 0) return [];
+    const seen = new Set<string>();
+    const result: FolderItem[] = [];
+    for (const rootId of selectedQuickFolderIds) {
+      const descendantIds = getDescendantFolderIds(rootId);
+      for (const dId of descendantIds) {
+        if (dId === rootId || seen.has(dId)) continue;
+        const item = folderObjMap.get(dId);
+        if (item) {
+          seen.add(dId);
+          result.push(item);
+        }
+      }
+    }
+    return result;
+  }, [selectedQuickFolderIds, getDescendantFolderIds, folderObjMap]);
+
+  const visibleModalDecks = useMemo(() => {
+    if (selectedQuickFolderIds.length === 0) {
+      return decks;
+    }
+    const activeFolderScope = new Set<string>([
+      ...selectedQuickFolderIds,
+      ...selectedQuickSubfolderIds,
+    ]);
+    return decks.filter((d) => {
+      const fid = normalizeFolderId(d.folder_id);
+      return Boolean(fid && activeFolderScope.has(fid));
+    });
+  }, [decks, selectedQuickFolderIds, selectedQuickSubfolderIds]);
+
+  const selectedTotalWords = useMemo(() => {
+    const idSet = new Set(selectedQuickDeckIds);
+    return decks.reduce((sum, d) => {
+      if (!idSet.has(d.id)) return sum;
+      return sum + getRealDeckWordCount(d);
+    }, 0);
+  }, [decks, selectedQuickDeckIds, getRealDeckWordCount]);
+
+  const toggleQuickFolder = (folderId: string) => {
+    const isCurrentlySelected = selectedQuickFolderIds.includes(folderId);
+
+    const descendantIds = getDescendantFolderIds(folderId);
+    const childOnlyIds = descendantIds.filter((id) => id !== folderId);
+    const scopeSet = new Set(descendantIds);
+    const folderDeckIds = decks
+      .filter((d) => {
+        const fid = normalizeFolderId(d.folder_id);
+        return Boolean(fid && scopeSet.has(fid));
+      })
+      .map((d) => d.id);
+
+    if (isCurrentlySelected) {
+      setSelectedQuickFolderIds((prev) => prev.filter((id) => id !== folderId));
+      setSelectedQuickSubfolderIds((prev) =>
+        prev.filter((id) => !childOnlyIds.includes(id))
+      );
+      setSelectedQuickDeckIds((prev) =>
+        prev.filter((id) => !folderDeckIds.includes(id))
+      );
+    } else {
+      setSelectedQuickFolderIds((prev) =>
+        Array.from(new Set([...prev, folderId]))
+      );
+      setSelectedQuickSubfolderIds((prev) =>
+        Array.from(new Set([...prev, ...childOnlyIds]))
+      );
+      setSelectedQuickDeckIds((prev) =>
+        Array.from(new Set([...prev, ...folderDeckIds]))
+      );
+    }
+  };
+
+  const toggleQuickSubfolder = (subfolderId: string) => {
+    const descendantIds = getDescendantFolderIds(subfolderId);
+    const scopeSet = new Set(descendantIds);
+    const subDeckIds = decks
+      .filter((d) => {
+        const fid = normalizeFolderId(d.folder_id);
+        return Boolean(fid && scopeSet.has(fid));
+      })
+      .map((d) => d.id);
+
+    const isCurrentlySelected = selectedQuickSubfolderIds.includes(subfolderId);
+    if (isCurrentlySelected) {
+      setSelectedQuickSubfolderIds((prev) =>
+        prev.filter((id) => !descendantIds.includes(id))
+      );
+      setSelectedQuickDeckIds((prev) =>
+        prev.filter((id) => !subDeckIds.includes(id))
+      );
+    } else {
+      setSelectedQuickSubfolderIds((prev) =>
+        Array.from(new Set([...prev, ...descendantIds]))
+      );
+      setSelectedQuickDeckIds((prev) =>
+        Array.from(new Set([...prev, ...subDeckIds]))
+      );
+    }
+  };
+
+  const toggleQuickDeck = (deck: DeckItem) => {
+    setSelectedQuickDeckIds((prev) =>
+      prev.includes(deck.id)
+        ? prev.filter((id) => id !== deck.id)
+        : [...prev, deck.id]
+    );
+  };
+
+  const handleOpenQuickStudyModal = () => {
+    setIsQuickStudyModalOpen(true);
+  };
+
+  const handleLaunchQuickAll = () => {
+    setIsQuickStudyModalOpen(false);
+    const availableIds = decks
+      .filter((d) => getRealDeckWordCount(d) > 0)
+      .map((d) => d.id);
+    if (availableIds.length > 0) {
+      router.push(
+        `/study/quick?decks=${encodeURIComponent(availableIds.join(","))}`
+      );
+    } else {
+      router.push("/study/quick");
+    }
+  };
+
+  const handleLaunchSelectedQuickStudy = () => {
+    if (selectedQuickDeckIds.length === 0 || selectedTotalWords === 0) {
+      return;
+    }
+    setIsQuickStudyModalOpen(false);
+    router.push(
+      `/study/quick?decks=${encodeURIComponent(selectedQuickDeckIds.join(","))}`
+    );
+  };
+
+  return (
+    <div
+      className={`w-full max-w-full overflow-x-hidden min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-200 ${
+        isDark ? "bg-[#0B0F19] text-slate-100" : "bg-[#dce3ec] text-slate-900"
+      }`}
+    >
+      <div className="flex-1 w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-10 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 items-start">
+        {/* =================================================================== */}
+        {/* 1. SOL SÜTUN: Deste & Kelime Ara + Klasörler + SM-2 Bilgi Kartı      */}
+        {/* =================================================================== */}
+        <aside className="w-full lg:sticky lg:top-20 space-y-4">
+          {/* Deste & Kelime Ara */}
+          <div
+            className={`p-4 rounded-3xl border space-y-2.5 transition-colors ${
+              isDark
+                ? "bg-slate-900/90 border-slate-800 text-slate-100 shadow-lg"
+                : "bg-[#f8fafc] border-slate-300 text-slate-900 shadow-sm"
+            }`}
+          >
+            <label
+              htmlFor="deck-search-input"
+              className={`text-xs font-bold block ${isDark ? "text-slate-200" : "text-slate-800"}`}
+            >
+              Deste &amp; Kelime Ara
+            </label>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                id="deck-search-input"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t("lib_search_decks_words")}
+                className={`w-full pl-9 pr-8 py-2 rounded-xl border text-xs focus:outline-none focus:border-indigo-500 transition ${
+                  isDark
+                    ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500"
+                    : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                }`}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label={t("lib_clear_search")}
+                  className={`absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"}`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Klasörler Listesi */}
+          <div
+            className={`p-4 rounded-3xl border space-y-2.5 transition-colors ${
+              isDark
+                ? "bg-slate-900/90 border-slate-800 text-slate-100 shadow-lg"
+                : "bg-[#f8fafc] border-slate-300 text-slate-900 shadow-sm"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                {t("lib_folders")}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewFolderName("");
+                  setNewFolderColor("#f59e0b");
+                  setNewFolderParentId("");
+                  setIsCreateFolderModalOpen(true);
+                }}
+                title={t("lib_new_folder_title")}
+                className={`px-2 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                  isDark
+                    ? "bg-slate-800 hover:bg-indigo-600/30 text-slate-200 hover:text-indigo-200 border-slate-700 hover:border-indigo-500/50"
+                    : "bg-slate-100 hover:bg-indigo-100 text-slate-800 hover:text-indigo-800 border-slate-300 hover:border-indigo-400"
                 }`}
               >
-                <span>📚</span>
-                <span>Tüm Desteler</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-black/30 text-slate-300">
+                <Plus className="w-3 h-3" />
+                <span>{t("lib_folder")}</span>
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              {/* Tüm Desteler (Klasör -> Kök Dizin Hedefi) */}
+              <button
+                type="button"
+                onClick={() => setSelectedFolderFilter("all")}
+                onDragEnter={(e) => {
+                  const fId = draggedFolderIdRef.current || draggedFolderId;
+                  if (!fId) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverFolderTarget("all");
+                }}
+                onDragOver={(e) => {
+                  const fId = draggedFolderIdRef.current || draggedFolderId;
+                  if (!fId) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverFolderTarget("all");
+                }}
+                onDragLeave={(e) => {
+                  e.stopPropagation();
+                  if (dragOverFolderTarget === "all") {
+                    setDragOverFolderTarget(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const fId =
+                    draggedFolderIdRef.current ||
+                    draggedFolderId ||
+                    e.dataTransfer.getData("application/x-folder-id");
+
+                  setDragOverFolderTarget(null);
+                  setDraggedFolderId(null);
+                  setDraggedDeckId(null);
+                  draggedFolderIdRef.current = null;
+                  draggedDeckIdRef.current = null;
+
+                  if (fId) {
+                    handleMoveFolderToParent(fId, null);
+                  }
+                }}
+                className={`w-full px-3 py-2 rounded-xl text-left text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
+                  dragOverFolderTarget === "all"
+                    ? isDark
+                      ? "ring-2 ring-indigo-500 bg-indigo-500/20 border border-dashed border-indigo-400 text-indigo-200 scale-[1.02]"
+                      : "ring-2 ring-indigo-500 bg-indigo-50 border border-dashed border-indigo-400 text-indigo-800 scale-[1.02]"
+                    : selectedFolderFilter === "all"
+                    ? isDark
+                      ? "bg-indigo-600/25 text-indigo-200 border border-indigo-500/50 font-bold shadow-xs"
+                      : "bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold shadow-xs"
+                    : isDark
+                    ? "bg-slate-950/70 hover:bg-slate-800/80 text-slate-300 hover:text-white border border-slate-800"
+                    : "bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-300/80"
+                }`}
+              >
+                <span className="flex items-center gap-2 truncate pointer-events-none">
+                  <span>📚</span>
+                  <span className="truncate">{t("lib_all_decks")}</span>
+                </span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md border pointer-events-none ${isDark ? "bg-slate-900 text-slate-300 border-slate-700" : "bg-white text-slate-700 border-slate-300"}`}>
                   {decks.length}
                 </span>
               </button>
 
-              {/* Dinamik Klasör Sekmeleri (📁 Kuzey, 📁 Ruzgar vb.) */}
-              {folders.map((f) => {
-                const isSelected = selectedFolderId === f.id;
-                const isHovered = dragOverFolderId === f.id;
-                return (
+              {/* Kullanıcı Klasörleri Ağacı (Renk Vurgulu + Alt Klasörlü) */}
+              {getSubfolders(null).length > 0 ? (
+                <div className="pt-1 space-y-1.5">
+                  {getSubfolders(null).map((folder) =>
+                    renderSidebarFolderNode(folder, 0)
+                  )}
+                </div>
+              ) : (
+                <div className={`p-3 rounded-xl border border-dashed text-center text-[11px] ${isDark ? "border-slate-800 text-slate-400" : "border-slate-300 text-slate-500"}`}>
+                  {t("lib_no_folders_yet")}
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        {/* =================================================================== */}
+        {/* 2. ANA ALAN (SAĞ): SM-2 Bar + Aksiyonlar + 3 Sütunlu Deste Vitrini  */}
+        {/* =================================================================== */}
+        <section className="min-w-0 w-full space-y-5">
+          {/* Üst SM-2 Günlük Tekrar Barı (Her İki Modda Koyu Kontrast Korunur) */}
+          <div
+            data-theme-preserve="dark"
+            className="p-5 sm:p-6 rounded-3xl bg-slate-900 text-white border border-slate-800 shadow-xl relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4"
+          >
+            <div className="absolute -right-10 -top-10 w-44 h-44 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
+            <div className="space-y-1.5 z-10 max-w-xl">
+              <span className="inline-block px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold uppercase tracking-wider">
+                {t("lib_daily_review_badge")}
+              </span>
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                {t("lib_continue_learning")}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                {t("lib_waiting_words_msg", undefined, { count: heroWaitingCount })}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 z-10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsWeakSpotModalOpen(true)}
+                className="px-4 py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+              >
+                <Target className="w-3.5 h-3.5 text-rose-300" />
+                <span>🎯 {t("lib_weak_spot")} ({weakSpotCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenQuickStudyModal}
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>✨ {t("lib_start_quick_study")}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Deste Vitrini Üst Barı */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className={`flex items-center gap-2 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+              {viewMode === "folder" && selectedFolderFilter !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedFolderFilter("all")}
+                  className={`px-2.5 py-1 rounded-xl border text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                    isDark
+                      ? "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200"
+                      : "bg-[#f8fafc] hover:bg-slate-100 border-slate-300 text-slate-800"
+                  }`}
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>{t("lib_all_folders")}</span>
+                </button>
+              )}
+              <span className={`font-bold ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                {t("lib_decks_listed", undefined, { count: deckSearchResults.length })}
+              </span>
+              {selectedFolderFilter !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedFolderFilter("all")}
+                  className={`px-2.5 py-0.5 rounded-full border text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer ${
+                    isDark
+                      ? "bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30"
+                      : "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
+                  }`}
+                >
+                  <span>
+                    {folderNameMap.get(selectedFolderFilter) || t("lib_folder")}
+                  </span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const hasFolderDecks =
+                    selectedFolderFilter !== "all" &&
+                    deckSearchResults.length > 0;
+                  let preferredDeckId = addWordCtrl.selectedDeckForWord;
+                  if (hasFolderDecks) {
+                    const alreadyInFolder = deckSearchResults.some(
+                      (entry) => entry.deck.id === preferredDeckId
+                    );
+                    if (!alreadyInFolder) {
+                      preferredDeckId = deckSearchResults[0].deck.id;
+                    }
+                  } else if (decks.length > 0 && !preferredDeckId) {
+                    preferredDeckId = decks[0].id;
+                  }
+                  addWordCtrl.openModal(preferredDeckId || undefined);
+                }}
+                className={`px-3.5 py-2 rounded-xl border font-bold text-xs shadow-xs flex items-center gap-1.5 transition cursor-pointer active:scale-95 ${
+                  isDark
+                    ? "bg-slate-900 hover:bg-slate-800 border-slate-700 hover:border-indigo-500/50 text-indigo-300"
+                    : "bg-[#f8fafc] hover:bg-indigo-50 border-slate-300 hover:border-indigo-400 text-indigo-700"
+                }`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-indigo-400" : "text-indigo-600"}`} />
+                <span>✨ {t("lib_add_word")}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedFolderFilter && selectedFolderFilter !== "all") {
+                    setNewDeckFolderId(selectedFolderFilter);
+                  } else if (folders.length > 0) {
+                    setNewDeckFolderId(String(folders[0].id || "").trim());
+                  } else {
+                    setNewDeckFolderId("");
+                  }
+                  setIsCreateModalOpen(true);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/25 flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5 text-amber-300" />
+                <span>+ {t("lib_new_deck")}</span>
+              </button>
+
+              {/* Kalıcı 3 Seçenekli Görünüm Değiştirici */}
+              <div
+                className={`flex items-center border rounded-xl p-1 shadow-xs ${
+                  isDark
+                    ? "bg-slate-900 border-slate-800"
+                    : "bg-[#f8fafc] border-slate-300"
+                }`}
+                role="group"
+                aria-label={t("lib_view_switcher")}
+              >
+                <button
+                  type="button"
+                  onClick={() => setViewMode("folder")}
+                  title={t("lib_view_folder_title")}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                    viewMode === "folder"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : isDark
+                      ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/70"
+                  }`}
+                >
+                  <FolderTree className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t("lib_folder")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  title={t("lib_view_card_title")}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : isDark
+                      ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/70"
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t("lib_view_card")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  title={t("lib_view_list_title")}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                    viewMode === "list"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : isDark
+                      ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/70"
+                  }`}
+                >
+                  <ListIcon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t("lib_view_list")}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Seçili Klasör Breadcrumb Yolu & Alt Klasörler */}
+          {selectedFolderFilter !== "all" && !trimmedQuery && (
+              <div className="space-y-4">
+                <div
+                  className={`px-4 py-2.5 rounded-2xl border shadow-sm flex flex-wrap items-center justify-between gap-2 ${
+                    isDark
+                      ? "bg-slate-900/90 border-slate-800"
+                      : "bg-[#f8fafc] border-slate-300"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFolderFilter("all")}
+                      className={`px-2 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                        isDark
+                          ? "bg-slate-800 hover:bg-indigo-500/20 text-slate-300 hover:text-indigo-200"
+                          : "bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700"
+                      }`}
+                    >
+                      Ana Dizin
+                    </button>
+                    {getBreadcrumbTrail(selectedFolderFilter).map(
+                      (crumb, idx, arr) => {
+                        const crumbId = String(crumb.id || "").trim();
+                        const isLast = idx === arr.length - 1;
+                        return (
+                          <div
+                            key={crumbId}
+                            className="flex items-center gap-1.5"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                            <button
+                              type="button"
+                              onClick={() => setSelectedFolderFilter(crumbId)}
+                              className={`px-2 py-1 rounded-lg transition cursor-pointer ${
+                                isLast
+                                  ? isDark
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold"
+                                    : "bg-amber-100 text-amber-900 border border-amber-300 font-bold"
+                                  : isDark
+                                  ? "text-slate-300 hover:text-indigo-200 hover:bg-slate-800 font-semibold"
+                                  : "text-slate-700 hover:text-indigo-700 hover:bg-slate-100 font-semibold"
+                              }`}
+                            >
+                              {crumb.name}
+                            </button>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+
                   <button
-                    key={f.id}
                     type="button"
-                    onClick={() => setSelectedFolderId(f.id)}
-                    onDragOver={(e) => handleDragOver(e, f.id)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDropOnFolder(e, f.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                      isSelected
-                        ? "bg-amber-600 text-white shadow-md shadow-amber-600/30 ring-1 ring-amber-400"
-                        : "bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white"
+                    onClick={() => {
+                      setNewFolderName("");
+                      setNewFolderColor(
+                        folderObjMap.get(selectedFolderFilter)?.color ||
+                          "#f59e0b"
+                      );
+                      setNewFolderParentId(selectedFolderFilter);
+                      setIsCreateFolderModalOpen(true);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                      isDark
+                        ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30"
+                        : "bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300"
+                    }`}
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    <span>{t("lib_subfolders")}</span>
+                  </button>
+                </div>
+
+                {viewMode === "folder" &&
+                  getSubfolders(selectedFolderFilter).length > 0 && (
+                    <div className="space-y-2.5">
+                      <div className={`text-[11px] font-bold uppercase tracking-wider px-1 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                        {t("lib_subfolders")} ({getSubfolders(selectedFolderFilter).length})
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {getSubfolders(selectedFolderFilter).map(
+                          renderFolderCard
+                        )}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+
+          {/* Deste ve Klasör Görünümleri (Klasör / Kart / Liste) */}
+          {loadingDecks ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5, 6].map((n) => (
+                <div
+                  key={n}
+                  className={`h-44 rounded-3xl border animate-pulse p-5 ${
+                    isDark ? "bg-slate-900 border-slate-800" : "bg-[#f8fafc] border-slate-300"
+                  }`}
+                />
+              ))}
+            </div>
+          ) : viewMode === "folder" &&
+            selectedFolderFilter === "all" &&
+            !trimmedQuery ? (
+            <div className="space-y-6">
+              {/* Kullanıcı Klasörleri (Kök Dizin) */}
+              {getSubfolders(null).length > 0 ? (
+                <div className="space-y-3">
+                  <div className={`text-[11px] font-bold uppercase tracking-wider px-1 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                    {t("lib_user_folders")} ({getSubfolders(null).length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {getSubfolders(null).map(renderFolderCard)}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={`p-8 rounded-3xl border border-dashed text-center space-y-3 ${
+                    isDark
+                      ? "bg-slate-900/80 border-slate-700"
+                      : "bg-[#f8fafc] border-slate-300"
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center mx-auto ${isDark ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
+                    <FolderPlus className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                      {t("lib_first_folder_title")}
+                    </h3>
+                    <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                      {t("lib_first_folder_desc")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewFolderName("");
+                      setNewFolderColor("#f59e0b");
+                      setNewFolderParentId("");
+                      setIsCreateFolderModalOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm transition cursor-pointer"
+                  >
+                    {t("lib_open_first_folder")}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : deckSearchResults.length === 0 ? (
+            viewMode === "folder" &&
+            selectedFolderFilter !== "all" &&
+            getSubfolders(selectedFolderFilter).length > 0 &&
+            !trimmedQuery ? (
+              <div
+                className={`p-5 rounded-2xl border border-dashed text-center text-xs ${
+                  isDark
+                    ? "bg-slate-900/70 border-slate-700 text-slate-400"
+                    : "bg-[#f8fafc] border-slate-300 text-slate-600"
+                }`}
+              >
+                {t("lib_no_decks_in_root")}
+              </div>
+            ) : (
+              <div
+                className={`p-8 rounded-3xl border border-dashed text-center space-y-3 ${
+                  isDark
+                    ? "bg-slate-900/80 border-slate-700"
+                    : "bg-[#f8fafc] border-slate-300"
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center mx-auto ${isDark ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" : "bg-indigo-100 text-indigo-700 border-indigo-200"}`}>
+                  <BookOpen className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {t("lib_no_match_title")}
+                  </h3>
+                  <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                    {t("lib_no_match_desc")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedFolderFilter("all");
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm transition cursor-pointer"
+                >
+                  {t("lib_show_all_decks")}
+                </button>
+              </div>
+            )
+          ) : viewMode === "list" ? (
+            /* KOMPAKT YATAY LİSTE GÖRÜNÜMÜ */
+            <div className="space-y-2.5">
+              {deckSearchResults.map(({ deck, matchedWords, realCardCount }) => {
+                const normalizedFid = normalizeFolderId(deck.folder_id);
+                const folderLabel =
+                  normalizedFid && validFolderIds.has(normalizedFid)
+                    ? folderNameMap.get(normalizedFid) || t("lib_folder")
+                    : t("lib_folder");
+                const isPresetDeck = deck.id.startsWith("preset_");
+                const isBeingDragged = draggedDeckId === deck.id;
+
+                return (
+                  <div
+                    key={deck.id}
+                    role="link"
+                    tabIndex={0}
+                    draggable
+                    onDragStart={(e) => handleDeckDragStart(e, deck.id)}
+                    onDragEnd={handleDeckDragEnd}
+                    onContextMenu={(e) => openDeckContextMenu(e, deck)}
+                    onClick={() => {
+                      setActiveDeckId(deck.id);
+                      router.push(`/study/${deck.id}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setActiveDeckId(deck.id);
+                        router.push(`/study/${deck.id}`);
+                      }
+                    }}
+                    className={`p-3.5 sm:px-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group cursor-grab active:cursor-grabbing ${
+                      isDark
+                        ? "bg-slate-900/90 hover:bg-slate-800/90 border-slate-800 hover:border-indigo-500/60 shadow-lg"
+                        : "bg-[#f8fafc] hover:bg-white border-slate-300 hover:border-indigo-400 shadow-sm hover:shadow-md"
                     } ${
-                      isHovered
-                        ? "ring-2 ring-amber-400 scale-105 border-dashed border-amber-400 bg-amber-500/15 text-amber-300"
+                      isBeingDragged
+                        ? "opacity-45 border-dashed border-indigo-400 scale-[0.99]"
                         : ""
                     }`}
                   >
-                    <span>📁</span>
-                    <span>{f.name}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-black/30 text-slate-300">
-                      {f.deck_count || 0}
-                    </span>
-                  </button>
+                    <div className="flex items-center gap-3 min-w-0 flex-1 pointer-events-none">
+                      <GripVertical className={`w-4 h-4 shrink-0 ${isDark ? "text-slate-600 group-hover:text-slate-400" : "text-slate-400 group-hover:text-slate-600"}`} />
+                      <span className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${isDark ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-400" : "bg-indigo-100 border-indigo-200 text-indigo-700"}`}>
+                        <BookOpen className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className={`text-sm font-bold transition truncate ${isDark ? "text-white group-hover:text-indigo-300" : "text-slate-900 group-hover:text-indigo-700"}`}>
+                            {deck.title}
+                          </h3>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border shrink-0 ${isDark ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"}`}>
+                            📁 {folderLabel}
+                          </span>
+                        </div>
+                        <p className={`text-xs truncate ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                          {deck.description || t("lib_personal_sm2_desc")}
+                        </p>
+                        {trimmedQuery && matchedWords.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {matchedWords.slice(0, 3).map((mw, idx) => (
+                              <span
+                                key={`${deck.id}-lmw-${idx}`}
+                                className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold ${isDark ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-300" : "bg-indigo-100 border-indigo-200 text-indigo-800"}`}
+                              >
+                                {mw.word} • {mw.meaning}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2.5 shrink-0">
+                      <span className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-semibold ${isDark ? "bg-slate-950 border-slate-800 text-slate-300" : "bg-slate-100 border-slate-300 text-slate-800"}`}>
+                        {realCardCount} {t("lib_word_unit")}
+                      </span>
+                      <span className={`font-semibold hidden md:inline-flex items-center gap-1 text-[11px] ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{t("lib_sm2_ready")}</span>
+                      </span>
+                      {!isPresetDeck && (
+                        <button
+                          type="button"
+                          onClick={(e) =>
+                            handleDeleteDeck(e, deck.id, deck.title)
+                          }
+                          title={t("lib_delete_deck_title")}
+                          className={`p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400 hover:bg-rose-500/15" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <span className={`font-bold text-xs flex items-center gap-1 group-hover:translate-x-0.5 transition ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>
+                        <span>{t("lib_study")}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </div>
                 );
               })}
             </div>
+          ) : (
+            /* 3 SÜTUNLU GENİŞ KART GÖRÜNÜMÜ */
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {deckSearchResults.map(({ deck, matchedWords, realCardCount }) => {
+                const normalizedFid = normalizeFolderId(deck.folder_id);
+                const folderLabel =
+                  normalizedFid && validFolderIds.has(normalizedFid)
+                    ? folderNameMap.get(normalizedFid) || t("lib_folder")
+                    : t("lib_folder");
+                const isPresetDeck = deck.id.startsWith("preset_");
+                const isBeingDragged = draggedDeckId === deck.id;
 
-            {/* Seçili Klasör Uyarısı */}
-            {selectedFolderId && (
-              <div className="flex items-center justify-between px-3 py-2.5 mb-5 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl">
-                <div className="flex items-center space-x-2 text-xs">
-                  <button onClick={() => setSelectedFolderId(null)} className="text-slate-400 hover:text-white underline">
-                    Tüm Klasörler
-                  </button>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                    <Folder className="w-3.5 h-3.5" />
-                    {activeFolderName || "Seçili Klasör"}
-                  </span>
-                </div>
-                <button onClick={() => setSelectedFolderId(null)} className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold">
-                  Geri Dön (Tümü)
-                </button>
-              </div>
-            )}
+                return (
+                  <div
+                    key={deck.id}
+                    role="link"
+                    tabIndex={0}
+                    draggable
+                    onDragStart={(e) => handleDeckDragStart(e, deck.id)}
+                    onDragEnd={handleDeckDragEnd}
+                    onContextMenu={(e) => openDeckContextMenu(e, deck)}
+                    onClick={() => {
+                      setActiveDeckId(deck.id);
+                      router.push(`/study/${deck.id}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setActiveDeckId(deck.id);
+                        router.push(`/study/${deck.id}`);
+                      }
+                    }}
+                    className={`p-5 rounded-3xl border transition-all duration-200 flex flex-col justify-between group cursor-grab active:cursor-grabbing relative overflow-hidden ${
+                      isDark
+                        ? "bg-slate-900/90 hover:bg-slate-800/90 border-slate-800 hover:border-indigo-500/60 shadow-lg hover:shadow-indigo-500/10"
+                        : "bg-[#f8fafc] hover:bg-white border-slate-300 hover:border-indigo-400 shadow-sm hover:shadow-md"
+                    } ${
+                      isBeingDragged
+                        ? "opacity-45 border-dashed border-indigo-400 scale-95"
+                        : ""
+                    }`}
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 pointer-events-none">
+                          <GripVertical className={`w-4 h-4 shrink-0 ${isDark ? "text-slate-600 group-hover:text-slate-400" : "text-slate-400 group-hover:text-slate-600"}`} />
+                          <span className={`w-9 h-9 rounded-xl border flex items-center justify-center group-hover:scale-110 transition ${isDark ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-400" : "bg-indigo-100 border-indigo-200 text-indigo-700"}`}>
+                            <BookOpen className="w-4 h-4" />
+                          </span>
+                        </div>
 
-            {/* =================================================================== */}
-            {/* 🎯 ÖZEL AKILLI KART: Oyun Arenası Hatalarım (Hatırlatma Destesi)    */}
-            {/* =================================================================== */}
-            {arenaMistakes.length > 0 && !selectedFolderId && (
-              <div className="mb-6 p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-rose-950/60 via-slate-900/90 to-purple-950/50 border-2 border-rose-500/40 shadow-xl shadow-rose-950/30 backdrop-blur-md relative overflow-hidden group">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-start sm:items-center gap-4 min-w-0">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-rose-600/20 border border-rose-500/50 text-rose-400 flex items-center justify-center text-2xl sm:text-3xl shadow-inner shrink-0 group-hover:scale-105 transition-transform">
-                      🎯
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
-                          🎯 Oyun Arenası Hatalarım
-                        </h3>
-                        <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
-                          {arenaMistakes.length} Kelime
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                        Oyunlarda takıldığın kelimeler burada toplanır. Tekrar et ve pekiştir!
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm("Oyun arenası hatalarını temizlemek istediğinize emin misiniz?")) {
-                          clearArenaMistakes();
-                        }
-                      }}
-                      className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-rose-400 hover:bg-slate-800/60 transition cursor-pointer"
-                      title="Hataları Temizle"
-                    >
-                      Temizle
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => startStudyMistakes(arenaMistakes)}
-                      className="px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-rose-600/30 transition cursor-pointer active:scale-95"
-                    >
-                      <RotateCw className="w-4 h-4" />
-                      <span>Hatalarımı Çalış (SM-2) ➔</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 1. KLASÖR GÖRÜNÜMÜ */}
-            {viewMode === "folder" && !selectedFolderId && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-xs uppercase tracking-wider font-bold text-slate-400 mb-3 flex items-center gap-1.5">
-                    <FolderTree className="w-4 h-4 text-amber-400" />
-                    <span>Klasörler</span>
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {folders.map((f) => {
-                      const isHovered = dragOverFolderId === f.id;
-                      return (
-                        <div
-                          key={f.id}
-                          onClick={() => setSelectedFolderId(f.id)}
-                          onDragOver={(e) => handleDragOver(e, f.id)}
-                          onDragLeave={handleDragLeave}
-                          onDrop={(e) => handleDropOnFolder(e, f.id)}
-                          className={`bg-white dark:bg-slate-900/85 hover:bg-slate-50 dark:hover:bg-slate-850 border border-amber-500/30 hover:border-amber-400/60 rounded-2xl p-4 shadow-sm dark:shadow-lg shadow-amber-950/20 hover:shadow-amber-500/10 transition-all cursor-pointer group flex flex-col justify-between select-none relative ${
-                            isHovered
-                              ? "border-dashed border-2 border-amber-400 scale-105 bg-amber-500/10 ring-2 ring-amber-400/40 shadow-xl shadow-amber-500/20"
-                              : ""
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="p-2 rounded-xl bg-amber-400/10 text-amber-400 group-hover:scale-110 transition-transform">
-                              <Folder className="w-5 h-5 text-amber-400" />
-                            </div>
+                        <div className="flex items-center gap-1.5">
+                          {!isPresetDeck && (
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteFolder(f.id, f.name);
-                              }}
-                              title="Klasörü Sil"
-                              className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition p-1"
+                              type="button"
+                              onClick={(e) =>
+                                handleDeleteDeck(e, deck.id, deck.title)
+                              }
+                              title={t("lib_delete_deck_title")}
+                              className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400 hover:bg-rose-500/15" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm group-hover:text-amber-500 dark:group-hover:text-amber-300 transition-colors truncate">{f.name}</h4>
-                            <div className="mt-2">
-                              <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs px-2 py-0.5 rounded-lg font-medium inline-block">
-                                {f.deck_count || 0} Deste
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-xs uppercase tracking-wider font-bold text-slate-400 mb-3 flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4 text-indigo-400" />
-                    <span>Genel & Bağımsız Desteler</span>
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {decks
-                      .filter((d) => !d.folder_id)
-                      .map((deck) => {
-                        const isBeingDragged = draggedDeckId === deck.id;
-                        const isTargetHovered = dragOverDeckId === deck.id;
-
-                        return (
-                          <div
-                            key={deck.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, deck.id)}
-                            onDragOver={(e) => handleDeckDragOver(e, deck.id)}
-                            onDragLeave={(e) => handleDeckDragLeave(e, deck.id)}
-                            onDrop={(e) => handleDeckDrop(e, deck.id)}
-                            onDragEnd={handleDragEnd}
-                            onClick={() => startStudy(deck)}
-                            className={`${
-                              isBeingDragged
-                                ? "opacity-40 border-indigo-500 border-dashed scale-95"
-                                : isTargetHovered
-                                ? "ring-2 ring-indigo-500 scale-[1.02] border-indigo-400 shadow-xl shadow-indigo-500/20 z-10"
-                                : "bg-white dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-850 border border-slate-200/90 dark:border-slate-800/90 hover:border-indigo-400 dark:hover:border-indigo-500/60"
-                            } rounded-2xl p-5 shadow-sm dark:shadow-xl hover:shadow-md dark:hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none`}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-1.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400 text-[11px]">
-                                  <GripVertical className="w-3.5 h-3.5" />
-                                  <span>Sürükle</span>
-                                </div>
-                                <button
-                                  onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
-                                  title="Desteyi Sil"
-                                  className="text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <h4 className="text-base font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">{deck.title}</h4>
-                              <p className="text-slate-600 dark:text-slate-400 text-xs line-clamp-2 mt-1 mb-4">{deck.description || "Açıklama yok."}</p>
-                              <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
-                                {deck.card_count} Kart
-                              </span>
-                            </div>
-                            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                              <span className="text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
-                              <span className="text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
-                                <span>Çalış & Oyna →</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 2. KART IZGARA GÖRÜNÜMÜ */}
-            {(viewMode === "grid" || selectedFolderId) && (
-              <div>
-                {filteredDecks.length === 0 ? (
-                  <div className="text-center p-8 sm:p-14 bg-gradient-to-b from-indigo-950/20 via-slate-900/60 to-slate-950/80 border-2 border-dashed border-indigo-500/40 rounded-3xl shadow-xl shadow-indigo-500/5 relative overflow-hidden group">
-                    <div className="w-16 h-16 rounded-3xl bg-indigo-600/20 border border-indigo-400/40 text-indigo-400 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-600/20 group-hover:scale-110 transition-transform">
-                      <Sparkles className="w-8 h-8 text-indigo-300 animate-pulse" />
-                    </div>
-                    <h4 className="text-lg font-black text-white">Bu Bölümde Deste Bulunamadı</h4>
-                    <p className="text-xs text-slate-400 max-w-md mx-auto mt-1.5 leading-relaxed">
-                      Kendi kelime destenizi hemen oluşturabilir veya platformdaki zengin okuma odası ve hazır desteleri inceleyebilirsiniz.
-                    </p>
-
-                    <div className="flex items-center justify-center flex-wrap gap-3 mt-6">
-                      <button
-                        type="button"
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs flex items-center gap-2 shadow-lg shadow-purple-600/30 transition active:scale-95 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>+ İlk Desteni Oluştur</span>
-                      </button>
-
-                      <Link
-                        href="/reading"
-                        className="px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-850 border border-slate-700/80 hover:border-slate-600 text-slate-200 font-bold text-xs flex items-center gap-2 transition active:scale-95 cursor-pointer shadow-sm"
-                      >
-                        <BookOpen className="w-4 h-4 text-amber-400" />
-                        <span>📖 Hazır Deste İncele</span>
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredDecks.map((deck) => {
-                      const parentFolder = folders.find((f) => String(f.id).toLowerCase() === String(deck.folder_id).toLowerCase());
-                      const isBeingDragged = draggedDeckId === deck.id;
-                      const isTargetHovered = dragOverDeckId === deck.id;
-
-                      return (
-                        <div
-                          key={deck.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, deck.id)}
-                          onDragOver={(e) => handleDeckDragOver(e, deck.id)}
-                          onDragLeave={(e) => handleDeckDragLeave(e, deck.id)}
-                          onDrop={(e) => handleDeckDrop(e, deck.id)}
-                          onDragEnd={handleDeckDragEnd}
-                          onClick={() => startStudy(deck)}
-                          className={`${
-                            isBeingDragged
-                              ? "opacity-40 border-indigo-500 border-dashed scale-95"
-                              : isTargetHovered
-                              ? "ring-2 ring-indigo-500 scale-[1.02] border-indigo-400 shadow-xl shadow-indigo-500/20 z-10"
-                              : "bg-white dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-850 border border-slate-200/90 dark:border-slate-800/90 hover:border-indigo-400 dark:hover:border-indigo-500/60"
-                          } rounded-2xl p-5 shadow-sm dark:shadow-xl hover:shadow-md dark:hover:shadow-2xl hover:shadow-indigo-950/30 transition-all group flex flex-col justify-between relative cursor-grab active:cursor-grabbing select-none`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center space-x-1.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400">
-                                <GripVertical className="w-4 h-4" />
-                                <span className="text-[11px]">Sürükle</span>
-                              </div>
-                              <button
-                                onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
-                                title="Desteyi Sil"
-                                className="text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            {parentFolder && (
-                              <span className="bg-amber-500/10 text-amber-500 dark:text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-lg text-xs font-medium inline-flex items-center space-x-1 mb-2">
-                                📁 {parentFolder.name}
-                              </span>
-                            )}
-                            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
-                              {deck.title}
-                            </h3>
-                            <p className="text-slate-600 dark:text-slate-400 text-xs line-clamp-2 mt-1 mb-4">
-                              {deck.description || "Açıklama yok."}
-                            </p>
-
-                            <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-md font-medium inline-block w-fit">
-                              {deck.card_count} Kart
-                            </span>
-                          </div>
-
-                          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                            <span className="text-xs font-medium">{deck.card_count} Kart Kayıtlı</span>
-                            <span className="text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 font-semibold text-xs transition-all inline-flex items-center gap-1">
-                              <span>Çalış & Oyna →</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 3. KOMPAKT LİSTE GÖRÜNÜMÜ */}
-            {viewMode === "list" && !selectedFolderId && (
-              <div className="space-y-2">
-                {filteredDecks.length === 0 ? (
-                  <div className="text-center p-8 bg-gradient-to-b from-indigo-950/20 via-slate-900/60 to-slate-950/80 border-2 border-dashed border-indigo-500/40 rounded-3xl shadow-sm text-center space-y-3">
-                    <p className="text-xs text-slate-300 font-bold">Aradığınız kriterde deste bulunamadı.</p>
-                    <div className="flex items-center justify-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>+ İlk Desteni Oluştur</span>
-                      </button>
-                      <Link
-                        href="/reading"
-                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-                        <span>📖 Hazır Deste İncele</span>
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  filteredDecks.map((deck) => {
-                    const parentFolder = folders.find((f) => String(f.id).toLowerCase() === String(deck.folder_id).toLowerCase());
-                    const isBeingDragged = draggedDeckId === deck.id;
-                    const isTargetHovered = dragOverDeckId === deck.id;
-
-                    return (
-                      <div
-                        key={deck.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, deck.id)}
-                        onDragOver={(e) => handleDeckDragOver(e, deck.id)}
-                        onDragLeave={(e) => handleDeckDragLeave(e, deck.id)}
-                        onDrop={(e) => handleDeckDrop(e, deck.id)}
-                        onDragEnd={handleDeckDragEnd}
-                        onClick={() => startStudy(deck)}
-                        className={`group cursor-pointer ${
-                          isBeingDragged
-                            ? "opacity-40 border-indigo-500 border-dashed scale-98"
-                            : isTargetHovered
-                            ? "ring-2 ring-indigo-500 scale-[1.01] border-indigo-400 bg-slate-800 shadow-xl shadow-indigo-500/20 z-10"
-                            : "bg-slate-900/80 hover:bg-slate-850 border-slate-800/90 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/20"
-                        } border px-4 py-3 rounded-xl transition-all flex items-center justify-between`}
-                      >
-                        <div className="flex items-center space-x-3.5 min-w-0">
-                          <GripVertical className="w-4 h-4 text-slate-600 group-hover:text-slate-400 shrink-0 cursor-grab" />
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-bold text-slate-100 group-hover:text-indigo-300 transition-colors truncate">{deck.title}</h4>
-                            <p className="text-xs text-slate-400 truncate">{deck.description || "Açıklama yok"}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-4 shrink-0">
-                          {parentFolder ? (
-                            <span className="hidden sm:inline-flex items-center space-x-1 text-[11px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-md">
-                              <Folder className="w-3 h-3" />
-                              <span>{parentFolder.name}</span>
-                            </span>
-                          ) : (
-                            <span className="hidden sm:inline text-[11px] text-slate-500">(Genel)</span>
                           )}
-
-                          <span className="text-xs text-slate-400 font-medium">{deck.card_count} Kart</span>
-
-                          <button
-                            onClick={(e) => handleDeleteDeck(e, deck.id, deck.title)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <span className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-semibold transition ${isDark ? "bg-slate-950 border-slate-800 text-slate-300 group-hover:text-indigo-300" : "bg-slate-100 border-slate-300 text-slate-800 group-hover:text-indigo-700"}`}>
+                            {realCardCount} {t("lib_word_unit")}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-            </div>
-          </div>
-        ) : loading ? (
-          <div className="flex flex-col items-center justify-center my-auto space-y-3">
-            <RotateCw className="w-8 h-8 text-indigo-400 animate-spin" />
-            <p className="text-sm text-slate-400">Yükleniyor...</p>
-          </div>
-        ) : cards.length === 0 ? (
-          <div className="my-auto text-center p-10 bg-slate-900/60 border border-slate-800 rounded-3xl max-w-md">
-            <h3 className="text-xl font-bold">Deste Boş</h3>
-            <p className="text-sm text-slate-400 mt-2">Bu destede henüz hiç kelime kartı yok.</p>
-            <div className="flex items-center justify-center gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setSelectedDeckForWord(activeDeck.id);
-                  setEnrichedData(null);
-                  setIsAddWordModalOpen(true);
-                }}
-                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium shadow-md shadow-indigo-500/20 rounded-xl text-sm transition cursor-pointer"
-              >
-                ✨ Desteye Kelime Ekle
-              </button>
-              <button
-                onClick={() => setActiveDeck(null)}
-                className="px-5 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-medium rounded-xl text-sm transition cursor-pointer"
-              >
-                ← Destelere Dön
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="w-full flex flex-col items-center">
-            {/* MOD: OKUMA ODASI */}
-            {currentMode === "reading" && (
-              <div className="w-full">
-                <ReadingRoom decks={decks} selectedDeckId={activeDeck.id} />
-              </div>
-            )}
 
-            {/* MOD: HANGMAN */}
-            {currentMode === "hangman" && (
-              <div className="w-full max-w-xl flex flex-col items-center">
-                <div className="w-full flex items-center justify-between mb-4 px-2">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-sm bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-                      <Zap className="w-4 h-4" />
-                      <span>{hangmanScore} Puan</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Heart key={i} className={`w-5 h-5 ${i < hangmanLives ? "text-rose-500 fill-rose-500" : "text-slate-800"}`} />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-400">Kelime: {hangmanIndex + 1} / {cards.length}</div>
-                </div>
+                      <div className="space-y-1 pt-0.5 pointer-events-none">
+                        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-md border ${isDark ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"}`}>
+                          📁 {folderLabel}
+                        </span>
+                        <h3 className={`text-base font-bold transition line-clamp-1 ${isDark ? "text-white group-hover:text-indigo-300" : "text-slate-900 group-hover:text-indigo-700"}`}>
+                          {deck.title}
+                        </h3>
+                        <p className={`text-xs line-clamp-2 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                          {deck.description || t("lib_personal_sm2_desc")}
+                        </p>
+                      </div>
 
-                {isHangmanOver && hangmanLives === 0 ? (
-                  <div className="text-center p-10 bg-slate-900/90 border border-rose-500/40 rounded-3xl w-full shadow-2xl">
-                    <div className="w-16 h-16 bg-rose-500/10 text-rose-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-500/20">
-                      <KeyRound className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white">Canlar Tükendi!</h3>
-                    <p className="text-slate-400 text-sm mt-1">Doğru kelime: <span className="text-indigo-400 font-bold">{currentHangmanCard?.word}</span></p>
-                    <div className="text-4xl font-extrabold text-amber-400 my-4 font-mono">{hangmanScore} Puan</div>
-                    <div className="flex justify-center gap-3 mt-6">
-                      <button onClick={() => setupHangmanGame(allDeckCards)} className="px-6 py-2.5 bg-indigo-600 rounded-xl text-sm font-semibold">Tekrar Dene</button>
-                      <button onClick={() => setCurrentMode("study")} className="px-5 py-2.5 bg-slate-800 rounded-xl text-sm font-medium">Kartlara Dön</button>
-                    </div>
-                  </div>
-                ) : isHangmanOver && hangmanLives > 0 ? (
-                  <div className="text-center p-10 bg-slate-900/90 border border-emerald-500/40 rounded-3xl w-full shadow-2xl">
-                    <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
-                      <Trophy className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white">Tüm Şifreleri Çözdünüz!</h3>
-                    <div className="text-4xl font-extrabold text-amber-400 my-4 font-mono">{hangmanScore} Puan</div>
-                    <div className="flex justify-center gap-3 mt-6">
-                      <button onClick={() => setupHangmanGame(allDeckCards)} className="px-6 py-2.5 bg-indigo-600 rounded-xl text-sm font-semibold">Tekrar Oyna</button>
-                      <button onClick={() => setCurrentMode("study")} className="px-5 py-2.5 bg-slate-800 rounded-xl text-sm font-medium">Kartlara Dön</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full flex flex-col items-center">
-                    <div className="w-full py-6 px-6 bg-slate-900 border border-slate-800 rounded-3xl text-center mb-6 shadow-xl relative">
-                      <button
-                        onClick={(e) => speakText(currentHangmanCard?.word || "", termLang, e)}
-                        title="Telaffuzu Dinle"
-                        className="absolute right-5 top-5 p-2 rounded-xl bg-slate-800/80 hover:bg-indigo-600/30 text-indigo-400 hover:text-white transition"
-                      >
-                        <Volume2 className="w-4 h-4" />
-                      </button>
-                      <span className="text-xs uppercase text-indigo-400 font-semibold tracking-wider">TÜRKÇE ANLAMI</span>
-                      <h2 className="text-2xl font-bold text-white mt-1">{currentHangmanCard?.meanings?.[0]?.translation || currentHangmanCard?.meanings?.[0]?.definition}</h2>
-                      {currentHangmanCard?.phonetic && <p className="text-xs font-mono text-slate-400 mt-1">{currentHangmanCard.phonetic}</p>}
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-center gap-2 mb-8 min-h-[56px] w-full px-2">
-                      {currentHangmanCard?.word.split("").map((ch, i) => {
-                        const upper = ch.toUpperCase();
-                        const isRevealed = upper === " " || upper === "-" || hangmanGuessed.includes(upper);
-                        return (
-                          <div key={i} className={`w-11 h-14 rounded-2xl flex items-center justify-center text-xl font-black border ${isRevealed ? "bg-slate-900 border-indigo-500 text-white" : "bg-slate-900/60 border-slate-800 text-transparent"}`}>
-                            {isRevealed ? upper : ""}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="grid grid-cols-7 sm:grid-cols-9 gap-1.5 w-full max-w-md">
-                      {ALPHABET.map((letter) => {
-                        const isGuessed = hangmanGuessed.includes(letter);
-                        const isCorrect = (currentHangmanCard?.word || "").toUpperCase().includes(letter);
-                        let btnStyle = "bg-slate-900 border-slate-800 hover:border-indigo-500 text-white";
-                        if (isGuessed) {
-                          btnStyle = isCorrect ? "bg-emerald-600/30 border-emerald-500 text-emerald-200 opacity-60 pointer-events-none" : "bg-rose-500/20 border-rose-500/60 text-rose-400 opacity-30 pointer-events-none";
-                        }
-                        return (
-                          <button key={letter} disabled={isGuessed || isHangmanSuccess} onClick={() => handleHangmanGuess(letter)} className={`h-11 rounded-xl text-sm font-bold border flex items-center justify-center shadow-md ${btnStyle}`}>
-                            {letter}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* MOD: SCRAMBLE */}
-            {currentMode === "scramble" && (
-              <div className="w-full max-w-xl flex flex-col items-center">
-                <div className="w-full flex items-center justify-between mb-4 px-2">
-                  <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-sm bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-                    <Zap className="w-4 h-4" />
-                    <span>{scrambleScore} Puan</span>
-                  </div>
-                  <div className="text-xs text-slate-400">Kelime: {scrambleIndex + 1} / {cards.length}</div>
-                </div>
-
-                {isScrambleOver ? (
-                  <div className="text-center p-10 bg-slate-900/90 border border-cyan-500/40 rounded-3xl w-full shadow-2xl">
-                    <div className="w-16 h-16 bg-cyan-500/10 text-cyan-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-cyan-500/20">
-                      <Trophy className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white">Harika Kelime Avcısı!</h3>
-                    <p className="text-slate-400 text-sm mt-1">Destedeki tüm karışık kelimeleri çözdünüz.</p>
-                    <div className="text-4xl font-extrabold text-cyan-400 my-4 font-mono">{scrambleScore} Puan</div>
-                    <div className="flex justify-center gap-3 mt-6">
-                      <button onClick={() => setupScrambleGame(allDeckCards)} className="px-6 py-2.5 bg-indigo-600 rounded-xl text-sm font-semibold">Tekrar Oyna</button>
-                      <button onClick={() => setCurrentMode("study")} className="px-5 py-2.5 bg-slate-800 rounded-xl text-sm font-medium">Kartlara Dön</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full flex flex-col items-center">
-                    <div className="w-full py-6 px-6 bg-slate-900 border border-slate-800 rounded-3xl text-center mb-6 shadow-xl">
-                      <span className="text-xs uppercase text-indigo-400 font-semibold tracking-wider">TÜRKÇE ANLAMI</span>
-                      <h2 className="text-2xl font-bold text-white mt-1">{currentScrambleCard?.meanings?.[0]?.translation || currentScrambleCard?.meanings?.[0]?.definition}</h2>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-center gap-2 mb-8 min-h-[56px] w-full px-4">
-                      {currentScrambleCard?.word.split("").map((_, i) => {
-                        const sel = selectedLetters[i];
-                        return (
-                          <button key={i} disabled={!sel || isScrambleSuccess || isScrambleWrong} onClick={() => sel && handleRemoveLetter(sel)} className={`w-12 h-14 rounded-2xl flex items-center justify-center text-xl font-black border ${isScrambleWrong ? "bg-rose-500/30 border-rose-500 text-rose-300 ring-2 ring-rose-500 scale-95 animate-pulse" : isScrambleSuccess ? "bg-emerald-600/30 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500 scale-105" : sel ? "bg-indigo-600/30 border-indigo-400 text-white" : "bg-slate-900 border-slate-800 text-slate-600"}`}>
-                            {sel ? sel.char : ""}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-center gap-2 mb-6 max-w-md">
-                      {scrambleLetters.map((l) => (
-                        <button key={l.charId} disabled={l.isUsed || isScrambleSuccess || isScrambleWrong} onClick={() => handlePickLetter(l)} className={`w-12 h-12 rounded-xl text-lg font-bold border transition-all ${isScrambleWrong && !l.isUsed ? "border-rose-500/60 bg-rose-500/10 text-rose-300" : l.isUsed ? "opacity-20 pointer-events-none border-transparent bg-slate-900" : "bg-slate-900 border-slate-700 hover:border-indigo-500 text-white shadow-md"}`}>
-                          {l.char}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button onClick={() => { setSelectedLetters([]); setScrambleLetters((prev) => prev.map((l) => ({ ...l, isUsed: false }))); setIsScrambleWrong(false); }} className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl">
-                      <Undo2 className="w-3.5 h-3.5" />
-                      <span>Harfleri Sıfırla</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* MOD: QUIZ */}
-            {currentMode === "quiz" && (
-              <div className="w-full max-w-xl flex flex-col items-center">
-                <div className="w-full flex items-center justify-between mb-4 px-2">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-sm bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-                      <Zap className="w-4 h-4" />
-                      <span>{quizScore} Puan</span>
-                    </div>
-                    {quizCombo > 1 && <div className="text-xs px-2 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 font-extrabold">{quizCombo}x KOMBO!</div>}
-                  </div>
-                  <div className="text-xs text-slate-400">Soru: {quizCardIndex + 1} / {cards.length}</div>
-                </div>
-
-                {isQuizOver ? (
-                  <div className="text-center p-10 bg-slate-900/90 border border-emerald-500/40 rounded-3xl w-full shadow-2xl">
-                    <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
-                      <Trophy className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white">Test Tamamlandı!</h3>
-                    <p className="text-slate-400 text-sm mt-1">{cards.length} soruda {quizCorrectCount} doğru bildiniz.</p>
-                    <div className="text-4xl font-extrabold text-amber-400 my-4 font-mono">{quizScore} Puan</div>
-                    <div className="flex justify-center gap-3 mt-6">
-                      <button onClick={() => setupSpeedQuiz(allDeckCards)} className="px-6 py-2.5 bg-indigo-600 rounded-xl text-sm font-semibold">Tekrar Test Et</button>
-                      <button onClick={() => setCurrentMode("study")} className="px-5 py-2.5 bg-slate-800 rounded-xl text-sm font-medium">Kartlara Dön</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full flex flex-col items-center">
-                    <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden mb-6 border border-slate-800">
-                      <div className={`h-full transition-all duration-100 ${quizTimeLeft > 2500 ? "bg-emerald-500" : quizTimeLeft > 1000 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${(quizTimeLeft / 5000) * 100}%` }} />
-                    </div>
-
-                    <div className="w-full py-8 px-6 bg-slate-900 border border-slate-800 rounded-3xl text-center mb-6 shadow-xl relative">
-                      <button
-                        onClick={(e) => speakText(currentQuizCard?.word || "", termLang, e)}
-                        title="Telaffuzu Dinle"
-                        className="absolute right-5 top-5 p-2 rounded-xl bg-slate-800/80 hover:bg-indigo-600/30 text-indigo-400 hover:text-white transition"
-                      >
-                        <Volume2 className="w-4 h-4" />
-                      </button>
-                      <span className="text-xs uppercase text-indigo-400 font-semibold tracking-wider">DOĞRU ANLAMI SEÇİN</span>
-                      <h2 className="text-4xl font-black text-white mt-2 mb-1">{currentQuizCard?.word}</h2>
-                      {currentQuizCard?.phonetic && <p className="text-xs font-mono text-slate-400">{currentQuizCard.phonetic}</p>}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                      {quizOptions.map((opt, idx) => {
-                        let btnStyle = "bg-slate-900 border-slate-800 hover:border-indigo-500/60 text-slate-200";
-                        if (selectedAnswer !== null) {
-                          if (opt.isCorrect) btnStyle = "bg-emerald-600/30 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500";
-                          else if (selectedAnswer === idx) btnStyle = "bg-rose-600/30 border-rose-500 text-rose-200";
-                        }
-                        return (
-                          <button key={idx} disabled={selectedAnswer !== null} onClick={() => handleQuizAnswer(idx)} className={`p-4 rounded-2xl border text-sm font-semibold transition-all duration-200 text-left flex items-center justify-between shadow-lg ${btnStyle}`}>
-                            <span>{opt.text}</span>
-                            {selectedAnswer !== null && opt.isCorrect && <Check className="w-4 h-4 text-emerald-400" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* MOD: GRAVITY */}
-            {currentMode === "gravity" && (
-              <div className="w-full max-w-xl flex flex-col items-center">
-                <div className="w-full flex items-center justify-between mb-4 px-2">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-sm bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-                      <Zap className="w-4 h-4" />
-                      <span>{gravityScore} Puan</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      {[...Array(3)].map((_, i) => (
-                        <Heart key={i} className={`w-5 h-5 ${i < gravityLives ? "text-rose-500 fill-rose-500" : "text-slate-700"}`} />
-                      ))}
-                    </div>
-                  </div>
-                  <button onClick={() => setupGravityGame(allDeckCards)} className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl">
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Yeniden</span>
-                  </button>
-                </div>
-
-                {isGravityOver ? (
-                  <div className="text-center p-10 bg-slate-900/90 border border-rose-500/40 rounded-3xl w-full shadow-2xl">
-                    <div className="w-16 h-16 bg-rose-500/10 text-rose-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-500/20">
-                      <Flame className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white">Gezegen Düştü!</h3>
-                    <p className="text-slate-400 text-sm mt-1">Canlarınız tükendi.</p>
-                    <div className="text-4xl font-extrabold text-amber-400 my-4 font-mono">{gravityScore} Puan</div>
-                    <div className="flex justify-center gap-3 mt-6">
-                      <button onClick={() => setupGravityGame(allDeckCards)} className="px-6 py-2.5 bg-indigo-600 rounded-xl text-sm font-semibold">Tekrar Dene</button>
-                      <button onClick={() => setCurrentMode("study")} className="px-5 py-2.5 bg-slate-800 rounded-xl text-sm font-medium">Kartlara Dön</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full flex flex-col items-center">
-                    <div className="w-full h-[380px] bg-slate-950 border border-slate-800 rounded-3xl relative overflow-hidden flex flex-col justify-between shadow-2xl">
-                      {currentGravityCard && (
-                        <div style={{ top: `${asteroidTop}%` }} className="absolute left-1/2 -translate-x-1/2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl shadow-xl border border-indigo-400/40 text-white font-bold text-lg whitespace-nowrap flex items-center space-x-2">
-                          <button onClick={(e) => speakText(currentGravityCard.word, termLang, e)} title="Telaffuz" className="text-amber-300 hover:text-white transition">
-                            <Volume2 className="w-4 h-4" />
-                          </button>
-                          <span>{currentGravityCard.word}</span>
+                      {/* Kelime Bazlı Arama Eşleşmeleri */}
+                      {trimmedQuery && matchedWords.length > 0 && (
+                        <div className="pt-1 flex flex-wrap gap-1 pointer-events-none">
+                          {matchedWords.slice(0, 3).map((mw, idx) => (
+                            <span
+                              key={`${deck.id}-mw-${idx}`}
+                              className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold truncate max-w-full ${isDark ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-300" : "bg-indigo-100 border-indigo-200 text-indigo-800"}`}
+                            >
+                              {mw.word} • {mw.meaning}
+                            </span>
+                          ))}
+                          {matchedWords.length > 3 && (
+                            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-200 text-slate-700"}`}>
+                              +{matchedWords.length - 3}
+                            </span>
+                          )}
                         </div>
                       )}
-                      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-rose-500/60" />
                     </div>
 
-                    <form onSubmit={handleGravitySubmit} className="w-full mt-4 flex gap-2">
-                      <input ref={gravityInputRef} type="text" placeholder="Karşılığını yazıp Enter'a basın..." value={gravityInput} onChange={(e) => setGravityInput(e.target.value)} className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none" />
-                      <button type="submit" className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold shadow-lg">Yok Et</button>
-                    </form>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* MOD: MATCH */}
-            {currentMode === "match" && (
-              <div className="w-full max-w-2xl flex flex-col items-center">
-                <div className="w-full flex items-center justify-between mb-6 px-2">
-                  <div className="flex items-center space-x-2 text-indigo-400 font-mono text-lg font-bold bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
-                    <Timer className="w-5 h-5" />
-                    <span>{(elapsedTime / 1000).toFixed(1)} sn</span>
-                  </div>
-                  <button onClick={() => setupMatchGame(allDeckCards)} className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl">
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Yeniden Başlat</span>
-                  </button>
-                </div>
-
-                {isGameFinished ? (
-                  <div className="text-center p-10 bg-slate-900/80 border border-indigo-500/40 rounded-3xl w-full max-w-md shadow-2xl">
-                    <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
-                      <Trophy className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white">Harika Zamanlama!</h3>
-                    <div className="text-4xl font-extrabold text-indigo-400 my-4 font-mono">{elapsedTime / 1000} sn</div>
-                    <div className="flex justify-center gap-3 mt-6">
-                      <button onClick={() => setupMatchGame(allDeckCards)} className="px-6 py-2.5 bg-indigo-600 rounded-xl text-sm font-semibold">Tekrar Oyna</button>
-                      <button onClick={() => setCurrentMode("study")} className="px-5 py-2.5 bg-slate-800 rounded-xl text-sm font-medium">Kartlara Dön</button>
+                    <div className={`pt-4 mt-4 border-t flex items-center justify-between text-xs pointer-events-none ${isDark ? "border-slate-800" : "border-slate-200"}`}>
+                      <span className={`font-semibold flex items-center gap-1 text-[11px] ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{t("lib_sm2_ready")}</span>
+                      </span>
+                      <span className={`font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>
+                        <span>{t("lib_study")}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 w-full">
-                    {tiles.map((tile) => {
-                      const isMatched = matchedIds.includes(tile.id);
-                      const isSelected = selectedTile?.tileId === tile.tileId;
-                      const isWrong = wrongTileIds.includes(tile.tileId);
-                      if (isMatched) return <div key={tile.tileId} className="h-28 rounded-2xl opacity-0 pointer-events-none" />;
-
-                      return (
-                        <div key={tile.tileId} onClick={() => handleTileClick(tile)} className={`h-28 rounded-2xl p-4 flex items-center justify-center text-center cursor-pointer transition-all duration-200 select-none shadow-lg text-sm font-semibold border ${isWrong ? "bg-rose-500/20 border-rose-500 text-rose-300 scale-95" : isSelected ? "bg-indigo-600/30 border-indigo-400 text-white scale-105 ring-2 ring-indigo-500" : "bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-200"}`}>
-                          <span className="line-clamp-3">{tile.text}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* MOD: STUDY */}
-            {currentMode === "study" && (
-              <div className="w-full max-w-xl flex flex-col items-center">
-                {sessionCompleted ? (
-                  <div className="my-auto text-center p-8 bg-slate-900/80 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl">
-                    <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-2" />
-                    <h3 className="text-xl font-bold text-white">Tebrikler! Oturum Tamamlandı</h3>
-                    <p className="text-xs text-slate-400 mt-1 mb-6">
-                      Hangi kelimeleri tekrar gözden geçirmek istersiniz?
-                    </p>
-
-                    <div className="space-y-2.5 text-left mb-6">
-                      <button
-                        onClick={() => restartStudyFiltered("forgotten")}
-                        disabled={forgottenCardsCount === 0}
-                        className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition ${forgottenCardsCount > 0
-                            ? "bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/20 text-rose-300 cursor-pointer"
-                            : "bg-slate-950/40 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-50"
-                          }`}
-                      >
-                        <div className="flex items-center space-x-2.5">
-                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                          <div>
-                            <div className="text-xs font-bold">Hatırlamadıklarımı Çalış</div>
-                            <div className="text-[11px] text-slate-400">Yalnızca bilmediğiniz kelimeler</div>
-                          </div>
-                        </div>
-                        <span className="text-xs px-2 py-0.5 rounded-lg bg-rose-500/20 font-bold text-rose-300">
-                          {forgottenCardsCount} Kart
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => restartStudyFiltered("difficult")}
-                        disabled={hardCardsCount === 0}
-                        className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition ${hardCardsCount > 0
-                            ? "bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 text-amber-300 cursor-pointer"
-                            : "bg-slate-950/40 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-50"
-                          }`}
-                      >
-                        <div className="flex items-center space-x-2.5">
-                          <RotateCw className="w-4 h-4 text-amber-400 shrink-0" />
-                          <div>
-                            <div className="text-xs font-bold">Zorlandıklarımı Tekrar Et</div>
-                            <div className="text-[11px] text-slate-400">Zorlandım + Hatırlamadım</div>
-                          </div>
-                        </div>
-                        <span className="text-xs px-2 py-0.5 rounded-lg bg-amber-500/20 font-bold text-amber-300">
-                          {hardCardsCount} Kart
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => restartStudyFiltered("all")}
-                        className="w-full p-3.5 rounded-2xl bg-indigo-600/15 border border-indigo-500/30 hover:bg-indigo-600/25 text-indigo-200 flex items-center justify-between transition cursor-pointer"
-                      >
-                        <div className="flex items-center space-x-2.5">
-                          <RefreshCw className="w-4 h-4 text-indigo-400 shrink-0" />
-                          <div>
-                            <div className="text-xs font-bold">Tüm Desteyi Baştan Çalış</div>
-                            <div className="text-[11px] text-slate-400">Destedeki bütün kelimeler</div>
-                          </div>
-                        </div>
-                        <span className="text-xs px-2 py-0.5 rounded-lg bg-indigo-500/20 font-bold text-indigo-300">
-                          {allDeckCards.length} Kart
-                        </span>
-                      </button>
-                    </div>
-
-                    <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                      <button
-                        onClick={() => setupSpeedQuiz(allDeckCards)}
-                        className="text-xs text-slate-400 hover:text-white transition flex items-center space-x-1"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Hızlı Test Çöz</span>
-                      </button>
-                      <button
-                        onClick={() => setActiveDeck(null)}
-                        className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-medium text-xs transition cursor-pointer"
-                      >
-                        ← Destelere Dön
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Üst Bilgi ve Aksiyon Çubuğu */}
-                    <div className="w-full flex items-center justify-between text-xs text-slate-400 mb-3 px-1">
-                      <span className="font-semibold text-slate-300">{activeDeck.title}</span>
-                      <div className="flex items-center space-x-4">
-                        <span>{currentIndex + 1} / {cards.length} Kart</span>
-
-                        <button
-                          onClick={() => openEditModalForCurrentCard(currentCard)}
-                          className="flex items-center space-x-1 text-indigo-400 hover:text-indigo-300 transition"
-                          title="Bu kartı düzenle"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          <span>Düzenle</span>
-                        </button>
-
-                        <button
-                          onClick={(e) => handleDeleteCurrentCard(e, currentCard.id, currentCard.word)}
-                          title="Bu kartı desteden sil"
-                          className="flex items-center space-x-1 text-rose-400 hover:text-rose-300 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Kartı Çıkar</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Flashcard Kartı - 3D CSS Flip & Güvenli Veri Bağlaması */}
-                    {(() => {
-                      const cardWord = currentCard?.word || (currentCard as any)?.front || "";
-                      const cardPhonetic = currentCard?.phonetic || "";
-                      const cardMeaning =
-                        (currentCard as any)?.meaning ||
-                        (currentCard as any)?.translation ||
-                        (currentCard as any)?.definition ||
-                        (currentCard as any)?.back ||
-                        currentCard?.meanings?.[0]?.translation ||
-                        currentCard?.meanings?.[0]?.definition ||
-                        (currentCard as any)?.turkish_meaning ||
-                        "Tanım bulunamadı";
-
-                      const cardExEn =
-                        currentCard?.example_sentences?.[0]?.en ||
-                        currentCard?.example_sentences?.[0]?.target ||
-                        (currentCard as any)?.example_sentence ||
-                        (currentCard as any)?.example ||
-                        (currentCard as any)?.context_sentence ||
-                        "";
-
-                      const cardExTr =
-                        currentCard?.example_sentences?.[0]?.tr ||
-                        currentCard?.example_sentences?.[0]?.native ||
-                        currentCard?.example_sentences?.[0]?.source ||
-                        (currentCard as any)?.example_sentence_tr ||
-                        (currentCard as any)?.example_translation ||
-                        "";
-
-                      return (
-                        <div
-                          onClick={() => setIsFlipped(!isFlipped)}
-                          className="w-full min-h-[340px] sm:min-h-[380px] cursor-pointer select-none [perspective:1000px] group"
-                          style={{ perspective: "1000px" }}
-                        >
-                          <div
-                            className="relative w-full h-full min-h-[340px] sm:min-h-[380px] rounded-3xl shadow-2xl transition-transform"
-                            style={{
-                              transformStyle: "preserve-3d",
-                              transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-                              transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-                            }}
-                          >
-                            {/* ÖN YÜZ (card-front) */}
-                            <div
-                              className={`absolute inset-0 w-full h-full bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 border-2 border-slate-800 hover:border-indigo-500/50 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl transition-colors ${
-                                isFlipped ? "pointer-events-none z-0 opacity-0" : "z-10 opacity-100"
-                              }`}
-                              style={{
-                                position: "absolute",
-                                width: "100%",
-                                height: "100%",
-                                backfaceVisibility: "hidden",
-                                WebkitBackfaceVisibility: "hidden",
-                              }}
-                            >
-                              <div className="flex items-center justify-between text-xs text-slate-500">
-                                <span className="font-bold tracking-wider uppercase text-indigo-400">TERİM</span>
-                                <span className="flex items-center space-x-1 text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg">
-                                  <RotateCw className="w-3.5 h-3.5" />
-                                  <span>Çevir (Boşluk / Space)</span>
-                                </span>
-                              </div>
-
-                              <div className="my-auto text-center py-6 flex flex-col items-center">
-                                <div className="flex items-center justify-center space-x-3 mb-2">
-                                  <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white">{cardWord}</h2>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => speakText(cardWord, termLang, e)}
-                                    title="Telaffuzu Dinle"
-                                    className="p-2.5 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 hover:text-white transition shadow-sm border border-indigo-500/30"
-                                  >
-                                    <Volume2 className="w-5 h-5" />
-                                  </button>
-                                </div>
-                                {cardPhonetic && <p className="text-base font-mono text-indigo-400 mt-1">{cardPhonetic}</p>}
-                              </div>
-
-                              <div className="text-center text-xs text-slate-500">Çevirmek için karta tıklayın veya Boşluk / Space tuşuna basın</div>
-                            </div>
-
-                            {/* ARKA YÜZ (card-back with transform: rotateY(180deg)) */}
-                            <div
-                              className={`absolute inset-0 w-full h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border-2 border-indigo-500/50 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl transition-colors ${
-                                isFlipped ? "z-20 opacity-100 ring-1 ring-indigo-500/30" : "pointer-events-none z-0 opacity-0"
-                              }`}
-                              style={{
-                                position: "absolute",
-                                width: "100%",
-                                height: "100%",
-                                backfaceVisibility: "hidden",
-                                WebkitBackfaceVisibility: "hidden",
-                                transform: "rotateY(180deg)",
-                              }}
-                            >
-                              <div className="flex items-center justify-between text-xs text-slate-500">
-                                <span className="font-bold tracking-wider uppercase text-emerald-400">TANIM / ÇEVİRİ</span>
-                                <span className="flex items-center space-x-1 text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg">
-                                  <RotateCw className="w-3.5 h-3.5" />
-                                  <span>Ön Yüze Dön</span>
-                                </span>
-                              </div>
-
-                              <div className="my-auto py-4 space-y-4">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0 flex-1">
-                                    <h4 className="text-xs uppercase font-semibold text-indigo-400 mb-1">Karşılığı / Anlamı</h4>
-                                    <p className="text-2xl sm:text-3xl font-extrabold text-white break-words">{cardMeaning}</p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => speakText(cardMeaning, defLang, e)}
-                                    title="Tanımı Dinle"
-                                    className="p-2.5 rounded-xl bg-slate-800 hover:bg-emerald-600 text-emerald-400 hover:text-white transition shrink-0"
-                                  >
-                                    <Volume2 className="w-5 h-5" />
-                                  </button>
-                                </div>
-
-                                {cardExEn && (
-                                  <div className="pt-3 border-t border-slate-800 bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="text-xs sm:text-sm text-slate-200 italic">&quot;{cardExEn}&quot;</p>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => speakText(cardExEn, termLang, e)}
-                                        title="Cümleyi Dinle"
-                                        className="p-1 text-slate-400 hover:text-indigo-300 shrink-0"
-                                      >
-                                        <Volume2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                    {cardExTr && <p className="text-xs text-slate-400 mt-1">{cardExTr}</p>}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="text-center text-xs text-slate-500">Kelimeni değerlendirerek ilerleyebilirsin ↓</div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* İleri / Geri Navigasyon Kontrolleri */}
-                    <div className="flex items-center justify-between w-full mt-4 px-1">
-                      <button
-                        onClick={handlePrevCard}
-                        disabled={currentIndex === 0}
-                        className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 text-slate-300 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-sm"
-                        title="Önceki Kart (Sol Ok Tuşu: ←)"
-                      >
-                        <ChevronLeft className="w-4 h-4 text-indigo-400" />
-                        <span className="text-xs font-semibold">Önceki Kart</span>
-                      </button>
-
-                      <div className="flex items-center space-x-1.5 text-xs font-mono text-slate-500 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-800/50">
-                        <span className="text-indigo-400 font-bold">{currentIndex + 1}</span>
-                        <span>/</span>
-                        <span>{cards.length}</span>
-                      </div>
-
-                      <button
-                        onClick={handleNextCard}
-                        disabled={currentIndex + 1 >= cards.length}
-                        className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 text-slate-300 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-sm"
-                        title="Sonraki Kart (Sağ Ok Tuşu: →)"
-                      >
-                        <span className="text-xs font-semibold">Sonraki Kart</span>
-                        <ChevronRight className="w-4 h-4 text-indigo-400" />
-                      </button>
-                    </div>
-
-                    {/* SM-2 Butonları */}
-                    {isFlipped && (
-                      <div className="w-full grid grid-cols-4 gap-3 mt-4">
-                        <button onClick={() => handleRating(1)} className="py-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/30 text-xs font-semibold hover:bg-rose-500/20 transition">Hatırlamadım</button>
-                        <button onClick={() => handleRating(3)} className="py-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold hover:bg-amber-500/20 transition">Zorlandım</button>
-                        <button onClick={() => handleRating(4)} className="py-3 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 text-xs font-semibold hover:bg-blue-500/20 transition">İyi</button>
-                        <button onClick={() => handleRating(5)} className="py-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-500/20 transition">Çok Kolay</button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
 
-      {/* KART DÜZENLEME (EDIT) MODALI */}
-      {isEditingCardModalOpen && editingCardData && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <Edit3 className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-lg font-bold text-white">Kartı Düzenle</h3>
-              </div>
-              <button onClick={() => setIsEditingCardModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* =================================================================== */}
+      {/* MODALLAR (Oyun Arenası & SM-2 Backend Endpoints ile Tam Senkron)     */}
+      {/* =================================================================== */}
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-slate-300">Kelime / Terim</label>
-                    <button type="button" onClick={() => speakText(editingCardData.word, termLang)} className="text-indigo-400 hover:text-white">
-                      <Volume2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={editingCardData.word}
-                    onChange={(e) => setEditingCardData({ ...editingCardData, word: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Fonetik</label>
-                  <input
-                    type="text"
-                    value={editingCardData.phonetic}
-                    onChange={(e) => setEditingCardData({ ...editingCardData, phonetic: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-indigo-400 focus:outline-none focus:border-indigo-500 font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Anlamı / Tanımı *</label>
-                <input
-                  type="text"
-                  required
-                  value={editingCardData.translation}
-                  onChange={(e) => setEditingCardData({ ...editingCardData, translation: e.target.value })}
-                  className="w-full bg-slate-950 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-400"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-slate-300">Örnek Cümle</label>
-                  <button type="button" onClick={() => speakText(editingCardData.exampleEn, termLang)} className="text-indigo-400 hover:text-white">
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <textarea
-                  rows={2}
-                  value={editingCardData.exampleEn}
-                  onChange={(e) => setEditingCardData({ ...editingCardData, exampleEn: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Cümlenin Çevirisi</label>
-                <textarea
-                  rows={2}
-                  value={editingCardData.exampleTr}
-                  onChange={(e) => setEditingCardData({ ...editingCardData, exampleTr: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-400 focus:outline-none focus:border-indigo-500 resize-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsEditingCardModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-white"
-                >
-                  İptal
-                </button>
-                <button
-                  type="button"
-                  disabled={isUpdatingCard || !editingCardData.translation.trim()}
-                  onClick={handleUpdateCurrentCard}
-                  className="flex items-center space-x-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-medium text-sm shadow-lg shadow-emerald-600/20"
-                >
-                  {isUpdatingCard ? <RotateCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  <span>Değişiklikleri Kaydet</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* KLASÖR OLUŞTURMA MODALI */}
+      {/* 1. Yeni Klasör Açma Modalı */}
       {isCreateFolderModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl">
             <div className="flex items-center space-x-2 mb-4">
-              <FolderPlus className="w-5 h-5 text-indigo-400" />
-              <h3 className="text-lg font-bold text-white">Yeni Klasör</h3>
+              <FolderPlus className="w-5 h-5 text-amber-400" />
+              <h3 className="text-lg font-bold text-white">
+                {newFolderParentId ? t("lib_new_subfolder_title") : t("lib_new_folder_title")}
+              </h3>
             </div>
             <form onSubmit={handleCreateFolder} className="space-y-4">
-              <input
-                type="text"
-                required
-                placeholder="Örn: Kuzey, Animals, B2 Sınavı"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
-              />
-              <div className="flex justify-end space-x-3">
-                <button type="button" onClick={() => setIsCreateFolderModalOpen(false)} className="px-4 py-2 text-sm text-slate-400">İptal</button>
-                <button type="submit" disabled={!newFolderName.trim()} className="px-5 py-2 bg-indigo-600 rounded-xl text-white text-sm font-semibold">Oluştur</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* YENİ DESTE MODALI */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">Yeni Deste</h3>
-            <form onSubmit={handleCreateDeck} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Klasör (İsteğe Bağlı)</label>
-                <select
-                  value={newDeckFolderId}
-                  onChange={(e) => setNewDeckFolderId(e.target.value)}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  {t("lib_folder_name_label")}
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder={t("lib_folder_name_ph")}
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  {t("lib_parent_folder_opt")}
+                </label>
+                <select
+                  value={newFolderParentId}
+                  onChange={(e) => setNewFolderParentId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none cursor-pointer"
                 >
-                  <option value="">(Klasörsüz / Genel)</option>
-                  {folders.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
+                  <option value="">{t("lib_root_dir")}</option>
+                  {folders.map((f) => {
+                    const fid = String(f.id || "").trim();
+                    return (
+                      <option key={fid} value={fid}>
+                        📁 {f.name}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
-              <input type="text" required placeholder="Deste Başlığı" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none" />
-              <textarea placeholder="Açıklama" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white resize-none focus:border-indigo-500 outline-none" />
-              <div className="flex justify-end space-x-3">
-                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-sm text-slate-400">İptal</button>
-                <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-indigo-600 rounded-xl text-white text-sm font-semibold">Kaydet</button>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  {t("lib_folder_color")}
+                </label>
+                <div className="flex items-center gap-2">
+                  {FOLDER_PALETTE.map((c) => {
+                    const active =
+                      newFolderColor.toLowerCase() === c.hex.toLowerCase();
+                    return (
+                      <button
+                        key={c.hex}
+                        type="button"
+                        title={c.label}
+                        onClick={() => setNewFolderColor(c.hex)}
+                        style={{ backgroundColor: c.hex }}
+                        className={`w-7 h-7 rounded-full transition cursor-pointer ${
+                          active
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110"
+                            : "opacity-75 hover:opacity-100"
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateFolderModalOpen(false);
+                    setNewFolderParentId("");
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                >
+                  {t("lib_cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingFolder || !newFolderName.trim()}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-white text-xs font-bold cursor-pointer"
+                >
+                  {isCreatingFolder ? t("lib_creating") : t("lib_create")}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* KELİME EKLEME MODALI */}
-      {isAddWordModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-lg font-bold text-white">
-                  {enrichedData ? "Kelimeyi Onayla & Kaydet" : "Kelime Ekle"}
-                </h3>
+      {/* 2. Yeni Deste Oluşturma Modalı */}
+      <CreateDeckModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        newTitle={newTitle}
+        setNewTitle={setNewTitle}
+        newDescription={newDescription}
+        setNewDescription={setNewDescription}
+        newDeckFolderId={newDeckFolderId}
+        setNewDeckFolderId={setNewDeckFolderId}
+        folders={folders.map((f) => ({ id: f.id, name: f.name }))}
+        onSubmit={handleCreateDeck}
+      />
+
+      {/* 3. AI Kelime Ekleme Modalı */}
+      <AddWordModal
+        isOpen={addWordCtrl.isOpen}
+        onClose={addWordCtrl.closeModal}
+        decks={addWordModalDecks}
+        selectedDeckForWord={addWordCtrl.selectedDeckForWord}
+        setSelectedDeckForWord={addWordCtrl.setSelectedDeckForWord}
+        termLang={addWordCtrl.termLang}
+        setTermLang={addWordCtrl.setTermLang}
+        defLang={addWordCtrl.defLang}
+        setDefLang={addWordCtrl.setDefLang}
+        supportedLanguages={SUPPORTED_LANGUAGES}
+        wordInput={addWordCtrl.wordInput}
+        setWordInput={addWordCtrl.setWordInput}
+        isAutoLookingUp={addWordCtrl.isAutoLookingUp}
+        triggerAutoLookup={addWordCtrl.triggerAutoLookup}
+        isEnriching={addWordCtrl.isEnriching}
+        contextHint={addWordCtrl.contextHint}
+        setContextHint={addWordCtrl.setContextHint}
+        handleManualInputMode={addWordCtrl.handleManualInputMode}
+        runFetchAi={addWordCtrl.runFetchAi}
+        enrichedData={addWordCtrl.enrichedData}
+        setEnrichedData={addWordCtrl.setEnrichedData}
+        speakText={speakText}
+        handleSaveCard={addWordCtrl.handleSaveCard}
+        isSavingCard={addWordCtrl.isSavingCard}
+        lastAutoWordRef={addWordCtrl.lastAutoWordRef}
+      />
+
+      {/* 4. Zayıf Nokta Kurtarma Modalı */}
+      <WeakSpotRecoveryModal
+        isOpen={isWeakSpotModalOpen}
+        onClose={() => {
+          setIsWeakSpotModalOpen(false);
+          fetchStudyMetrics();
+        }}
+        onRefreshNeeded={fetchStudyMetrics}
+        onAllWeakSpotsCleared={() => {
+          setWeakSpotCount(0);
+          fetchStudyMetrics();
+        }}
+      />
+
+      {/* 5. Hızlı Çalışma Kapsam Seçici Modalı */}
+      {isQuickStudyModalOpen && (
+        <div
+          onClick={() => setIsQuickStudyModalOpen(false)}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 text-slate-100 max-h-[90vh] flex flex-col"
+          >
+            {/* Üst Başlık */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    {t("lib_quick_study_scope")}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {t("lib_quick_study_sub")}
+                  </p>
+                </div>
               </div>
-              <button onClick={() => setIsAddWordModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
+              <button
+                type="button"
+                onClick={() => setIsQuickStudyModalOpen(false)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {!enrichedData ? (
-              <form onSubmit={handleFetchAiData} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Hedef Deste *</label>
-                  <select
-                    value={selectedDeckForWord}
-                    onChange={(e) => setSelectedDeckForWord(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
-                  >
-                    {decks.length === 0 ? (
-                      <option value="">(Önce bir deste oluşturun)</option>
-                    ) : (
-                      decks.map((d) => {
-                        const parentFolder = folders.find((f) => String(f.id).toLowerCase() === String(d.folder_id).toLowerCase());
-                        return (
-                          <option key={d.id} value={d.id}>
-                            {d.title} {activeDeck && activeDeck.id === d.id ? "(Şu an açık)" : parentFolder ? `(📁 ${parentFolder.name})` : "(Genel)"}
-                          </option>
-                        );
-                      })
-                    )}
-                  </select>
-                </div>
+            {/* En Üstte: Tek Tıkla Hemen Başla */}
+            <button
+              type="button"
+              onClick={handleLaunchQuickAll}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition active:scale-[0.99] cursor-pointer shrink-0"
+            >
+              <span>{t("lib_quick_all_btn")}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
 
-                {/* DİL SEÇİCİ */}
-                <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-2xl">
-                  <div className="flex items-center space-x-1.5 text-xs text-indigo-400 font-semibold mb-2">
-                    <Languages className="w-4 h-4" />
-                    <span>DİL SEÇENEKLERİ</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">TERİM DİLİ</label>
-                      <select
-                        value={termLang}
-                        onChange={(e) => setTermLang(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-indigo-300 font-bold focus:border-indigo-500 outline-none"
-                      >
-                        {SUPPORTED_LANGUAGES.map((l) => (
-                          <option key={l.code} value={l.code}>{l.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">TANIM DİLİ</label>
-                      <select
-                        value={defLang}
-                        onChange={(e) => setDefLang(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-emerald-300 font-bold focus:border-indigo-500 outline-none"
-                      >
-                        {SUPPORTED_LANGUAGES.map((l) => (
-                          <option key={l.code} value={l.code}>{l.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    Kelime / Terim ({SUPPORTED_LANGUAGES.find((l) => l.code === termLang)?.label}) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder={termLang === "de" ? "Örn: die Herausforderung, schön" : termLang === "es" ? "Örn: desarrollar, biblioteca" : "Örn: bullet, resilient, deliberate"}
-                    value={wordInput}
-                    onChange={(e) => setWordInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">İpucu / Tanım (İsteğe bağlı)</label>
-                  <input
-                    type="text"
-                    placeholder="Kendiniz yazacaksanız buraya doğrudan anlamı da yazabilirsiniz"
-                    value={contextHint}
-                    onChange={(e) => setContextHint(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
-                  />
-                </div>
-
-                {/* İKİLİ BUTON ÇUBUĞU */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800">
-                  <button type="button" onClick={() => setIsAddWordModalOpen(false)} className="text-xs text-slate-400 hover:text-white order-2 sm:order-1">
-                    İptal
-                  </button>
-                  <div className="flex items-center space-x-2 w-full sm:w-auto order-1 sm:order-2">
+            {/* Klasörler ve Desteler Çoklu Seçim Alanı */}
+            <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+              {/* Klasörler Bölümü */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    {t("lib_quick_folders_hint")}
+                  </span>
+                  {(selectedQuickFolderIds.length > 0 ||
+                    selectedQuickDeckIds.length > 0) && (
                     <button
                       type="button"
-                      onClick={handleManualInputMode}
-                      disabled={!wordInput.trim() || !selectedDeckForWord}
-                      className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-indigo-500 hover:bg-slate-800 text-slate-200 text-xs font-semibold transition disabled:opacity-40"
+                      onClick={() => {
+                        setSelectedQuickFolderIds([]);
+                        setSelectedQuickSubfolderIds([]);
+                        setSelectedQuickDeckIds([]);
+                      }}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
                     >
-                      Kendim Yazacağım ✍️
+                      {t("lib_clear_selection")}
                     </button>
-                    <button
-                      type="submit"
-                      disabled={isEnriching || !wordInput.trim() || !selectedDeckForWord}
-                      className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-semibold text-xs transition disabled:opacity-40 shadow-lg shadow-indigo-600/30"
-                    >
-                      {isEnriching ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-white" />}
-                      <span>AI ile Anlam Getir</span>
-                    </button>
-                  </div>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4">
-                {correctionNotice && (
-                  <div className="flex items-center space-x-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{correctionNotice}</span>
-                  </div>
-                )}
-
-                {suggestions.length > 0 && (
-                  <div>
-                    <span className="text-xs text-slate-400 block mb-1.5">Alternatifler:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestions.map((sug) => (
-                        <button
-                          key={sug}
-                          type="button"
-                          onClick={() => {
-                            setWordInput(sug);
-                            runFetchAi(sug);
-                          }}
-                          className="text-xs px-2.5 py-1 bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500 rounded-lg text-slate-300 hover:text-white transition"
-                        >
-                          {sug}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs text-slate-400">Terim</label>
-                      <button type="button" onClick={() => speakText(enrichedData.word, termLang)} className="text-indigo-400 hover:text-white">
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      value={enrichedData.word}
-                      onChange={(e) => setEnrichedData({ ...enrichedData, word: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Fonetik (İsteğe Bağlı)</label>
-                    <input
-                      type="text"
-                      placeholder="/ˈbʊl.ɪt/"
-                      value={enrichedData.phonetic}
-                      onChange={(e) => setEnrichedData({ ...enrichedData, phonetic: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-indigo-400 focus:border-indigo-500 outline-none font-mono"
-                    />
-                  </div>
+                  )}
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-slate-400">Tanım / Çeviri *</label>
-                    <button type="button" onClick={() => speakText(enrichedData.translation, defLang)} className="text-emerald-400 hover:text-white">
-                      <Volume2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Örn: mermi, kurşun"
-                    value={enrichedData.translation}
-                    onChange={(e) => setEnrichedData({ ...enrichedData, translation: e.target.value })}
-                    className="w-full bg-slate-950 border border-indigo-500/50 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-400 outline-none"
-                  />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {getSubfolders(null).map((folder) => {
+                    const fId = String(folder.id || "").trim();
+                    const { deckCount, wordCount } =
+                      getRecursiveFolderStats(fId);
+                    const checked = selectedQuickFolderIds.includes(fId);
 
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Örnek Cümle (İsteğe Bağlı)</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Örn: The vest is designed to stop bullets."
-                    value={enrichedData.exampleEn}
-                    onChange={(e) => setEnrichedData({ ...enrichedData, exampleEn: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 resize-none focus:border-indigo-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Cümlenin Çevirisi (İsteğe Bağlı)</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Örn: Yelek, kurşunları durdurmak için tasarlanmıştır."
-                    value={enrichedData.exampleTr}
-                    onChange={(e) => setEnrichedData({ ...enrichedData, exampleTr: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-400 resize-none focus:border-indigo-500 outline-none"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                  <button onClick={() => setEnrichedData(null)} className="text-xs text-slate-400 hover:text-white">
-                    ← Geri Dön
-                  </button>
-                  <button
-                    onClick={handleSaveEditedCard}
-                    disabled={isSavingCard || !enrichedData.translation.trim()}
-                    className="flex items-center space-x-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white font-medium text-sm disabled:opacity-40"
-                  >
-                    {isSavingCard ? <RotateCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    <span>Desteye Kaydet</span>
-                  </button>
+                    return (
+                      <label
+                        key={fId}
+                        className={`p-3 rounded-2xl border flex items-center justify-between gap-2 cursor-pointer transition ${
+                          checked
+                            ? "bg-indigo-600/20 border-indigo-400 text-white"
+                            : "bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleQuickFolder(fId)}
+                            className="w-4 h-4 rounded accent-indigo-500 cursor-pointer shrink-0"
+                          />
+                          <span className="text-xs font-bold truncate">
+                            📁 {folder.name}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                          {deckCount} / {wordCount}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
-            )}
+
+              {/* Seçili Klasörlerin Alt Klasörleri Bölümü (Varsa) */}
+              {selectedQuickFolderIds.length > 0 &&
+                modalSubfolders.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400/90 block">
+                      {t("lib_subfolders")} ({modalSubfolders.length})
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {modalSubfolders.map((sub) => {
+                        const subId = String(sub.id || "").trim();
+                        const { deckCount, wordCount } =
+                          getRecursiveFolderStats(subId);
+                        const checked =
+                          selectedQuickSubfolderIds.includes(subId);
+
+                        return (
+                          <label
+                            key={subId}
+                            className={`p-2.5 rounded-2xl border flex items-center justify-between gap-2 cursor-pointer transition ${
+                              checked
+                                ? "bg-amber-500/15 border-amber-400/70 text-white"
+                                : "bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleQuickSubfolder(subId)}
+                                className="w-4 h-4 rounded accent-amber-500 cursor-pointer shrink-0"
+                              />
+                              <span className="text-xs font-semibold truncate">
+                                ↳ 📂 {sub.name}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                              {deckCount} / {wordCount}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+              {/* Desteler Bölümü (Dinamik Klasör Filtreli) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+                    {selectedQuickFolderIds.length > 0
+                      ? t("lib_quick_selected_decks", undefined, { count: visibleModalDecks.length })
+                      : t("lib_quick_all_decks_hdr", undefined, { count: decks.length })}
+                  </span>
+                  {selectedQuickFolderIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedQuickFolderIds([]);
+                        setSelectedQuickSubfolderIds([]);
+                      }}
+                      className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                    >
+                      {t("lib_show_all_decks")}
+                    </button>
+                  )}
+                </div>
+
+                {visibleModalDecks.length === 0 ? (
+                  <div className="p-4 rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 text-center text-xs text-slate-400">
+                    {t("lib_quick_no_decks")}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {visibleModalDecks.map((deck) => {
+                      const checked = selectedQuickDeckIds.includes(deck.id);
+                      const normalizedFid = normalizeFolderId(deck.folder_id);
+                      const folderLabel =
+                        normalizedFid && validFolderIds.has(normalizedFid)
+                          ? folderNameMap.get(normalizedFid) || t("lib_folder")
+                          : t("lib_folder");
+                      const wordCount = getRealDeckWordCount(deck);
+
+                      return (
+                        <label
+                          key={deck.id}
+                          className={`p-3 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition ${
+                            checked
+                              ? "bg-emerald-500/15 border-emerald-400/70 text-white"
+                              : "bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleQuickDeck(deck)}
+                              className="w-4 h-4 rounded accent-emerald-500 cursor-pointer shrink-0"
+                            />
+                            <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold truncate">
+                                {deck.title}
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700 shrink-0">
+                                📁 {folderLabel}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="text-[11px] font-mono font-bold text-indigo-300 shrink-0">
+                            {wordCount} {t("lib_word_unit")}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Alt Eylem Butonu */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-400 font-mono">
+                {t("lib_quick_decks_selected", undefined, { count: selectedQuickDeckIds.length })}
+              </span>
+              <button
+                type="button"
+                disabled={
+                  selectedQuickDeckIds.length === 0 ||
+                  selectedTotalWords === 0
+                }
+                onClick={handleLaunchSelectedQuickStudy}
+                className={`px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm flex items-center gap-2 transition ${
+                  selectedQuickDeckIds.length > 0 &&
+                  selectedTotalWords > 0
+                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/30 cursor-pointer active:scale-95"
+                    : "bg-slate-800 text-slate-500 cursor-not-allowed"
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>
+                  {t("lib_quick_study_selected", undefined, { count: selectedTotalWords })}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
-      {/* Avatar Stüdyosu Modalı (10 Standart Avatar / Selfie / Fotoğraf Yükle) */}
-      <AvatarPickerModal
-        isOpen={isAvatarStudioOpen}
-        onClose={() => setIsAvatarStudioOpen(false)}
-      />
 
-      {/* Merkezi Hesap & Tercihler Modalı */}
+      {/* 6. Klasör Adını Düzenle Modalı */}
+      {renamingFolder && (
+        <div
+          onClick={() => setRenamingFolder(null)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <Edit3 className="w-5 h-5 text-amber-400" />
+              <h3 className="text-base font-bold text-white">
+                {t("lib_rename_folder")}
+              </h3>
+            </div>
+            <form onSubmit={handleRenameFolder} className="space-y-4">
+              <input
+                type="text"
+                required
+                autoFocus
+                value={renamingFolder.name}
+                onChange={(e) =>
+                  setRenamingFolder({ ...renamingFolder, name: e.target.value })
+                }
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRenamingFolder(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                >
+                  {t("lib_cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRenamingFolder || !renamingFolder.name.trim()}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-white text-xs font-bold cursor-pointer"
+                >
+                  {isRenamingFolder ? t("lib_saving") : t("lib_save")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 7. Özel Sağ Tık (Context Menu) Klasöre Taşıma Menüsü */}
+      {contextMenu && (
+        <div
+          data-theme-preserve="dark"
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed z-[9999] w-64 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 shadow-2xl p-2 text-slate-100 space-y-1 animate-in fade-in zoom-in-95 duration-100"
+        >
+          {contextMenu.type === "deck" && contextMenu.deck && (
+            <>
+              <div className="px-2.5 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-800 truncate">
+                {t("lib_move_deck_to")}
+              </div>
+              <div className="max-h-52 overflow-y-auto space-y-0.5 py-1">
+                {folders.map((f) => {
+                  const fid = String(f.id || "").trim();
+                  const isCurrent =
+                    normalizeFolderId(contextMenu.deck?.folder_id) === fid;
+                  return (
+                    <button
+                      key={fid}
+                      type="button"
+                      onClick={() => {
+                        const targetDeck = contextMenu.deck!;
+                        setContextMenu(null);
+                        handleMoveDeckToFolder(targetDeck.id, fid);
+                      }}
+                      className={`w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition cursor-pointer ${
+                        isCurrent
+                          ? "bg-amber-500/15 text-amber-300"
+                          : "hover:bg-slate-800 text-slate-200"
+                      }`}
+                    >
+                      <span className="truncate">📁 {f.name}</span>
+                      {isCurrent && <Check className="w-3.5 h-3.5 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!contextMenu.deck.id.startsWith("preset_") && (
+                <div className="pt-1 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const targetDeck = contextMenu.deck!;
+                      setContextMenu(null);
+                      handleDeleteDeck(e, targetDeck.id, targetDeck.title);
+                    }}
+                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-bold text-rose-400 hover:bg-rose-500/15 flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>🗑️ {t("lib_delete_deck_title")}</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {contextMenu.type === "folder" && contextMenu.folder && (() => {
+            const ctxFolder = contextMenu.folder!;
+            const sourceId = String(ctxFolder.id || "").trim();
+            const currentParent = normalizeFolderId(ctxFolder.parent_id);
+            const validTargets = folders.filter((targetF) => {
+              const targetId = String(targetF.id || "").trim();
+              return (
+                targetId !== sourceId &&
+                targetId !== currentParent &&
+                !wouldCreateFolderCycle(folders, sourceId, targetId)
+              );
+            });
+
+            return (
+              <>
+                <div className="px-2.5 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-800 truncate">
+                  📁 {ctxFolder.name}
+                </div>
+
+                <div className="py-1 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContextMenu(null);
+                      setContextMoveOpen(false);
+                      setSelectedFolderFilter(sourceId);
+                      setNewDeckFolderId(sourceId);
+                      setIsCreateModalOpen(true);
+                    }}
+                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold text-indigo-300 hover:bg-indigo-500/15 flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t("lib_add_deck_plus")}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContextMenu(null);
+                      setContextMoveOpen(false);
+                      setNewFolderName("");
+                      setNewFolderColor(ctxFolder.color || "#f59e0b");
+                      setNewFolderParentId(sourceId);
+                      setIsCreateFolderModalOpen(true);
+                    }}
+                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold text-amber-300 hover:bg-amber-500/15 flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t("lib_new_sub_under")}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setContextMoveOpen((prev) => !prev)}
+                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold text-slate-200 hover:bg-slate-800 flex items-center justify-between gap-2 transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <CornerDownRight className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <span>{t("lib_move_under_folder")}</span>
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
+                        contextMoveOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {contextMoveOpen && (
+                    <div className="ml-3 pl-2 border-l border-slate-700 max-h-40 overflow-y-auto space-y-0.5 py-1">
+                      {currentParent && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setContextMenu(null);
+                            setContextMoveOpen(false);
+                            handleMoveFolderToParent(sourceId, null);
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold text-emerald-300 hover:bg-emerald-500/15 transition cursor-pointer"
+                        >
+                          {t("lib_move_to_root")}
+                        </button>
+                      )}
+                      {validTargets.map((targetF) => {
+                        const targetId = String(targetF.id || "").trim();
+                        return (
+                          <button
+                            key={targetId}
+                            type="button"
+                            onClick={() => {
+                              setContextMenu(null);
+                              setContextMoveOpen(false);
+                              handleMoveFolderToParent(sourceId, targetId);
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium text-slate-200 hover:bg-slate-800 truncate transition cursor-pointer"
+                          >
+                            📁 {targetF.name}
+                          </button>
+                        );
+                      })}
+                      {!currentParent && validTargets.length === 0 && (
+                        <div className="px-2.5 py-1.5 text-[11px] text-slate-500">
+                          {t("lib_no_target_folders")}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={isCopyingFolder}
+                    onClick={() => {
+                      setContextMenu(null);
+                      setContextMoveOpen(false);
+                      handleCopyFolder(ctxFolder);
+                    }}
+                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50 flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t("lib_copy_folder")}</span>
+                  </button>
+                </div>
+
+                <div className="pt-1 border-t border-slate-800 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContextMenu(null);
+                      setContextMoveOpen(false);
+                      setRenamingFolder({
+                        id: sourceId,
+                        name: ctxFolder.name,
+                      });
+                    }}
+                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold text-indigo-300 hover:bg-indigo-500/15 flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t("lib_edit_name")}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      setContextMenu(null);
+                      setContextMoveOpen(false);
+                      handleDeleteFolder(e, sourceId, ctxFolder.name);
+                    }}
+                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-bold text-rose-400 hover:bg-rose-500/15 flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>🗑️ {t("lib_delete_folder_title")}</span>
+                  </button>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* 8. Ayarlar Modalı */}
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
       />
-    </main>
+
+      <MobileBottomTabbar />
+    </div>
   );
 }

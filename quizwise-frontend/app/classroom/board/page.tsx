@@ -39,7 +39,9 @@ import {
 import confetti from "canvas-confetti";
 import BoardTimer from "./components/BoardTimer";
 import SendMaterialModal from "../../components/classroom/SendMaterialModal";
+import ClassLiveQRModal from "../../components/classroom/ClassLiveQRModal";
 import { useProfile } from "../../context/ProfileContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 export type BoardDrawingTool =
   | "pan"
@@ -63,11 +65,16 @@ export interface BoardTerm {
 }
 
 function SmartBoardConsoleContent() {
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const classId = searchParams.get("classId") || searchParams.get("class_id") || "cls-1";
   const sessionId = searchParams.get("sessionId") || searchParams.get("session_id") || "";
-  const activeClassName = searchParams.get("className") || searchParams.get("class_name") || "Ders / Tahta Odası";
+  const activeClassName = searchParams.get("className") || searchParams.get("class_name") || t("brd_default_room", "Ders / Tahta Odası");
+
+  const [liveSessionId, setLiveSessionId] = useState<string>(sessionId);
+  const [liveJoinCode, setLiveJoinCode] = useState<string | null>(null);
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
   // 1. Profil Context (Dinamik Öğretmen Kartı / Stüdyo İçin)
   const { userProfile } = useProfile();
@@ -275,19 +282,51 @@ function SmartBoardConsoleContent() {
   // Aktif Oturumu localStorage'a kaydet (Ders bitirilene kadar kalıcı oturum)
   useEffect(() => {
     if (typeof window === "undefined" || !classId) return;
-    try {
-      const activeSession = {
-        classId,
-        sessionId: sessionId || "",
-        className: activeClassName || "Ders / Tahta Odası",
-        startedAt: new Date().toISOString(),
-      };
-      localStorage.setItem("vocaship_active_class", JSON.stringify(activeSession));
-      window.dispatchEvent(new Event("vocaship_active_class_change"));
-    } catch (e) {
-      console.warn("Aktif oturum kaydedilemedi:", e);
-    }
-  }, [classId, sessionId, activeClassName]);
+    let cancelled = false;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    const syncLocalActiveClass = (resolvedSessionId: string) => {
+      try {
+        const activeSession = {
+          classId,
+          sessionId: resolvedSessionId,
+          className: activeClassName || t("brd_default_room", "Ders / Tahta Odası"),
+          startedAt: new Date().toISOString(),
+        };
+        localStorage.setItem("vocaship_active_class", JSON.stringify(activeSession));
+        window.dispatchEvent(new Event("vocaship_active_class_change"));
+      } catch (e) {
+        console.warn("Aktif oturum kaydedilemedi:", e);
+      }
+    };
+
+    syncLocalActiveClass(liveSessionId || sessionId || "");
+
+    fetch(`${apiUrl}/api/v1/classroom/classes/${encodeURIComponent(classId)}/start-live`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        teacher_id: userProfile?.id || undefined,
+        class_name: activeClassName || undefined,
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (data.session_id) {
+          setLiveSessionId(data.session_id);
+          syncLocalActiveClass(data.session_id);
+        }
+        if (data.join_code) {
+          setLiveJoinCode(data.join_code);
+        }
+      })
+      .catch((e) => console.warn("Arka plan canlı oturum başlatma hatası:", e));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [classId, activeClassName]);
 
   // Dersi Bitir ve Arşive Kaydet
   const handleCompleteLesson = async () => {
@@ -319,18 +358,33 @@ function SmartBoardConsoleContent() {
         screenStreamRef.current = null;
       }
 
-      // Aktif oturum kaydını SADECE ders bitirildiğinde temizle
+      let computedDuration: number | undefined = undefined;
       if (typeof window !== "undefined") {
         try {
+          const rawActive = localStorage.getItem("vocaship_active_class");
+          if (rawActive) {
+            const parsed = JSON.parse(rawActive);
+            if (parsed?.startedAt) {
+              const diffMs = Date.now() - new Date(parsed.startedAt).getTime();
+              if (Number.isFinite(diffMs) && diffMs > 0) {
+                computedDuration = Math.max(1, Math.round(diffMs / 60000));
+              }
+            }
+          }
           localStorage.removeItem("vocaship_active_class");
           window.dispatchEvent(new Event("vocaship_active_class_change"));
         } catch {}
       }
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      if (sessionId) {
-        await fetch(`${apiUrl}/api/v1/classroom/sessions/${sessionId}/complete`, {
+      const effectiveSessionId = liveSessionId || sessionId;
+      if (effectiveSessionId) {
+        await fetch(`${apiUrl}/api/v1/classroom/sessions/${encodeURIComponent(effectiveSessionId)}/complete`, {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            duration_minutes: computedDuration,
+          }),
         }).catch((e) => console.warn("Session complete error:", e));
       }
 
@@ -613,7 +667,7 @@ function SmartBoardConsoleContent() {
         setMediaError(null);
       } catch (err) {
         console.warn("Ekran paylaşımı başlatılamadı:", err);
-        setMediaError("Ekran paylaşımı izni verilmedi veya iptal edildi.");
+        setMediaError(t("brd_screen_err", "Ekran paylaşımı izni verilmedi veya iptal edildi."));
       }
     }
   };
@@ -981,18 +1035,29 @@ function SmartBoardConsoleContent() {
           <Link
             href="/classroom"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/80 text-xs font-bold text-slate-200 transition cursor-pointer active:scale-95 shadow-sm"
-            title="Sınıflarıma Dön (Ders arka planda devam eder)"
+            title={t("brd_back_tip", "Sınıflarıma Dön (Ders arka planda devam eder)")}
           >
             <ArrowLeft className="w-4 h-4 text-indigo-400" />
-            <span>← Sınıflarım</span>
+            <span>{t("brd_back_btn", "← Sınıflarım")}</span>
           </Link>
 
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-indigo-950/70 border border-indigo-500/40 text-indigo-300">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400 shrink-0" />
             <span className="text-xs font-black tracking-wider uppercase font-mono truncate max-w-[160px] sm:max-w-xs md:max-w-md">
-              🟢 AKILLI TAHTA • {activeClassName}
+              🟢 {t("brd_smart_board_lbl", "AKILLI TAHTA")} • {activeClassName}
             </span>
           </div>
+
+          {liveJoinCode && (
+            <button
+              type="button"
+              onClick={() => setIsQRModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-black tracking-wider font-mono transition active:scale-95 cursor-pointer shrink-0"
+              title={t("brd_show_qr_title", "QR Kodu Büyüt")}
+            >
+              <span>📱 {t("brd_class_code_lbl", "Sınıf Kodu")}: {liveJoinCode}</span>
+            </button>
+          )}
         </div>
 
         {/* Sağ: Ders Materyali / PDF Yükle, Materyal Gönder & Tam Ekran */}
@@ -1001,13 +1066,13 @@ function SmartBoardConsoleContent() {
           {isScreenSharing ? (
             <div className="flex items-center gap-1.5 bg-indigo-950/90 border border-indigo-500/50 py-1.5 px-3 rounded-xl text-xs text-indigo-200">
               <MonitorUp className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
-              <span className="font-bold hidden sm:inline">🖥️ Ekran Paylaşımı</span>
+              <span className="font-bold hidden sm:inline">{t("brd_screen_badge", "🖥️ Ekran Paylaşımı")}</span>
               <button
                 type="button"
                 onClick={toggleScreenShare}
                 className="ml-1 text-[11px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer"
               >
-                Durdur
+                {t("brd_stop_btn", "Durdur")}
               </button>
             </div>
           ) : pdfFileName ? (
@@ -1020,7 +1085,7 @@ function SmartBoardConsoleContent() {
                 type="button"
                 onClick={handleClearPdf}
                 className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-                title="Materyali Kapat"
+                title={t("brd_close_mat_tip", "Materyali Kapat")}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -1030,11 +1095,11 @@ function SmartBoardConsoleContent() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-              title="PDF veya Ders Materyali Yükle"
+              title={t("brd_upload_pdf_tip", "PDF veya Ders Materyali Yükle")}
             >
               <Upload className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">📤 Ders Materyali / PDF Yükle</span>
-              <span className="sm:hidden">📤 PDF Yükle</span>
+              <span className="hidden sm:inline">{t("brd_upload_pdf", "📤 Ders Materyali / PDF Yükle")}</span>
+              <span className="sm:hidden">{t("brd_upload_pdf_short", "📤 PDF Yükle")}</span>
             </button>
           )}
 
@@ -1043,11 +1108,11 @@ function SmartBoardConsoleContent() {
             type="button"
             onClick={() => setIsSendMaterialOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-xs font-bold text-indigo-300 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-            title="Öğrencilere Not ve Materyal Gönder"
+            title={t("brd_send_mat_tip", "Öğrencilere Not ve Materyal Gönder")}
           >
             <Send className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">📨 Materyal Gönder</span>
-            <span className="sm:hidden">📨 Gönder</span>
+            <span className="hidden sm:inline">{t("brd_send_mat", "📨 Materyal Gönder")}</span>
+            <span className="sm:hidden">{t("brd_send_short", "📨 Gönder")}</span>
           </button>
 
           {/* Gerçek Tarayıcı Tam Ekran Butonu */}
@@ -1059,18 +1124,18 @@ function SmartBoardConsoleContent() {
                 ? "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 ring-1 ring-amber-500/30"
                 : "bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700"
             }`}
-            title={isFullscreen ? "Tam Ekrandan Çık" : "Gerçek Tarayıcı Tam Ekran Moduna Geç"}
+            title={isFullscreen ? t("brd_fs_exit_tip", "Tam Ekrandan Çık") : t("brd_fs_enter_tip", "Gerçek Tarayıcı Tam Ekran Moduna Geç")}
           >
             {isFullscreen ? (
               <>
                 <Minimize2 className="w-3.5 h-3.5 text-amber-300" />
-                <span className="hidden sm:inline">🗗 Tam Ekrandan Çık</span>
+                <span className="hidden sm:inline">{t("brd_fs_exit", "🗗 Tam Ekrandan Çık")}</span>
                 <span className="sm:hidden">🗗</span>
               </>
             ) : (
               <>
                 <Maximize2 className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">⛶ Tam Ekran</span>
+                <span className="hidden sm:inline">{t("brd_fs_enter", "⛶ Tam Ekran")}</span>
                 <span className="sm:hidden">⛶</span>
               </>
             )}
@@ -1180,7 +1245,7 @@ function SmartBoardConsoleContent() {
               {isPdfLoading && (
                 <div className="absolute inset-0 bg-slate-950/70 z-30 flex flex-col items-center justify-center gap-3 backdrop-blur-sm pointer-events-none">
                   <div className="w-8 h-8 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-                  <span className="text-xs text-indigo-300 font-mono">Ders sayfaları işleniyor ve hizalanıyor...</span>
+                  <span className="text-xs text-indigo-300 font-mono">{t("brd_processing_pages", "Ders sayfaları işleniyor ve hizalanıyor...")}</span>
                 </div>
               )}
               {/* Zoom & Scroll Kapsayıcısı - PDF ile Canvas'ı 1:1 bağlar */}
@@ -1265,10 +1330,10 @@ function SmartBoardConsoleContent() {
               </div>
 
               <h2 className="text-xl sm:text-2xl font-black text-white group-hover:text-indigo-300 transition">
-                PDF veya Ders Materyali Yükle
+                {t("brd_empty_title", "PDF veya Ders Materyali Yükle")}
               </h2>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mt-2">
-                Bilgisayarınızdan bir ders sunumu veya okuma parçası seçin. Pinch-to-zoom ve fosforlu çizim araçlarıyla tahtada işleyin.
+                {t("brd_empty_desc", "Bilgisayarınızdan bir ders sunumu veya okuma parçası seçin. Pinch-to-zoom ve fosforlu çizim araçlarıyla tahtada işleyin.")}
               </p>
 
               <button
@@ -1276,7 +1341,7 @@ function SmartBoardConsoleContent() {
                 className="mt-6 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 pointer-events-none"
               >
                 <Upload className="w-4 h-4" />
-                <span>Dosya Seç ➔</span>
+                <span>{t("brd_choose_file", "Dosya Seç ➔")}</span>
               </button>
             </div>
           )}
@@ -1288,10 +1353,10 @@ function SmartBoardConsoleContent() {
           <div className="space-y-2 shrink-0">
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
-                Ders İçi Eylemler
+                {t("brd_actions_hdr", "Ders İçi Eylemler")}
               </span>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                Canlı Konsol
+                {t("brd_live_console", "Canlı Konsol")}
               </span>
             </div>
 
@@ -1301,10 +1366,10 @@ function SmartBoardConsoleContent() {
                 type="button"
                 onClick={() => setIsTimerOpen(true)}
                 className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-indigo-500/50 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition group shadow-sm active:scale-95 cursor-pointer"
-                title="⏱️ Süre / Sayaç Aç"
+                title={t("brd_timer_tip", "⏱️ Süre / Sayaç Aç")}
               >
                 <Timer className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
-                <span>⏱️ Süre</span>
+                <span>{t("brd_timer_btn", "⏱️ Süre")}</span>
               </button>
 
               {/* BUTON 2: 📧 NOT / MATERYAL GÖNDER */}
@@ -1312,10 +1377,10 @@ function SmartBoardConsoleContent() {
                 type="button"
                 onClick={() => setIsSendMaterialOpen(true)}
                 className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-indigo-500/50 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition group shadow-sm active:scale-95 cursor-pointer"
-                title="Öğrencilere Not ve Materyal Gönder"
+                title={t("brd_send_mat_tip", "Öğrencilere Not ve Materyal Gönder")}
               >
                 <Send className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
-                <span>📧 Materyal</span>
+                <span>{t("brd_mat_btn", "📧 Materyal")}</span>
               </button>
             </div>
 
@@ -1328,10 +1393,10 @@ function SmartBoardConsoleContent() {
             >
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform" />
-                <span>{isEndingLesson ? "Tamamlanıyor..." : "⚡ Dersi Bitir"}</span>
+                <span>{isEndingLesson ? t("brd_ending", "Tamamlanıyor...") : t("brd_end_lesson", "⚡ Dersi Bitir")}</span>
               </div>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-700/80 text-emerald-100">
-                Arşivle
+                {t("brd_archive_lbl", "Arşivle")}
               </span>
             </button>
           </div>
@@ -1342,13 +1407,13 @@ function SmartBoardConsoleContent() {
             <div
               onClick={() => setIsExpanded((prev) => !prev)}
               className="flex items-center justify-between cursor-pointer select-none group gap-2"
-              title={isExpanded ? "Daraltmak için tıklayın" : "Genişletmek için tıklayın"}
+              title={isExpanded ? t("brd_collapse_tip", "Daraltmak için tıklayın") : t("brd_expand_tip", "Genişletmek için tıklayın")}
             >
               {/* Sol: Yeşil Canlı Nokta & Başlık */}
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 <span className="text-[11px] font-mono font-bold text-slate-200 group-hover:text-indigo-300 transition-colors truncate">
-                  {isExpanded ? "Öğretmen Stüdyosu" : "🟢 Öğretmen Stüdyosu (Canlı)"}
+                  {isExpanded ? t("brd_studio_title", "Öğretmen Stüdyosu") : t("brd_studio_live", "🟢 Öğretmen Stüdyosu (Canlı)")}
                 </span>
               </div>
 
@@ -1368,7 +1433,7 @@ function SmartBoardConsoleContent() {
                           ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 ring-1 ring-emerald-500/40"
                           : "text-slate-400 hover:text-white hover:bg-slate-800"
                       }`}
-                      title={isMicActive ? "Mikrofonu Kapat" : "Mikrofonu Aç"}
+                      title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
                     >
                       {isMicActive ? (
                         <Mic className="w-3.5 h-3.5 text-emerald-400" />
@@ -1388,7 +1453,7 @@ function SmartBoardConsoleContent() {
                           ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 ring-1 ring-emerald-500/40"
                           : "text-slate-400 hover:text-white hover:bg-slate-800"
                       }`}
-                      title={isCameraActive ? "Kamerayı Kapat" : "Kamerayı Aç"}
+                      title={isCameraActive ? t("brd_cam_off_tip", "Kamerayı Kapat") : t("brd_cam_on_tip", "Kamerayı Aç")}
                     >
                       {isCameraActive ? (
                         <Video className="w-3.5 h-3.5 text-emerald-400" />
@@ -1407,7 +1472,7 @@ function SmartBoardConsoleContent() {
                     setIsExpanded((prev) => !prev);
                   }}
                   className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-                  title={isExpanded ? "Daralt [—]" : "Genişlet [⌄]"}
+                  title={isExpanded ? t("brd_collapse_tip", "Daralt") : t("brd_expand_tip", "Genişlet")}
                 >
                   {isExpanded ? (
                     <Minus className="w-3.5 h-3.5" />
@@ -1455,7 +1520,7 @@ function SmartBoardConsoleContent() {
                           <span>{userProfile.avatar_url || "👨‍🏫"}</span>
                         )}
                       </div>
-                      <span className="text-[10px] font-mono text-slate-400">Kamera Kapalı</span>
+                      <span className="text-[10px] font-mono text-slate-400">{t("brd_cam_off_lbl", "Kamera Kapalı")}</span>
                     </div>
                   )}
 
@@ -1463,7 +1528,7 @@ function SmartBoardConsoleContent() {
                     <>
                       <div className="absolute top-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-900/85 text-[9px] text-emerald-300 font-bold backdrop-blur-sm pointer-events-none">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>Canlı PiP</span>
+                        <span>{t("brd_pip_lbl", "Canlı PiP")}</span>
                       </div>
                       <button
                         type="button"
@@ -1472,10 +1537,10 @@ function SmartBoardConsoleContent() {
                           setIsCameraFullscreen(true);
                         }}
                         className="absolute top-1.5 right-1.5 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900/85 hover:bg-slate-800 text-white text-[10px] font-semibold backdrop-blur-sm border border-slate-700/80 transition-all cursor-pointer shadow-md hover:scale-105 active:scale-95"
-                        title="Kamerayı Tam Ekran Yap"
+                        title={t("brd_cam_fs_tip", "Kamerayı Tam Ekran Yap")}
                       >
                         <Maximize2 className="w-3 h-3 text-indigo-400" />
-                        <span>⛶ Tam Ekran</span>
+                        <span>{t("brd_fs_enter", "⛶ Tam Ekran")}</span>
                       </button>
                     </>
                   )}
@@ -1493,7 +1558,7 @@ function SmartBoardConsoleContent() {
                   </div>
 
                   <div className="w-full py-1.5 px-2 rounded-lg bg-slate-900/90 border border-slate-800/80 text-[11px] flex items-center justify-between gap-1.5">
-                    <span className="text-slate-400 font-medium shrink-0">Aktif Ders:</span>
+                    <span className="text-slate-400 font-medium shrink-0">{t("brd_active_lesson_lbl", "Aktif Ders:")}</span>
                     <span className="font-bold text-indigo-300 truncate text-right">
                       {activeClassName}
                     </span>
@@ -1510,18 +1575,18 @@ function SmartBoardConsoleContent() {
                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 ring-1 ring-emerald-400/40"
                         : "bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700"
                     }`}
-                    title={isMicActive ? "Mikrofonu Kapat" : "Mikrofonu Aç"}
+                    title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
                   >
                     {isMicActive ? (
                       <>
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         <Mic className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Açık</span>
+                        <span>{t("brd_on", "Açık")}</span>
                       </>
                     ) : (
                       <>
                         <MicOff className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Mikrofon</span>
+                        <span>{t("brd_mic_short", "Mikrofon")}</span>
                       </>
                     )}
                   </button>
@@ -1534,18 +1599,18 @@ function SmartBoardConsoleContent() {
                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 ring-1 ring-emerald-400/40"
                         : "bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700"
                     }`}
-                    title={isCameraActive ? "Kamerayı Kapat" : "Kamerayı Aç"}
+                    title={isCameraActive ? t("brd_cam_off_tip", "Kamerayı Kapat") : t("brd_cam_on_tip", "Kamerayı Aç")}
                   >
                     {isCameraActive ? (
                       <>
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         <Video className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Açık</span>
+                        <span>{t("brd_on", "Açık")}</span>
                       </>
                     ) : (
                       <>
                         <VideoOff className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Kamera</span>
+                        <span>{t("brd_cam_short", "Kamera")}</span>
                       </>
                     )}
                   </button>
@@ -1573,7 +1638,7 @@ function SmartBoardConsoleContent() {
           {/* 3. ALT DURUM BİLGİSİ */}
           <div className="mt-auto p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            <span>🔒 Sıfır Ses Kaydı • Canlı Dinleme Aktif</span>
+            <span>{t("brd_zero_audio_badge", "🔒 Sıfır Ses Kaydı • Canlı Dinleme Aktif")}</span>
           </div>
         </aside>
       </main>
@@ -1594,7 +1659,7 @@ function SmartBoardConsoleContent() {
               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-md ring-2 ring-emerald-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title={isMicActive ? "Mikrofonu Kapat" : "Mikrofonu Aç"}
+          title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
         >
           {isMicActive ? (
             <>
@@ -1604,7 +1669,7 @@ function SmartBoardConsoleContent() {
           ) : (
             <MicOff className="w-4 h-4" />
           )}
-          <span className="hidden xl:inline">Mikrofon</span>
+          <span className="hidden xl:inline">{t("brd_mic_short", "Mikrofon")}</span>
         </button>
 
         {/* Canlı Stüdyo: 📷 Kamera */}
@@ -1616,7 +1681,7 @@ function SmartBoardConsoleContent() {
               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-md ring-2 ring-emerald-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title={isCameraActive ? "Kamerayı Kapat" : "Kamerayı Aç (PiP)"}
+          title={isCameraActive ? t("brd_cam_off_tip", "Kamerayı Kapat") : t("brd_cam_on_tip", "Kamerayı Aç")}
         >
           {isCameraActive ? (
             <>
@@ -1626,7 +1691,7 @@ function SmartBoardConsoleContent() {
           ) : (
             <VideoOff className="w-4 h-4" />
           )}
-          <span className="hidden xl:inline">Kamera</span>
+          <span className="hidden xl:inline">{t("brd_cam_short", "Kamera")}</span>
         </button>
 
         {/* Canlı Stüdyo: 🖥️ Ekran Paylaş */}
@@ -1638,7 +1703,7 @@ function SmartBoardConsoleContent() {
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title={isScreenSharing ? "Ekran Paylaşımını Durdur" : "Ekran Paylaş (Canlı Sahne)"}
+          title={isScreenSharing ? t("brd_screen_stop_tip", "Ekran Paylaşımını Durdur") : t("brd_screen_start_tip", "Ekran Paylaş (Canlı Sahne)")}
         >
           {isScreenSharing ? (
             <>
@@ -1648,7 +1713,7 @@ function SmartBoardConsoleContent() {
           ) : (
             <Monitor className="w-4 h-4" />
           )}
-          <span className="hidden xl:inline">Ekran Paylaş</span>
+          <span className="hidden xl:inline">{t("brd_screen_btn", "Ekran Paylaş")}</span>
         </button>
 
         <div className="w-px h-5 bg-slate-700 mx-0.5" />
@@ -1662,10 +1727,10 @@ function SmartBoardConsoleContent() {
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title="🖐️ Gezinme & Pan Modu (Tut & Kaydır)"
+          title={t("brd_tool_pan_tip", "🖐️ Gezinme & Pan Modu (Tut & Kaydır)")}
         >
           <Hand className="w-4 h-4" />
-          <span className="hidden sm:inline">Gezin</span>
+          <span className="hidden sm:inline">{t("brd_tool_pan_lbl", "Gezin")}</span>
         </button>
 
         {/* 🟡 Fosforlu Kalem (%80 Transparanlık) */}
@@ -1677,10 +1742,10 @@ function SmartBoardConsoleContent() {
               ? "bg-amber-400/20 text-amber-300 border border-amber-400/50 shadow-md ring-2 ring-amber-400/30"
               : "text-slate-400 hover:text-amber-300 hover:bg-slate-800"
           }`}
-          title="🟡 Fosforlu Kalem (%80 Şeffaf Vurgu)"
+          title={t("brd_tool_hl_tip", "🟡 Fosforlu Kalem (%80 Şeffaf Vurgu)")}
         >
           <Highlighter className="w-4 h-4 text-amber-400" />
-          <span className="hidden sm:inline">Fosforlu</span>
+          <span className="hidden sm:inline">{t("brd_tool_hl_lbl", "Fosforlu")}</span>
         </button>
 
         {/* ✏️ Kırmızı Not Kalemi */}
@@ -1692,10 +1757,10 @@ function SmartBoardConsoleContent() {
               ? "bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-md"
               : "text-slate-400 hover:text-rose-400 hover:bg-slate-800"
           }`}
-          title="✏️ Kırmızı Not Kalemi"
+          title={t("brd_tool_pen_tip", "✏️ Kırmızı Not Kalemi")}
         >
           <PenTool className="w-4 h-4 text-rose-400" />
-          <span className="hidden md:inline">Kırmızı</span>
+          <span className="hidden md:inline">{t("brd_tool_red_lbl", "Kırmızı")}</span>
         </button>
 
         {/* ✏️ Mavi Not Kalemi */}
@@ -1707,10 +1772,10 @@ function SmartBoardConsoleContent() {
               ? "bg-blue-500/20 text-blue-300 border border-blue-500/50 shadow-md"
               : "text-slate-400 hover:text-blue-400 hover:bg-slate-800"
           }`}
-          title="✏️ Mavi Not Kalemi"
+          title={t("brd_tool_blue_tip", "✏️ Mavi Not Kalemi")}
         >
           <PenTool className="w-4 h-4 text-blue-400" />
-          <span className="hidden md:inline">Mavi</span>
+          <span className="hidden md:inline">{t("brd_tool_blue_lbl", "Mavi")}</span>
         </button>
 
         <div className="w-px h-5 bg-slate-700 mx-0.5" />
@@ -1724,10 +1789,10 @@ function SmartBoardConsoleContent() {
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title="📏 Düz Çizgi Aracı"
+          title={t("brd_tool_line_tip", "📏 Düz Çizgi Aracı")}
         >
           <Ruler className="w-4 h-4" />
-          <span className="hidden xl:inline">Çizgi</span>
+          <span className="hidden xl:inline">{t("brd_tool_line_lbl", "Çizgi")}</span>
         </button>
 
         {/* ⭕ Daire Aracı */}
@@ -1739,10 +1804,10 @@ function SmartBoardConsoleContent() {
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title="⭕ Daire / Elips Vurgulama Aracı"
+          title={t("brd_tool_circle_tip", "⭕ Daire / Elips Vurgulama Aracı")}
         >
           <Circle className="w-4 h-4" />
-          <span className="hidden xl:inline">Daire</span>
+          <span className="hidden xl:inline">{t("brd_tool_circle_lbl", "Daire")}</span>
         </button>
 
         {/* ⬜ Kare / Dikdörtgen Aracı */}
@@ -1754,20 +1819,20 @@ function SmartBoardConsoleContent() {
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title="⬜ Kare / Dikdörtgen Çerçeve Aracı"
+          title={t("brd_tool_rect_tip", "⬜ Kare / Dikdörtgen Çerçeve Aracı")}
         >
           <Square className="w-4 h-4" />
-          <span className="hidden xl:inline">Kare</span>
+          <span className="hidden xl:inline">{t("brd_tool_rect_lbl", "Kare")}</span>
         </button>
 
         {/* Şekil Renk Paleti (Kırmızı, Mavi, Zümrüt Yeşili, Sarı) */}
         {(activeTool === "line" || activeTool === "circle" || activeTool === "rect") && (
           <div className="flex items-center gap-1 px-1.5 py-1 rounded-xl bg-slate-800/80 border border-slate-700/60 animate-in fade-in zoom-in-95">
             {[
-              { color: "#ef4444", label: "Kırmızı", bg: "bg-rose-500" },
-              { color: "#3b82f6", label: "Mavi", bg: "bg-blue-500" },
-              { color: "#10b981", label: "Zümrüt Yeşili", bg: "bg-emerald-500" },
-              { color: "#facc15", label: "Sarı", bg: "bg-amber-400" },
+              { color: "#ef4444", label: t("brd_tool_red_lbl", "Kırmızı"), bg: "bg-rose-500" },
+              { color: "#3b82f6", label: t("brd_tool_blue_lbl", "Mavi"), bg: "bg-blue-500" },
+              { color: "#10b981", label: t("brd_tool_emerald_lbl", "Zümrüt Yeşili"), bg: "bg-emerald-500" },
+              { color: "#facc15", label: t("brd_tool_yellow_lbl", "Sarı"), bg: "bg-amber-400" },
             ].map((p) => (
               <button
                 key={p.color}
@@ -1793,10 +1858,10 @@ function SmartBoardConsoleContent() {
               ? "bg-slate-700 text-white border border-slate-600 shadow-md"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
           }`}
-          title="🧹 Silgi"
+          title={t("brd_tool_eraser_lbl", "Silgi")}
         >
           <Eraser className="w-4 h-4" />
-          <span className="hidden md:inline">Silgi</span>
+          <span className="hidden md:inline">{t("brd_tool_eraser_lbl", "Silgi")}</span>
         </button>
 
         {/* 🗑️ Çizimleri Temizle */}
@@ -1804,7 +1869,7 @@ function SmartBoardConsoleContent() {
           type="button"
           onClick={handleClearCanvas}
           className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-          title="🗑️ Tüm Çizimleri Temizle"
+          title={t("brd_clear_draw_tip", "🗑️ Tüm Çizimleri Temizle")}
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -1817,7 +1882,7 @@ function SmartBoardConsoleContent() {
           onClick={handleZoomOut}
           disabled={scale <= 0.8}
           className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
-          title="➖ Uzaklaş (Scale -0.15)"
+          title={t("brd_zoom_out_tip", "➖ Uzaklaş (Scale -0.15)")}
         >
           <ZoomOut className="w-4 h-4" />
         </button>
@@ -1826,7 +1891,7 @@ function SmartBoardConsoleContent() {
           type="button"
           onClick={handleResetZoom}
           className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 text-indigo-300 font-mono font-bold text-xs transition cursor-pointer"
-          title="Ölçeği Sıfırla (%100)"
+          title={t("brd_zoom_reset_tip", "Ölçeği Sıfırla (%100)")}
         >
           %{Math.round(scale * 100)}
         </button>
@@ -1836,7 +1901,7 @@ function SmartBoardConsoleContent() {
           onClick={handleZoomIn}
           disabled={scale >= 2.5}
           className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
-          title="➕ Yakınlaş (Scale +0.15)"
+          title={t("brd_zoom_in_tip", "➕ Yakınlaş (Scale +0.15)")}
         >
           <ZoomIn className="w-4 h-4" />
         </button>
@@ -1867,7 +1932,7 @@ function SmartBoardConsoleContent() {
             <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-900/80 border border-slate-700/80 backdrop-blur-md shadow-2xl text-white">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-xs sm:text-sm font-bold tracking-wide">
-                🎥 CANLI EĞİTMEN YAYINI
+                {t("brd_live_broadcast", "🎥 CANLI EĞİTMEN YAYINI")}
               </span>
               <span className="text-slate-500 font-mono">•</span>
               <span className="text-xs text-indigo-300 font-semibold truncate max-w-xs sm:max-w-md">
@@ -1879,10 +1944,10 @@ function SmartBoardConsoleContent() {
               type="button"
               onClick={() => setIsCameraFullscreen(false)}
               className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold backdrop-blur-md shadow-2xl transition active:scale-95 cursor-pointer"
-              title="Kamerayı Sağ Panele Küçült [Esc]"
+              title={t("brd_min_cam_tip", "Kamerayı Sağ Panele Küçült [Esc]")}
             >
               <Minimize2 className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">Kamerayı Küçült</span>
+              <span className="hidden sm:inline">{t("brd_min_cam", "Kamerayı Küçült")}</span>
             </button>
           </div>
 
@@ -1898,18 +1963,18 @@ function SmartBoardConsoleContent() {
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-500/30"
                     : "bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700"
                 }`}
-                title={isMicActive ? "Mikrofonu Kapat" : "Mikrofonu Aç"}
+                title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
               >
                 {isMicActive ? (
                   <>
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <Mic className="w-4 h-4 text-emerald-400" />
-                    <span>Mikrofon Açık</span>
+                    <span>{t("brd_mic_on_lbl", "Mikrofon Açık")}</span>
                   </>
                 ) : (
                   <>
                     <MicOff className="w-4 h-4 text-slate-400" />
-                    <span>Mikrofon Kapalı</span>
+                    <span>{t("brd_mic_off_lbl", "Mikrofon Kapalı")}</span>
                   </>
                 )}
               </button>
@@ -1919,10 +1984,10 @@ function SmartBoardConsoleContent() {
                 type="button"
                 onClick={toggleCamera}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/50 text-xs sm:text-sm font-bold transition shadow-md active:scale-95 cursor-pointer"
-                title="Kamerayı Kapat"
+                title={t("brd_cam_off_tip", "Kamerayı Kapat")}
               >
                 <VideoOff className="w-4 h-4 text-rose-400" />
-                <span>Kamerayı Kapat</span>
+                <span>{t("brd_cam_off_tip", "Kamerayı Kapat")}</span>
               </button>
 
               {/* [ 📄 Tahtaya / PDF'e Geç (Kamerayı Küçült) ] */}
@@ -1930,10 +1995,10 @@ function SmartBoardConsoleContent() {
                 type="button"
                 onClick={() => setIsCameraFullscreen(false)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
-                title="Kamerayı Sağ Panele Küçültüp Tahtaya Dön"
+                title={t("brd_back_board_tip", "Kamerayı Sağ Panele Küçültüp Tahtaya Dön")}
               >
                 <FileText className="w-4 h-4 text-white" />
-                <span>Tahtaya / PDF'e Geç</span>
+                <span>{t("brd_back_board", "Tahtaya / PDF'e Geç")}</span>
               </button>
 
               {/* Ayırıcı Çizgi */}
@@ -1945,10 +2010,10 @@ function SmartBoardConsoleContent() {
                 onClick={handleCompleteLesson}
                 disabled={isEndingLesson}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-200 border border-slate-700 hover:border-rose-500/50 text-xs sm:text-sm font-bold transition shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
-                title="Aktif Dersi Sonlandır"
+                title={t("brd_end_lesson_tip", "Aktif Dersi Sonlandır")}
               >
                 <Power className="w-4 h-4 text-amber-400 hover:text-rose-400" />
-                <span>{isEndingLesson ? "Tamamlanıyor..." : "Dersi Bitir"}</span>
+                <span>{isEndingLesson ? t("brd_ending", "Tamamlanıyor...") : t("brd_end_btn", "Dersi Bitir")}</span>
               </button>
             </div>
           </div>
@@ -1972,6 +2037,14 @@ function SmartBoardConsoleContent() {
           teacherId={userProfile.id || "00000000-0000-0000-0000-000000000001"}
         />
       )}
+
+      <ClassLiveQRModal
+        isOpen={isQRModalOpen}
+        onClose={() => setIsQRModalOpen(false)}
+        classCode={liveJoinCode}
+        className={activeClassName}
+        activeSessionId={liveSessionId || sessionId || undefined}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Timer, Plus, X, Play, Pause, RotateCcw } from "lucide-react";
 import confetti from "canvas-confetti";
+import { useLanguage } from "../../../context/LanguageContext";
 
 export interface BoardTimerProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ export interface BoardTimerProps {
 }
 
 export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
+  const { t } = useLanguage();
   const [secondsRemaining, setSecondsRemaining] = useState<number>(60);
   const [overtimeSeconds, setOvertimeSeconds] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -107,7 +109,7 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
                 isOvertime ? "text-rose-300" : "text-white"
               }`}
             >
-              {isOvertime ? "Ek Süre Sayılıyor" : "Akıllı Sayaç"}
+              {isOvertime ? t("brd_timer_overtime", "Ek Süre Sayılıyor") : t("brd_timer_title", "Akıllı Sayaç")}
             </span>
           </div>
 
@@ -115,7 +117,7 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
             type="button"
             onClick={onClose}
             className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -136,7 +138,7 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
           </span>
           {isOvertime && (
             <p className="text-[11px] text-rose-300 font-semibold mt-1">
-              Süre doldu, ek süre devam ediyor
+              {t("brd_timer_ended", "Süre doldu, ek süre devam ediyor")}
             </p>
           )}
         </div>
@@ -145,8 +147,8 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
         <div className="grid grid-cols-3 gap-2 mb-3">
           {[
             { label: "30s", val: 30 },
-            { label: "1 dk", val: 60 },
-            { label: "3 dk", val: 180 },
+            { label: `1 ${t("cls_min_short", "dk")}`, val: 60 },
+            { label: `3 ${t("cls_min_short", "dk")}`, val: 180 },
           ].map((preset) => (
             <button
               key={preset.val}
@@ -169,10 +171,10 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
             type="button"
             onClick={handleAddOneMinute}
             className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 text-xs font-bold flex items-center justify-center gap-1 border border-slate-700 transition cursor-pointer"
-            title="1 Dakika Ek Süre Ver"
+            title={t("brd_timer_add1m_tip", "1 Dakika Ek Süre Ver")}
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+1 Dk</span>
+            <span>+1 {t("cls_min_short", "dk")}</span>
           </button>
 
           <button
@@ -185,14 +187,14 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
             }`}
           >
             {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-            <span>{isRunning ? "Durdur" : "Başlat"}</span>
+            <span>{isRunning ? t("brd_timer_pause", "Durdur") : t("brd_timer_start", "Başlat")}</span>
           </button>
 
           <button
             type="button"
             onClick={handleReset}
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
-            title="Sıfırla"
+            title={t("brd_timer_reset", "Sıfırla")}
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>

@@ -1,3 +1,5 @@
+import { pickUiText, formatUiText } from "./utils/uiLocale";
+
 export const getApiBase = (): string => {
   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (envUrl) {
@@ -72,7 +74,7 @@ export async function resilientFetch(
         externalSignal.removeEventListener("abort", onExternalAbort);
       }
       lastError = timedOut
-        ? new Error(`İstek ${timeoutMs}ms içinde yanıt vermedi (zaman aşımı).`)
+        ? new Error(formatUiText({ tr: "İstek {ms}ms içinde yanıt vermedi (zaman aşımı).", en: "Request timed out after {ms}ms.", de: "Zeitüberschreitung nach {ms}ms.", es: "La solicitud superó el tiempo límite de {ms}ms.", fr: "La requête a expiré après {ms}ms." }, { ms: timeoutMs }))
         : err;
 
       if (externalSignal?.aborted || attempt >= retries) {
@@ -84,7 +86,7 @@ export async function resilientFetch(
 
   throw lastError instanceof Error
     ? lastError
-    : new Error("Ağ bağlantısı kurulamadı.");
+    : new Error(pickUiText({ tr: "Ağ bağlantısı kurulamadı.", en: "Network connection failed.", de: "Netzwerkverbindung fehlgeschlagen.", es: "Error de conexión de red.", fr: "Échec de la connexion réseau." }));
 }
 
 

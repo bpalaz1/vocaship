@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import confetti from "canvas-confetti";
 import { Crown, Sparkles, Trophy, Award, Check, Star } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface GrandmasterCelebrationModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export default function GrandmasterCelebrationModal({
   avatarUrl = "/avatars/sparky.png",
   userName = "Ahmet Kaya",
 }: GrandmasterCelebrationModalProps) {
+  const { t } = useLanguage();
   useEffect(() => {
     if (isOpen) {
       try {
@@ -70,7 +72,7 @@ export default function GrandmasterCelebrationModal({
         <div className="space-y-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-mono font-black tracking-wider uppercase">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>1000 Kelime Barajı Tamamlandı!</span>
+            <span>{t("game_gm_milestone", "1000 Kelime Barajı Tamamlandı!")}</span>
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -78,8 +80,7 @@ export default function GrandmasterCelebrationModal({
           </h2>
 
           <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
-            Tebrikler <strong>{userName}</strong>! 1000 kelimelik dev maratonu başarıyla tamamladın
-            ve platformun en yüksek dereceli efsaneler kulübüne adını yazdırdın.
+            {t("game_gm_congrats_pre", "Tebrikler")} <strong>{userName}</strong>! {t("game_gm_congrats_post", "1000 kelimelik dev maratonu başarıyla tamamladın ve platformun en yüksek dereceli efsaneler kulübüne adını yazdırdın.")}
           </p>
         </div>
 
@@ -88,30 +89,30 @@ export default function GrandmasterCelebrationModal({
           <div className="p-3 rounded-2xl bg-slate-950/80 border border-amber-500/30 space-y-1">
             <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
               <Crown className="w-3.5 h-3.5" />
-              <span>Altın Çerçeve</span>
+              <span>{t("game_gm_perk1_t", "Altın Çerçeve")}</span>
             </span>
             <p className="text-[10px] text-slate-400">
-              Avatarın etrafında kalıcı parlak altın aura.
+              {t("game_gm_perk1_d", "Avatarın etrafında kalıcı parlak altın aura.")}
             </p>
           </div>
 
           <div className="p-3 rounded-2xl bg-slate-950/80 border border-amber-500/30 space-y-1">
             <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
               <Star className="w-3.5 h-3.5" />
-              <span>Grandmaster Tacı</span>
+              <span>{t("game_gm_perk2_t", "Grandmaster Tacı")}</span>
             </span>
             <p className="text-[10px] text-slate-400">
-              Liderlik ve sınıf listelerinde özel unvan rozeti.
+              {t("game_gm_perk2_d", "Liderlik ve sınıf listelerinde özel unvan rozeti.")}
             </p>
           </div>
 
           <div className="p-3 rounded-2xl bg-slate-950/80 border border-amber-500/30 space-y-1">
             <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
               <Trophy className="w-3.5 h-3.5" />
-              <span>Efsane Sandık</span>
+              <span>{t("game_gm_perk3_t", "Efsane Sandık")}</span>
             </span>
             <p className="text-[10px] text-slate-400">
-              Tüm tematik sandıkların kilitleri kalıcı açıldı.
+              {t("game_gm_perk3_d", "Tüm tematik sandıkların kilitleri kalıcı açıldı.")}
             </p>
           </div>
         </div>
@@ -122,7 +123,7 @@ export default function GrandmasterCelebrationModal({
           onClick={onClose}
           className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/30 transition active:scale-95 cursor-pointer"
         >
-          Zaferi Kutla & Tacını Tak ➔
+          {t("game_gm_cta", "Zaferi Kutla & Tacını Tak ➔")}
         </button>
       </div>
     </div>

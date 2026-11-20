@@ -30,6 +30,7 @@ class UserResponse(BaseModel):
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = Field(None, description="Güncellenecek Ad Soyad")
     username: Optional[str] = Field(None, description="Güncellenecek Kullanıcı Adı (Rumuz)")
+    email: Optional[EmailStr] = Field(None, description="Güncellenecek e-posta adresi")
     avatar_url: Optional[str] = Field(None, description="Profil avatar URL'i")
     plan_tier: Optional[str] = Field(None, description="Güncellenecek üyelik planı")
 

@@ -1,5 +1,5 @@
 /**
- * Vocaship 4-Mode Dynamic Conversation Engine Types
+ * VocaShip 4-Mode Dynamic Conversation Engine Types
  * 'casual' | 'problem_solving' | 'interview' | 'story_debate'
  */
 

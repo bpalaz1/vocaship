@@ -584,7 +584,7 @@ export function buildUser3DPersona(
     dicebearSeed: customName,
     avatarIcon: "🧊",
     image: resolvedImg,
-    desc: "Vocaship 3D Low-Poly Faceted user avatar",
+    desc: "VocaShip 3D Low-Poly Faceted user avatar",
     defaultPrompt: "Talk naturally and warmly as the user's personal 3D mentor.",
     ttsSettings,
   };

@@ -14,6 +14,7 @@ import {
   Check,
 } from "lucide-react";
 import { useAuth, PlanTier } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface AuthModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export default function AuthModal({
   initialTab = "login",
 }: AuthModalProps) {
   const { login, register } = useAuth();
+  const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">(initialTab);
   const [fullName, setFullName] = useState<string>("");
@@ -49,15 +51,15 @@ export default function AuthModal({
     setErrorMsg(null);
 
     if (activeTab === "register" && !fullName.trim()) {
-      setErrorMsg("Lütfen Ad Soyad alanını doldurun.");
+      setErrorMsg(t("auth_err_fullname"));
       return;
     }
     if (!username.trim()) {
-      setErrorMsg("Lütfen kullanıcı adınızı girin.");
+      setErrorMsg(t("auth_err_username"));
       return;
     }
     if (!password || password.length < 3) {
-      setErrorMsg("Şifreniz en az 3 karakter olmalıdır.");
+      setErrorMsg(t("auth_err_password_min"));
       return;
     }
 
@@ -73,7 +75,7 @@ export default function AuthModal({
       setPassword("");
       onClose();
     } catch (err: any) {
-      setErrorMsg(err?.message || "İşlem başarısız oldu. Lütfen bilgilerinizi kontrol edin.");
+      setErrorMsg(err?.message || t("auth_err_failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -100,10 +102,10 @@ export default function AuthModal({
             </div>
             <div>
               <h2 className="text-base font-black text-white tracking-tight">
-                {activeTab === "login" ? "Hesabına Giriş Yap" : "Hızlı Hesap Oluştur"}
+                {activeTab === "login" ? t("auth_login_heading") : t("auth_register_heading")}
               </h2>
               <p className="text-[11px] text-slate-400">
-                E-posta veya onay kodu gerekmeden anında başla
+                {t("auth_instant_subtitle")}
               </p>
             </div>
           </div>
@@ -112,7 +114,7 @@ export default function AuthModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            aria-label="Kapat"
+            aria-label={t("auth_close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -131,7 +133,7 @@ export default function AuthModal({
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              Giriş Yap
+              {t("auth_tab_login")}
             </button>
             <button
               type="button"
@@ -143,7 +145,7 @@ export default function AuthModal({
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              Kayıt Ol
+              {t("auth_tab_register")}
             </button>
           </div>
         </div>
@@ -166,14 +168,14 @@ export default function AuthModal({
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                 <BadgeCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Ad Soyad</span>
+                <span>{t("auth_fullname_label")}</span>
               </label>
               <input
                 type="text"
                 data-testid="auth-input-fullname"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Örn: Ahmet Yılmaz"
+                placeholder={t("auth_fullname_ph")}
                 autoComplete="name"
                 required
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
@@ -185,14 +187,14 @@ export default function AuthModal({
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Kullanıcı Adı</span>
+              <span>{t("auth_username_label")}</span>
             </label>
             <input
               type="text"
               data-testid="auth-input-username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Örn: ahmetyilmaz"
+              placeholder={t("auth_username_ph")}
               autoComplete="username"
               required
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
@@ -203,7 +205,7 @@ export default function AuthModal({
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Şifre</span>
+              <span>{t("auth_password_label")}</span>
             </label>
             <input
               type="password"
@@ -223,10 +225,10 @@ export default function AuthModal({
               <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Başlangıç Planı Seç</span>
+                  <span>{t("auth_select_plan")}</span>
                 </span>
                 <span className="text-[10px] text-slate-400 font-normal">
-                  (Dilediğinde değiştirebilirsin)
+                  {t("auth_plan_changeable")}
                 </span>
               </label>
 
@@ -247,9 +249,9 @@ export default function AuthModal({
                       <span className="text-xs font-black text-slate-200">🆓 Basic</span>
                       {selectedPlan === "basic" && <Check className="w-3 h-3 text-emerald-400" />}
                     </div>
-                    <div className="text-[10px] font-bold text-slate-400 mt-0.5">Ücretsiz</div>
+                    <div className="text-[10px] font-bold text-slate-400 mt-0.5">{t("auth_plan_free")}</div>
                     <p className="text-[9px] text-slate-400 leading-tight mt-1 line-clamp-2">
-                      1 Hikaye / 1 Seans / 50 Kart
+                      {t("auth_plan_basic_desc")}
                     </p>
                   </div>
                 </button>
@@ -272,9 +274,9 @@ export default function AuthModal({
                       </span>
                       {selectedPlan === "plus" && <Check className="w-3 h-3 text-indigo-400" />}
                     </div>
-                    <div className="text-[10px] font-bold text-indigo-400 mt-0.5">Öğrenci</div>
+                    <div className="text-[10px] font-bold text-indigo-400 mt-0.5">{t("auth_plan_student")}</div>
                     <p className="text-[9px] text-indigo-200/80 leading-tight mt-1 line-clamp-2">
-                      5 Hikaye / 3 Seans / 500 Kart
+                      {t("auth_plan_plus_desc")}
                     </p>
                   </div>
                 </button>
@@ -300,9 +302,9 @@ export default function AuthModal({
                       </span>
                       {selectedPlan === "pro" && <Check className="w-3 h-3 text-amber-400" />}
                     </div>
-                    <div className="text-[10px] font-bold text-amber-400 mt-0.5">Eğitmen</div>
+                    <div className="text-[10px] font-bold text-amber-400 mt-0.5">{t("auth_plan_instructor")}</div>
                     <p className="text-[9px] text-amber-200/80 leading-tight mt-1 line-clamp-2">
-                      Sınırsız AI + Sınıf Açma
+                      {t("auth_plan_pro_desc")}
                     </p>
                   </div>
                 </button>
@@ -321,12 +323,12 @@ export default function AuthModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>İşleniyor...</span>
+                  <span>{t("auth_processing")}</span>
                 </>
               ) : activeTab === "login" ? (
-                <span>Giriş Yap ➔</span>
+                <span>{t("auth_submit_login")}</span>
               ) : (
-                <span>Hesabı Oluştur ve Başla ➔</span>
+                <span>{t("auth_submit_register")}</span>
               )}
             </button>
           </div>

@@ -23,6 +23,7 @@ import {
   cleanToken,
 } from "../../utils/pronunciationMatcher";
 import { playNeuralTTS, stopSpeech } from "../../utils/tts";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SentenceShadowingWidgetProps {
   sentence: string;
@@ -43,6 +44,7 @@ export default function SentenceShadowingWidget({
   onNextSentence,
   onScoreEarned,
 }: SentenceShadowingWidgetProps) {
+  const { t } = useLanguage();
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [interimText, setInterimText] = useState<string>("");
   const [result, setResult] = useState<PronunciationResult | null>(null);
@@ -186,7 +188,7 @@ export default function SentenceShadowingWidget({
   return (
     <div
       role="region"
-      aria-label="Mikro Telaffuz ve Gölgeleme Penceresi"
+      aria-label={t("read_shadow_title", "Mikro Telaffuz ve Gölgeleme Penceresi")}
       className="fixed bottom-24 right-4 sm:right-8 z-50 w-[calc(100%-2rem)] sm:w-[540px] max-w-full animate-in fade-in slide-in-from-bottom-4 duration-200"
     >
       <div className="bg-slate-950/95 border border-indigo-500/30 rounded-3xl p-5 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 text-slate-100 flex flex-col space-y-4">
@@ -201,14 +203,14 @@ export default function SentenceShadowingWidget({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs sm:text-sm font-black text-white tracking-tight">
-                  Mikro Telaffuz & Gölgeleme (Shadowing)
+                  {t("read_shadow_title", "Mikro Telaffuz & Gölgeleme (Shadowing)")}
                 </h3>
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                   AI COACH
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Cümleyi sesli oku; kelime kelime anlık doğruluk rengini gör.
+                {t("read_shadow_sub", "Cümleyi sesli oku; kelime kelime anlık doğruluk rengini gör.")}
               </p>
             </div>
           </div>
@@ -224,7 +226,7 @@ export default function SentenceShadowingWidget({
                 type="button"
                 onClick={onClose}
                 className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-                title="Pencereyi Kapat"
+                title={t("close", "Pencereyi Kapat")}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -237,14 +239,14 @@ export default function SentenceShadowingWidget({
           <div className="p-3 rounded-2xl bg-amber-950/70 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
-              <span>Tarayıcınızda SpeechRecognition mikrofon desteği bulunamadı.</span>
+              <span>{t("read_shadow_unsupported", "Tarayıcınızda SpeechRecognition mikrofon desteği bulunamadı.")}</span>
             </div>
             <button
               type="button"
               onClick={() => handleSimulateSentence(sentence)}
               className="px-2.5 py-1 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold shrink-0 hover:bg-amber-400 cursor-pointer"
             >
-              Simüle Et
+              {t("read_shadow_simulate", "Simüle Et")}
             </button>
           </div>
         )}
@@ -255,10 +257,10 @@ export default function SentenceShadowingWidget({
         <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/90 shadow-inner space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <span>Hedef Cümle</span>
+              <span>{t("read_shadow_target_sentence", "Hedef Cümle")}</span>
               {result && (
                 <span className="text-[10px] text-slate-500 font-normal lowercase">
-                  (Kırmızı/sarı kelimelere tıklayarak yavaşça dinleyin)
+                  {t("read_shadow_slow_hint", "(Kırmızı/sarı kelimelere tıklayarak yavaşça dinleyin)")}
                 </span>
               )}
             </span>
@@ -273,10 +275,10 @@ export default function SentenceShadowingWidget({
                   ? "bg-indigo-600 text-white animate-pulse"
                   : "bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700/80"
               }`}
-              title="Model Telaffuzu Dinle"
+              title={t("read_shadow_listen_model", "Model Telaffuzu Dinle")}
             >
               <Volume2 className="w-3.5 h-3.5" />
-              <span>{isModelSpeaking ? "Okunuyor..." : "Modeli Dinle"}</span>
+              <span>{isModelSpeaking ? t("read_shadow_playing", "Okunuyor...") : t("read_shadow_listen_model", "Modeli Dinle")}</span>
             </button>
           </div>
 
@@ -327,7 +329,7 @@ export default function SentenceShadowingWidget({
             <div className="pt-2 border-t border-slate-800 flex items-center gap-2 text-xs text-amber-300">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
               <span className="font-semibold italic truncate">
-                {interimText || "Dinleniyor... Cümleyi mikrofonunuza sesli okuyun."}
+                {interimText || t("read_shadow_listening", "Dinleniyor... Cümleyi mikrofonunuza sesli okuyun.")}
               </span>
             </div>
           )}
@@ -349,7 +351,7 @@ export default function SentenceShadowingWidget({
                 }`}
               >
                 <span>%{result.overallScore}</span>
-                <span className="text-[9px] font-mono uppercase font-bold">Skor</span>
+                <span className="text-[9px] font-mono uppercase font-bold">{t("read_shadow_score_lbl", "Skor")}</span>
               </div>
 
               <div>
@@ -358,7 +360,10 @@ export default function SentenceShadowingWidget({
                   <span>{result.badge}</span>
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  {result.correctCount} / {result.totalCount} kelime tam doğrulukla telaffuz edildi.
+                  {t("read_shadow_words_matched", "{correct} / {total} kelime tam doğrulukla telaffuz edildi.", {
+                    correct: result.correctCount,
+                    total: result.totalCount,
+                  })}
                 </p>
               </div>
             </div>
@@ -370,7 +375,7 @@ export default function SentenceShadowingWidget({
                 onClick={onNextSentence}
                 className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1 shadow-md shadow-indigo-600/30 shrink-0"
               >
-                <span>Sonraki</span>
+                <span>{t("read_shadow_next", "Sonraki")}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -392,7 +397,7 @@ export default function SentenceShadowingWidget({
             className="px-3.5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition text-xs font-bold flex items-center gap-1.5 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Sıfırla</span>
+            <span>{t("read_shadow_reset", "Sıfırla")}</span>
           </button>
 
           {/* Merkez: Büyük Ses Dalgalı Mikrofon Butonu */}
@@ -405,7 +410,7 @@ export default function SentenceShadowingWidget({
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
                 <MicOff className="w-4 h-4" />
-                <span>Kaydı Bitir</span>
+                <span>{t("read_shadow_stop", "Kaydı Bitir")}</span>
               </button>
             ) : (
               <button
@@ -414,7 +419,7 @@ export default function SentenceShadowingWidget({
                 className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 ring-1 ring-white/20 active:scale-95 transition-all flex items-center gap-2.5 cursor-pointer"
               >
                 <Mic className="w-4 h-4" />
-                <span>{result ? "Tekrar Oku & Test Et" : "Sesli Oku (Konuş)"}</span>
+                <span>{result ? t("read_shadow_retry", "Tekrar Oku & Test Et") : t("read_shadow_start", "Sesli Oku (Konuş)")}</span>
               </button>
             )}
           </div>

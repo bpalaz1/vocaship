@@ -1,5 +1,5 @@
 /**
- * Vocaship Ortak Oyunlaştırma & Anti-Spam Motoru (Gamification Engine)
+ * VocaShip Ortak Oyunlaştırma & Anti-Spam Motoru (Gamification Engine)
  * - Azalan Verim (Anti-Spam)
  * - CEFR Zorluk Çarpanı (A1-C2)
  * - Seri Kombo & Final Çarpanı
@@ -7,6 +7,8 @@
  */
 
 import { API_BASE } from "../config";
+import { getEquippedMuseumBuff } from "../data/museumItems";
+import { pickUiText, formatUiText } from "./uiLocale";
 
 const DAILY_SOLVES_KEY = "vocaship_daily_word_solves";
 
@@ -101,15 +103,22 @@ export function recordDailyWordSolve(word: string, isCorrect: boolean): number {
 }
 
 /**
- * Azalan Verim (Anti-Spam) Temel XP Tablosu:
- * 1. Doğru: 25 | 2. Doğru: 15 | 3. Doğru: 8 | 4+ Doğru: 2 | Yanlış: 0
+ * Azalan Verim (Anti-Spam) Oranı & Temel XP Tablosu:
+ * Aynı gün içinde aynı kelimenin:
+ * 1. Doğru: %100 (25 XP) | 2. Doğru: %60 (15 XP) | 3. Doğru: %30 (8 XP) | 4+ Doğru: %10 (3 XP) | Yanlış: 0
  */
+export function getDiminishingMultiplier(previousSolvesCount: number, isCorrect: boolean): number {
+  if (!isCorrect) return 0;
+  if (previousSolvesCount <= 0) return 1.0;
+  if (previousSolvesCount === 1) return 0.6;
+  if (previousSolvesCount === 2) return 0.3;
+  return 0.1;
+}
+
 export function getBaseXpForSolveCount(previousSolvesCount: number, isCorrect: boolean): number {
   if (!isCorrect) return 0;
-  if (previousSolvesCount <= 0) return 25;
-  if (previousSolvesCount === 1) return 15;
-  if (previousSolvesCount === 2) return 8;
-  return 2;
+  const ratio = getDiminishingMultiplier(previousSolvesCount, true);
+  return Math.max(2, Math.round(25 * ratio));
 }
 
 /**
@@ -138,37 +147,110 @@ export function getCefrMultiplier(level?: string): number {
 }
 
 /**
- * Seri Kombo Çarpanı:
- * 3–5 doğru: 🔥 x2 Çarpan
- * 6–9 doğru: ⚡ x3 Çarpan
- * 10+ doğru veya Final sorusu: 👑 x5 Süper Final Çarpanı
+ * 5'li Seri (5-Card Streak Engine) Çarpanı:
+ * 1–4 doğru: x1 Standart
+ * 5–9 doğru: 🔥 x2 Çarpan
+ * 10–14 doğru: ⚡ x3 Çarpan
+ * 15+ doğru: 👑 x5 Süper Çarpan
  */
 export function getStreakMultiplier(
   streak: number,
-  isFinalQuestion = false
+  _isFinalQuestion = false
 ): { multiplier: number; label: string; icon: string } {
-  if (isFinalQuestion || streak >= 10) {
-    return { multiplier: 5.0, label: "x5 Süper Final Çarpanı", icon: "👑" };
+  if (streak >= 15) {
+    return { multiplier: 5.0, label: pickUiText({ tr: "x5 Süper Çarpan", en: "x5 Super Multiplier", de: "x5 Super-Multiplikator", es: "Multiplicador x5", fr: "Super multiplicateur x5" }), icon: "👑" };
   }
-  if (streak >= 6) {
-    return { multiplier: 3.0, label: "x3 Çarpan", icon: "⚡" };
+  if (streak >= 10) {
+    return { multiplier: 3.0, label: pickUiText({ tr: "x3 Çarpan", en: "x3 Multiplier", de: "x3 Multiplikator", es: "Multiplicador x3", fr: "Multiplicateur x3" }), icon: "⚡" };
   }
-  if (streak >= 3) {
-    return { multiplier: 2.0, label: "x2 Çarpan", icon: "🔥" };
+  if (streak >= 5) {
+    return { multiplier: 2.0, label: pickUiText({ tr: "x2 Çarpan", en: "x2 Multiplier", de: "x2 Multiplikator", es: "Multiplicador x2", fr: "Multiplicateur x2" }), icon: "🔥" };
   }
-  return { multiplier: 1.0, label: "x1 Standart", icon: "" };
+  return { multiplier: 1.0, label: pickUiText({ tr: "x1 Standart", en: "x1 Standard", de: "x1 Standard", es: "x1 Estándar", fr: "x1 Standard" }), icon: "" };
+}
+
+export interface FiveCardMilestoneInfo {
+  isMilestone: boolean;
+  bonusGold: number;
+  triggerChest: boolean;
+  multiplier: number;
+  milestoneLabel: string;
+  progressInCycle: number; // 0..5
 }
 
 /**
- * Her 3 doğru seride bir Gizemli Sandık modalının tetiklenip tetiklenmeyeceğini denetler.
+ * Her 5 doğru cevapta bir (5., 10., 15., 20...) çarpan ve bonus altın ödülünü hesaplar.
+ */
+export function getFiveCardMilestoneReward(streak: number): FiveCardMilestoneInfo {
+  if (streak <= 0) {
+    return {
+      isMilestone: false,
+      bonusGold: 0,
+      triggerChest: false,
+      multiplier: 1,
+      milestoneLabel: "",
+      progressInCycle: 0,
+    };
+  }
+
+  const progressInCycle = ((streak - 1) % 5) + 1;
+  const isMilestone = streak % 5 === 0;
+  const { multiplier } = getStreakMultiplier(streak);
+
+  if (!isMilestone) {
+    return {
+      isMilestone: false,
+      bonusGold: 0,
+      triggerChest: false,
+      multiplier,
+      milestoneLabel: "",
+      progressInCycle,
+    };
+  }
+
+  if (streak === 5) {
+    return {
+      isMilestone: true,
+      bonusGold: 25,
+      triggerChest: false,
+      multiplier: 2,
+      milestoneLabel: pickUiText({ tr: "🔥 5/5 Seri! x2 Çarpan & +25 Bonus Altın!", en: "🔥 5/5 Streak! x2 Multiplier & +25 Bonus Gold!", de: "🔥 5/5 Serie! x2 Multiplikator & +25 Bonus-Gold!", es: "🔥 ¡Racha 5/5! Multiplicador x2 y +25 Oro extra!", fr: "🔥 Série 5/5 ! Multiplicateur x2 & +25 Or bonus !" }),
+      progressInCycle: 5,
+    };
+  }
+
+  if (streak === 10) {
+    return {
+      isMilestone: true,
+      bonusGold: 50,
+      triggerChest: true,
+      multiplier: 3,
+      milestoneLabel: pickUiText({ tr: "⚡ 10. Doğru! x3 Çarpan, +50 Bonus Altın & Sandık Bonusu!", en: "⚡ 10th Correct! x3 Multiplier, +50 Bonus Gold & Chest Bonus!", de: "⚡ 10. Richtig! x3 Multiplikator, +50 Bonus-Gold & Truhenbonus!", es: "⚡ ¡10.ª correcta! Multiplicador x3, +50 Oro extra y Cofre!", fr: "⚡ 10e bonne réponse ! Multiplicateur x3, +50 Or & Coffre !" }),
+      progressInCycle: 5,
+    };
+  }
+
+  return {
+    isMilestone: true,
+    bonusGold: 100,
+    triggerChest: true,
+    multiplier: 5,
+    milestoneLabel: formatUiText({ tr: "👑 {n}. Doğru! x5 Süper Çarpan & +100 Bonus Altın!", en: "👑 {n}th Correct! x5 Super Multiplier & +100 Bonus Gold!", de: "👑 {n}. Richtig! x5 Super-Multiplikator & +100 Bonus-Gold!", es: "👑 ¡{n}.ª correcta! Supermultiplicador x5 y +100 Oro extra!", fr: "👑 {n}e bonne réponse ! Super multiplicateur x5 & +100 Or !" }, { n: streak }),
+    progressInCycle: 5,
+  };
+}
+
+/**
+ * Her 5 doğru seride bir (5., 10., 15., 20...) "Al veya Değiştir" Gizemli Sandık modalını tetikler.
  */
 export function shouldTriggerMysteryChest(streak: number): boolean {
-  return streak > 0 && streak % 3 === 0;
+  return streak > 0 && streak % 5 === 0;
 }
 
 /**
- * Tek bir kelime cevabı için tüm formülleri (Azalan Verim, CEFR, Seri Kombo ve Aktif Buff)
- * harmanlayarak kazanılacak XP ve Altın miktarını hesaplar.
+ * Tek bir kelime cevabı için 5-Card Streak Engine kurallarıyla XP ve Bonus Altın hesaplar.
+ * - 1, 2, 3, 4. doğrularda yalnızca standart taban XP verilir (altın = 0).
+ * - Her 5 doğru kartta bir (5., 10., 15., 20.) çarpan yükselir ve +25 / +50 / +100 Bonus Altın kasaya eklenir.
  */
 export function calculateWordReward(options: {
   word: string;
@@ -199,9 +281,9 @@ export function calculateWordReward(options: {
       baseXP: 0,
       cefrMultiplier: cefrMult,
       streakMultiplier: 1.0,
-      streakLabel: "",
+      streakLabel: pickUiText({ tr: "x1 Standart", en: "x1 Standard", de: "x1 Standard", es: "x1 Estándar", fr: "x1 Standard" }),
       streakIcon: "",
-      buffMultiplier: buffMult,
+      buffMultiplier: 1.0,
       totalXP: 0,
       totalGold: 0,
       solveCountToday: previousSolves,
@@ -209,18 +291,31 @@ export function calculateWordReward(options: {
     };
   }
 
-  // Temel XP: Özel değer verilmediyse azalan verim tablosundan alınır
-  const baseXP = customBaseXP !== undefined ? customBaseXP : getBaseXpForSolveCount(previousSolves, true);
-  const isDiminished = previousSolves >= 2;
+  // Temel XP: Özel değer verilmediyse azalan verim (%100 / %60 / %30 / %10) tablosundan alınır
+  const dimRatio = getDiminishingMultiplier(previousSolves, true);
+  const baseXP =
+    customBaseXP !== undefined
+      ? Math.max(1, Math.round(customBaseXP * dimRatio))
+      : getBaseXpForSolveCount(previousSolves, true);
+  const isDiminished = previousSolves >= 1;
 
   // Çözümü günlüğe işle
   const newSolveCount = recordDailyWordSolve(word, true);
 
-  // Toplam XP Hesapla: Base * CEFR * Streak * Buff
+  // Toplam XP Hesapla: Base * CEFR * 5'li Seri Çarpanı * Buff
   const totalXP = Math.round(baseXP * cefrMult * streakInfo.multiplier * buffMult);
 
-  // Toplam Altın Hesapla: Orantılı pozitif altın (en az 1, tabanın ~%40'ı ile çarpanlar)
-  const totalGold = Math.max(1, Math.round(totalXP * 0.4));
+  // Altın: SADECE her 5 doğru kartta bir (5., 10., 15., 20.) milestone bonusu olarak verilir!
+  const milestone = getFiveCardMilestoneReward(streak);
+  const equippedBuff = getEquippedMuseumBuff();
+  const goldBuffMult = equippedBuff?.type === "bonus_gold" ? 1.15 : 1.0;
+  const totalGold = milestone.isMilestone
+    ? Math.max(1, Math.round(milestone.bonusGold * dimRatio * goldBuffMult))
+    : 0;
+
+  if (milestone.isMilestone && totalGold > 0) {
+    awardGamificationReward(0, totalGold, milestone.milestoneLabel);
+  }
 
   return {
     baseXP,
@@ -243,15 +338,16 @@ export function calculateWordReward(options: {
 export function awardGamificationReward(
   totalXP: number,
   totalGold: number,
-  label = "🎮 Arena Ödülü"
+  label?: string
 ): void {
+  const resolvedLabel = label || pickUiText({ tr: "🎮 Arena Ödülü", en: "🎮 Arena Reward", de: "🎮 Arena-Belohnung", es: "🎮 Recompensa de Arena", fr: "🎮 Récompense d'Arène" });
   if (typeof window === "undefined") return;
 
   if (totalXP > 0) {
     // 1. Floating XP Event
     window.dispatchEvent(
       new CustomEvent("quizwise_floating_xp", {
-        detail: { amount: totalXP, label: `${label} (+${totalXP} XP)` },
+        detail: { amount: totalXP, label: `${resolvedLabel} (+${totalXP} XP)` },
       })
     );
 
@@ -268,7 +364,7 @@ export function awardGamificationReward(
       body: JSON.stringify({
         action: "arena_game_reward",
         amount: totalXP,
-        details: { label },
+        details: { label: resolvedLabel },
       }),
     }).catch(() => {});
   }

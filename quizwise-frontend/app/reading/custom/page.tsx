@@ -252,7 +252,7 @@ export default function CustomArticleReaderPage() {
 
   const toggleTTS = () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      alert("Tarayıcınız sesli okumayı desteklemiyor.");
+      alert(t("read_tts_unsupported", "Tarayıcınız sesli okumayı desteklemiyor."));
       return;
     }
     if (isPlayingTTS) {
@@ -500,7 +500,7 @@ export default function CustomArticleReaderPage() {
               <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
                 {t("quick_start_title", "HIZLI BAŞLA: ÖRNEK AKADEMİK & KARİYER MAKALELERİ")}
               </span>
-              <span className="text-xs text-slate-500">{t("quick_start_sub", "Tek tıkla yükleyin")}</span>
+              <span className="text-xs text-slate-400">{t("quick_start_sub", "Tek tıkla yükleyin")}</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -508,14 +508,14 @@ export default function CustomArticleReaderPage() {
                 <div
                   key={idx}
                   onClick={() => handleLoadSample(sample)}
-                  className="group p-5 rounded-2xl bg-slate-900/60 hover:bg-slate-850/80 border border-slate-800 hover:border-indigo-500/50 transition-all duration-200 cursor-pointer shadow-lg hover:shadow-indigo-500/10 flex flex-col justify-between space-y-3"
+                  className="group p-5 rounded-2xl bg-slate-900/70 hover:bg-slate-800/80 border border-slate-800 hover:border-indigo-500/50 transition-all duration-200 cursor-pointer shadow-lg hover:shadow-indigo-500/10 flex flex-col justify-between space-y-3"
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20">
                         {sample.level}
                       </span>
-                      <span className="text-[11px] text-slate-500 font-medium">{sample.source}</span>
+                      <span className="text-[11px] text-slate-400 font-medium">{sample.source}</span>
                     </div>
                     <h3 className="text-sm font-bold text-slate-100 group-hover:text-indigo-300 transition-colors line-clamp-2">
                       {getSampleTitle(sample)}
@@ -534,7 +534,7 @@ export default function CustomArticleReaderPage() {
           </div>
 
           {/* Kendi Metnini Yapıştır Formu */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-4">
+          <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -668,7 +668,7 @@ export default function CustomArticleReaderPage() {
           <div className="flex items-center space-x-2 text-xs text-indigo-300 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl px-4 py-2.5">
             <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
             <span>
-              {t("interactive_mode_banner_tip", "Vocaship İnteraktif Mod: Metindeki bilmediğiniz herhangi bir kelimenin üzerine tıklayın. Anında fonetik telaffuzu, çevirisi ve kelime kartı açılacaktır.")}
+              {t("interactive_mode_banner_tip", "VocaShip İnteraktif Mod: Metindeki bilmediğiniz herhangi bir kelimenin üzerine tıklayın. Anında fonetik telaffuzu, çevirisi ve kelime kartı açılacaktır.")}
             </span>
           </div>
 
@@ -736,7 +736,7 @@ export default function CustomArticleReaderPage() {
                                       ? "bg-amber-500/20 text-amber-200 border-b-2 border-amber-400"
                                       : "hover:bg-indigo-500/20 hover:text-indigo-200"
                                   }`}
-                                  title="Anlamını & Fonetiğini Gör"
+                                  title={t("read_meaning_tip", "Anlamını & Fonetiğini Gör")}
                                 >
                                   {token}{" "}
                                 </span>
@@ -843,7 +843,7 @@ export default function CustomArticleReaderPage() {
                                       ? "bg-amber-500/20 text-amber-200 border-b-2 border-amber-400"
                                       : "hover:bg-indigo-500/20 hover:text-indigo-200"
                                   }`}
-                                  title="Anlamını & Fonetiğini Gör"
+                                  title={t("read_meaning_tip", "Anlamını & Fonetiğini Gör")}
                                 >
                                   {token}{" "}
                                 </span>
@@ -863,7 +863,7 @@ export default function CustomArticleReaderPage() {
           {isExtractingVocab ? (
             <div className="flex items-center justify-center p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-slate-400 gap-2.5 text-xs">
               <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-              <span>Metin analiz ediliyor ve hedef kelimeler çıkartılıyor...</span>
+              <span>{t("read_extracting_vocab", "Metin analiz ediliyor ve hedef kelimeler çıkartılıyor...")}</span>
             </div>
           ) : (
             extractedVocabulary.length > 0 && (

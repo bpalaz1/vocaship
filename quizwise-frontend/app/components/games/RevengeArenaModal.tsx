@@ -20,8 +20,10 @@ import {
 import {
   getArenaMistakes,
   removeArenaMistake,
+  syncUnifiedWeakSpots,
   ArenaMistakeItem,
 } from "../../utils/arenaMistakes";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface RevengeArenaModalProps {
   isOpen: boolean;
@@ -45,6 +47,7 @@ export default function RevengeArenaModal({
   onClose,
   onAwardXP,
 }: RevengeArenaModalProps) {
+  const { t } = useLanguage();
   const [mistakes, setMistakes] = useState<ArenaMistakeItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -52,17 +55,26 @@ export default function RevengeArenaModal({
   const [clearedWordsCount, setClearedWordsCount] = useState(0);
   const [isSessionComplete, setIsSessionComplete] = useState(false);
 
-  // Hataları Yükle
+  // Ortak Hata & Zayıf Nokta Havuzunu Yükle
   useEffect(() => {
-    if (isOpen) {
-      const list = getArenaMistakes();
-      setMistakes(list);
-      setCurrentIndex(0);
-      setSelectedAnswer(null);
-      setIsAnswered(false);
-      setClearedWordsCount(0);
-      setIsSessionComplete(false);
-    }
+    if (!isOpen) return;
+    const localList = getArenaMistakes();
+    setMistakes(localList);
+    setCurrentIndex(0);
+    setSelectedAnswer(null);
+    setIsAnswered(false);
+    setClearedWordsCount(0);
+    setIsSessionComplete(false);
+
+    let cancelled = false;
+    syncUnifiedWeakSpots().then((synced) => {
+      if (!cancelled) {
+        setMistakes(synced);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   // Maksimum 5 Soruluk Mini Oturum
@@ -143,13 +155,16 @@ export default function RevengeArenaModal({
 
     if (isCorrect) {
       playSound("correct");
-      // Kelimeyi Unutma Destesinden Kalıcı Sil
-      removeArenaMistake(currentMistake.word);
+      // Kelimeyi Hem İntikam Arenası Yerel Listesinden Hem Veritabanı Zayıf Nokta Havuzundan Sil
+      removeArenaMistake(currentMistake.word, {
+        syncBackend: true,
+        cardId: currentMistake.cardId || currentMistake.id,
+      });
       setClearedWordsCount((c) => c + 1);
 
       // +25 Telafi XP
       if (onAwardXP) {
-        onAwardXP(25, `İntikam Telafisi: ${currentMistake.word}`);
+        onAwardXP(25, `${t("game_revenge_xp_lbl", "İntikam Telafisi")}: ${currentMistake.word}`);
       }
 
       setTimeout(() => {
@@ -190,11 +205,10 @@ export default function RevengeArenaModal({
 
           <div className="space-y-1.5">
             <h3 className="text-lg sm:text-xl font-black text-white">
-              Harika Gidiyorsun! 🎯
+              {t("game_revenge_clean_title", "Harika Gidiyorsun! 🎯")}
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Şu an temizlenmesi gereken bir hata kelimesi yok. Tüm geçmiş oyunlardaki
-              kelimeleri başarıyla öğrendin!
+              {t("game_revenge_clean_desc", "Şu an temizlenmesi gereken bir hata kelimesi yok. Tüm geçmiş oyunlardaki kelimeleri başarıyla öğrendin!")}
             </p>
           </div>
 
@@ -203,7 +217,7 @@ export default function RevengeArenaModal({
             onClick={onClose}
             className="w-full py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition cursor-pointer"
           >
-            Arenaya Dön
+            {t("game_back_arena", "Arenaya Dön")}
           </button>
         </div>
       </div>
@@ -221,17 +235,17 @@ export default function RevengeArenaModal({
 
           <div className="space-y-1.5">
             <h3 className="text-lg sm:text-xl font-black text-white">
-              🎯 Telafi Seansı Tamamlandı!
+              {t("game_revenge_done_title", "🎯 Telafi Seansı Tamamlandı!")}
             </h3>
             <p className="text-xs sm:text-sm text-slate-300">
-              <strong className="text-emerald-400">{clearedWordsCount} kelime</strong>{" "}
-              hafızana geri kazandırıldı ve Unutma Destesi'nden temizlendi.
+              <strong className="text-emerald-400">{clearedWordsCount} {t("words", "kelime")}</strong>{" "}
+              {t("game_revenge_done_desc", "hafızana geri kazandırıldı ve Unutma Destesi'nden temizlendi.")}
             </p>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center gap-2 font-mono text-sm font-black text-amber-300">
             <Zap className="w-4 h-4 text-amber-400" />
-            <span>+{clearedWordsCount * 25} Telafi XP Kazandın!</span>
+            <span>{t("game_revenge_earned_xp", "+{xp} Telafi XP Kazandın!", { xp: clearedWordsCount * 25 })}</span>
           </div>
 
           <button
@@ -239,7 +253,7 @@ export default function RevengeArenaModal({
             onClick={onClose}
             className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/20 transition active:scale-95 cursor-pointer"
           >
-            Tamamla ve Arenaya Dön ➔
+            {t("game_revenge_finish_btn", "Tamamla ve Arenaya Dön ➔")}
           </button>
         </div>
       </div>
@@ -258,13 +272,13 @@ export default function RevengeArenaModal({
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
-                <span>🎯 İntikam Arenası</span>
+                <span>{t("game_revenge_title", "🎯 İntikam Arenası")}</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                  {mistakes.length} Hata
+                  {mistakes.length} {t("game_mistake_unit", "Hata")}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Soru {currentIndex + 1} / {sessionQueue.length} • Doğru bilinen hata listesinden silinir (+25 XP)
+                {t("game_revenge_q_progress", "Soru {cur} / {total} • Doğru bilinen hata listesinden silinir (+25 XP)", { cur: currentIndex + 1, total: sessionQueue.length })}
               </p>
             </div>
           </div>
@@ -282,7 +296,7 @@ export default function RevengeArenaModal({
         {currentMistake && (
           <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-1">
             <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest block">
-              Daha Önce Yanlış Yapılan Kelime
+              {t("game_revenge_prev_wrong", "Daha Önce Yanlış Yapılan Kelime")}
             </span>
             <h4 className="text-2xl sm:text-3xl font-black text-white font-mono tracking-wide">
               {currentMistake.word}
@@ -330,10 +344,10 @@ export default function RevengeArenaModal({
         <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
           <span className="flex items-center gap-1">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
-            <span>Doğru bilinen kelimeler hafızadan silinir</span>
+            <span>{t("game_revenge_footer_note", "Doğru bilinen kelimeler hafızadan silinir")}</span>
           </span>
           <span className="font-mono text-emerald-400 font-bold">
-            Temizlenen: {clearedWordsCount}
+            {t("game_revenge_cleared", "Temizlenen:")} {clearedWordsCount}
           </span>
         </div>
       </div>

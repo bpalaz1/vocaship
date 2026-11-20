@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import confetti from "canvas-confetti";
-import { Flame, Heart, X, Zap, Target, Sparkles, Send } from "lucide-react";
+import { Flame, Heart, X, Zap, Target, Sparkles, Send, Volume2, VolumeX } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
 import RespawnModal from "./RespawnModal";
 import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
@@ -11,6 +11,10 @@ import {
   shouldTriggerMysteryChest,
 } from "../../utils/gamificationEngine";
 import { GameMistakeItem } from "./GameOverSummary";
+import StreakMilestoneBar from "./StreakMilestoneBar";
+import { getEquippedMuseumBuff } from "../../data/museumItems";
+import { playArenaSound } from "../../utils/soundEffects";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface GravityGameProps {
   cards: Array<{ word: string; meaning: string }>;
@@ -21,13 +25,18 @@ export interface GravityGameProps {
 
 export default function GravityGame({
   cards,
-  deckTitle = "Genel Deste",
+  deckTitle,
   onClose,
   onAwardXP,
 }: GravityGameProps) {
+  const { t } = useLanguage();
+  const resolvedDeckTitle = deckTitle || t("game_default_deck", "Genel Deste");
+  const equippedBuff = useMemo(() => getEquippedMuseumBuff(), []);
+  const initialLives = equippedBuff?.type === "extra_life" ? 4 : 3;
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [asteroidY, setAsteroidY] = useState(10); // 10% dan 88% e doğru kayar
-  const [lives, setLives] = useState(3);
+  const [lives, setLives] = useState(initialLives);
   const [score, setScore] = useState(0);
   const [wave, setWave] = useState(1);
   const [streak, setStreak] = useState(0);
@@ -54,8 +63,8 @@ export default function GravityGame({
   useEffect(() => {
     if (gameOver || isExploding || isImpact) return;
 
-    // Hız: dalgaya göre artar
-    const speedInterval = Math.max(25, 60 - wave * 4);
+    // Hız: dalgaya göre artar (+2s ekstra süre buff'ı varsa daha yavaş iner)
+    const speedInterval = Math.max(25, 60 - wave * 4) + (equippedBuff?.type === "extra_time" ? 14 : 0);
 
     loopTimerRef.current = setInterval(() => {
       setAsteroidY((prevY) => {
@@ -79,6 +88,7 @@ export default function GravityGame({
     if (loopTimerRef.current) clearInterval(loopTimerRef.current);
 
     setStreak(0);
+    playArenaSound("wrong", soundEnabled);
 
     // 5 Saniyelik Hata Telafisi için kaydet
     if (activeCard) {
@@ -138,6 +148,11 @@ export default function GravityGame({
 
       const nextStreak = streak + 1;
       setStreak(nextStreak);
+      if (nextStreak % 5 === 0) {
+        playArenaSound("milestone", soundEnabled);
+      } else {
+        playArenaSound("correct", soundEnabled);
+      }
 
       // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
       const reward = calculateWordReward({
@@ -205,8 +220,8 @@ export default function GravityGame({
             <Flame className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-white">Yerçekimi Savunması (Gravity)</h2>
-            <p className="text-xs text-slate-400 font-medium">{deckTitle}</p>
+            <h2 className="text-base font-black text-white">{t("game_gravity_title", "Yerçekimi Savunması (Gravity)")}</h2>
+            <p className="text-xs text-slate-400 font-medium">{resolvedDeckTitle}</p>
           </div>
         </div>
 
@@ -227,8 +242,21 @@ export default function GravityGame({
 
           {/* Skor & Dalga */}
           <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-amber-400">
-            {score} Puan • Dalga {wave}
+            {score} {t("game_points_unit", "Puan")} • {t("game_wave_n", "Dalga {n}", { n: wave })}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+            title={soundEnabled ? t("game_sound_off", "Sesi Kapat") : t("game_sound_on", "Sesi Aç")}
+          >
+            {soundEnabled ? (
+              <Volume2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <VolumeX className="w-4 h-4 text-slate-500" />
+            )}
+          </button>
 
           <button
             type="button"
@@ -240,6 +268,11 @@ export default function GravityGame({
         </div>
       </div>
 
+      {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
+      <div className="max-w-4xl mx-auto w-full pt-2.5 shrink-0">
+        <StreakMilestoneBar streak={streak} />
+      </div>
+
       {/* 2. Uzay Savunma Arenası (Kayan Kelime Asteroidi) */}
       <div className="max-w-4xl mx-auto w-full flex-1 relative my-4 rounded-3xl bg-slate-900/60 border-2 border-slate-800 overflow-hidden shadow-2xl flex flex-col justify-between">
         {/* Arka plan ızgarası */}
@@ -248,7 +281,7 @@ export default function GravityGame({
         {/* Tabandaki Kırmızı Tehlike Sınırı */}
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-rose-950/40 via-rose-900/10 to-transparent border-t-2 border-dashed border-rose-500/30 flex items-center justify-center">
           <span className="text-[11px] font-mono tracking-widest text-rose-400/80 font-bold uppercase">
-            ⚡ SAVUNMA TABAN HATTI ⚡
+            {t("game_gravity_base", "⚡ SAVUNMA TABAN HATTI ⚡")}
           </span>
         </div>
 
@@ -286,7 +319,7 @@ export default function GravityGame({
             disabled={gameOver || isExploding}
             value={typedInput}
             onChange={(e) => setTypedInput(e.target.value)}
-            placeholder="Yukarıdaki kelimenin Türkçe anlamını yazıp Enter'a basın..."
+            placeholder={t("game_gravity_input_ph", "Yukarıdaki kelimenin anlamını yazıp Enter'a basın...")}
             className="flex-1 bg-slate-900 border-2 border-indigo-500/50 focus:border-indigo-400 rounded-2xl px-5 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 font-medium"
           />
 
@@ -295,7 +328,7 @@ export default function GravityGame({
             disabled={!typedInput.trim() || gameOver || isExploding}
             className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
           >
-            <span>Patlat</span>
+            <span>{t("game_gravity_blast", "Patlat")}</span>
             <Send className="w-4 h-4" />
           </button>
         </form>
@@ -303,14 +336,14 @@ export default function GravityGame({
         {/* Hızlı Tıklanabilir İpucu Hapı */}
         <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
           <span>
-            İpucu: Anlamın bir parçasını yazabilirsiniz.
+            {t("game_gravity_hint", "İpucu: Anlamın bir parçasını yazabilirsiniz.")}
           </span>
           <button
             type="button"
             onClick={() => handleCheckExplode(activeCard.meaning)}
             className="text-amber-400 hover:underline cursor-pointer"
           >
-            Anlamı Çöz: {activeCard.meaning}
+            {t("game_gravity_solve", "Anlamı Çöz:")} {activeCard.meaning}
           </button>
         </div>
       </div>
@@ -318,8 +351,8 @@ export default function GravityGame({
       {/* 4. Oyun Bitiş Ekranı (5 Saniyelik Hata Telafisi ile) */}
       {gameOver && (
         <GameOverScreen
-          gameTitle="☄️ Yerçekimi Savunması"
-          deckTitle={deckTitle}
+          gameTitle={t("game_gravity_over_title", "☄️ Yerçekimi Savunması")}
+          deckTitle={resolvedDeckTitle}
           score={score}
           awardedXP={Math.max(50, score)}
           awardedGold={Math.max(20, Math.round(score * 0.4))}

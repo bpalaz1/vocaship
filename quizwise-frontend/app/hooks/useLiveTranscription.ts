@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
+import { pickUiText } from "../utils/uiLocale";
 
 export interface LiveCapturedWord {
   id: string;
@@ -255,12 +256,12 @@ export function useLiveTranscription({
           const turkishMeaning =
             dictEntry?.turkish_meaning ||
             (token.endsWith("tion")
-              ? "Eylem, süreç veya durum terimi"
+              ? pickUiText({ tr: "Eylem, süreç veya durum terimi", en: "Action, process, or state term", de: "Handlungs-, Prozess- oder Zustandsbegriff", es: "Término de acción, proceso o estado", fr: "Terme d'action, processus ou état" })
               : token.endsWith("able") || token.endsWith("ible")
-              ? "Yapılabilir, uygun nitelikte"
+              ? pickUiText({ tr: "Yapılabilir, uygun nitelikte", en: "Capable of or suitable for", de: "Machbar, geeignet", es: "Factible, apto", fr: "Faisable, apte" })
               : token.endsWith("ive")
-              ? "Nitelik belirten sıfat / terim"
-              : "Canlı derste vurgulanan hedef kavram");
+              ? pickUiText({ tr: "Nitelik belirten sıfat / terim", en: "Descriptive adjective / term", de: "Beschreibendes Adjektiv / Begriff", es: "Adjetivo o término descriptivo", fr: "Adjectif / terme descriptif" })
+              : pickUiText({ tr: "Canlı derste vurgulanan hedef kavram", en: "Target concept highlighted in live lesson", de: "Im Live-Unterricht hervorgehobener Zielbegriff", es: "Concepto clave destacado en la clase en vivo", fr: "Concept clé mis en avant pendant le cours" }));
 
           const captured: LiveCapturedWord = {
             id: `live-word-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -325,7 +326,7 @@ export function useLiveTranscription({
 
     if (!SpeechRecognition) {
       setIsSupported(false);
-      setErrorMessage("Tarayıcınızda yerel Web Speech API (konuşma tanıma) desteği bulunamadı.");
+      setErrorMessage(pickUiText({ tr: "Tarayıcınızda yerel Web Speech API (konuşma tanıma) desteği bulunamadı.", en: "Native Web Speech API (speech recognition) support was not found in your browser.", de: "Keine native Web Speech API-Unterstützung in Ihrem Browser gefunden.", es: "No se encontró compatibilidad nativa con Web Speech API en tu navegador.", fr: "La prise en charge native de Web Speech API est introuvable dans votre navigateur." }));
       return;
     }
 
@@ -364,7 +365,7 @@ export function useLiveTranscription({
         // 'no-speech' veya 'aborted' normal akışta gelebilir
         if (event.error !== "no-speech" && event.error !== "aborted") {
           console.warn("[SpeechRecognition Error]:", event.error);
-          setErrorMessage(`Konuşma algılama uyarısı: ${event.error}`);
+          setErrorMessage(`${pickUiText({ tr: "Konuşma algılama uyarısı:", en: "Speech detection warning:", de: "Spracherkennungswarnung:", es: "Aviso de reconocimiento de voz:", fr: "Avertissement de reconnaissance vocale :" })} ${event.error}`);
         }
       };
 
@@ -382,7 +383,7 @@ export function useLiveTranscription({
       recognitionRef.current = recognition;
     } catch (e: any) {
       setIsSupported(false);
-      setErrorMessage(e.message || "SpeechRecognition başlatılamadı.");
+      setErrorMessage(e.message || pickUiText({ tr: "SpeechRecognition başlatılamadı.", en: "Could not initialize SpeechRecognition.", de: "SpeechRecognition konnte nicht gestartet werden.", es: "No se pudo iniciar SpeechRecognition.", fr: "Impossible de démarrer SpeechRecognition." }));
     }
 
     return () => {
@@ -398,7 +399,7 @@ export function useLiveTranscription({
   // Dinlemeyi Başlat
   const startListening = useCallback(() => {
     if (!isSupported) {
-      setErrorMessage("Mikrofon desteği bulunamadı veya konuşma tanıma bu tarayıcıda kapalı.");
+      setErrorMessage(pickUiText({ tr: "Mikrofon desteği bulunamadı veya konuşma tanıma bu tarayıcıda kapalı.", en: "Microphone support unavailable or speech recognition is disabled in this browser.", de: "Mikrofonunterstützung fehlt oder Spracherkennung ist in diesem Browser deaktiviert.", es: "No hay soporte de micrófono o el reconocimiento de voz está desactivado en este navegador.", fr: "Support micro introuvable ou reconnaissance vocale désactivée dans ce navigateur." }));
       return;
     }
     try {

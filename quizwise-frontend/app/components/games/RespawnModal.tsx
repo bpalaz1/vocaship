@@ -14,6 +14,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface RespawnModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export default function RespawnModal({
   onRespawn,
   onGiveUp,
 }: RespawnModalProps) {
+  const { t } = useLanguage();
   const [consecutiveCount, setConsecutiveCount] = useState(0);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -162,6 +164,20 @@ export default function RespawnModal({
     }
   };
 
+  // Klavye kısayolları (1-2-3-4)
+  useEffect(() => {
+    if (!isOpen || isAnswered) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const idx = ["1", "2", "3", "4"].indexOf(e.key);
+      if (idx !== -1 && options[idx]) {
+        e.preventDefault();
+        handleSelectOption(options[idx]);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, isAnswered, options]);
+
   if (!isOpen) return null;
 
   return (
@@ -177,10 +193,10 @@ export default function RespawnModal({
           </div>
 
           <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-            ❤️‍🩹 Kurtarma Odası: Yeniden Canlanma!
+            {t("game_respawn_title", "⚡ Son Şans: Kurtarma Odası!")}
           </h3>
           <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
-            Canın tükendi ama oyun bitmedi! <strong>3 kelimeyi arka arkaya</strong> doğru bil, 1 canla hemen savaşa geri dön!
+            <strong>{t("game_respawn_sub", "3 kelimeyi doğru bil, +1 Can ile oyuna geri dön!")}</strong>
           </p>
         </div>
 
@@ -200,7 +216,7 @@ export default function RespawnModal({
                   {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : step}
                 </div>
                 <span className="text-xs font-bold text-slate-300 hidden sm:inline">
-                  {step}. Doğru
+                  {t("game_respawn_step", "{n}. Doğru", { n: step })}
                 </span>
               </div>
             );
@@ -210,7 +226,7 @@ export default function RespawnModal({
         {/* AKTİF KELİME KARTI */}
         <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-            Kelime Anlamını Seç
+            {t("game_pick_meaning", "Kelime Anlamını Seç")}
           </span>
           <h4 className="text-2xl sm:text-3xl font-black text-white font-mono tracking-wide">
             {activeCard.word}
@@ -222,7 +238,7 @@ export default function RespawnModal({
 
         {/* 4 ŞIKLI SEÇENEK BUTONLARI */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {options.map((opt) => {
+          {options.map((opt, idx) => {
             const isSelected = selectedOption === opt;
             const isCorrect = opt === activeCard.meaning;
 
@@ -242,9 +258,12 @@ export default function RespawnModal({
                 type="button"
                 disabled={isAnswered}
                 onClick={() => handleSelectOption(opt)}
-                className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-semibold text-left transition-all cursor-pointer ${btnStyle}`}
+                className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-semibold text-left transition-all cursor-pointer flex items-center gap-2.5 ${btnStyle}`}
               >
-                {opt}
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900 text-emerald-300 border border-slate-700 shrink-0 font-bold">
+                  [{idx + 1}]
+                </span>
+                <span className="leading-snug">{opt}</span>
               </button>
             );
           })}
@@ -257,11 +276,11 @@ export default function RespawnModal({
             onClick={onGiveUp}
             className="text-xs text-slate-400 hover:text-rose-400 transition underline underline-offset-4 cursor-pointer"
           >
-            Pes Et ve Skoru Gör
+            {t("game_give_up_score", "Pes Et ve Skoru Gör")}
           </button>
 
           <span className="text-[11px] font-mono text-emerald-400 font-bold">
-            ⚡ Sıfır Eleme Garantisi
+            {t("game_zero_elim", "⚡ Sıfır Eleme Garantisi")}
           </span>
         </div>
       </div>

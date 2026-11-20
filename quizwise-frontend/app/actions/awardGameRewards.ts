@@ -1,4 +1,5 @@
 import { API_BASE } from "../config";
+import { pickUiText, formatUiText } from "../utils/uiLocale";
 
 export interface AwardGameRewardsParams {
   sessionId: string;
@@ -52,7 +53,7 @@ export async function awardGameRewards({
         return {
           ...parsed,
           alreadyClaimed: true,
-          message: "Bu yarışmanın ödüllerini daha önce aldınız.",
+          message: pickUiText({ tr: "Bu yarışmanın ödüllerini daha önce aldınız.", en: "You have already claimed rewards for this competition.", de: "Sie haben die Belohnungen für diesen Wettbewerb bereits erhalten.", es: "Ya has reclamado las recompensas de esta competición.", fr: "Vous avez déjà réclamé les récompenses de cette compétition." }),
         };
       } catch {}
     }
@@ -98,7 +99,7 @@ export async function awardGameRewards({
             new CustomEvent("quizwise_floating_xp", {
               detail: {
                 amount: result.awardedXP,
-                label: `🏆 ${rank}. Sıra Podyum Ödülü (+${result.awardedXP} XP)`,
+                label: formatUiText({ tr: "🏆 {rank}. Sıra Podyum Ödülü (+{xp} XP)", en: "🏆 Rank #{rank} Podium Reward (+{xp} XP)", de: "🏆 Platz #{rank} Podium-Belohnung (+{xp} XP)", es: "🏆 Premio de podio #{rank} (+{xp} XP)", fr: "🏆 Récompense du podium #{rank} (+{xp} XP)" }, { rank, xp: result.awardedXP }),
               },
             })
           );
@@ -131,6 +132,11 @@ export async function awardGameRewards({
 
   // 3. Çevrimdışı (Offline) Fallback
   const rule = FALLBACK_REWARDS[rank] || FALLBACK_DEFAULT;
+  const localizedKeyNames: Record<number, string> = {
+    1: pickUiText({ tr: "Epik Sandık Anahtarı 🔑", en: "Epic Chest Key 🔑", de: "Epischer Truhenschlüssel 🔑", es: "Llave de cofre épico 🔑", fr: "Clé de coffre épique 🔑" }),
+    2: pickUiText({ tr: "Nadir Sandık Anahtarı 🔑", en: "Rare Chest Key 🔑", de: "Seltener Truhenschlüssel 🔑", es: "Llave de cofre raro 🔑", fr: "Clé de coffre rare 🔑" }),
+    3: pickUiText({ tr: "Standart Sandık Anahtarı 🔑", en: "Standard Chest Key 🔑", de: "Standard-Truhenschlüssel 🔑", es: "Llave de cofre estándar 🔑", fr: "Clé de coffre standard 🔑" }),
+  };
   const offlineResult: AwardGameRewardsResult = {
     success: true,
     sessionId,
@@ -139,10 +145,10 @@ export async function awardGameRewards({
     awardedXP: rule.xp,
     awardedGold: rule.coins,
     awardedKey: rule.key || null,
-    keyName: rule.keyName || null,
+    keyName: localizedKeyNames[rank] || rule.keyName || null,
     newTotalXP: 0,
     newCoins: 0,
-    message: `Tebrikler! ${rank}. sıra ödülleri (+${rule.xp} XP, +${rule.coins} 🪙) cüzdanınıza kaydedildi!`,
+    message: formatUiText({ tr: "Tebrikler! {rank}. sıra ödülleri (+{xp} XP, +{coins} 🪙) cüzdanınıza kaydedildi!", en: "Congratulations! Rank #{rank} rewards (+{xp} XP, +{coins} 🪙) added to your wallet!", de: "Glückwunsch! Belohnungen für Platz #{rank} (+{xp} XP, +{coins} 🪙) gutgeschrieben!", es: "¡Felicidades! Recompensas del puesto #{rank} (+{xp} XP, +{coins} 🪙) guardadas en tu cartera.", fr: "Félicitations ! Récompenses du rang #{rank} (+{xp} XP, +{coins} 🪙) ajoutées à votre portefeuille !" }, { rank, xp: rule.xp, coins: rule.coins }),
     alreadyClaimed: false,
   };
 
@@ -153,7 +159,7 @@ export async function awardGameRewards({
       new CustomEvent("quizwise_floating_xp", {
         detail: {
           amount: rule.xp,
-          label: `🏆 ${rank}. Sıra Podyum Ödülü (+${rule.xp} XP)`,
+          label: formatUiText({ tr: "🏆 {rank}. Sıra Podyum Ödülü (+{xp} XP)", en: "🏆 Rank #{rank} Podium Reward (+{xp} XP)", de: "🏆 Platz #{rank} Podium-Belohnung (+{xp} XP)", es: "🏆 Premio de podio #{rank} (+{xp} XP)", fr: "🏆 Récompense du podium #{rank} (+{xp} XP)" }, { rank, xp: rule.xp }),
         },
       })
     );

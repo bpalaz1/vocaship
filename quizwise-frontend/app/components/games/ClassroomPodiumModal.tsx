@@ -19,6 +19,7 @@ import {
   Flame,
 } from "lucide-react";
 import { awardGameRewards, AwardGameRewardsResult } from "../../actions/awardGameRewards";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface PodiumParticipant {
   id: string;
@@ -53,13 +54,16 @@ export default function ClassroomPodiumModal({
   isOpen,
   onClose,
   sessionId,
-  gameTitle = "Canlı Sınıf Arenası",
+  gameTitle,
   currentUserRank = 1,
   currentUserId = "current_user",
-  currentUserName = "Sen",
+  currentUserName,
   participants = DEFAULT_PARTICIPANTS,
   onRewardsClaimed,
 }: ClassroomPodiumModalProps) {
+  const { t } = useLanguage();
+  const resolvedGameTitle = gameTitle || t("game_pod_default_title", "Canlı Sınıf Arenası");
+  const resolvedUserName = currentUserName || t("lb_you", "Sen");
   const [claiming, setClaiming] = useState(false);
   const [claimResult, setClaimResult] = useState<AwardGameRewardsResult | null>(null);
   const [alreadyClaimed, setAlreadyClaimed] = useState(false);
@@ -117,17 +121,17 @@ export default function ClassroomPodiumModal({
 
   // Sıralamadaki ilk 3 kişiyi bul
   const first = participants.find((p) => p.rank === 1) || {
-    name: "1. Şampiyon",
+    name: t("game_pod_1st", "1. Şampiyon"),
     avatar: "👑",
     score: 950,
   };
   const second = participants.find((p) => p.rank === 2) || {
-    name: "2. Finalist",
+    name: t("game_pod_2nd", "2. Finalist"),
     avatar: "🥈",
     score: 820,
   };
   const third = participants.find((p) => p.rank === 3) || {
-    name: "3. Derece",
+    name: t("game_pod_3rd", "3. Derece"),
     avatar: "🥉",
     score: 740,
   };
@@ -142,7 +146,7 @@ export default function ClassroomPodiumModal({
         sessionId,
         rank: currentUserRank,
         userId: currentUserId,
-        gameMode: gameTitle,
+        gameMode: resolvedGameTitle,
       });
 
       setClaimResult(result);
@@ -187,14 +191,14 @@ export default function ClassroomPodiumModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
-                  🏆 Sınıf Podyumu & Sonuçlar
+                  {t("game_pod_hdr", "🏆 Sınıf Podyumu & Sonuçlar")}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Canlı Multiplayer
+                  {t("game_pod_live_badge", "Canlı Multiplayer")}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                {gameTitle} • Oturum #{sessionId.slice(-6).toUpperCase()}
+                {resolvedGameTitle} • {t("game_pod_session", "Oturum")} #{sessionId.slice(-6).toUpperCase()}
               </p>
             </div>
           </div>
@@ -203,7 +207,7 @@ export default function ClassroomPodiumModal({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-xl bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -225,11 +229,11 @@ export default function ClassroomPodiumModal({
             </div>
             <div className="text-center w-full px-1">
               <p className="text-xs font-bold text-white truncate">{second.name}</p>
-              <p className="text-[11px] font-mono text-slate-400">{second.score} Puan</p>
+              <p className="text-[11px] font-mono text-slate-400">{second.score} {t("game_points_unit", "Puan")}</p>
             </div>
             <div className="w-full h-24 sm:h-28 rounded-t-2xl bg-gradient-to-t from-slate-850 to-slate-800 border-t-2 border-slate-400/50 flex flex-col items-center justify-center shadow-lg">
               <Medal className="w-6 h-6 text-slate-300" />
-              <span className="text-xs font-black text-slate-300 mt-1">2. SIRA</span>
+              <span className="text-xs font-black text-slate-300 mt-1">{t("game_pod_rank2", "2. SIRA")}</span>
             </div>
           </div>
 
@@ -248,12 +252,12 @@ export default function ClassroomPodiumModal({
             </div>
             <div className="text-center w-full px-1">
               <p className="text-xs sm:text-sm font-black text-amber-200 truncate">{first.name}</p>
-              <p className="text-xs font-mono font-bold text-amber-400">{first.score} Puan</p>
+              <p className="text-xs font-mono font-bold text-amber-400">{first.score} {t("game_points_unit", "Puan")}</p>
             </div>
             <div className="w-full h-32 sm:h-36 rounded-t-2xl bg-gradient-to-t from-amber-950/70 via-amber-900/50 to-amber-600/30 border-t-2 border-amber-400 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden">
               <div className="absolute inset-0 bg-yellow-400/10 blur-xl pointer-events-none" />
               <Trophy className="w-8 h-8 text-amber-300 drop-shadow" />
-              <span className="text-sm font-black text-amber-300 mt-1">ŞAMPİYON</span>
+              <span className="text-sm font-black text-amber-300 mt-1">{t("game_pod_champion", "ŞAMPİYON")}</span>
             </div>
           </div>
 
@@ -269,11 +273,11 @@ export default function ClassroomPodiumModal({
             </div>
             <div className="text-center w-full px-1">
               <p className="text-xs font-bold text-white truncate">{third.name}</p>
-              <p className="text-[11px] font-mono text-slate-400">{third.score} Puan</p>
+              <p className="text-[11px] font-mono text-slate-400">{third.score} {t("game_points_unit", "Puan")}</p>
             </div>
             <div className="w-full h-18 sm:h-20 rounded-t-2xl bg-gradient-to-t from-slate-900 to-amber-950/40 border-t-2 border-amber-700/50 flex flex-col items-center justify-center shadow-lg">
               <Award className="w-5 h-5 text-amber-600" />
-              <span className="text-[11px] font-black text-amber-600 mt-1">3. SIRA</span>
+              <span className="text-[11px] font-black text-amber-600 mt-1">{t("game_pod_rank3", "3. SIRA")}</span>
             </div>
           </div>
         </div>
@@ -291,24 +295,24 @@ export default function ClassroomPodiumModal({
                 <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
                   <span>
                     {currentUserRank === 1
-                      ? "🏆 Tebrikler! 1. Sırada Tamamladın!"
+                      ? t("game_pod_win1", "🏆 Tebrikler! 1. Sırada Tamamladın!")
                       : currentUserRank === 2
-                      ? "🥈 Tebrikler! 2. Sıradasın!"
+                      ? t("game_pod_win2", "🥈 Tebrikler! 2. Sıradasın!")
                       : currentUserRank === 3
-                      ? "🥉 Tebrikler! Podyumdasın (3. Sıra)!"
-                      : `🎯 Sen ${currentUserRank}. sırada tamamladın!`}
+                      ? t("game_pod_win3", "🥉 Tebrikler! Podyumdasın (3. Sıra)!")
+                      : t("game_pod_win_n", "🎯 Sen {rank}. sırada tamamladın!", { rank: currentUserRank })}
                   </span>
                 </h4>
                 <p className="text-[11px] text-slate-400">
                   {currentUserRank <= 3
-                    ? "Büyük podyum derecesiyle azami ödül kazandın!"
-                    : "Katılımın ve serin korundu, tebrikler!"}
+                    ? t("game_pod_max_reward", "Büyük podyum derecesiyle azami ödül kazandın!")
+                    : t("game_pod_streak_kept", "Katılımın ve serin korundu, tebrikler!")}
                 </p>
               </div>
             </div>
 
             <span className="self-start sm:self-auto px-2.5 py-1 rounded-xl text-[11px] font-mono font-bold bg-indigo-950/70 text-indigo-300 border border-indigo-500/30">
-              {currentUserName}
+              {resolvedUserName}
             </span>
           </div>
 
@@ -320,7 +324,7 @@ export default function ClassroomPodiumModal({
                 <Zap className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-[10px] text-slate-400 font-medium">Kazanılan XP</p>
+                <p className="text-[10px] text-slate-400 font-medium">{t("game_earned_xp", "Kazanılan XP")}</p>
                 <p className="text-xs sm:text-sm font-black font-mono text-indigo-300">
                   +{currentUserRank === 1 ? 100 : currentUserRank === 2 ? 70 : currentUserRank === 3 ? 50 : 20} XP
                 </p>
@@ -333,7 +337,7 @@ export default function ClassroomPodiumModal({
                 <Coins className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-[10px] text-slate-400 font-medium">Kazanılan Altın</p>
+                <p className="text-[10px] text-slate-400 font-medium">{t("game_earned_gold", "Kazanılan Altın")}</p>
                 <p className="text-xs sm:text-sm font-black font-mono text-amber-300">
                   +{currentUserRank === 1 ? 50 : currentUserRank === 2 ? 35 : currentUserRank === 3 ? 25 : 10} 🪙
                 </p>
@@ -346,15 +350,15 @@ export default function ClassroomPodiumModal({
                 <Key className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] text-slate-400 font-medium">Sandık Anahtarı</p>
+                <p className="text-[10px] text-slate-400 font-medium">{t("game_pod_key_lbl", "Sandık Anahtarı")}</p>
                 <p className="text-xs font-black text-cyan-300 truncate">
                   {currentUserRank === 1
-                    ? "1x Epik Anahtar 🔑"
+                    ? t("game_pod_key_epic", "1x Epik Anahtar 🔑")
                     : currentUserRank === 2
-                    ? "1x Nadir Anahtar 🔑"
+                    ? t("game_pod_key_rare", "1x Nadir Anahtar 🔑")
                     : currentUserRank === 3
-                    ? "1x Std. Anahtar 🔑"
-                    : "Katılım Rozeti 🎖️"}
+                    ? t("game_pod_key_std", "1x Std. Anahtar 🔑")
+                    : t("game_pod_badge_part", "Katılım Rozeti 🎖️")}
                 </p>
               </div>
             </div>
@@ -375,19 +379,19 @@ export default function ClassroomPodiumModal({
               {claiming ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Ödüller Doğrulanıyor...</span>
+                  <span>{t("game_pod_verifying", "Ödüller Doğrulanıyor...")}</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 fill-current" />
-                  <span>Ödülleri Cüzdana Aktar ➔</span>
+                  <span>{t("game_pod_claim_btn", "Ödülleri Cüzdana Aktar ➔")}</span>
                 </>
               )}
             </button>
           ) : (
             <div className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center justify-center space-x-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>{claimResult?.message || "Ödüller başarıyla cüzdanınıza aktarıldı!"}</span>
+              <span>{claimResult?.message || t("game_pod_claimed_ok", "Ödüller başarıyla cüzdanınıza aktarıldı!")}</span>
             </div>
           )}
 
@@ -396,7 +400,7 @@ export default function ClassroomPodiumModal({
             onClick={onClose}
             className="w-full sm:w-auto py-3 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center space-x-2 transition cursor-pointer"
           >
-            <span>Arenaya Dön</span>
+            <span>{t("game_back_arena", "Arenaya Dön")}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

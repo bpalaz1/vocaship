@@ -14,6 +14,7 @@ import {
 import { useUserStories } from "../../context/UserStoriesContext";
 import { useAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
+import { useAppTheme } from "../../context/ThemeContext";
 import { autoAssignCover, autoAssignGradient } from "../../utils/autoCover";
 import { useTranslation, useLanguage } from "../../context/LanguageContext";
 import {
@@ -174,6 +175,26 @@ export const PROFESSIONAL_ITEMS = [
   { id: "finance_accounting", label: "Kurumsal Finans & Ekonomi", icon: "📈" },
 ];
 
+const READING_CAT_KEY_MAP: Record<string, string> = {
+  kids: "read_cat_kids",
+  adult_basic: "read_cat_daily",
+  adult_intermediate: "read_cat_adventure",
+  adult_advanced: "read_cat_philosophy",
+  mythology: "read_cat_mythology",
+  archaeology: "read_cat_archaeology",
+  nature_miracles: "read_cat_nature",
+  human_culture: "read_cat_human",
+  project_controls: "read_cat_project",
+  legal_contracts: "read_cat_legal",
+  medical_clinical: "read_cat_medical",
+  finance_accounting: "read_cat_finance",
+};
+
+function getReadingCatLabel(id: string, fallback: string, t: (k: string, d?: string) => string) {
+  const key = READING_CAT_KEY_MAP[id];
+  return key ? t(key, fallback) : fallback;
+}
+
 const PRESET_SNIPPETS = [
   {
     label: "📰 The Economist",
@@ -213,6 +234,7 @@ function StoryCardItem({
   isUserStory,
 }: StoryCardProps) {
   const { t } = useLanguage();
+  const { isDark } = useAppTheme();
   const [imgError, setImgError] = useState(false);
 
   const tier = getStoryTier(story);
@@ -225,17 +247,17 @@ function StoryCardItem({
   // Seviye Rozet Stili
   const tierBadgeConfig = {
     A: {
-      label: "A Seviyesi (2-3 dk)",
+      label: t("read_level_a_tip", "A Seviyesi (2-3 dk)"),
       badgeBg: "bg-emerald-500/90 text-white border-emerald-400/40",
       dot: "🟢",
     },
     B: {
-      label: "B Seviyesi (4-5 dk)",
+      label: t("read_level_b_tip", "B Seviyesi (4-5 dk)"),
       badgeBg: "bg-sky-500/90 text-white border-sky-400/40",
       dot: "🔵",
     },
     C: {
-      label: "C Seviyesi (5-6 dk)",
+      label: t("read_level_c_tip", "C Seviyesi (5-6 dk)"),
       badgeBg: "bg-purple-600/90 text-white border-purple-400/40",
       dot: "🟣",
     },
@@ -252,10 +274,14 @@ function StoryCardItem({
           onSelect(story);
         }
       }}
-      className={`group relative w-full rounded-2xl bg-white dark:bg-slate-900/90 border shadow-sm dark:shadow-lg hover:shadow-md dark:hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-200 cursor-pointer overflow-hidden flex flex-col focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-        isUserStory
-          ? "border-amber-500/40 hover:border-amber-400 hover:shadow-amber-500/10"
-          : "border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500/70 hover:shadow-indigo-500/15"
+      className={`group relative w-full rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden flex flex-col focus:outline-none focus:ring-2 focus:ring-indigo-400 hover:-translate-y-1.5 ${
+        isDark
+          ? isUserStory
+            ? "bg-slate-900/90 border-amber-500/40 hover:border-amber-400 shadow-lg hover:shadow-2xl hover:shadow-amber-500/10"
+            : "bg-slate-900/90 border-slate-800 hover:border-indigo-500/70 shadow-lg hover:shadow-2xl hover:shadow-indigo-500/15"
+          : isUserStory
+          ? "bg-[#f8fafc] border-amber-400 hover:border-amber-500 shadow-sm hover:shadow-md"
+          : "bg-[#f8fafc] border-slate-300 hover:border-indigo-400 shadow-sm hover:shadow-md"
       }`}
     >
       {/* 16:9 Kapak Görseli Katmanı (aspect-video) */}
@@ -350,15 +376,17 @@ function StoryCardItem({
         <div className="space-y-1.5">
           <span
             className={`text-[10px] font-bold uppercase tracking-wider line-clamp-1 ${
-              isUserStory ? "text-amber-400" : "text-indigo-400"
+              isUserStory
+                ? isDark ? "text-amber-400" : "text-amber-700"
+                : isDark ? "text-indigo-400" : "text-indigo-700"
             }`}
           >
-            {story.topic || story.categoryName || (isUserStory ? "Özel Hikaye" : "Genel Okuma")}
+            {story.topic || story.categoryName || (isUserStory ? t("custom_story_label", "Özel Hikaye") : t("general_story_label", "Genel Okuma"))}
           </span>
-          <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors line-clamp-1">
+          <h3 className={`text-sm sm:text-base font-bold transition-colors line-clamp-1 ${isDark ? "text-white group-hover:text-indigo-300" : "text-slate-900 group-hover:text-indigo-700"}`}>
             {story.title}
           </h3>
-          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+          <p className={`text-xs line-clamp-2 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
             {story.desc || (story.content ? story.content.slice(0, 110) + "..." : "")}
           </p>
         </div>
@@ -373,11 +401,15 @@ function StoryCardItem({
                 <span
                   key={idx}
                   title={trMeaning ? `${wordText}: ${trMeaning}` : wordText}
-                  className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 group-hover:border-indigo-400 dark:group-hover:border-indigo-500/40 transition-colors"
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-md border transition-colors ${
+                    isDark
+                      ? "bg-slate-800/90 border-slate-700/80 text-slate-300 group-hover:border-indigo-500/40"
+                      : "bg-slate-100 border-slate-300 text-slate-800 group-hover:border-indigo-400"
+                  }`}
                 >
-                  <strong className="text-indigo-600 dark:text-indigo-300">{wordText}</strong>
+                  <strong className={isDark ? "text-indigo-300" : "text-indigo-700"}>{wordText}</strong>
                   {trMeaning && (
-                    <span className="text-slate-500 dark:text-slate-400"> • {trMeaning}</span>
+                    <span className={isDark ? "text-slate-400" : "text-slate-600"}> • {trMeaning}</span>
                   )}
                 </span>
               );
@@ -386,11 +418,11 @@ function StoryCardItem({
         )}
 
         {/* Aksiyon Alt Çubuğu */}
-        <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
-          <span className="text-[11px] text-slate-500 dark:text-slate-500">
-            {isUserStory ? "Kişisel Kütüphane" : "Sıfır Bekleme (0ms)"}
+        <div className={`pt-2.5 border-t flex items-center justify-between text-xs font-semibold transition-colors ${isDark ? "border-slate-800/80 text-slate-400 group-hover:text-indigo-300" : "border-slate-200 text-slate-600 group-hover:text-indigo-700"}`}>
+          <span className="text-[11px]">
+            {isUserStory ? t("personal_library", "Kişisel Kütüphane") : t("instant_access", "Sıfır Bekleme (0ms)")}
           </span>
-          <div className="flex items-center gap-1 text-indigo-400 group-hover:translate-x-1 transition-transform">
+          <div className={`flex items-center gap-1 group-hover:translate-x-1 transition-transform ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>
             <span>{t("btn_read_now", "Hemen Oku")}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -410,6 +442,7 @@ export default function ReadingRoom({
   onCompleteStory,
 }: ReadingRoomProps) {
   const { t } = useTranslation();
+  const { isDark } = useAppTheme();
   const { userStories, deleteUserStory } = useUserStories();
   const { user } = useAuth();
   const { userProfile } = useProfile();
@@ -666,7 +699,7 @@ export default function ReadingRoom({
         /* ========================================================================= */
         <div className="space-y-4">
           {/* 1. KOMPAKT VE TEK SATIRLIK ÜST ŞERİT (TOP BAR) */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl backdrop-blur-md">
+          <div data-theme-preserve="dark" className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl backdrop-blur-md">
             {/* Sol: Başlık + Toplam Hikaye Rozeti + Günlük AI Hikaye Kotası */}
             <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
@@ -674,19 +707,19 @@ export default function ReadingRoom({
                 <span>{t("nav_reading", "Okuma Odası")}</span>
               </h1>
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                {allAvailableStories.length} Hikaye
+                {allAvailableStories.length} {t("read_story_unit", "Hikaye")}
               </span>
               {planTier === "pro" ? (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] flex items-center gap-1 shadow-sm">
-                  👑 PRO • Sınırsız AI
+                  👑 {t("read_plan_pro", "PRO • Sınırsız AI")}
                 </span>
               ) : planTier === "plus" ? (
                 <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold text-[11px] flex items-center gap-1 shadow-sm">
-                  ⚡ Plus • Günlük 5/5 AI
+                  ⚡ {t("read_plan_plus", "Plus • Günlük 5/5 AI")}
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
-                  🆓 Basic • Günlük 1/1 AI
+                  🆓 {t("read_plan_basic", "Basic • Günlük 1/1 AI")}
                 </span>
               )}
             </div>
@@ -700,7 +733,7 @@ export default function ReadingRoom({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Hikaye ara..."
+                  placeholder={t("read_search_placeholder", "Hikaye ara...")}
                   className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition shadow-inner"
                 />
                 {searchQuery && (
@@ -725,12 +758,12 @@ export default function ReadingRoom({
                       : "text-slate-400 hover:text-white hover:bg-slate-800/50"
                   }`}
                 >
-                  Tümü
+                  {t("read_all_levels", "Tümü")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedLevel("A")}
-                  title="A Seviyesi (2-3 dk)"
+                  title={t("read_level_a_tip", "A Seviyesi (2-3 dk)")}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                     selectedLevel === "A"
                       ? "bg-emerald-600 text-white shadow-md ring-1 ring-emerald-400/40"
@@ -744,7 +777,7 @@ export default function ReadingRoom({
                 <button
                   type="button"
                   onClick={() => setSelectedLevel("B")}
-                  title="B Seviyesi (4-5 dk)"
+                  title={t("read_level_b_tip", "B Seviyesi (4-5 dk)")}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                     selectedLevel === "B"
                       ? "bg-sky-600 text-white shadow-md ring-1 ring-sky-400/40"
@@ -758,7 +791,7 @@ export default function ReadingRoom({
                 <button
                   type="button"
                   onClick={() => setSelectedLevel("C")}
-                  title="C Seviyesi (5-6 dk)"
+                  title={t("read_level_c_tip", "C Seviyesi (5-6 dk)")}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                     selectedLevel === "C"
                       ? "bg-purple-600 text-white shadow-md ring-1 ring-purple-400/40"
@@ -780,17 +813,17 @@ export default function ReadingRoom({
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-200" />
                   <span className="hidden sm:inline">{t("reading_generate_ai", "Yapay Zekâ ile Üret")}</span>
-                  <span className="sm:hidden">Üret</span>
+                  <span className="sm:hidden">{t("read_gen_short", "Üret")}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsPasteModalOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs transition active:scale-95 cursor-pointer shrink-0"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 hover:text-white font-bold text-xs transition active:scale-95 cursor-pointer shrink-0"
                 >
                   <span>📋</span>
                   <span className="hidden sm:inline">{t("reading_paste_text", "Metin Yapıştır")}</span>
-                  <span className="sm:hidden">Yapıştır</span>
+                  <span className="sm:hidden">{t("read_paste_short", "Yapıştır")}</span>
                 </button>
               </div>
             </div>
@@ -807,11 +840,13 @@ export default function ReadingRoom({
               className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
                 activeTab === "explore" && selectedCategory === "all"
                   ? "bg-indigo-600 text-white shadow-md"
-                  : "bg-slate-900 border border-slate-800 text-slate-300"
+                  : isDark
+                  ? "bg-slate-900 border border-slate-800 text-slate-300"
+                  : "bg-[#f8fafc] border border-slate-300 text-slate-800"
               }`}
             >
               <span>🌟</span>
-              <span>Keşfet ({allAvailableStories.length})</span>
+              <span>{t("reading_tab_explore", "Keşfet")} ({allAvailableStories.length})</span>
             </button>
             <button
               type="button"
@@ -819,11 +854,13 @@ export default function ReadingRoom({
               className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
                 activeTab === "in_progress"
                   ? "bg-indigo-600 text-white shadow-md"
-                  : "bg-slate-900 border border-slate-800 text-slate-300"
+                  : isDark
+                  ? "bg-slate-900 border border-slate-800 text-slate-300"
+                  : "bg-[#f8fafc] border border-slate-300 text-slate-800"
               }`}
             >
               <span>⏳</span>
-              <span>Devam Edenler ({inProgressStories.length})</span>
+              <span>{t("read_in_progress", "Devam Edenler")} ({inProgressStories.length})</span>
             </button>
             <button
               type="button"
@@ -831,11 +868,13 @@ export default function ReadingRoom({
               className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
                 activeTab === "completed"
                   ? "bg-indigo-600 text-white shadow-md"
-                  : "bg-slate-900 border border-slate-800 text-slate-300"
+                  : isDark
+                  ? "bg-slate-900 border border-slate-800 text-slate-300"
+                  : "bg-[#f8fafc] border border-slate-300 text-slate-800"
               }`}
             >
               <span>✅</span>
-              <span>Arşivim ({completedStories.length})</span>
+              <span>{t("read_archive", "Arşivim")} ({completedStories.length})</span>
             </button>
             {userStories.length > 0 && (
               <button
@@ -847,11 +886,13 @@ export default function ReadingRoom({
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
                   activeTab === "explore" && selectedCategory === "user_custom"
                     ? "bg-amber-500 text-slate-950 font-bold shadow-md"
-                    : "bg-slate-900 border border-amber-500/30 text-amber-300"
+                    : isDark
+                    ? "bg-slate-900 border border-amber-500/30 text-amber-300"
+                    : "bg-amber-50 border border-amber-300 text-amber-800"
                 }`}
               >
                 <span>✨</span>
-                <span>Benim Hikayelerim ({userStories.length})</span>
+                <span>{t("read_my_stories", "Benim Hikayelerim")} ({userStories.length})</span>
               </button>
             )}
             {GENERAL_CULTURE_ITEMS.map((cat) => (
@@ -865,11 +906,13 @@ export default function ReadingRoom({
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
                   activeTab === "explore" && selectedCategory === cat.id
                     ? "bg-indigo-600 text-white font-bold shadow-md"
-                    : "bg-slate-900 border border-slate-800 text-slate-300"
+                    : isDark
+                    ? "bg-slate-900 border border-slate-800 text-slate-300"
+                    : "bg-[#f8fafc] border border-slate-300 text-slate-800"
                 }`}
               >
                 <span>{cat.icon}</span>
-                <span>{cat.label}</span>
+                <span>{getReadingCatLabel(cat.id, cat.label, t)}</span>
               </button>
             ))}
             {PROFESSIONAL_ITEMS.map((cat) => (
@@ -883,11 +926,13 @@ export default function ReadingRoom({
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
                   activeTab === "explore" && selectedCategory === cat.id
                     ? "bg-indigo-600 text-white font-bold shadow-md"
-                    : "bg-slate-900 border border-slate-800 text-slate-300"
+                    : isDark
+                    ? "bg-slate-900 border border-slate-800 text-slate-300"
+                    : "bg-[#f8fafc] border border-slate-300 text-slate-800"
                 }`}
               >
                 <span>{cat.icon}</span>
-                <span>{cat.label}</span>
+                <span>{getReadingCatLabel(cat.id, cat.label, t)}</span>
               </button>
             ))}
           </div>
@@ -895,11 +940,17 @@ export default function ReadingRoom({
           {/* 2 SÜTUNLU MİZANPAJ: SOL DİKEY SIDEBAR + SAĞ GENİŞ VİTRİN */}
           <div className="flex flex-col lg:flex-row gap-5 items-start">
             {/* SOL DİKEY KATEGORİ MENÜSÜ (SIDEBAR) */}
-            <aside className="hidden lg:block w-64 lg:w-72 shrink-0 sticky top-20 bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-xl backdrop-blur-md max-h-[calc(100vh-6rem)] overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-slate-800">
+            <aside
+              className={`hidden lg:block w-64 lg:w-72 shrink-0 sticky top-20 border rounded-2xl p-3.5 backdrop-blur-md max-h-[calc(100vh-6rem)] overflow-y-auto space-y-4 scrollbar-thin transition-colors ${
+                isDark
+                  ? "bg-slate-900/90 border-slate-800 shadow-xl scrollbar-thumb-slate-800"
+                  : "bg-[#f8fafc] border-slate-300 shadow-sm scrollbar-thumb-slate-300"
+              }`}
+            >
               {/* A) ANA RAF SEÇİCİ */}
               <div className="space-y-1">
-                <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Ana Raf
+                <div className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {t("read_main_shelf", "Ana Raf")}
                 </div>
                 {/* 🌟 Keşfet (Tümü) */}
                 <button
@@ -910,15 +961,25 @@ export default function ReadingRoom({
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
                     activeTab === "explore" && selectedCategory === "all"
-                      ? "bg-indigo-600/90 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                      ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                      : isDark
+                      ? "text-slate-300 hover:text-white hover:bg-slate-800/60"
+                      : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/70"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span>🌟</span>
-                    <span>Keşfet (Tümü)</span>
+                    <span>{t("read_explore_all", "Keşfet (Tümü)")}</span>
                   </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-slate-300">
+                  <span
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                      activeTab === "explore" && selectedCategory === "all"
+                        ? "bg-white/20 text-white"
+                        : isDark
+                        ? "bg-slate-950/60 text-slate-300"
+                        : "bg-slate-200 text-slate-800"
+                    }`}
+                  >
                     {allAvailableStories.length}
                   </span>
                 </button>
@@ -929,16 +990,18 @@ export default function ReadingRoom({
                   onClick={() => setActiveTab("in_progress")}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
                     activeTab === "in_progress"
-                      ? "bg-indigo-600/90 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                      ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                      : isDark
+                      ? "text-slate-300 hover:text-white hover:bg-slate-800/60"
+                      : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/70"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span>⏳</span>
-                    <span>Devam Edenler</span>
+                    <span>{t("read_in_progress", "Devam Edenler")}</span>
                   </div>
                   {inProgressStories.length > 0 && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full font-bold ${isDark ? "bg-amber-500/20 text-amber-300" : "bg-amber-100 text-amber-900"}`}>
                       {inProgressStories.length}
                     </span>
                   )}
@@ -950,16 +1013,18 @@ export default function ReadingRoom({
                   onClick={() => setActiveTab("completed")}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
                     activeTab === "completed"
-                      ? "bg-indigo-600/90 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                      ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                      : isDark
+                      ? "text-slate-300 hover:text-white hover:bg-slate-800/60"
+                      : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/70"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span>✅</span>
-                    <span>Arşivim</span>
+                    <span>{t("read_archive", "Arşivim")}</span>
                   </div>
                   {completedStories.length > 0 && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full font-bold ${isDark ? "bg-emerald-500/20 text-emerald-300" : "bg-emerald-100 text-emerald-900"}`}>
                       {completedStories.length}
                     </span>
                   )}
@@ -975,24 +1040,34 @@ export default function ReadingRoom({
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
                     activeTab === "explore" && selectedCategory === "user_custom"
                       ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20 ring-1 ring-amber-300"
-                      : "text-amber-400/80 hover:text-amber-300 hover:bg-slate-900/60"
+                      : isDark
+                      ? "text-amber-400/80 hover:text-amber-300 hover:bg-slate-800/60"
+                      : "text-amber-800 hover:text-amber-950 hover:bg-amber-100/70"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span>✨</span>
-                    <span>Benim Hikayelerim</span>
+                    <span>{t("read_my_stories", "Benim Hikayelerim")}</span>
                   </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-amber-300">
+                  <span
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                      activeTab === "explore" && selectedCategory === "user_custom"
+                        ? "bg-slate-900/15 text-slate-950"
+                        : isDark
+                        ? "bg-slate-950/60 text-amber-300"
+                        : "bg-amber-100 text-amber-900"
+                    }`}
+                  >
                     {userStories.length}
                   </span>
                 </button>
               </div>
 
               {/* B) 🌍 GENEL KÜLTÜR */}
-              <div className="space-y-1 pt-3 border-t border-slate-800/80">
-                <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <div className={`space-y-1 pt-3 border-t ${isDark ? "border-slate-800/80" : "border-slate-200"}`}>
+                <div className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   <span>🌍</span>
-                  <span>Genel Kültür</span>
+                  <span>{t("read_general_culture", "Genel Kültür")}</span>
                 </div>
                 {GENERAL_CULTURE_ITEMS.map((cat) => {
                   const isSelected = activeTab === "explore" && selectedCategory === cat.id;
@@ -1007,15 +1082,17 @@ export default function ReadingRoom({
                       }}
                       className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs transition cursor-pointer ${
                         isSelected
-                          ? "bg-indigo-600/90 text-white font-semibold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                          ? "bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                          : isDark
+                          ? "text-slate-300 hover:text-white hover:bg-slate-800/60"
+                          : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/70 font-medium"
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate">
                         <span className="text-sm shrink-0">{cat.icon}</span>
-                        <span className="truncate">{cat.label}</span>
+                        <span className="truncate">{getReadingCatLabel(cat.id, cat.label, t)}</span>
                       </div>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-slate-400 shrink-0 ml-1">
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0 ml-1 ${isSelected ? "bg-white/20 text-white" : isDark ? "bg-slate-950/60 text-slate-400" : "bg-slate-200 text-slate-700"}`}>
                         {count}
                       </span>
                     </button>
@@ -1024,10 +1101,10 @@ export default function ReadingRoom({
               </div>
 
               {/* C) 💼 MESLEKİ & SEKTÖREL */}
-              <div className="space-y-1 pt-3 border-t border-slate-800/80">
-                <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <div className={`space-y-1 pt-3 border-t ${isDark ? "border-slate-800/80" : "border-slate-200"}`}>
+                <div className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   <span>💼</span>
-                  <span>Mesleki & Sektörel</span>
+                  <span>{t("read_cat_professional", "Mesleki & Sektörel")}</span>
                 </div>
                 {PROFESSIONAL_ITEMS.map((cat) => {
                   const isSelected = activeTab === "explore" && selectedCategory === cat.id;
@@ -1042,15 +1119,17 @@ export default function ReadingRoom({
                       }}
                       className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs transition cursor-pointer ${
                         isSelected
-                          ? "bg-indigo-600/90 text-white font-semibold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                          ? "bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400/40"
+                          : isDark
+                          ? "text-slate-300 hover:text-white hover:bg-slate-800/60"
+                          : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/70 font-medium"
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate">
                         <span className="text-sm shrink-0">{cat.icon}</span>
-                        <span className="truncate">{cat.label}</span>
+                        <span className="truncate">{getReadingCatLabel(cat.id, cat.label, t)}</span>
                       </div>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-950/60 text-slate-400 shrink-0 ml-1">
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0 ml-1 ${isSelected ? "bg-white/20 text-white" : isDark ? "bg-slate-950/60 text-slate-400" : "bg-slate-200 text-slate-700"}`}>
                         {count}
                       </span>
                     </button>
@@ -1068,19 +1147,25 @@ export default function ReadingRoom({
                 <div className="space-y-4">
                   {/* Aktif Kategori / Arama Bilgisi Çubuğu */}
                   <div className="flex items-center justify-between gap-2 px-1">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                      <span className="text-indigo-400">
+                    <div className={`flex items-center gap-2 text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-800"}`}>
+                      <span className={isDark ? "text-indigo-400" : "text-indigo-700"}>
                         {selectedCategory === "all"
-                          ? "🌟 Tüm Kategoriler"
+                          ? `🌟 ${t("read_all_categories", "Tüm Kategoriler")}`
                           : selectedCategory === "user_custom"
-                          ? "✨ Benim Hikayelerim"
-                          : (GENERAL_CULTURE_ITEMS.find((c) => c.id === selectedCategory) ||
-                             PROFESSIONAL_ITEMS.find((c) => c.id === selectedCategory))?.label || selectedCategory}
+                          ? `✨ ${t("read_my_stories", "Benim Hikayelerim")}`
+                          : (() => {
+                              const foundCat =
+                                GENERAL_CULTURE_ITEMS.find((c) => c.id === selectedCategory) ||
+                                PROFESSIONAL_ITEMS.find((c) => c.id === selectedCategory);
+                              return foundCat
+                                ? getReadingCatLabel(foundCat.id, foundCat.label, t)
+                                : selectedCategory;
+                            })()}
                       </span>
-                      <span className="text-slate-600">•</span>
-                      <span className="text-slate-400 font-normal">
-                        {filteredStories.length} {filteredStories.length === 1 ? "hikaye" : "hikaye"}
-                        {selectedLevel !== "all" && ` (${selectedLevel} Seviyesi)`}
+                      <span className={isDark ? "text-slate-600" : "text-slate-400"}>•</span>
+                      <span className={`font-normal ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                        {filteredStories.length} {t("read_story_unit", "Hikaye").toLowerCase()}
+                        {selectedLevel !== "all" && ` (${selectedLevel} ${t("read_level_suffix", "Seviyesi")})`}
                       </span>
                     </div>
 
@@ -1088,7 +1173,7 @@ export default function ReadingRoom({
                       <button
                         type="button"
                         onClick={handleClearFilters}
-                        className="text-[11px] text-indigo-400 hover:text-indigo-300 underline font-medium cursor-pointer"
+                        className={`text-[11px] underline font-medium cursor-pointer ${isDark ? "text-indigo-400 hover:text-indigo-300" : "text-indigo-700 hover:text-indigo-900"}`}
                       >
                         Filtreleri Temizle
                       </button>
@@ -1112,7 +1197,7 @@ export default function ReadingRoom({
                             onDelete={
                               isCustom
                                 ? () => {
-                                    if (confirm(`"${storyItem.title}" kütüphanenizden silinsin mi?`)) {
+                                    if (confirm(t("read_confirm_delete_story", "\"{title}\" kütüphanenizden silinsin mi?", { title: storyItem.title }))) {
                                       deleteUserStory(storyItem.id);
                                     }
                                   }
@@ -1124,22 +1209,22 @@ export default function ReadingRoom({
                     </div>
                   ) : (
                     /* Boş Durum: Arama / Filtreleme Sonucu Yok */
-                    <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center space-y-3">
-                      <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
+                    <div className={`rounded-3xl border border-dashed p-12 text-center space-y-3 ${isDark ? "border-slate-800 bg-slate-900/40" : "border-slate-300 bg-[#f8fafc]"}`}>
+                      <div className={`w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center text-2xl ${isDark ? "bg-slate-800/60 border-slate-700/50" : "bg-slate-100 border-slate-300"}`}>
                         🔍
                       </div>
-                      <h3 className="text-base font-bold text-white">
+                      <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
                         {t("no_stories_found", "Aramanıza veya Filtreye Uygun Hikaye Bulunamadı")}
                       </h3>
-                      <p className="text-xs text-slate-400 max-w-md mx-auto">
-                        Seçili seviye veya kategoride eşleşen metin bulunamadı. Filtreleri temizleyerek tüm kataloğu görüntüleyebilirsiniz.
+                      <p className={`text-xs max-w-md mx-auto ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                        {t("read_no_match_desc", "Seçili seviye veya kategoride eşleşen metin bulunamadı. Filtreleri temizleyerek tüm kataloğu görüntüleyebilirsiniz.")}
                       </p>
                       <button
                         type="button"
                         onClick={handleClearFilters}
                         className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
                       >
-                        Filtreleri Temizle
+                        {t("read_clear_filters", "Filtreleri Temizle")}
                       </button>
                     </div>
                   )}
@@ -1152,15 +1237,15 @@ export default function ReadingRoom({
               {activeTab === "in_progress" && (
                 <div className="space-y-4">
                   {inProgressStories.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
-                      <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
+                    <div className={`rounded-3xl border border-dashed p-12 text-center space-y-3 ${isDark ? "border-slate-800 bg-slate-900/30" : "border-slate-300 bg-[#f8fafc]"}`}>
+                      <div className={`w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center text-2xl ${isDark ? "bg-slate-800/60 border-slate-700/50" : "bg-slate-100 border-slate-300"}`}>
                         ⏳
                       </div>
-                      <h3 className="text-sm font-semibold text-slate-200">
-                        Yarım kalan bir okumanız bulunmuyor
+                      <h3 className={`text-sm font-semibold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                        {t("read_empty_progress_title", "Yarım kalan bir okumanız bulunmuyor")}
                       </h3>
-                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                        Keşfet sekmesinden yeni bir hikaye veya vaka analizine başlayarak okuma odasında ilerleyebilirsiniz.
+                      <p className={`text-xs max-w-sm mx-auto ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                        {t("read_empty_progress_desc", "Keşfet sekmesinden yeni bir hikaye veya vaka analizine başlayarak okuma odasında ilerleyebilirsiniz.")}
                       </p>
                       <button
                         type="button"
@@ -1170,7 +1255,7 @@ export default function ReadingRoom({
                         }}
                         className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
                       >
-                        <span>Metinleri Keşfet</span>
+                        <span>{t("read_explore_texts", "Metinleri Keşfet")}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -1184,24 +1269,28 @@ export default function ReadingRoom({
                         return (
                           <div
                             key={`${item.storyKey}-${index}`}
-                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-indigo-500/40 transition shadow-sm"
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl border transition ${
+                              isDark
+                                ? "bg-slate-900/90 border-slate-800 hover:border-indigo-500/40 shadow-lg"
+                                : "bg-[#f8fafc] border-slate-300 hover:border-indigo-400 shadow-sm"
+                            }`}
                           >
                             <div className="space-y-2 flex-1 min-w-0">
                               <div className="flex items-center space-x-2.5">
-                                <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold font-mono">
-                                  {item.level || "Orta"}
+                                <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold font-mono ${isDark ? "bg-amber-500/15 text-amber-300 border-amber-500/30" : "bg-amber-100 text-amber-900 border-amber-300"}`}>
+                                  {item.level || "Intermediate"}
                                 </span>
-                                <h3 className="text-sm sm:text-base font-bold text-white truncate">
+                                <h3 className={`text-sm sm:text-base font-bold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
                                   {item.title}
                                 </h3>
                               </div>
 
                               <div className="space-y-1 max-w-md">
-                                <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-                                  <span>Kaldığınız Yer: Sayfa {currentP} / {totalP}</span>
-                                  <span className="text-indigo-400 font-mono font-bold">%{percent}</span>
+                                <div className={`flex items-center justify-between text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                                  <span>{t("read_page_progress", "Kaldığınız Yer: Sayfa {cur} / {total}", { cur: currentP, total: totalP })}</span>
+                                  <span className={`font-mono font-bold ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>%{percent}</span>
                                 </div>
-                                <div className="w-full h-1.5 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
+                                <div className={`w-full h-1.5 rounded-full border overflow-hidden ${isDark ? "bg-slate-950 border-slate-800" : "bg-slate-200 border-slate-300"}`}>
                                   <div
                                     className="h-full bg-gradient-to-r from-indigo-500 to-amber-400 rounded-full transition-all"
                                     style={{ width: `${percent}%` }}
@@ -1216,7 +1305,7 @@ export default function ReadingRoom({
                               className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer shrink-0"
                             >
                               <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>Okumaya Devam Et</span>
+                              <span>{t("read_resume_btn", "Okumaya Devam Et")}</span>
                             </button>
                           </div>
                         );
@@ -1232,15 +1321,15 @@ export default function ReadingRoom({
               {activeTab === "completed" && (
                 <div className="space-y-4">
                   {completedStories.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center space-y-3">
-                      <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-2xl">
+                    <div className={`rounded-3xl border border-dashed p-12 text-center space-y-3 ${isDark ? "border-slate-800 bg-slate-900/30" : "border-slate-300 bg-[#f8fafc]"}`}>
+                      <div className={`w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center text-2xl ${isDark ? "bg-slate-800/60 border-slate-700/50" : "bg-slate-100 border-slate-300"}`}>
                         📚
                       </div>
-                      <h3 className="text-sm font-semibold text-slate-200">
-                        Henüz tamamlanan bir metniniz yok
+                      <h3 className={`text-sm font-semibold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                        {t("read_empty_archive_title", "Henüz tamamlanan bir metniniz yok")}
                       </h3>
-                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                        Bir okumayı bitirdiğinizde &apos;Hikayeyi Bitirdim&apos; butonuna basarak arşive ekleyebilirsiniz.
+                      <p className={`text-xs max-w-sm mx-auto ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                        {t("read_empty_archive_desc", "Bir okumayı bitirdiğinizde 'Hikayeyi Bitirdim' butonuna basarak arşive ekleyebilirsiniz.")}
                       </p>
                       <button
                         type="button"
@@ -1250,7 +1339,7 @@ export default function ReadingRoom({
                         }}
                         className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
                       >
-                        <span>Metinleri Keşfet</span>
+                        <span>{t("read_explore_texts", "Metinleri Keşfet")}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -1259,27 +1348,38 @@ export default function ReadingRoom({
                       {completedStories.map((item, index) => (
                         <div
                           key={`${item.storyKey}-${index}`}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-emerald-500/40 transition shadow-sm"
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl border transition ${
+                            isDark
+                              ? "bg-slate-900/90 border-slate-800 hover:border-emerald-500/40 shadow-lg"
+                              : "bg-[#f8fafc] border-slate-300 hover:border-emerald-400 shadow-sm"
+                          }`}
                         >
                           <div className="space-y-1.5">
                             <div className="flex items-center space-x-2.5">
-                              <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold font-mono flex items-center gap-1">
+                              <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold font-mono flex items-center gap-1 ${isDark ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-emerald-100 text-emerald-800 border-emerald-300"}`}>
                                 <Check className="w-3 h-3" />
-                                <span>Tamamlandı</span>
+                                <span>{t("read_status_completed", "Tamamlandı")}</span>
                               </span>
-                              <h3 className="text-sm sm:text-base font-bold text-white">
+                              <h3 className={`text-sm sm:text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
                                 {item.title}
                               </h3>
                             </div>
-                            <p className="text-xs text-slate-400">
-                              Kategori: {item.topic || "Genel"} • Seviye: {item.level || "C1"}
+                            <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                              {t("read_cat_level_line", "Kategori: {topic} • Seviye: {level}", {
+                                topic: item.topic || t("general_story_label", "Genel Okuma"),
+                                level: item.level || "C1",
+                              })}
                             </p>
                           </div>
 
                           <button
                             type="button"
                             onClick={() => handleOpenFromProgress(item)}
-                            className="inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition cursor-pointer shrink-0"
+                            className={`inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl border font-bold text-xs transition cursor-pointer shrink-0 ${
+                              isDark
+                                ? "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200"
+                                : "bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800"
+                            }`}
                           >
                             <RotateCw className="w-3.5 h-3.5" />
                             <span>Yeniden Oku</span>
@@ -1331,9 +1431,9 @@ export default function ReadingRoom({
               <div className="flex items-center space-x-2.5">
                 <span className="text-xl">✍️</span>
                 <div>
-                  <h3 className="text-base font-bold text-white">Kendi Metnini Yapıştır</h3>
+                  <h3 className="text-base font-bold text-white">{t("read_paste_modal_title", "Kendi Metnini Yapıştır")}</h3>
                   <p className="text-xs text-slate-400">
-                    Makale, haber veya vaka metninizi Dual-Reader ile inceleyin
+                    {t("read_paste_modal_sub", "Makale, haber veya vaka metninizi Dual-Reader ile inceleyin")}
                   </p>
                 </div>
               </div>
@@ -1350,7 +1450,7 @@ export default function ReadingRoom({
             <div className="space-y-3">
               <input
                 type="text"
-                placeholder="Metin Başlığı (İsteğe Bağlı)..."
+                placeholder={t("read_paste_title_ph", "Metin Başlığı (İsteğe Bağlı)...")}
                 value={pasteTitle}
                 onChange={(e) => setPasteTitle(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -1358,7 +1458,7 @@ export default function ReadingRoom({
 
               <textarea
                 rows={8}
-                placeholder="İngilizce metninizi buraya yapıştırın..."
+                placeholder={t("read_paste_body_ph", "İngilizce metninizi buraya yapıştırın...")}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none leading-relaxed"
@@ -1366,7 +1466,7 @@ export default function ReadingRoom({
 
               {/* Örnek Parçacıklar */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-[11px] text-slate-400">Örnekler:</span>
+                <span className="text-[11px] text-slate-400">{t("read_examples_label", "Örnekler:")}</span>
                 {PRESET_SNIPPETS.map((snippet) => (
                   <button
                     key={snippet.label}
@@ -1389,7 +1489,7 @@ export default function ReadingRoom({
                 onClick={() => setIsPasteModalOpen(false)}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer"
               >
-                İptal
+                {t("cancel", "İptal")}
               </button>
               <button
                 type="button"
@@ -1397,7 +1497,7 @@ export default function ReadingRoom({
                 onClick={() => handleLaunchCustomReader(pasteText, pasteTitle)}
                 className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer"
               >
-                Metni Çözümle & Oku ➔
+                {t("read_analyze_read_btn", "Metni Çözümle & Oku ➔")}
               </button>
             </div>
           </div>

@@ -28,7 +28,13 @@ def calculate_sm2(rating: int, repetitions: int, ease_factor: float, interval: i
     return new_repetitions, round(new_ease_factor, 2), new_interval
 
 
-def process_card_review_result(card_id: str, is_correct: bool, rating: Optional[int] = None) -> Dict[str, Any]:
+def process_card_review_result(
+    card_id: str,
+    is_correct: bool,
+    rating: Optional[int] = None,
+    force_clear: bool = False,
+    meaning: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Zayıf Nokta Avcısı (Weak-Spot Hunter) + Dinamik SM-2 Değerlendirmesi:
     - is_correct == False: mistake_count += 1, consecutive_correct = 0, needs_review = True
@@ -73,12 +79,12 @@ def process_card_review_result(card_id: str, is_correct: bool, rating: Optional[
 
         new_card_id = str(uuid.uuid4())
         word_clean = card_id.strip()
-        auto_translation = word_clean
-        auto_definition = f"Otomatik eklenen kelime: {word_clean}"
+        auto_translation = (meaning or "").strip() or word_clean
+        auto_definition = (meaning or "").strip() or f"Otomatik eklenen kelime: {word_clean}"
         try:
             from app.api.v1.endpoints.ai import MULTI_LANG_VOCAB
             word_lower = word_clean.lower()
-            if word_lower in MULTI_LANG_VOCAB:
+            if word_lower in MULTI_LANG_VOCAB and auto_translation == word_clean:
                 auto_translation = MULTI_LANG_VOCAB[word_lower].get("translations", {}).get("tr") or auto_translation
                 auto_definition = MULTI_LANG_VOCAB[word_lower].get("translations", {}).get("tr") or auto_definition
         except Exception:
@@ -118,9 +124,10 @@ def process_card_review_result(card_id: str, is_correct: bool, rating: Optional[
         effective_rating = rating if rating is not None else 1
     else:
         consecutive_correct += 1
-        # 2 kez üst üste doğru bilinirse zayıf noktadan otomatik çıkar
-        if consecutive_correct >= 2:
+        # Tek doğrulamayla zorla temizle (İntikam / Telafi) veya 2 kez üst üste doğru bilinince çıkar
+        if force_clear or consecutive_correct >= 2:
             needs_review = False
+            consecutive_correct = max(consecutive_correct, 2)
         else:
             needs_review = old_needs_review
         effective_rating = rating if rating is not None else 4

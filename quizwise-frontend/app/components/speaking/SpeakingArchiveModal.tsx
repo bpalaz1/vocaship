@@ -19,6 +19,7 @@ import {
   SpeakingArchiveItem,
   getSpeakingArchives,
 } from "../../actions/speakingArchive";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SpeakingArchiveModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export default function SpeakingArchiveModal({
   onClose,
   userId,
 }: SpeakingArchiveModalProps) {
+  const { t, language } = useLanguage();
   const [archives, setArchives] = useState<SpeakingArchiveItem[]>([]);
   const [selectedArchive, setSelectedArchive] = useState<SpeakingArchiveItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,7 @@ export default function SpeakingArchiveModal({
         }
       } catch (err: any) {
         console.error("Arşivler yüklenemedi:", err);
-        setError("Arşiv geçmişi yüklenirken bir sorun oluştu.");
+        setError(t("speak_archive_load_err", "Arşiv geçmişi yüklenirken bir sorun oluştu."));
       } finally {
         setLoading(false);
       }
@@ -67,7 +69,7 @@ export default function SpeakingArchiveModal({
   const formatDate = (isoString: string) => {
     try {
       const d = new Date(isoString);
-      return d.toLocaleDateString("tr-TR", {
+      return d.toLocaleDateString(language === "tr" ? "tr-TR" : language, {
         day: "numeric",
         month: "long",
         year: "numeric",
@@ -99,14 +101,14 @@ export default function SpeakingArchiveModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-white tracking-wide">
-                  🗂️ Konuşma Arşivim
+                  🗂️ {t("speak_archive_modal_title", "Konuşma Arşivim")}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
-                  {archives.length} Oturum
+                  {t("speak_archive_sessions_count", "{count} Oturum", { count: archives.length })}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Geçmiş pratik diyaloglarınızı, karnelerinizi ve gelişim skorlarınızı inceleyin
+                {t("speak_archive_modal_sub", "Geçmiş pratik diyaloglarınızı, karnelerinizi ve gelişim skorlarınızı inceleyin")}
               </p>
             </div>
           </div>
@@ -115,7 +117,7 @@ export default function SpeakingArchiveModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -128,15 +130,15 @@ export default function SpeakingArchiveModal({
           {/* 1. SOL PANEL: GEÇMİŞ OTURUMLAR LİSTESİ */}
           <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-slate-800/80 flex flex-col min-h-0 bg-slate-950/40">
             <div className="p-3 border-b border-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-              <span>Geçmiş Pratikler</span>
-              <span className="text-[10px] text-slate-500 font-mono">Tarihe Göre</span>
+              <span>{t("speak_past_practices", "Geçmiş Pratikler")}</span>
+              <span className="text-[10px] text-slate-500 font-mono">{t("speak_by_date", "Tarihe Göre")}</span>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin scrollbar-thumb-slate-800">
               {loading ? (
                 <div className="p-8 text-center text-xs text-slate-400 space-y-2">
                   <Sparkles className="w-5 h-5 text-indigo-400 animate-spin mx-auto" />
-                  <p>Arşivler yükleniyor...</p>
+                  <p>{t("speak_archive_loading", "Arşivler yükleniyor...")}</p>
                 </div>
               ) : error ? (
                 <div className="p-4 text-center text-xs text-rose-400 bg-rose-950/20 rounded-xl border border-rose-500/30">
@@ -145,9 +147,9 @@ export default function SpeakingArchiveModal({
               ) : archives.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400 space-y-2">
                   <MessageSquare className="w-8 h-8 text-slate-600 mx-auto" />
-                  <p className="font-semibold text-slate-300">Henüz arşivlenmiş oturum yok</p>
+                  <p className="font-semibold text-slate-300">{t("speak_no_archive_yet", "Henüz arşivlenmiş oturum yok")}</p>
                   <p className="text-[11px]">
-                    Speaking Lounge'da konuşma yaptıktan sonra <b>[ 🏁 Pratiği Bitir & Kaydet ]</b> butonuna basarak kaydedebilirsiniz.
+                    {t("speak_no_archive_cta", "Speaking Lounge'da konuşma yaptıktan sonra [ 🏁 Pratiği Bitir & Kaydet ] butonuna basarak kaydedebilirsiniz.")}
                   </p>
                 </div>
               ) : (
@@ -210,35 +212,35 @@ export default function SpeakingArchiveModal({
 
                     <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-bold">
                       <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      <span>+{selectedArchive.xp_awarded || 30} XP Kazanıldı</span>
+                      <span>{t("speak_xp_earned", "+{xp} XP Kazanıldı", { xp: selectedArchive.xp_awarded || 30 })}</span>
                     </div>
                   </div>
 
                   {/* 4'lü Metrik Kartları */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                     <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Akıcılık</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">{t("speak_stat_fluency", "Akıcılık")}</span>
                       <span className="text-sm font-extrabold text-emerald-400 font-mono">
                         %{selectedArchive.metrics?.fluency || 85}
                       </span>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Kelime/Jargon</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">{t("speak_stat_vocab", "Kelime/Jargon")}</span>
                       <span className="text-sm font-extrabold text-indigo-400 font-mono">
                         %{selectedArchive.metrics?.vocabulary || 80}
                       </span>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Gramer</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">{t("speak_stat_grammar", "Gramer")}</span>
                       <span className="text-sm font-extrabold text-teal-400 font-mono">
                         %{selectedArchive.metrics?.grammar || 90}
                       </span>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Genel Puan</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">{t("speak_stat_overall", "Genel Puan")}</span>
                       <span className="text-sm font-extrabold text-amber-400 font-mono">
                         {selectedArchive.metrics?.overall_score || selectedArchive.metrics?.fluency || 88}
                       </span>
@@ -256,7 +258,7 @@ export default function SpeakingArchiveModal({
                         // Kullanıcı Balonu (Sağa Yaslı, Indigo)
                         <div key={idx} className="flex flex-col items-end max-w-[85%] sm:max-w-[75%] ml-auto space-y-1">
                           <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 pr-1">
-                            <span className="font-bold text-indigo-300">Sen</span>
+                            <span className="font-bold text-indigo-300">{t("speak_user_prefix", "Sen")}</span>
                             {turn.timestamp && <span>• {turn.timestamp}</span>}
                           </div>
                           <div className="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-md text-xs sm:text-sm leading-relaxed font-medium">
@@ -276,7 +278,7 @@ export default function SpeakingArchiveModal({
                             {/* Varsa Alınan Alternatif Cümle */}
                             {turn.feedback?.better_alternative && (
                               <div className="mt-2.5 pt-2 border-t border-slate-700/60 text-[11px] text-emerald-300 bg-emerald-950/20 p-2 rounded-xl">
-                                <span className="font-bold text-emerald-400">💡 Daha Doğal Alternatif: </span>
+                                <span className="font-bold text-emerald-400">{t("speak_better_alt", "💡 Daha Doğal Alternatif: ")}</span>
                                 <span>{turn.feedback.better_alternative}</span>
                               </div>
                             )}
@@ -286,7 +288,7 @@ export default function SpeakingArchiveModal({
                     })
                   ) : (
                     <div className="p-8 text-center text-xs text-slate-400">
-                      Bu oturum için kayıtlı transkript metni bulunamadı.
+                      {t("speak_no_transcript", "Bu oturum için kayıtlı transkript metni bulunamadı.")}
                     </div>
                   )}
                 </div>
@@ -294,9 +296,9 @@ export default function SpeakingArchiveModal({
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400 space-y-2">
                 <Archive className="w-10 h-10 text-slate-600" />
-                <p className="text-sm font-semibold text-slate-300">İncelemek istediğiniz bir oturumu seçin</p>
+                <p className="text-sm font-semibold text-slate-300">{t("speak_select_session_title", "İncelemek istediğiniz bir oturumu seçin")}</p>
                 <p className="text-xs max-w-sm">
-                  Sol paneldeki pratik geçmişinizden bir seans seçerek konuşma dökümünü ve detaylı karne puanlarınızı görüntüleyin.
+                  {t("speak_select_session_desc", "Sol paneldeki pratik geçmişinizden bir seans seçerek konuşma dökümünü ve detaylı karne puanlarınızı görüntüleyin.")}
                 </p>
               </div>
             )}
@@ -309,7 +311,7 @@ export default function SpeakingArchiveModal({
         <div className="px-6 py-3 border-t border-slate-800/80 bg-slate-950/80 flex items-center justify-between text-xs text-slate-400 shrink-0">
           <div className="flex items-center gap-1.5 text-[11px] font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>Sıfır Depolama Maliyeti • Güvenli JSON Arşivi</span>
+            <span>{t("speak_zero_storage_badge", "Sıfır Depolama Maliyeti • Güvenli JSON Arşivi")}</span>
           </div>
           <button
             type="button"

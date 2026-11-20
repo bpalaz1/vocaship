@@ -74,16 +74,16 @@ export default function CipherLabModal({
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border border-emerald-500/30">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h4 className="text-2xl font-black text-white">Tüm Kelimeler Çözüldü!</h4>
+            <h4 className="text-2xl font-black text-white">{t("game_cipher_all_solved", "Tüm Kelimeler Çözüldü!")}</h4>
             <p className="text-sm text-slate-300">
-              Akademik kelime dağarcığınız mükemmel seviyede.
+              {t("game_cipher_great_vocab", "Akademik kelime dağarcığınız mükemmel seviyede.")}
             </p>
             <button
               type="button"
               onClick={startCipherGame}
               className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer"
             >
-              Tekrar Başlat
+              {t("btn_restart", "Tekrar Başlat")}
             </button>
           </div>
         ) : (
@@ -139,14 +139,14 @@ export default function CipherLabModal({
               {cipherFeedback === "correct" && (
                 <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
                   <Check className="w-4 h-4" />
-                  <span>Harika! Doğru Kelime: {words[cipherIndex]?.word}</span>
+                  <span>{t("game_cipher_correct", "Harika! Doğru Kelime:")} {words[cipherIndex]?.word}</span>
                 </div>
               )}
 
               {cipherFeedback === "wrong" && (
                 <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4" />
-                  <span>Yanıt hatalı, ipucunu inceleyip tekrar deneyin.</span>
+                  <span>{t("game_cipher_wrong", "Yanıt hatalı, ipucunu inceleyip tekrar deneyin.")}</span>
                 </div>
               )}
             </form>

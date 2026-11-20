@@ -16,6 +16,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
+import { useTheme } from "../../context/ThemeContext";
 import {
   STORE_CHARACTERS,
   StoreCharacter,
@@ -46,6 +47,8 @@ export default function ChestShop({
   onCharacterUnlocked,
 }: ChestShopProps) {
   const { currentLang = "tr", t } = useLanguage();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   const [userCoins, setUserCoins] = useState<number>(initialCoins);
   const [unlockedIds, setUnlockedIds] = useState<string[]>(initialUnlocked);
@@ -89,7 +92,7 @@ export default function ChestShop({
   // Karakter Satın Alma / Kilit Açma İşlemi (Anti-Tamper Korumalı)
   const handleUnlock = async (char: StoreCharacter) => {
     // 1. Milestone Kontrolü
-    const milestone = checkCharacterMilestone(char, userLevel, completedStoriesCount);
+    const milestone = checkCharacterMilestone(char, userLevel, completedStoriesCount, currentLang);
     if (!milestone.isUnlocked) {
       setActiveInfoModal({ char, reason: milestone.missingReason });
       showToast(
@@ -234,7 +237,7 @@ export default function ChestShop({
           const loc = getCharacterLocale(char, currentLang);
           const isUnlocked = unlockedIds.includes(char.id);
           const isActiveAvatar = selectedAvatarId === char.id;
-          const milestone = checkCharacterMilestone(char, userLevel, completedStoriesCount);
+          const milestone = checkCharacterMilestone(char, userLevel, completedStoriesCount, currentLang);
           const canAfford = userCoins >= char.priceGold;
           const isLocked = !isUnlocked && !milestone.isUnlocked;
 
@@ -243,11 +246,17 @@ export default function ChestShop({
               key={char.id}
               data-testid={`character-card-${char.id}`}
               className={`rounded-3xl border transition-all duration-300 p-4 flex flex-col justify-between relative overflow-hidden backdrop-blur-md ${
-                isUnlocked
-                  ? "bg-white border-indigo-300 shadow-md hover:shadow-lg hover:-translate-y-1 text-slate-800"
+                isDark
+                  ? isUnlocked
+                    ? "bg-slate-900/90 border-indigo-500/50 shadow-lg hover:shadow-indigo-500/15 hover:-translate-y-1 text-slate-100"
+                    : isLocked
+                    ? "bg-slate-950/80 border-slate-800/90 opacity-75 text-slate-400"
+                    : "bg-slate-900/90 border-slate-800 hover:border-amber-500/60 hover:-translate-y-0.5 shadow-md text-slate-100"
+                  : isUnlocked
+                  ? "bg-slate-100 border-indigo-300 shadow-md hover:shadow-lg hover:-translate-y-1 text-slate-900"
                   : isLocked
-                  ? "bg-slate-100/90 border-slate-200/90 opacity-70 grayscale-[30%] text-slate-500"
-                  : "bg-white border-slate-200 hover:border-amber-400 hover:-translate-y-0.5 shadow-sm text-slate-800"
+                  ? "bg-slate-200/80 border-slate-300 opacity-75 text-slate-600"
+                  : "bg-slate-100 border-slate-300 hover:border-amber-400 hover:-translate-y-0.5 shadow-sm text-slate-900"
               }`}
             >
               {/* Arka Plan Hafif Gradient */}
@@ -266,7 +275,7 @@ export default function ChestShop({
                       : "bg-slate-800 text-slate-300 border-slate-700"
                   }`}
                 >
-                  {char.rarity}
+                  {t(`rarity_${char.rarity}` as any, char.rarity)}
                 </span>
 
                 {isActiveAvatar && (
@@ -301,10 +310,10 @@ export default function ChestShop({
 
               {/* Çok Dilli İsim ve Biyografi */}
               <div className="space-y-1 text-center my-2">
-                <h3 className="text-sm font-extrabold text-white truncate">
+                <h3 className={`text-sm font-extrabold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
                   {loc.name}
                 </h3>
-                <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed min-h-[32px]">
+                <p className={`text-[11px] line-clamp-2 leading-relaxed min-h-[32px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>
                   {loc.bio}
                 </p>
               </div>
@@ -317,7 +326,7 @@ export default function ChestShop({
                     setActiveInfoModal({ char, reason: milestone.missingReason })
                   }
                   className="p-2 rounded-2xl bg-rose-950/30 border border-rose-500/30 text-rose-300 space-y-1 cursor-pointer hover:bg-rose-950/50 transition my-2"
-                  title="Eksik koşulları görüntülemek için tıkla"
+                  title={t("shop_view_missing_tip", "Eksik koşulları görüntülemek için tıkla")}
                 >
                   <div className="flex items-center justify-between text-[10px] font-black uppercase">
                     <span className="flex items-center gap-1">

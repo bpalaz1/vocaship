@@ -1,11 +1,12 @@
 /**
- * Vocaship Natural Neural TTS Engine (Prosody-Optimized & Word-by-Word Vocaship Live Speaking Engine)
+ * VocaShip Natural Neural TTS Engine (Prosody-Optimized & Word-by-Word VocaShip Live Speaking Engine)
  * Yüksek kaliteli doğal nöral sesler (Natural / Online), doğal nefes duraklamaları,
  * kelime kelime (onboundary) canlı altyazı takibi ve milisaniyelik Video Loop (Talking / Idle) senkronizasyonu.
  */
 
 import { PersonaInfo } from "../context/PersonaContext";
 import { API_BASE } from "../config";
+import { pickUiText } from "./uiLocale";
 
 export interface SpeakOptions {
   rate?: number;
@@ -281,23 +282,59 @@ export function getActiveVoiceDisplay(persona: PersonaInfo): string {
   if (persona.id === "custom") {
     const pref = persona.ttsSettings?.preferredVoice;
     if (pref === "female") {
-      return "🎙️ Kadın Nöral Ses (Pitch: 1.05)";
+      return pickUiText({
+        tr: "🎙️ Kadın Nöral Ses (Pitch: 1.05)",
+        en: "🎙️ Female Neural Voice (Pitch: 1.05)",
+        de: "🎙️ Weibliche Neural-Stimme (Pitch: 1.05)",
+        es: "🎙️ Voz Neural Femenina (Pitch: 1.05)",
+        fr: "🎙️ Voix Neurale Féminine (Pitch: 1.05)",
+      });
     }
     if (pref === "male") {
-      return "🎙️ Tok Erkek Nöral Ses (Pitch: 0.92)";
+      return pickUiText({
+        tr: "🎙️ Tok Erkek Nöral Ses (Pitch: 0.92)",
+        en: "🎙️ Deep Male Neural Voice (Pitch: 0.92)",
+        de: "🎙️ Tiefe Männliche Neural-Stimme (Pitch: 0.92)",
+        es: "🎙️ Voz Neural Masculina Profunda (Pitch: 0.92)",
+        fr: "🎙️ Voix Neurale Masculine Grave (Pitch: 0.92)",
+      });
     }
     if (pref === "child") {
-      return "🎙️ Çocuk Nöral Ses (Pitch: 1.20)";
+      return pickUiText({
+        tr: "🎙️ Çocuk Nöral Ses (Pitch: 1.20)",
+        en: "🎙️ Child Neural Voice (Pitch: 1.20)",
+        de: "🎙️ Kindliche Neural-Stimme (Pitch: 1.20)",
+        es: "🎙️ Voz Neural Infantil (Pitch: 1.20)",
+        fr: "🎙️ Voix Neurale Enfant (Pitch: 1.20)",
+      });
     }
   }
   if (persona.id === "sparky") {
-    return "🎙️ Sparky (0.78x Tane Tane)";
+    return pickUiText({
+      tr: "🎙️ Sparky (0.78x Tane Tane)",
+      en: "🎙️ Sparky (0.78x Clear & Slow)",
+      de: "🎙️ Sparky (0.78x Deutlich & Langsam)",
+      es: "🎙️ Sparky (0.78x Claro y Pausado)",
+      fr: "🎙️ Sparky (0.78x Clair et Posé)",
+    });
   }
   if (persona.id === "chuck") {
-    return "🎙️ Chuck (0.78x Tane Tane)";
+    return pickUiText({
+      tr: "🎙️ Chuck (0.78x Tane Tane)",
+      en: "🎙️ Chuck (0.78x Clear & Slow)",
+      de: "🎙️ Chuck (0.78x Deutlich & Langsam)",
+      es: "🎙️ Chuck (0.78x Claro y Pausado)",
+      fr: "🎙️ Chuck (0.78x Clair et Posé)",
+    });
   }
   if (persona.id === "sandy") {
-    return "🎙️ Sandy (0.86x Doğal Mentor)";
+    return pickUiText({
+      tr: "🎙️ Sandy (0.86x Doğal Mentor)",
+      en: "🎙️ Sandy (0.86x Natural Mentor)",
+      de: "🎙️ Sandy (0.86x Natürlicher Mentor)",
+      es: "🎙️ Sandy (0.86x Mentor Natural)",
+      fr: "🎙️ Sandy (0.86x Mentor Naturel)",
+    });
   }
 
   const isFemale = persona.gender === "female";

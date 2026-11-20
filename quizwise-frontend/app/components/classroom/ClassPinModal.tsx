@@ -11,6 +11,7 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 /**
  * 3 Karakter - 3 Karakter PIN üretici (Örn: 7A2-5K9)
@@ -42,6 +43,7 @@ export default function ClassPinModal({
   className,
   onRegeneratePin,
 }: ClassPinModalProps) {
+  const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("http://localhost:3000");
   const [activePin, setActivePin] = useState<string>(classCode || "7A2-5K9");
@@ -116,14 +118,14 @@ export default function ClassPinModal({
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Katılım Kodu & Davetiye</span>
+            <span>{t("cls_pin_modal_hdr", "Katılım Kodu & Davetiye")}</span>
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black text-white">
-            {className || "Sınıf Katılım Kodu"}
+            {className || t("cls_pin_default_name", "Sınıf Katılım Kodu")}
           </h2>
           <p className="text-xs text-slate-400">
-            Kayıtlı öğrenciler doğrudan katılır. Misafir öğrenciler için öğretmen onayı gerekir.
+            {t("cls_pin_modal_sub", "Kayıtlı öğrenciler doğrudan katılır. Misafir öğrenciler için öğretmen onayı gerekir.")}
           </p>
         </div>
 
@@ -136,16 +138,16 @@ export default function ClassPinModal({
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-                  Ders Katılım PIN
+                  {t("cls_pin_lbl", "Ders Katılım PIN")}
                 </span>
                 <button
                   type="button"
                   onClick={handleRegenerate}
                   className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold transition cursor-pointer"
-                  title="Yeni bir PIN kodu oluştur"
+                  title={t("cls_pin_regen_tip", "Yeni bir PIN kodu oluştur")}
                 >
                   <RefreshCw className="w-3 h-3" />
-                  <span>Yenile</span>
+                  <span>↻</span>
                 </button>
               </div>
 
@@ -168,12 +170,12 @@ export default function ClassPinModal({
               {copied ? (
                 <>
                   <Check className="w-4 h-4 text-emerald-200" />
-                  <span className="text-emerald-100">PIN Kopyalandı!</span>
+                  <span className="text-emerald-100">{t("cls_pin_copied", "PIN Kopyalandı!")}</span>
                 </>
               ) : (
                 <>
                   <Copy className="w-4 h-4" />
-                  <span>PIN Kodunu Kopyala</span>
+                  <span>{t("cls_pin_copied", "Copy PIN").replace("PIN Kopyalandı!", "Copy PIN")}</span>
                 </>
               )}
             </button>
@@ -187,9 +189,9 @@ export default function ClassPinModal({
 
             <div className="space-y-0.5">
               <span className="text-[11px] font-bold text-slate-200 block">
-                📷 Kamera ile Tara
+                📷 QR
               </span>
-              <p className="text-[10px] text-slate-400">Doğrudan sınıfa bağlan</p>
+              <p className="text-[10px] text-slate-400">{t("cls_pin_direct_sub", "Doğrudan sınıfa bağlan")}</p>
             </div>
           </div>
         </div>
@@ -200,7 +202,7 @@ export default function ClassPinModal({
             <div className="flex items-center gap-2 text-amber-300">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
               <span>
-                Misafir: <b className="text-white">{guestStudent}</b> onay bekliyor
+                <b className="text-white">{guestStudent}</b>
               </span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -208,19 +210,18 @@ export default function ClassPinModal({
                 type="button"
                 onClick={() => setGuestStudent(null)}
                 className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
-                title="Sınıfa Al"
+                title={t("cls_pin_admit_tip", "Sınıfa Al")}
               >
                 <UserCheck className="w-3 h-3" />
-                <span>Kabul Et</span>
+                <span>✓</span>
               </button>
               <button
                 type="button"
                 onClick={() => setGuestStudent(null)}
                 className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
-                title="Reddet"
               >
                 <UserX className="w-3 h-3" />
-                <span>Reddet</span>
+                <span>✕</span>
               </button>
             </div>
           </div>
@@ -229,11 +230,11 @@ export default function ClassPinModal({
         {/* Öğrenci Katılım Yönergesi */}
         <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between gap-3 text-left">
           <span>
-            Öğrenciler <b>vocaship.com/classroom</b> adresine bu 6 haneli kodu girerek anında bağlanır.
+            {t("cls_pin_footer_pre", "Öğrenciler")} <b>vocaship.com/classroom</b> {t("cls_pin_footer_post", "adresine bu 6 haneli kodu girerek anında bağlanır.")}
           </span>
           <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold shrink-0">
             <ShieldCheck className="w-3.5 h-3.5" />
-            Canlı
+            {t("cls_pin_live", "Canlı")}
           </span>
         </div>
 
@@ -244,7 +245,7 @@ export default function ClassPinModal({
             onClick={onClose}
             className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
           >
-            Kapat
+            {t("close", "Kapat")}
           </button>
         </div>
       </div>

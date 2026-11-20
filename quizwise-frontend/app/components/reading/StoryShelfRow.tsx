@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import StoryCoverCard from "./StoryCoverCard";
 import { StoryShelf } from "../../data/storyLibrary";
 import { ChevronLeft, ChevronRight, Layers } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface StoryShelfRowProps {
   shelf: StoryShelf;
@@ -20,6 +21,7 @@ export default function StoryShelfRow({
   inProgressStoryIds = [],
   className = "",
 }: StoryShelfRowProps) {
+  const { t } = useLanguage();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -70,7 +72,7 @@ export default function StoryShelfRow({
               {shelf.badge}
             </span>
             <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 shrink-0">
-              {shelf.stories.length} Hikaye
+              {shelf.stories.length} {t("shop_stories_suffix", "Hikaye")}
             </span>
           </div>
 
@@ -85,7 +87,7 @@ export default function StoryShelfRow({
             type="button"
             onClick={() => handleScroll("left")}
             disabled={!canScrollLeft}
-            aria-label="Sola kaydır"
+            aria-label={t("read_scroll_left", "Sola kaydır")}
             className={`p-2 rounded-xl border transition-all cursor-pointer ${
               canScrollLeft
                 ? "bg-slate-800 hover:bg-slate-700 text-white border-slate-700 shadow-sm active:scale-95"
@@ -99,7 +101,7 @@ export default function StoryShelfRow({
             type="button"
             onClick={() => handleScroll("right")}
             disabled={!canScrollRight}
-            aria-label="Sağa kaydır"
+            aria-label={t("read_scroll_right", "Sağa kaydır")}
             className={`p-2 rounded-xl border transition-all cursor-pointer ${
               canScrollRight
                 ? "bg-slate-800 hover:bg-slate-700 text-white border-slate-700 shadow-sm active:scale-95"

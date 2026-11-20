@@ -4,7 +4,7 @@
  * sessizce biriktirip /games sayfasına girildiğinde toplu teslim eden modül.
  */
 
-export type GoldSource = 'reading' | 'ai_story' | 'speaking';
+export type GoldSource = "reading" | "ai_story" | "speaking" | "sm2";
 
 export interface PendingGoldData {
   total: number;

@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    PROJECT_NAME: str = "Vocaship"
+    PROJECT_NAME: str = "VocaShip"
     API_V1_STR: str = "/api/v1"
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""

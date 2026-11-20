@@ -17,6 +17,7 @@ import {
   ArrowRight,
   ShieldCheck,
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface ClassLiveQRModalProps {
   isOpen: boolean;
@@ -31,10 +32,12 @@ export default function ClassLiveQRModal({
   isOpen,
   onClose,
   classCode,
-  className = "Canlı Ders Sınıfı",
+  className,
   gradeLevel = "C1 Pro",
   activeSessionId = "live-session-1",
 }: ClassLiveQRModalProps) {
+  const { t } = useLanguage();
+  const resolvedClassName = className || t("cls_card_live", "Canlı Ders");
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [origin, setOrigin] = useState("http://localhost:3000");
@@ -105,11 +108,11 @@ export default function ClassLiveQRModal({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-300 font-bold text-xs tracking-wider uppercase animate-pulse">
             <Radio className="w-3.5 h-3.5 text-rose-400" />
-            <span>🔴 Akıllı Tahta Canlı QR Modu</span>
+            <span>{t("cls_qr_title", "🔴 Akıllı Tahta Canlı QR Modu")}</span>
           </div>
 
           <span className="hidden sm:inline-flex text-xs text-slate-400 font-medium">
-            Öğrenciler doğrudan kamera ile bağlanır
+            {t("cls_qr_sub", "Öğrenciler doğrudan kamera ile bağlanır")}
           </span>
         </div>
 
@@ -119,17 +122,17 @@ export default function ClassLiveQRModal({
             type="button"
             onClick={toggleFullscreen}
             className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition flex items-center gap-2 text-xs font-bold cursor-pointer"
-            title={isFullscreen ? "Tam Ekrandan Çık" : "Tahtada Tam Ekran Yap"}
+            title={isFullscreen ? t("cls_qr_exit_fs", "Tam Ekrandan Çık") : t("cls_qr_enter_fs", "Tahtada Tam Ekran Yap")}
           >
             {isFullscreen ? (
               <>
                 <Minimize2 className="w-4 h-4 text-amber-400" />
-                <span className="hidden md:inline">Küçült</span>
+                <span className="hidden md:inline">{t("cls_qr_shrink", "Küçült")}</span>
               </>
             ) : (
               <>
                 <Maximize2 className="w-4 h-4 text-indigo-400" />
-                <span className="hidden md:inline">Tam Ekran</span>
+                <span className="hidden md:inline">{t("cls_qr_enter_fs", "Tam Ekran")}</span>
               </>
             )}
           </button>
@@ -139,7 +142,7 @@ export default function ClassLiveQRModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-900 hover:bg-rose-600/20 border border-slate-800 hover:border-rose-500/50 text-slate-400 hover:text-rose-300 transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -160,12 +163,12 @@ export default function ClassLiveQRModal({
               {gradeLevel}
             </span>
             <span className="text-xs text-slate-400 font-medium">
-              Sınıf Katılım Ekranı
+              {t("cls_qr_screen", "Sınıf Katılım Ekranı")}
             </span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            {className}
+            {resolvedClassName}
           </h1>
         </div>
 
@@ -194,7 +197,7 @@ export default function ClassLiveQRModal({
         <div className="space-y-3 w-full max-w-lg">
           <div className="py-3 px-6 rounded-2xl bg-slate-900 border-2 border-indigo-500/40 shadow-inner flex flex-col items-center justify-center">
             <span className="text-[11px] font-bold font-mono tracking-widest uppercase text-indigo-300">
-              Alternatif 6 Haneli Katılım Kodu
+              {t("cls_qr_alt_code", "Alternatif 6 Haneli Katılım Kodu")}
             </span>
             <span className="text-3xl sm:text-5xl font-mono font-black tracking-[0.2em] text-white pt-1 selection:bg-indigo-600">
               {formattedCode}
@@ -205,10 +208,10 @@ export default function ClassLiveQRModal({
           <div className="space-y-1 text-center">
             <p className="text-sm sm:text-base font-extrabold text-slate-200 flex items-center justify-center gap-2">
               <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Kameranızı tahtaya tutun ve anında derse katılın</span>
+              <span>{t("cls_qr_scan_hdr", "Kameranızı tahtaya tutun ve anında derse katılın")}</span>
             </p>
             <p className="text-xs text-slate-400">
-              Şifresiz ve hızlı eşleşme • Cihazınız doğrudan etkileşimli canlı derse bağlanacaktır.
+              {t("cls_qr_scan_sub", "Şifresiz ve hızlı eşleşme • Cihazınız doğrudan etkileşimli canlı derse bağlanacaktır.")}
             </p>
           </div>
         </div>
@@ -222,7 +225,7 @@ export default function ClassLiveQRModal({
         className="w-full max-w-4xl p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl"
       >
         <div className="flex items-center gap-2.5 text-xs text-slate-300 truncate max-w-full">
-          <span className="text-indigo-400 font-mono font-bold shrink-0">🔗 Doğrudan Link:</span>
+          <span className="text-indigo-400 font-mono font-bold shrink-0">{t("cls_qr_direct_link", "🔗 Doğrudan Link:")}</span>
           <span className="font-mono text-slate-400 truncate text-[11px] select-all">
             {joinUrl}
           </span>
@@ -241,12 +244,12 @@ export default function ClassLiveQRModal({
             {copied ? (
               <>
                 <Check className="w-3.5 h-3.5" />
-                <span>Link Kopyalandı!</span>
+                <span>{t("cls_qr_copied", "Link Kopyalandı!")}</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span>Linki Kopyala</span>
+                <span>{t("speak_sc_copy", "Copy")}</span>
               </>
             )}
           </button>
@@ -256,10 +259,10 @@ export default function ClassLiveQRModal({
             target="_blank"
             rel="noopener noreferrer"
             className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold flex items-center gap-1 transition cursor-pointer"
-            title="Öğrenci Girişini Yeni Sekmede Test Et"
+            title={t("cls_qr_test_tab", "Öğrenci Girişini Yeni Sekmede Test Et")}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Test Et</span>
+            <span className="hidden sm:inline">Test</span>
           </a>
         </div>
       </div>

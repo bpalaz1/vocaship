@@ -6,6 +6,8 @@ import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
 import { playNeuralTTS } from "../../utils/tts";
 import PronunciationCoach from "../PronunciationCoach";
+import { rewardReadingWordAdded } from "../../utils/rewardEngine";
+import { getCachedWordEntry, setCachedWordEntry } from "../../utils/wordMemoryCache";
 
 interface Deck {
     id: string;
@@ -98,10 +100,12 @@ export default function WordCardModal({
 
     useEffect(() => {
         let isMounted = true;
+        const controller = new AbortController();
         const cleanWord = word.toLowerCase().trim();
 
         // 1. Hikayeden gelen hazır Türkçe karşılık varsa ve Türkçe seçiliyse öncelikli kullan
         if (nativeLang === "tr" && initialTranslation) {
+            setLoading(false);
             setData({
                 phonetic: QUICK_LOOKUP[cleanWord]?.phonetic || `/${cleanWord}/`,
                 translation: initialTranslation,
@@ -116,9 +120,28 @@ export default function WordCardModal({
             return;
         }
 
-        // 2. Türkçe seçiliyse önce Hızlı Yerel Sözlük Havuzunu Kontrol Et (Kota harcamaz, sıfır gecikme)
+        // 2. Hafıza Öncelikli (0ms): Ortak çok dilli yerel sözlük + localStorage önbelleğini kontrol et
+        const memHit = getCachedWordEntry(cleanWord, "en", nativeLang);
+        if (memHit) {
+            setLoading(false);
+            setData({
+                phonetic: memHit.phonetic || `/${cleanWord}/`,
+                translation: memHit.translation,
+                definition: memHit.definition || "",
+                meanings: [
+                    {
+                        translation: memHit.translation,
+                        definition: memHit.definition || "",
+                    }
+                ],
+            });
+            return;
+        }
+
+        // 3. Türkçe için ek hikaye yerel sözlüğünü kontrol et
         if (nativeLang === "tr" && QUICK_LOOKUP[cleanWord]) {
             const item = QUICK_LOOKUP[cleanWord];
+            setLoading(false);
             setData({
                 phonetic: item.phonetic || `/${cleanWord}/`,
                 translation: item.tr,
@@ -133,18 +156,19 @@ export default function WordCardModal({
             return;
         }
 
-        // 3. Diğer diller veya yerelde yoksa Backend Servisini Çağır
+        // 4. Hafızada yoksa önceki dilin anlamını hemen temizle ve Backend hafıza-öncelikli servisi çağır
         async function fetchMeaning() {
+            setData(null);
             setLoading(true);
             try {
-                const res = await fetch(`${API_BASE}/ai/enrich`, {
+                const res = await fetch(`${API_BASE}/api/v1/ai/lookup`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
+                    signal: controller.signal,
                     body: JSON.stringify({
                         word: cleanWord,
                         target_lang: "en",
                         native_lang: nativeLang,
-                        level: "B2",
                         context_hint: contextSentence || undefined,
                     }),
                 });
@@ -163,11 +187,30 @@ export default function WordCardModal({
                             json.definition ||
                             "";
 
-                        // Asla translation alanına İngilizce kelimenin kendisini basma
                         const cleanTranslation =
                             rawTranslation && rawTranslation.toLowerCase() !== cleanWord.toLowerCase()
                                 ? rawTranslation
                                 : "";
+
+                        if (cleanTranslation) {
+                            setCachedWordEntry({
+                                word: cleanWord,
+                                targetLang: "en",
+                                nativeLang,
+                                phonetic: json.phonetic || `/${cleanWord}/`,
+                                translation: cleanTranslation,
+                                definition: rawDefinition,
+                                exampleTarget:
+                                    json.example_sentences?.[0]?.target ||
+                                    json.example_sentences?.[0]?.en ||
+                                    "",
+                                exampleNative:
+                                    json.example_sentences?.[0]?.native ||
+                                    json.example_sentences?.[0]?.tr ||
+                                    "",
+                                source: json.source || "memory_cache",
+                            });
+                        }
 
                         setData({
                             phonetic: json.phonetic || `/${cleanWord}/`,
@@ -188,17 +231,18 @@ export default function WordCardModal({
                             phonetic: `/${cleanWord}/`,
                             translation: "",
                             definition: "",
-                            meanings: [{ translation: "Anlam bulunamadı", definition: "" }]
+                            meanings: [{ translation: t("meaning_not_found", "Anlam bulunamadı"), definition: "" }]
                         });
                     }
                 }
-            } catch (err) {
+            } catch (err: any) {
+                if (err?.name === "AbortError") return;
                 if (isMounted) {
                     setData({
                         phonetic: `/${cleanWord}/`,
                         translation: "",
                         definition: "",
-                        meanings: [{ translation: "Bağlantı kurulamadı", definition: "" }]
+                        meanings: [{ translation: t("err_server_conn", "Bağlantı kurulamadı"), definition: "" }]
                     });
                 }
             } finally {
@@ -209,8 +253,9 @@ export default function WordCardModal({
         if (cleanWord) fetchMeaning();
         return () => {
             isMounted = false;
+            controller.abort();
         };
-    }, [word, contextSentence, nativeLang]);
+    }, [word, contextSentence, nativeLang, initialTranslation, t]);
 
     const speak = () => {
         playNeuralTTS(word, { rate: 0.9 });
@@ -218,7 +263,7 @@ export default function WordCardModal({
 
     const handleSaveToDeck = async () => {
         if (!targetDeck) {
-            alert("Lütfen bir deste seçin!");
+            alert(t("read_select_deck_alert", "Lütfen bir deste seçin!"));
             return;
         }
         setSaving(true);
@@ -235,20 +280,24 @@ export default function WordCardModal({
                 deck_id: targetDeck,
                 word: word.trim(),
                 phonetic: data?.phonetic || null,
+                target_lang: "en",
+                native_lang: nativeLang,
                 meanings: [
                     {
                         part_of_speech: data?.meanings?.[0]?.part_of_speech || "",
                         translation: currentTranslation,
                         definition: currentDefinition,
+                        target_lang: "en",
+                        native_lang: nativeLang,
                     },
                 ],
                 example_sentences: contextSentence
-                    ? [{ en: contextSentence.trim(), tr: "" }]
+                    ? [{ en: contextSentence.trim(), tr: "", target: contextSentence.trim(), native: "" }]
                     : [],
                 collocations: [],
             };
 
-            const res = await fetch(`${API_BASE}/decks/cards`, {
+            const res = await fetch(`${API_BASE}/api/v1/decks/cards`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -256,6 +305,7 @@ export default function WordCardModal({
 
             if (res.ok) {
                 setSaved(true);
+                rewardReadingWordAdded(word.trim());
                 onCardSaved(word.toLowerCase().trim());
 
                 setTimeout(() => {
@@ -263,10 +313,10 @@ export default function WordCardModal({
                 }, 600);
             } else {
                 const errJson = await res.json().catch(() => null);
-                alert("Kart eklenemedi: " + (errJson?.detail ? JSON.stringify(errJson.detail) : res.statusText));
+                alert(t("read_card_add_failed", "Kart eklenemedi:") + " " + (errJson?.detail ? JSON.stringify(errJson.detail) : res.statusText));
             }
         } catch (err: any) {
-            alert("Sunucuya bağlanılamadı: " + err.message);
+            alert(t("read_server_conn_err", "Sunucuya bağlanılamadı:") + " " + err.message);
         } finally {
             setSaving(false);
         }
@@ -284,7 +334,7 @@ export default function WordCardModal({
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition cursor-pointer"
-                    title="Kapat ve Hikayeye Dön"
+                    title={t("read_close_back_story", "Kapat ve Hikayeye Dön")}
                 >
                     <X className="w-5 h-5" />
                 </button>
@@ -294,7 +344,7 @@ export default function WordCardModal({
                     <button
                         onClick={speak}
                         className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 transition cursor-pointer"
-                        title="Telaffuz Dinle"
+                        title={t("listen_pronunciation", "Telaffuz Dinle")}
                     >
                         <Volume2 className="w-4 h-4" />
                     </button>

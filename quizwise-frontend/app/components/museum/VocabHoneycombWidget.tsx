@@ -2,6 +2,8 @@
 
 import React from "react";
 import { Sparkles, Trophy, BookOpen, Mic, Award, Crown } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
+import { pickLang } from "../../context/translationsExtra";
 
 export interface VocabHoneycombWidgetProps {
   learnedWordsCount: number;
@@ -22,7 +24,7 @@ const HONEYCOMB_TIERS: HexCellConfig[] = [
   { tier: 2, minWords: 100, maxWords: 200, title: "Filiz", icon: "🌿" },
   { tier: 3, minWords: 200, maxWords: 300, title: "Bronz", icon: "🥉" },
   { tier: 4, minWords: 300, maxWords: 400, title: "Safir I", icon: "💎" },
-  { tier: 5, minWords: 400, maxWords: 500, title: "Safir II", icon: "🔷" },
+  { tier: 5, minWords: 400, maxWords: 500, title: "Safir II", icon: "🔹" },
   { tier: 6, minWords: 500, maxWords: 600, title: "Safir III", icon: "💠" },
   { tier: 7, minWords: 600, maxWords: 700, title: "Zümrüt I", icon: "🟢" },
   { tier: 8, minWords: 700, maxWords: 800, title: "Zümrüt II", icon: "❇️" },
@@ -35,6 +37,7 @@ export default function VocabHoneycombWidget({
   readingStoriesCount = 12,
   speakingTurnsCount = 45,
 }: VocabHoneycombWidgetProps) {
+  const { currentLang, t } = useLanguage();
   // Renge Dönüşüm Kuralı:
   // 0 - 299: Gri / Nötr Taş
   // 300 - 699: Safir Mavisi
@@ -49,7 +52,7 @@ export default function VocabHoneycombWidget({
       return {
         bg: "bg-slate-950/80 border-slate-800 text-slate-600",
         glow: "",
-        statusText: "Kilitli",
+        statusText: t("honey_locked", "Kilitli"),
         isLit: false,
       };
     }
@@ -59,7 +62,7 @@ export default function VocabHoneycombWidget({
       return {
         bg: "bg-slate-800 border-slate-600 text-slate-200",
         glow: "shadow-[0_0_12px_rgba(148,163,184,0.3)]",
-        statusText: "Temel Ustalık",
+        statusText: t("honey_basic", "Temel Ustalık"),
         isLit: true,
       };
     }
@@ -69,7 +72,7 @@ export default function VocabHoneycombWidget({
       return {
         bg: "bg-gradient-to-br from-blue-600 via-cyan-600 to-indigo-700 border-cyan-400 text-white",
         glow: "shadow-[0_0_18px_rgba(6,182,212,0.45)]",
-        statusText: "Safir Bellek",
+        statusText: t("honey_sapphire", "Safir Bellek"),
         isLit: true,
       };
     }
@@ -78,7 +81,7 @@ export default function VocabHoneycombWidget({
     return {
       bg: "bg-gradient-to-br from-emerald-500 via-teal-500 to-amber-500 border-amber-300 text-slate-950 font-black",
       glow: "shadow-[0_0_22px_rgba(16,185,129,0.55)]",
-      statusText: "Zümrüt Ustalık",
+      statusText: t("honey_emerald", "Zümrüt Ustalık"),
       isLit: true,
     };
   };
@@ -90,28 +93,32 @@ export default function VocabHoneycombWidget({
   const overallPercent = Math.min(100, Math.round((learnedWordsCount / 1000) * 100));
 
   return (
-    <div className="w-full rounded-3xl bg-slate-900/95 border-2 border-indigo-500/30 p-5 sm:p-7 shadow-2xl relative overflow-hidden backdrop-blur-md space-y-6">
+    <div className="w-full max-w-[1680px] mx-auto rounded-3xl bg-slate-900/95 border-2 border-indigo-500/30 px-4 sm:px-6 py-5 sm:py-7 shadow-2xl relative overflow-hidden backdrop-blur-md space-y-6">
       {/* Arka plan atmosferik ışıltısı */}
       <div className="absolute top-0 right-1/4 w-80 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-1/4 w-80 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* ÜST BAŞLIK VE ÖZET SAYILARI */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-4 border-b border-slate-800 pb-5">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-bold font-mono">
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span>SM-2 Kelime Hakimiyet Peteği</span>
+            <span>{t("honey_badge", "SM-2 Kelime Hakimiyet Peteği")}</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <span>Ustalık Peteği (1000 Kelime)</span>
+            <span>{t("honey_title", "Ustalık Peteği (1000 Kelime)")}</span>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/30">
-              %{overallPercent} Tamamlandı
+              %{overallPercent} {t("dash_completed", "Tamamlandı")}
             </span>
           </h2>
           <p className="text-xs text-slate-400 max-w-lg">
-            Kelimeler kalıcı hafızana yerleştikçe petek hücreleri <strong>Gri</strong> →{" "}
-            <span className="text-cyan-400 font-semibold">Safir Mavisi</span> →{" "}
-            <span className="text-emerald-400 font-semibold">Zümrüt & Altın</span> rengine dönüşür.
+            {pickLang(currentLang, {
+              tr: "Kelimeler kalıcı hafızana yerleştikçe petek hücreleri Gri → Safir Mavisi → Zümrüt & Altın rengine dönüşür.",
+              en: "As words settle into long-term memory, honeycomb cells evolve from Gray → Sapphire Blue → Emerald & Gold.",
+              de: "Wenn Wörter im Langzeitgedächtnis verankert werden, wechseln Zellen von Grau → Saphirblau → Smaragd & Gold.",
+              es: "A medida que las palabras pasan a la memoria a largo plazo, las celdas cambian de Gris → Azul Zafiro → Esmeralda y Oro.",
+              fr: "À mesure que les mots s'ancrent en mémoire, les alvéoles passent du Gris → Bleu Saphir → Émeraude & Or.",
+            })}
           </p>
         </div>
 
@@ -119,7 +126,7 @@ export default function VocabHoneycombWidget({
         <div className="grid grid-cols-3 gap-2 shrink-0">
           <div className="p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-center space-y-0.5">
             <span className="text-[10px] text-slate-500 uppercase font-bold block flex items-center justify-center gap-1">
-              <Trophy className="w-3 h-3 text-amber-400" /> Kelime
+              <Trophy className="w-3 h-3 text-amber-400" /> {t("honey_word_lbl", "Kelime")}
             </span>
             <span className="text-sm sm:text-base font-black text-white font-mono">
               {learnedWordsCount}
@@ -128,7 +135,7 @@ export default function VocabHoneycombWidget({
 
           <div className="p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-center space-y-0.5">
             <span className="text-[10px] text-slate-500 uppercase font-bold block flex items-center justify-center gap-1">
-              <BookOpen className="w-3 h-3 text-indigo-400" /> Okuma
+              <BookOpen className="w-3 h-3 text-indigo-400" /> {t("nav_reading_short", "Okuma")}
             </span>
             <span className="text-sm sm:text-base font-black text-indigo-300 font-mono">
               {readingStoriesCount} 📜
@@ -147,7 +154,7 @@ export default function VocabHoneycombWidget({
       </div>
 
       {/* 10 HÜCRELİ İNTERAKTİF PETEK IZGARASI */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2 sm:gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-3 w-full">
         {HONEYCOMB_TIERS.map((cell) => {
           const status = getCellStatus(cell);
           const isCurrent =
@@ -166,10 +173,10 @@ export default function VocabHoneycombWidget({
               {/* Başlık ve Hedef */}
               <div className="space-y-0.5 my-1">
                 <span className="text-[11px] font-black leading-tight block">
-                  {cell.title}
+                  {t(`honey_t${cell.tier}`, cell.title)}
                 </span>
                 <span className="text-[9px] font-mono opacity-75 block">
-                  {cell.maxWords} K.
+                  {cell.maxWords} {t("honey_w_abbr", "K.")}
                 </span>
               </div>
 
@@ -181,7 +188,7 @@ export default function VocabHoneycombWidget({
                     : "bg-slate-900 text-slate-500 border border-slate-800"
                 }`}
               >
-                {isCurrent ? "Aktif" : status.isLit ? "✓ Tamam" : "Kilit"}
+                {isCurrent ? t("honey_active", "Aktif") : status.isLit ? `✓ ${t("honey_done", "Tamam")}` : t("honey_lock_short", "Kilit")}
               </span>
             </div>
           );

@@ -164,7 +164,7 @@ export default function PronunciationCoach({
             type="button"
             onClick={handleStop}
             className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-md shadow-rose-600/30 cursor-pointer active:scale-95"
-            title="Konuşmayı Bitir"
+            title={t("pron_stop_tip", "Konuşmayı Bitir")}
           >
             <Square className="w-3.5 h-3.5 fill-current" />
             <span>{t("pronunciation_stop", "Bitir")}</span>
@@ -217,7 +217,7 @@ export default function PronunciationCoach({
             </span>
 
             <span className="text-[11px] text-slate-400 font-medium">
-              ({result.correctWords}/{result.totalWords} kelime doğru)
+              ({result.correctWords}/{result.totalWords} {t("pron_words_correct", "kelime doğru")})
             </span>
           </div>
 
@@ -226,7 +226,7 @@ export default function PronunciationCoach({
               type="button"
               onClick={handleListenOriginal}
               className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
-              title="Orijinal Telaffuzu Dinle"
+              title={t("pron_listen_orig_tip", "Orijinal Telaffuzu Dinle")}
             >
               <Volume2 className="w-3.5 h-3.5" />
             </button>
@@ -234,7 +234,7 @@ export default function PronunciationCoach({
               type="button"
               onClick={handleStart}
               className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition cursor-pointer border border-indigo-500/30"
-              title="Tekrar Dene"
+              title={t("pronunciation_try_again", "Tekrar Dene")}
             >
               <RotateCcw className="w-3 h-3" />
               <span>{t("pronunciation_try_again", "Tekrar Dene")}</span>
@@ -245,7 +245,7 @@ export default function PronunciationCoach({
         {/* Word-by-Word Colored Feedback */}
         <div>
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1.5">
-            Kelime Analizi:
+            {t("pron_word_analysis", "Kelime Analizi:")}
           </span>
           <div className="flex flex-wrap gap-1.5">
             {result.words.map((item, idx) => {
@@ -260,8 +260,8 @@ export default function PronunciationCoach({
                   }`}
                   title={
                     isCorrect
-                      ? "Doğru telaffuz edildi"
-                      : "Bu kelime atlandı veya telaffuz algılanamadı"
+                      ? t("pron_word_ok", "Doğru telaffuz edildi")
+                      : t("pron_word_miss", "Bu kelime atlandı veya telaffuz algılanamadı")
                   }
                 >
                   {isCorrect ? (
@@ -300,7 +300,7 @@ export default function PronunciationCoach({
             ? "px-3 py-1.5 text-xs bg-gradient-to-r from-indigo-600/30 to-violet-600/30 hover:from-indigo-600/50 hover:to-violet-600/50 border border-indigo-500/40 text-indigo-300 hover:text-white"
             : "px-4 py-2.5 text-xs sm:text-sm bg-gradient-to-r from-indigo-600/25 via-purple-600/25 to-pink-600/25 hover:from-indigo-600/40 hover:via-purple-600/40 hover:to-pink-600/40 border border-indigo-500/40 hover:border-indigo-400/70 text-indigo-200 hover:text-white shadow-indigo-950/50"
         }`}
-        title="Mikrofon ile telaffuzunu test et ve anında kelime analizi al"
+        title={t("pron_cta_tip", "Mikrofon ile telaffuzunu test et ve anında kelime analizi al")}
       >
         <span className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
         <span className="relative z-10 flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-500/20 group-hover:bg-indigo-500/30 text-indigo-300 group-hover:text-white transition">

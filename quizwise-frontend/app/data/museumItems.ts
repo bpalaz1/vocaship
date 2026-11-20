@@ -1,11 +1,17 @@
 /**
- * Vocaship 100 Eserlik Bütünleşik Müze & Sergi Salonu Veri Havuzu (MuseumHub)
- * 4 Salon x 25 Epik Eser = 100 Eser
+ * Sandık Mağazası Karakter & Eser Havuzu ve Pasif Güç Tanımları
  */
 
 export type MuseumSalonId = 1 | 2 | 3 | 4;
 export type MuseumCategory = "heroes" | "creatures" | "relics" | "monuments";
 export type MuseumRarity = "common" | "rare" | "epic" | "legendary";
+export type MuseumBuffType = "boss_crit" | "extra_time" | "extra_life" | "bonus_gold";
+
+export interface MuseumPassiveBuff {
+  type: MuseumBuffType;
+  label: string;
+  icon: string;
+}
 
 export interface MuseumItem {
   id: string;
@@ -16,7 +22,116 @@ export interface MuseumItem {
   description: string;
   storyLore: string;
   avatarIcon: string;
-  dustValue: number;
+  passiveBuff?: MuseumPassiveBuff;
+}
+
+export const BUFF_DEFINITIONS: Record<MuseumBuffType, MuseumPassiveBuff> = {
+  boss_crit: {
+    type: "boss_crit",
+    icon: "⚔️",
+    label: "⚔️ Ejderha Baskını'nda +%15 Kritik Hasar",
+  },
+  extra_time: {
+    type: "extra_time",
+    icon: "⏳",
+    label: "⏳ Süreli oyunlarda +2 Saniye Ek Süre",
+  },
+  extra_life: {
+    type: "extra_life",
+    icon: "🛡️",
+    label: "🛡️ Oyunlara +1 Ekstra Kalkan (Can) ile Başlama",
+  },
+  bonus_gold: {
+    type: "bonus_gold",
+    icon: "🪙",
+    label: "🪙 Tüm oyunlarda +%15 Bonus Altın",
+  },
+};
+
+export function getMuseumItemBuff(item: MuseumItem): MuseumPassiveBuff {
+  if (item.passiveBuff) return item.passiveBuff;
+
+  const t = (item.title || "").toLowerCase();
+  if (
+    t.includes("okçu") ||
+    t.includes("savaşçı") ||
+    t.includes("kılıç") ||
+    t.includes("samuray") ||
+    t.includes("gladyatör") ||
+    t.includes("mızrak") ||
+    t.includes("ejderha") ||
+    t.includes("hançer") ||
+    t.includes("balta")
+  ) {
+    return BUFF_DEFINITIONS.boss_crit;
+  }
+  if (
+    t.includes("büyücü") ||
+    t.includes("saat") ||
+    t.includes("zaman") ||
+    t.includes("kozmik") ||
+    t.includes("astronot") ||
+    t.includes("kahin") ||
+    t.includes("yıldız") ||
+    t.includes("ay") ||
+    t.includes("gök")
+  ) {
+    return BUFF_DEFINITIONS.extra_time;
+  }
+  if (
+    t.includes("paladin") ||
+    t.includes("kalkan") ||
+    t.includes("kale") ||
+    t.includes("muhafız") ||
+    t.includes("şövalye") ||
+    t.includes("zırh") ||
+    t.includes("golem") ||
+    t.includes("hisar") ||
+    t.includes("sur")
+  ) {
+    return BUFF_DEFINITIONS.extra_life;
+  }
+  if (
+    t.includes("bilge") ||
+    t.includes("kalem") ||
+    t.includes("parşömen") ||
+    t.includes("kitap") ||
+    t.includes("kütüphane") ||
+    t.includes("simya") ||
+    t.includes("pusula") ||
+    t.includes("altın") ||
+    t.includes("taç")
+  ) {
+    return BUFF_DEFINITIONS.bonus_gold;
+  }
+
+  // Kategoriye göre dengeli dağılım
+  const numMatch = item.id.match(/(\d+)/);
+  const num = numMatch ? parseInt(numMatch[1], 10) : 1;
+  if (item.category === "heroes") {
+    return num % 2 === 0 ? BUFF_DEFINITIONS.extra_life : BUFF_DEFINITIONS.boss_crit;
+  }
+  if (item.category === "creatures") {
+    return num % 2 === 0 ? BUFF_DEFINITIONS.extra_time : BUFF_DEFINITIONS.boss_crit;
+  }
+  if (item.category === "relics") {
+    return num % 2 === 0 ? BUFF_DEFINITIONS.bonus_gold : BUFF_DEFINITIONS.boss_crit;
+  }
+  return num % 2 === 0 ? BUFF_DEFINITIONS.extra_life : BUFF_DEFINITIONS.bonus_gold;
+}
+
+export function getEquippedMuseumBuff(): MuseumPassiveBuff | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const rawBuff = localStorage.getItem("vocaship_equipped_buff");
+    if (rawBuff) {
+      const parsed = JSON.parse(rawBuff);
+      if (parsed?.type && BUFF_DEFINITIONS[parsed.type as MuseumBuffType]) {
+        return BUFF_DEFINITIONS[parsed.type as MuseumBuffType];
+      }
+    }
+  } catch {}
+  return null;
 }
 
 export interface MuseumSalonConfig {
@@ -35,7 +150,7 @@ export const MUSEUM_SALONS: MuseumSalonConfig[] = [
   {
     id: 1,
     title: "Kahramanlar & Muhafızlar",
-    subtitle: "Vocaship evreninin cesur savaşçıları ve bilge rehberleri",
+    subtitle: "VocaShip evreninin cesur savaşçıları ve bilge rehberleri",
     icon: "⚔️",
     badge: "Salon 1",
     chestCostGold: 100,
@@ -91,7 +206,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Maceraya ilk adımı atan sevimli ve meraklı tilki.",
     storyLore: "Kelime dağarcığının ilk tohumlarını eken, her yeni öğrenciye cesaret fısıldayan sadık keşif dostu.",
     avatarIcon: "🦊",
-    dustValue: 25,
   },
   {
     id: "hero_02",
@@ -102,7 +216,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Sarsılmaz iradesiyle kelime kalesini koruyan granit zırhlı nöbetçi.",
     storyLore: "Temel dilbilgisi kurallarını bir granit blok gibi korur, unutkanlığın içeri sızmasına asla izin vermez.",
     avatarIcon: "🛡️",
-    dustValue: 25,
   },
   {
     id: "hero_03",
@@ -113,7 +226,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Hedefi 12'den vuran sessiz orman nişancısı.",
     storyLore: "Yayından fırlayan her ok, en karmaşık eşanlamlı kelimeleri dahi tam kalbinden yakalar.",
     avatarIcon: "🏹",
-    dustValue: 25,
   },
   {
     id: "hero_04",
@@ -124,7 +236,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kuzey buzullarının soğukkanlı savunucusu.",
     storyLore: "Sınav stresini donduran çelik kalkanıyla her zorlu metinde sükuneti sağlar.",
     avatarIcon: "❄️",
-    dustValue: 25,
   },
   {
     id: "hero_05",
@@ -135,7 +246,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Neon kılıcıyla dijital dünyada kelime avlayan fütüristik savaşçı.",
     storyLore: "Hızlı refleksleri sayesinde zaman sınırlı Speed Recall oyunlarının mutlak efendisidir.",
     avatarIcon: "⚡",
-    dustValue: 50,
   },
   {
     id: "hero_06",
@@ -146,7 +256,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Yıldızlararası sözlüklerde bilinmeyen terimlerin peşinde koşan kaşif.",
     storyLore: "Yerçekimsiz uzayda yeni deyimler keşfeder, galaktik hafıza haritaları çizer.",
     avatarIcon: "🧑‍🚀",
-    dustValue: 50,
   },
   {
     id: "hero_07",
@@ -157,7 +266,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "SM-2 aralıklı tekrar eğrilerini büken kadim zaman efendisi.",
     storyLore: "Unutulmaya yüz tutmuş bir kelimeyi tam zamanında bilince geri çağırarak hafızayı ölümsüz kılar.",
     avatarIcon: "⏳",
-    dustValue: 50,
   },
   {
     id: "hero_08",
@@ -168,7 +276,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Arena kumlarında hiç yenilmemiş cesur şampiyon.",
     storyLore: "1v1 düellolarda ve kelime arenasında sergilediği kombolarla tribünleri ayağa kaldırır.",
     avatarIcon: "⚔️",
-    dustValue: 25,
   },
   {
     id: "hero_09",
@@ -179,7 +286,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Doğanın fısıltılarını İngilizceye tercüme eden iz sürücü.",
     storyLore: "En gizli kök kelimeleri ve etimolojik izleri ormanın derinliklerinde takip eder.",
     avatarIcon: "🍃",
-    dustValue: 25,
   },
   {
     id: "hero_10",
@@ -190,7 +296,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kum fırtınalarının ardındaki kadim metinleri çözen gizemli simyacı.",
     storyLore: "Serap sanılan kelimeleri gerçeğe dönüştürür, parşömenlere altın mürekkeple yazar.",
     avatarIcon: "🔮",
-    dustValue: 25,
   },
   {
     id: "hero_11",
@@ -201,7 +306,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gök gürültüsünü çekicinde toplayan erdem savaşçısı.",
     storyLore: "Doğru telaffuzun gücünü şimşek hızında yayar, yanlış vurguları tek darbede siler.",
     avatarIcon: "🌩️",
-    dustValue: 50,
   },
   {
     id: "hero_12",
@@ -212,7 +316,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Volkanın bağrında dövülmüş alevli zırhın taşıyıcısı.",
     storyLore: "Akıcı konuşmanın sıcaklığını ruhunda taşır; tereddütleri eriten bir tutkuyla konuşur.",
     avatarIcon: "🔥",
-    dustValue: 25,
   },
   {
     id: "hero_13",
@@ -223,7 +326,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Okyanusların derinliklerindeki hazineleri çıkaran tecrübeli denizci.",
     storyLore: "Hazine Avı oyunlarında korsan sandıklarının yerini şaşmaz pusulasıyla tayin eder.",
     avatarIcon: "🧭",
-    dustValue: 25,
   },
   {
     id: "hero_14",
@@ -234,7 +336,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Rüzgarın kanatlarında süzülen hafif ve çevik hava muhafızı.",
     storyLore: "Kelime eşleştirmelerinde kartların arasından bir rüzgar gibi süzülür.",
     avatarIcon: "🪽",
-    dustValue: 25,
   },
   {
     id: "hero_15",
@@ -245,7 +346,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Karanlık bastığında öğrencilerin gece tekrarlarına eşlik eden fenerli bekçi.",
     storyLore: "Yatmadan önceki son 5 kelimelik tekrarın zihne mühürlenmesini sağlar.",
     avatarIcon: "🌙",
-    dustValue: 25,
   },
   {
     id: "hero_16",
@@ -256,7 +356,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Bin yıllık kütüphanelerin sırlarını taşıyan ak sakallı üstat.",
     storyLore: "C1 ve C2 düzeyindeki akademik kavramları bir çocuk masalı gibi berrak anlatır.",
     avatarIcon: "📜",
-    dustValue: 50,
   },
   {
     id: "hero_17",
@@ -267,7 +366,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kusursuz disipliniyle çalışan sadık alıştırma şövalyesi.",
     storyLore: "Günlük hedefini aksatmayan kaşiflere her gün yeni bir onur nişanı takar.",
     avatarIcon: "🦾",
-    dustValue: 25,
   },
   {
     id: "hero_18",
@@ -278,7 +376,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Zıt anlamlı kelimeleri manyetik kutuplarla birbirine çeken mucit.",
     storyLore: "Karmaşık cümle yapılarını dişli çarklar gibi pürüzsüzce birbirine kenetler.",
     avatarIcon: "🧲",
-    dustValue: 25,
   },
   {
     id: "hero_19",
@@ -289,7 +386,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Işığı prizma gibi yansıtarak kelimelerin inceliklerini aydınlatan nöbetçi.",
     storyLore: "Fonetik transkripsiyon sembollerini gökkuşağı renkleriyle parıldatır.",
     avatarIcon: "💎",
-    dustValue: 25,
   },
   {
     id: "hero_20",
@@ -300,7 +396,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Güneşin doğuşuyla birlikte erken kalkan çalışkan zihinleri kutsayan rahip.",
     storyLore: "Sabah saatlerinde yapılan konuşma pratiklerine %20 fazladan zindelik bahşeder.",
     avatarIcon: "☀️",
-    dustValue: 50,
   },
   {
     id: "hero_21",
@@ -311,7 +406,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gümüş oklarıyla gecenin sessizliğinde zorlu gramer kalıplarını yakalayan avcı.",
     storyLore: "Karanlıkta parlayan yay ipi, devrik cümleleri kusursuz nizama sokar.",
     avatarIcon: "🏹",
-    dustValue: 25,
   },
   {
     id: "hero_22",
@@ -322,7 +416,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kelimelerin köklerindeki antik sembolleri kazıyan usta nakkaş.",
     storyLore: "Her harfin bir ruhu olduğuna inanır ve sözcükleri birer sanat eseri gibi zihne oyar.",
     avatarIcon: "✒️",
-    dustValue: 50,
   },
   {
     id: "hero_23",
@@ -333,7 +426,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Ejderha baskınlarında ön safta savaşan yılmaz güç abidesi.",
     storyLore: "Hata yapmaktan korkmaz; her yanlış cevabı daha güçlü bir doğruyla telafi eder.",
     avatarIcon: "🌋",
-    dustValue: 25,
   },
   {
     id: "hero_24",
@@ -344,7 +436,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Boyutlar arası kapılardan geçerek tüm dünya dillerini gezen gezgin.",
     storyLore: "Farklı aksanların melodisini çözer, yabancı hissettiren kelimeleri evine kavuşturur.",
     avatarIcon: "🌌",
-    dustValue: 50,
   },
   {
     id: "hero_25",
@@ -355,7 +446,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "1000 kelimelik zirveye tırmanan öğrencilerin altın sureti.",
     storyLore: "Salon 1'in en büyük onur tacıdır; İngilizceyi bir anahtar gibi kullanarak tüm kapıları açar.",
     avatarIcon: "👑",
-    dustValue: 50,
   },
 
   // ===========================================================================
@@ -370,7 +460,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Geceleri parıldayan gözleriyle kitap sayfalarını tarayan antik baykuş.",
     storyLore: "Okunan her cümlenin ana fikrini bir bakışta süzer ve hafıza yuvasına taşır.",
     avatarIcon: "🦉",
-    dustValue: 25,
   },
   {
     id: "creature_02",
@@ -381,7 +470,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Beyaz tüyleriyle gökyüzünde süzülen mitolojik asil at.",
     storyLore: "Zorlu okuma parçalarında okuyucuyu sırtına alır, paragrafın doruk noktasına ulaştırır.",
     avatarIcon: "🦄",
-    dustValue: 25,
   },
   {
     id: "creature_03",
@@ -392,7 +480,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Toprağın ve kayaların kadim enerjisiyle canlanan dev koruyucu.",
     storyLore: "Kalıcı hafızanın simgesidir; bir kez öğrendiği kelimeyi bin yıl boyunca unutmaz.",
     avatarIcon: "🗿",
-    dustValue: 25,
   },
   {
     id: "creature_04",
@@ -403,7 +490,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Volkanik dağların zirvesinde yaşayan, kelimeleri alevle test eden ulu ejderha.",
     storyLore: "Ejderha Baskını arenasında meydan okuyan öğrencilerin cesaretini takdir eder.",
     avatarIcon: "🐉",
-    dustValue: 50,
   },
   {
     id: "creature_05",
@@ -414,7 +500,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kendi küllerinden yeniden doğan ebedi zarafet simgesi.",
     storyLore: "Sıfır Eleme (Respawn) anında gökten inerek öğrenciye yeni bir can ve umut üfler.",
     avatarIcon: "🪶",
-    dustValue: 50,
   },
   {
     id: "creature_06",
@@ -425,7 +510,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gövdesi yıldız tozlarıyla parlayan uzay ejderhası.",
     storyLore: "Samanyolu'nun ötesindeki bilinmeyen kelime galaksilerini korur.",
     avatarIcon: "✨",
-    dustValue: 50,
   },
   {
     id: "creature_07",
@@ -436,7 +520,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kutupların buz sarkıtları arasında uyuyan mavi ejderha.",
     storyLore: "Nefesiyle heyecanı yatıştırır, sınav esnasında zihne buz gibi bir odaklanma sağlar.",
     avatarIcon: "🧊",
-    dustValue: 25,
   },
   {
     id: "creature_08",
@@ -447,7 +530,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Dip akıntılarının en derininde yatan kadim deniz devi.",
     storyLore: "Akademik metinlerin derin sularında boğulmadan yüzmenin sırrını öğretir.",
     avatarIcon: "🐋",
-    dustValue: 50,
   },
   {
     id: "creature_09",
@@ -458,7 +540,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Şimşek bulutlarının üzerinde yuva yapan altın gözlü yırtıcı.",
     storyLore: "Metin içindeki anahtar kelimeleri gökyüzünden bir şimşek hızıyla tespit eder.",
     avatarIcon: "🦅",
-    dustValue: 25,
   },
   {
     id: "creature_10",
@@ -469,7 +550,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kabuğu zümrüt ve elmas kristallerinden oluşan sabır timsali.",
     storyLore: "Yavaş ama kararlı adımlarla her gün 20 kelime öğrenmenin büyük zaferini fısıldar.",
     avatarIcon: "🐢",
-    dustValue: 25,
   },
   {
     id: "creature_11",
@@ -480,7 +560,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Bulunduğu ortamın diline anında uyum sağlayan renk değiştiren dost.",
     storyLore: "Farklı konuşma ortamlarında doğru tonlamayı ve kelime seçimini hızla benimser.",
     avatarIcon: "🦎",
-    dustValue: 25,
   },
   {
     id: "creature_12",
@@ -491,7 +570,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Dolunayın altında sürü halinde kelime avlayan gümüş tüylü kurt.",
     storyLore: "Sınıfça yapılan Co-op baskınlarda birlik olmanın sarsılmaz gücünü temsil eder.",
     avatarIcon: "🐺",
-    dustValue: 25,
   },
   {
     id: "creature_13",
@@ -502,7 +580,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Yelesi saf güneş ışığından örülmüş heybetli ormanlar kralı.",
     storyLore: "Özgüvenle konuşmanın asaletini aşılar; kekelemeyi ve çekingenliği kükreyerek dağıtır.",
     avatarIcon: "🦁",
-    dustValue: 50,
   },
   {
     id: "creature_14",
@@ -513,7 +590,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gözleriyle yanıltıcı seçenekleri taşlaştıran efsanevi sürüngen.",
     storyLore: "Çoktan seçmeli testlerdeki çeldiricileri tek bakışta etkisiz hale getirir.",
     avatarIcon: "🐍",
-    dustValue: 25,
   },
   {
     id: "creature_15",
@@ -524,7 +600,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Buzul çağının fırtınalarına göğüs germiş devasa yürüyen anıt.",
     storyLore: "Geniş sırtında koca kütüphaneleri taşır, ağır tempolu ama sarsılmaz hafıza inşa eder.",
     avatarIcon: "🦣",
-    dustValue: 25,
   },
   {
     id: "creature_16",
@@ -535,7 +610,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Közlerin arasında dans eden minik ve neşeli lav yaratığı.",
     storyLore: "Öğrenme kıvılcımını hiç söndürmez; en sıkıcı konuları bile eğlenceli hale getirir.",
     avatarIcon: "🔥",
-    dustValue: 25,
   },
   {
     id: "creature_17",
@@ -546,7 +620,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kanatlarını çırptığında fırtınalar koparan elektrik mavisi ejderha.",
     storyLore: "Speed Recall oyunlarında ardı ardına gelen 10 kombo serisinde gökyüzünde belirir.",
     avatarIcon: "⚡",
-    dustValue: 50,
   },
   {
     id: "creature_18",
@@ -557,7 +630,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gecenin örtüsü altında sessiz adımlarla avlanan göz kamaştırıcı avcı.",
     storyLore: "Listening dinleme çalışmalarında aradaki en kısık sesli detayları dahi yakalar.",
     avatarIcon: "🐆",
-    dustValue: 25,
   },
   {
     id: "creature_19",
@@ -568,7 +640,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Bulutların arasında yüzen devasa masmavi gök memelisi.",
     storyLore: "Yankılanan şarkısıyla binlerce yeni kelimeyi gökyüzüne bir melodi gibi yayar.",
     avatarIcon: "🐳",
-    dustValue: 50,
   },
   {
     id: "creature_20",
@@ -579,7 +650,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Boynuzlarından lavlar damlayan durdurulamaz yer altı devi.",
     storyLore: "Zorluklar karşısında asla geri adım atmaz; önündeki tüm engelleri yıkar geçer.",
     avatarIcon: "🐂",
-    dustValue: 25,
   },
   {
     id: "creature_21",
@@ -590,7 +660,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Aslan gövdesi ve kartal başıyla dağ geçitlerini koruyan asil bekçi.",
     storyLore: "Hem cesaretin hem de keskin aklın birleşimini sembolize eder.",
     avatarIcon: "🦅",
-    dustValue: 25,
   },
   {
     id: "creature_22",
@@ -601,7 +670,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Bir başı kesildiğinde iki başı birden çıkan çok başlı antik efsane.",
     storyLore: "Her çözülen problemin ardından zihnin kapasitesini iki katına çıkarır.",
     avatarIcon: "🐉",
-    dustValue: 50,
   },
   {
     id: "creature_23",
@@ -612,7 +680,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gümüşi kanatlarıyla gecenin rüyalarını kelimelerle süsleyen peri güvesi.",
     storyLore: "Uykuda gerçekleşen hafıza pekiştirme süreçlerinin koruyucu meleğidir.",
     avatarIcon: "🦋",
-    dustValue: 25,
   },
   {
     id: "creature_24",
@@ -623,7 +690,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Büyülü ormanın derinliklerinde parıldayan psişik doğa ruhu.",
     storyLore: "Kelimeler arasında hiç tahmin edilmeyen sezgisel bağlar kurar.",
     avatarIcon: "🍄",
-    dustValue: 25,
   },
   {
     id: "creature_25",
@@ -634,7 +700,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Evrenin doğumundan beri göklerde uyuyan en yüce yaratık.",
     storyLore: "Salon 2'nin taç mücevheridir; yalnızca 100 kelime barajını aşan gerçek kaşiflere uyanır.",
     avatarIcon: "👑",
-    dustValue: 50,
   },
 
   // ===========================================================================
@@ -649,7 +714,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "İlk kelime savaşlarına katılan acemilerin güvenilir kılıcı.",
     storyLore: "Hafif ve dengelidir; A1 seviyesindeki ilk cümleleri cesaretle kurmayı sağlar.",
     avatarIcon: "🗡️",
-    dustValue: 25,
   },
   {
     id: "relic_02",
@@ -660,7 +724,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Namusunda parlayan alevlerle yanlış harfleri yakan büyülü kılıç.",
     storyLore: "Word Scramble oyunlarında harfleri doğru sıraya dizmek için harika bir kılavuzdur.",
     avatarIcon: "🔥",
-    dustValue: 25,
   },
   {
     id: "relic_03",
@@ -671,7 +734,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Sınav kaygılarını ve kafa karışıklıklarını geri püskürten saydam kalkan.",
     storyLore: "Çeldirici seçeneklerin zihni bulandırmasına karşı zırh gibi korur.",
     avatarIcon: "🛡️",
-    dustValue: 25,
   },
   {
     id: "relic_04",
@@ -682,7 +744,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Geleceğin teknolojisiyle ışık saçan yüksek enerjili kılıç.",
     storyLore: "Tek darbede en karmaşık bileşik kelimeleri kök ve eklerine ayırır.",
     avatarIcon: "⚡",
-    dustValue: 50,
   },
   {
     id: "relic_05",
@@ -693,7 +754,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Taşa saplanmış kadim kelime kılıcı; sadece gerçek galipler çekebilir.",
     storyLore: "Her doğru telaffuzda göğe altın ışık huzmeleri saçar, konuşmayı akıcı kılar.",
     avatarIcon: "✨",
-    dustValue: 50,
   },
   {
     id: "relic_06",
@@ -704,7 +764,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "300+ kelime barajını aşarak Salon 3'e hükmeden liderlerin tacı.",
     storyLore: "Kuşanan oyuncunun profilinde saf altın bir parıltıyla ışıldar.",
     avatarIcon: "👑",
-    dustValue: 50,
   },
   {
     id: "relic_07",
@@ -715,7 +774,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Üzerine koruyucu gramer rünleri işlenmiş kırılmaz göğüslük.",
     storyLore: "Zorlu paragraf sorularında öğrencinin odağını hiçbir şeyin bozamamasını sağlar.",
     avatarIcon: "🦺",
-    dustValue: 50,
   },
   {
     id: "relic_08",
@@ -726,7 +784,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kutup fırtınalarının keskinliğiyle bilenmiş donmuş mızrak.",
     storyLore: "Uzak hedeflerdeki anlam nüanslarını tek bir hamleyle yakalar.",
     avatarIcon: "🔱",
-    dustValue: 25,
   },
   {
     id: "relic_09",
@@ -737,7 +794,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Zihni dış gürültülerden arındıran parıltılı miğfer.",
     storyLore: "Kulaklıktan gelen telaffuz seslerini stüdyo netliğinde zihne aktarır.",
     avatarIcon: "🪖",
-    dustValue: 50,
   },
   {
     id: "relic_10",
@@ -748,7 +804,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Uzaydan düşen bir göktaşının çekirdeğinden dövülmüş ağır balyoz.",
     storyLore: "Yerçekimi Savunması oyununda düşen asteroidleri parçalamak için birebirdir.",
     avatarIcon: "🔨",
-    dustValue: 25,
   },
   {
     id: "relic_11",
@@ -759,7 +814,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gerdikçe kıvılcımlar saçan elektrik yüklü kombo yayı.",
     storyLore: "Seri kombolarda atılan her ok için +%50 daha fazla skor üretir.",
     avatarIcon: "🏹",
-    dustValue: 25,
   },
   {
     id: "relic_12",
@@ -770,7 +824,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Sessizce hareket eden hızlı refleks hançeri.",
     storyLore: "Kart Eşleştirme tablosunda çiftleri saniyeler içinde çözüp kaybettirir.",
     avatarIcon: "🗡️",
-    dustValue: 25,
   },
   {
     id: "relic_13",
@@ -781,7 +834,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Ignis'in dökülen pullarından dikilmiş yanmaz zarafet örtüsü.",
     storyLore: "Kritik darbelerden hasar almayı önler, kullanıcıya asil bir duruş katar.",
     avatarIcon: "🧣",
-    dustValue: 50,
   },
   {
     id: "relic_14",
@@ -792,7 +844,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "İki ağızlı ağır çelik savaş baltası.",
     storyLore: "Uzun ve karmaşık cümleleri mantıksal parçalara ayırmakta ustadır.",
     avatarIcon: "🪓",
-    dustValue: 25,
   },
   {
     id: "relic_15",
@@ -803,7 +854,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Mavi bir safir taşının etrafına sarılmış gümüş kolye.",
     storyLore: "Unutma riskine giren kelimeleri hemen uyararak İntikam Arenası'na taşır.",
     avatarIcon: "🧿",
-    dustValue: 25,
   },
   {
     id: "relic_16",
@@ -814,7 +864,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kelimeleri havadan çekip parmak uçlarında tutan eldiven.",
     storyLore: "Doğru şıkkı sezgisel olarak kendine doğru çeker.",
     avatarIcon: "🧤",
-    dustValue: 25,
   },
   {
     id: "relic_17",
@@ -825,7 +874,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "İçinde bir galaksinin döndüğü parıldayan altın halka.",
     storyLore: "Kullanıcının kelime peteğindeki tüm hücrelere kozmik ışık yayar.",
     avatarIcon: "💍",
-    dustValue: 50,
   },
   {
     id: "relic_18",
@@ -836,7 +884,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Yeşil orman zümrütleriyle kaplı efsanevi savunma diski.",
     storyLore: "Yanlış telaffuz edilen kelimeleri şefkatle düzeltir, telafi altını kazandırır.",
     avatarIcon: "🛡️",
-    dustValue: 25,
   },
   {
     id: "relic_19",
@@ -847,7 +894,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Ucu saf gün ışığından yapılmış aydınlatıcı mızrak.",
     storyLore: "Karanlık ve anlaşılmaz akademik paragrafları gün ışığı gibi aydınlatır.",
     avatarIcon: "🔱",
-    dustValue: 50,
   },
   {
     id: "relic_20",
@@ -858,7 +904,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Hilal şeklinde kıvrık, gümüş ışıltılı zarif pala.",
     storyLore: "Hafıza eğrisinde gece tekrarlarını pürüzsüz hale getirir.",
     avatarIcon: "🌙",
-    dustValue: 25,
   },
   {
     id: "relic_21",
@@ -869,7 +914,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Tarih öncesi yaratıkların fosillerinden yapılmış hafif zırh.",
     storyLore: "Eski kelime kökenlerini ve etimolojiyi koruyan antik bir mirastır.",
     avatarIcon: "🦴",
-    dustValue: 25,
   },
   {
     id: "relic_22",
@@ -880,7 +924,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Dokunulduğunda mavi kıvılcımlar çıkaran enerji kubbesi.",
     storyLore: "Hata yapma korkusunu tamamen yok eden modern bir kalkan jeneratörüdür.",
     avatarIcon: "🌐",
-    dustValue: 50,
   },
   {
     id: "relic_23",
@@ -891,7 +934,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kumları yukarı doğru akan efsanevi kronometre.",
     storyLore: "Speed Recall oyunlarında süreyi 3 saniye genişleterek rahat düşünme sağlar.",
     avatarIcon: "⏳",
-    dustValue: 50,
   },
   {
     id: "relic_24",
@@ -902,7 +944,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Hazine madenlerinde altın damarlarını biçen parlak tırpan.",
     storyLore: "Hazine Avı oyunlarında her sandıktan ekstradan +10 altın çıkarır.",
     avatarIcon: "⛏️",
-    dustValue: 25,
   },
   {
     id: "relic_25",
@@ -913,7 +954,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Tüm dil kurallarına hükmeden imparatorluk asası.",
     storyLore: "Salon 3'ün zirve eseri; kuşanıldığında dil öğrenimindeki mutlak otoriteyi simgeler.",
     avatarIcon: "🪄",
-    dustValue: 50,
   },
 
   // ===========================================================================
@@ -928,7 +968,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Temel kelime taşlarının üst üste dizilmesiyle yükselen gözetleme kulesi.",
     storyLore: "İlk 50 kelimenin sağlam temelini temsil eder; ufuktaki yeni hedefleri gösterir.",
     avatarIcon: "🗼",
-    dustValue: 25,
   },
   {
     id: "monument_02",
@@ -939,7 +978,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kutup dağlarının tepesinde yükselen masmavi şeffaf kale.",
     storyLore: "Soğuk ve berrak bir mantıkla kurulan kusursuz gramer yapılarını simgeler.",
     avatarIcon: "🏰",
-    dustValue: 25,
   },
   {
     id: "monument_03",
@@ -950,7 +988,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Bulutların üzerinde süzülen yerçekimsiz büyü kalesi.",
     storyLore: "Öğrenilen yüzlerce kelimenin gökyüzünde birer yıldız gibi parıldadığı kutsal sığınak.",
     avatarIcon: "⭐",
-    dustValue: 50,
   },
   {
     id: "monument_04",
@@ -961,7 +998,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Ejderhaların koruması altındaki lav ve altınla bezeli efsanevi kale.",
     storyLore: "600+ kelime barajını aşan öğrencilerin adının altın harflerle yazıldığı salon başyapıtı.",
     avatarIcon: "🏯",
-    dustValue: 50,
   },
   {
     id: "monument_05",
@@ -972,7 +1008,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Mürekkebi hiç bitmeyen, kelimeleri altın yaldızla yazan anıt kalem.",
     storyLore: "Okuma Odası'nda yapay zekâ ile üretilen tüm epik hikayelerin yaratıcı kaynağıdır.",
     avatarIcon: "✒️",
-    dustValue: 25,
   },
   {
     id: "monument_06",
@@ -983,7 +1018,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kuzeyi değil, öğrencinin bir sonraki öğrenmesi gereken kelimeyi gösteren pusula.",
     storyLore: "SM-2 algoritmasının kalbindeki en doğru rota rehberidir.",
     avatarIcon: "🧭",
-    dustValue: 25,
   },
   {
     id: "monument_07",
@@ -992,9 +1026,8 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     category: "monuments",
     rarity: "legendary",
     description: "Sayfaları sonsuzluğa uzanan, her açıldığında yeni bir terim öğreten kutsal kitap.",
-    storyLore: "Vocaship platformunun kalbidir; tüm kütüphaneler bu kitaptan beslenir.",
+    storyLore: "VocaShip platformunun kalbidir; tüm kütüphaneler bu kitaptan beslenir.",
     avatarIcon: "📖",
-    dustValue: 50,
   },
   {
     id: "monument_08",
@@ -1005,7 +1038,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Karanlık denizlerdeki gemilere kelime ışığı tutan dev deniz feneri.",
     storyLore: "Bilinmeyen kavramların yarattığı sis bulutunu tek bir ışık demetiyle dağıtır.",
     avatarIcon: "🏮",
-    dustValue: 50,
   },
   {
     id: "monument_09",
@@ -1016,7 +1048,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Her basamağı bir CEFR seviyesini (A1'den C2'ye) temsil eden devasa piramit.",
     storyLore: "Zirveye ulaşanlar güneşe el uzatır ve dili akıcı bir sanat gibi konuşur.",
     avatarIcon: "🏛️",
-    dustValue: 50,
   },
   {
     id: "monument_10",
@@ -1027,7 +1058,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Uzak galaksilerdeki yeni deyimleri inceleyen teleskoplu anıt.",
     storyLore: "Dil öğreniminin sınırlarının evren kadar sonsuz olduğunu hatırlatır.",
     avatarIcon: "🔭",
-    dustValue: 25,
   },
   {
     id: "monument_11",
@@ -1038,7 +1068,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "İngilizce konuşulan büyük medeniyetin giriş kapısı.",
     storyLore: "Eşiklerinden geçen her öğrenciye bir dünya vatandaşı olma müjdesi verir.",
     avatarIcon: "🚪",
-    dustValue: 25,
   },
   {
     id: "monument_12",
@@ -1049,7 +1078,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "En azgın dalgalara bile direnen granit kayalık feneri.",
     storyLore: "Sınav günlerinde sarsılmaz bir dinginlik feneri gibi yol gösterir.",
     avatarIcon: "🌊",
-    dustValue: 25,
   },
   {
     id: "monument_13",
@@ -1060,7 +1088,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kızgın kumlarda susamış zihinlere bilgi suyu sunan büyülü çeşme.",
     storyLore: "Yorulan öğrencilerin motivasyonunu tek yudumda yeniler.",
     avatarIcon: "⛲",
-    dustValue: 25,
   },
   {
     id: "monument_14",
@@ -1071,7 +1098,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Altın madalyaların ve zafer kupalarının döküldüğü devasa ateş ocağı.",
     storyLore: "Oyun Arenası'nda kazanılan her başarının burada ebedi bir kupaya dönüştüğüne inanılır.",
     avatarIcon: "🌋",
-    dustValue: 25,
   },
   {
     id: "monument_15",
@@ -1082,7 +1108,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Gündönümlerinde güneş ışığını kelime peteklerine odaklayan monolitler.",
     storyLore: "Doğanın döngüleriyle hafızanın biyolojik ritmini senkronize eder.",
     avatarIcon: "🗿",
-    dustValue: 25,
   },
   {
     id: "monument_16",
@@ -1093,7 +1118,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Okyanusun dibinde batmadan ışıldayan kadim bilgelik tapınağı.",
     storyLore: "Kaybolduğu sanılan en derin ve nadir kelimeleri sütunlarında saklar.",
     avatarIcon: "🏛️",
-    dustValue: 50,
   },
   {
     id: "monument_17",
@@ -1104,7 +1128,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Manyetik mineraller sayesinde gökyüzünde süzülen antik şehir.",
     storyLore: "Sadece zihinsel olarak özgürleşen ve önyargıları yıkan kaşiflerin görebildiği ada.",
     avatarIcon: "🏝️",
-    dustValue: 50,
   },
   {
     id: "monument_18",
@@ -1115,7 +1138,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Kökleri kütüphanelerin altına inen bin yıllık ulu çınar ağacı.",
     storyLore: "Öğrenilen her 10 kelime için dallarında altın bir yaprak filizlendirir.",
     avatarIcon: "🌳",
-    dustValue: 25,
   },
   {
     id: "monument_19",
@@ -1126,7 +1148,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Her saat başı akıcı bir İngilizce kelime tınısıyla çalan bronz çan.",
     storyLore: "Düzenli çalışma disiplinini zarafetle hatırlatan zamansız bir ses.",
     avatarIcon: "🔔",
-    dustValue: 25,
   },
   {
     id: "monument_20",
@@ -1137,7 +1158,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Yeraltında milyonlarca yılda oluşmuş ametist ve zümrüt tapınak.",
     storyLore: "Speaking Lounge sohbetlerinin akustiğini mükemmelleştiren yankı odası.",
     avatarIcon: "💎",
-    dustValue: 25,
   },
   {
     id: "monument_21",
@@ -1148,7 +1168,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Geçilmez surlarıyla unutkanlık ordularını püskürten çelik kale.",
     storyLore: "Öğrencinin azmini ve pes etmeyen iradesini çelikten bir anıta dönüştürür.",
     avatarIcon: "🧱",
-    dustValue: 25,
   },
   {
     id: "monument_22",
@@ -1159,7 +1178,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "İçinden geçenleri doğrudan yabancı bir kültürün kalbine ışınlayan portal.",
     storyLore: "Dili sadece kitaptan değil, hayatın tam içinden yaşayarak öğrenmeyi sağlar.",
     avatarIcon: "🌀",
-    dustValue: 50,
   },
   {
     id: "monument_23",
@@ -1170,7 +1188,6 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "Farklı seviyedeki öğrencileri birbirine bağlayan ışık köprüsü.",
     storyLore: "Sınıf içi dayanışmanın ve birlikte öğrenmenin aydınlık köprüsüdür.",
     avatarIcon: "🌈",
-    dustValue: 50,
   },
   {
     id: "monument_24",
@@ -1181,18 +1198,16 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
     description: "İçinde tüm dünya dillerinin ses dalgalarını barındıran plazma küre.",
     storyLore: "Dokunan kişiye anında kusursuz bir fonetik telaffuz hissi bahşeder.",
     avatarIcon: "🔮",
-    dustValue: 25,
   },
   {
     id: "monument_25",
     salonId: 4,
-    title: "Vocaship Grand Panteon",
+    title: "VocaShip Grand Panteon",
     category: "monuments",
     rarity: "legendary",
     description: "100 eserin tamamını toplayan ulu kaşiflerin ebedi zafer tapınağı.",
     storyLore: "Müzenin en yüce kubbesidir; buraya ulaşan her öğrenci kendi dil zaferinin mimarıdır.",
     avatarIcon: "👑",
-    dustValue: 50,
   },
 ];
 
@@ -1234,35 +1249,6 @@ export function unlockMuseumItem(itemId: string): string[] {
     return current;
   } catch {
     return [itemId];
-  }
-}
-
-/**
- * Kullanıcının mevcut Sihirli Toz (Magic Dust) miktarını okur.
- */
-export function getMagicDust(): number {
-  if (typeof window === "undefined") return 0;
-  try {
-    const raw = localStorage.getItem("vocaship_magic_dust");
-    return raw ? parseInt(raw, 10) || 0 : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Sihirli Toz ekler veya çıkarır.
- */
-export function updateMagicDust(delta: number): number {
-  if (typeof window === "undefined") return 0;
-  try {
-    const current = getMagicDust();
-    const next = Math.max(0, current + delta);
-    localStorage.setItem("vocaship_magic_dust", String(next));
-    window.dispatchEvent(new CustomEvent("vocaship_dust_updated", { detail: { dust: next, delta } }));
-    return next;
-  } catch {
-    return 0;
   }
 }
 

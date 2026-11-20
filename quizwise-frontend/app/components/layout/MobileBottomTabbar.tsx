@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, Mic, Gamepad2, GraduationCap, Layers } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface TabItem {
   id: string;
@@ -16,10 +17,10 @@ export interface TabItem {
 export const DEFAULT_TABS: TabItem[] = [
   {
     id: "study",
-    label: "Desteler",
-    href: "/study",
+    label: "Kütüphanem",
+    href: "/",
     icon: <Layers className="w-5 h-5" />,
-    isActive: (path) => path.startsWith("/study") || path === "/",
+    isActive: (path) => path === "/" || path.startsWith("/study"),
   },
   {
     id: "reading",
@@ -57,16 +58,26 @@ export default function MobileBottomTabbar({
   tabs?: TabItem[];
 }) {
   const pathname = usePathname() || "";
+  const { t } = useLanguage();
+
+  const tabLabelKey: Record<string, string> = {
+    study: "nav_library",
+    reading: "nav_reading_short",
+    speaking: "nav_speaking",
+    games: "nav_games_short",
+    classroom: "nav_classroom",
+  };
 
   return (
     <nav
       data-testid="mobile-bottom-tabbar"
       className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-xl px-2 sm:px-4 py-1.5 flex justify-around items-center lg:hidden shadow-[0_-8px_24px_rgba(0,0,0,0.6)]"
       style={{ paddingBottom: "calc(0.4rem + env(safe-area-inset-bottom, 0px))" }}
-      aria-label="Mobil Alt Navigasyon"
+      aria-label={t("aria_mobile_nav", "Mobil Alt Navigasyon")}
     >
       {tabs.map((tab) => {
         const active = tab.isActive(pathname);
+        const displayLabel = tabLabelKey[tab.id] ? t(tabLabelKey[tab.id], tab.label) : tab.label;
 
         return (
           <Link
@@ -90,7 +101,7 @@ export default function MobileBottomTabbar({
 
             {/* Metin Etiketi */}
             <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
-              {tab.label}
+              {displayLabel}
             </span>
 
             {/* Aktif Gösterge Noktası */}

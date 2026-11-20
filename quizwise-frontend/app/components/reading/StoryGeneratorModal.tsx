@@ -53,12 +53,12 @@ interface StoryGeneratorModalProps {
 type SourceTab = "decks" | "spaced_repetition" | "manual";
 
 const TOPIC_PRESETS = [
-  { id: "business", label: "🏢 İş, Proje & Sözleşme Müzakeresi", title: "Project & Contract Negotiations" },
-  { id: "space", label: "🚀 Uzay & Geleceğin Teknolojileri", title: "Space Exploration & Deep Tech" },
-  { id: "adventure", label: "🏔️ Gizemli Keşif & Doğa Serüveni", title: "Mystery & Alpine Expedition" },
-  { id: "cafe", label: "☕ Günlük Yaşam & Kültürel Sohbet", title: "Daily Life & Urban Conversations" },
-  { id: "medical", label: "🩺 Tıp, Sağlık & Klinik Vaka", title: "Clinical Case & Healthcare Diagnostics" },
-  { id: "finance", label: "📈 Kurumsal Finans & Girişimcilik", title: "Corporate Finance & Capital Strategy" },
+  { id: "business", labelKey: "read_gen_preset_business", label: "🏢 İş, Proje & Sözleşme Müzakeresi", title: "Project & Contract Negotiations" },
+  { id: "space", labelKey: "read_gen_preset_space", label: "🚀 Uzay & Geleceğin Teknolojileri", title: "Space Exploration & Deep Tech" },
+  { id: "adventure", labelKey: "read_gen_preset_adventure", label: "🏔️ Gizemli Keşif & Doğa Serüveni", title: "Mystery & Alpine Expedition" },
+  { id: "cafe", labelKey: "read_gen_preset_cafe", label: "☕ Günlük Yaşam & Kültürel Sohbet", title: "Daily Life & Urban Conversations" },
+  { id: "medical", labelKey: "read_gen_preset_medical", label: "🩺 Tıp, Sağlık & Klinik Vaka", title: "Clinical Case & Healthcare Diagnostics" },
+  { id: "finance", labelKey: "read_gen_preset_finance", label: "📈 Kurumsal Finans & Girişimcilik", title: "Corporate Finance & Capital Strategy" },
 ];
 
 const DEFAULT_SPACED_REPETITION_WORDS: CardItem[] = [
@@ -296,20 +296,20 @@ export default function StoryGeneratorModal({
   // Yapay Zekâ ile Hikaye Üretme Fonksiyonu
   const handleGenerateStory = async () => {
     if (selectedWords.length === 0) {
-      setErrorMessage("Lütfen hikayede yer almasını istediğiniz en az 3-4 hedef kelime seçin.");
+      setErrorMessage(t("read_gen_min_words", "Lütfen hikayede yer almasını istediğiniz en az 3-4 hedef kelime seçin."));
       return;
     }
 
     setErrorMessage(null);
     setIsGenerating(true);
-    setLoadingStepText("1/3 Hedef kelimeler ve anlamsal bağlam kurgulanıyor...");
+    setLoadingStepText(t("read_gen_step_1_txt", "1/3 Hedef kelimeler ve anlamsal bağlam kurgulanıyor..."));
 
     const topicObj = TOPIC_PRESETS.find((p) => p.id === selectedTopicPreset);
     const finalTopic = customTopic.trim() || topicObj?.title || "Curated Knowledge Narrative";
 
     try {
       // 1. Backend API'ye asenkron istek at
-      setLoadingStepText("2/3 Yapay zekâ özgün olay örgüsü ve metni oluşturuyor...");
+      setLoadingStepText(t("read_gen_step_2_txt", "2/3 Yapay zekâ özgün olay örgüsü ve metni oluşturuyor..."));
 
       const payload = {
         level,
@@ -334,7 +334,7 @@ export default function StoryGeneratorModal({
         console.warn("Backend generate çağrısı başarısız oldu, akıllı yerel motor devreye giriyor:", err);
       }
 
-      setLoadingStepText("3/3 Kapak görseli ve anlama soruları atanıyor...");
+      setLoadingStepText(t("read_gen_step_3_txt", "3/3 Kapak görseli ve anlama soruları atanıyor..."));
 
       // Eğer backend cevap vermediyse veya Gemini kotası aşıldıysa: Yerel zengin metin üret
       if (!storyData || !storyData.content) {
@@ -405,7 +405,7 @@ export default function StoryGeneratorModal({
       onClose();
     } catch (err: any) {
       console.error("Story generation error:", err);
-      setErrorMessage(err?.message || "Hikaye üretilirken beklenmeyen bir hata oluştu.");
+      setErrorMessage(err?.message || t("read_gen_err_generic", "Hikaye üretilirken beklenmeyen bir hata oluştu."));
     } finally {
       setIsGenerating(false);
       setLoadingStepText("");
@@ -494,24 +494,24 @@ export default function StoryGeneratorModal({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg sm:text-xl font-black text-white">
-                  Yapay Zekâ ile Özgün Hikaye Üret
+                  {t("read_gen_title", "Yapay Zekâ ile Özgün Hikaye Üret")}
                 </h3>
                 {planTier === "pro" ? (
                   <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[11px] font-black tracking-wide flex items-center gap-1 shadow-sm">
-                    👑 PRO • Sınırsız
+                    👑 {t("read_plan_pro", "PRO • Sınırsız")}
                   </span>
                 ) : planTier === "plus" ? (
                   <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[11px] font-bold tracking-wide flex items-center gap-1">
-                    ⚡ Plus • Günlük 5/5
+                    ⚡ {t("read_plan_plus", "Plus • Günlük 5/5")}
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold tracking-wide flex items-center gap-1">
-                    🆓 Basic • Günlük 1/1
+                    🆓 {t("read_plan_basic", "Basic • Günlük 1/1")}
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Kelime destelerinizden veya aralıklı tekrar eğrinizden beslenen kişiselleştirilmiş okuma metni
+                {t("read_gen_sub", "Kelime destelerinizden veya aralıklı tekrar eğrinizden beslenen kişiselleştirilmiş okuma metni")}
               </p>
             </div>
           </div>
@@ -531,9 +531,9 @@ export default function StoryGeneratorModal({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <span>1. Hedef Kelime Kaynağı</span>
+              <span>{t("read_gen_step1", "1. Hedef Kelime Kaynağı")}</span>
               <span className="text-[10px] text-indigo-400 font-mono">
-                ({selectedWords.length} Kelime Seçildi)
+                {t("read_gen_selected_count", "({count} Kelime Seçildi)", { count: selectedWords.length })}
               </span>
             </label>
 
@@ -543,7 +543,7 @@ export default function StoryGeneratorModal({
                 onClick={() => setSelectedWords([])}
                 className="text-[11px] text-slate-400 hover:text-rose-400 font-medium transition cursor-pointer"
               >
-                Seçimleri Temizle
+                {t("read_gen_clear", "Seçimleri Temizle")}
               </button>
             )}
           </div>
@@ -560,7 +560,7 @@ export default function StoryGeneratorModal({
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Destelerimden Seç</span>
+              <span>{t("read_gen_tab_decks", "Destelerimden Seç")}</span>
             </button>
 
             <button
@@ -573,7 +573,7 @@ export default function StoryGeneratorModal({
               }`}
             >
               <Brain className="w-4 h-4" />
-              <span>Hatırlama Eğrisi</span>
+              <span>{t("read_gen_tab_sr", "Hatırlama Eğrisi")}</span>
             </button>
 
             <button
@@ -586,7 +586,7 @@ export default function StoryGeneratorModal({
               }`}
             >
               <Edit3 className="w-4 h-4" />
-              <span>Serbest Yazım</span>
+              <span>{t("read_gen_tab_manual", "Serbest Yazım")}</span>
             </button>
           </div>
 
@@ -620,7 +620,7 @@ export default function StoryGeneratorModal({
                     className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
-                    <span>Destedeki Tümünü Seç / Kaldır</span>
+                    <span>{t("read_gen_toggle_all", "Destedeki Tümünü Seç / Kaldır")}</span>
                   </button>
                 )}
               </div>
@@ -628,11 +628,11 @@ export default function StoryGeneratorModal({
               {loadingDeckCards ? (
                 <div className="py-8 flex items-center justify-center gap-2 text-xs text-slate-400">
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                  <span>Destedeki kelimeler yükleniyor...</span>
+                  <span>{t("read_gen_loading_deck", "Destedeki kelimeler yükleniyor...")}</span>
                 </div>
               ) : deckCards.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-500">
-                  Bu destede henüz kayıtlı kelime kartı bulunmuyor.
+                  {t("read_gen_empty_deck", "Bu destede henüz kayıtlı kelime kartı bulunmuyor.")}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1 no-scrollbar">
@@ -678,7 +678,7 @@ export default function StoryGeneratorModal({
                 <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
                   <Brain className="w-4 h-4 text-amber-400" />
                   <span>
-                    Bugün hafızanı tazeleyeceğin {dueCards.length} kelime bulundu
+                    {t("read_gen_sr_found", "Bugün hafızanı tazeleyeceğin {count} kelime bulundu", { count: dueCards.length })}
                   </span>
                 </div>
                 <button
@@ -686,18 +686,18 @@ export default function StoryGeneratorModal({
                   onClick={() => handleToggleSelectAll(dueCards)}
                   className="text-xs font-semibold text-amber-400 hover:text-amber-300 cursor-pointer"
                 >
-                  Tümünü İşaretle
+                  {t("read_gen_mark_all", "Tümünü İşaretle")}
                 </button>
               </div>
 
               <p className="text-[11px] text-slate-400">
-                Aralıklı tekrar algoritması tarafından unutulma riski tespit edilen kelimeler otomatik olarak hikaye kurgusuna yerleştirilir.
+                {t("read_gen_sr_desc", "Aralıklı tekrar algoritması tarafından unutulma riski tespit edilen kelimeler otomatik olarak hikaye kurgusuna yerleştirilir.")}
               </p>
 
               {loadingDueCards ? (
                 <div className="py-6 flex items-center justify-center gap-2 text-xs text-amber-300">
                   <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                  <span>Hatırlama eğrisi analiz ediliyor...</span>
+                  <span>{t("read_gen_sr_loading", "Hatırlama eğrisi analiz ediliyor...")}</span>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1 no-scrollbar">
@@ -739,7 +739,7 @@ export default function StoryGeneratorModal({
           {sourceTab === "manual" && (
             <div className="space-y-3 p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
               <p className="text-xs text-slate-400">
-                Hikayede geçmesini istediğiniz kelimeleri virgülle ayırarak yazın (örn:{" "}
+                {t("read_gen_manual_hint", "Hikayede geçmesini istediğiniz kelimeleri virgülle ayırarak yazın (örn:")}{" "}
                 <span className="text-indigo-300 font-mono">
                   critical path, resilience, milestone, trajectory
                 </span>
@@ -756,7 +756,7 @@ export default function StoryGeneratorModal({
                       handleAddManualWords();
                     }
                   }}
-                  placeholder="Kelimeleri virgülle ayırarak ekleyin..."
+                  placeholder={t("read_gen_manual_ph", "Kelimeleri virgülle ayırarak ekleyin...")}
                   className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
                 <button
@@ -765,7 +765,7 @@ export default function StoryGeneratorModal({
                   disabled={!manualInput.trim()}
                   className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs shadow-md transition cursor-pointer"
                 >
-                  Listeye Ekle
+                  {t("add", "Ekle")}
                 </button>
               </div>
 
@@ -800,7 +800,7 @@ export default function StoryGeneratorModal({
           {/* Seviye Seçimi */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              2. İngilizce Seviyesi
+              {t("read_gen_step2", "2. İngilizce Seviyesi")}
             </label>
             <div className="grid grid-cols-3 gap-2">
               {(["Elementary", "Intermediate", "Advanced"] as const).map((lvl) => (
@@ -824,13 +824,13 @@ export default function StoryGeneratorModal({
           {/* Uzunluk Seçimi */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              3. Metin Uzunluğu
+              {t("read_gen_step3", "3. Metin Uzunluğu")}
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { count: 150, label: "Kısa (~150k)" },
-                { count: 250, label: "Standart (~250k)" },
-                { count: 350, label: "Detaylı (~350k)" },
+                { count: 150, label: t("read_gen_len_short", "Kısa (~150k)") },
+                { count: 250, label: t("read_gen_len_std", "Standart (~250k)") },
+                { count: 350, label: t("read_gen_len_long", "Detaylı (~350k)") },
               ].map((item) => (
                 <button
                   key={item.count}
@@ -852,7 +852,7 @@ export default function StoryGeneratorModal({
         {/* Konu ve Tema Seçimi */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-            4. Hikaye Teması / Senaryo
+            {t("read_gen_step4", "4. Hikaye Teması / Senaryo")}
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {TOPIC_PRESETS.map((p) => (
@@ -869,7 +869,7 @@ export default function StoryGeneratorModal({
                     : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700"
                 }`}
               >
-                {p.label}
+                {t(p.labelKey, p.label)}
               </button>
             ))}
           </div>
@@ -878,7 +878,7 @@ export default function StoryGeneratorModal({
             type="text"
             value={customTopic}
             onChange={(e) => setCustomTopic(e.target.value)}
-            placeholder="Veya dilediğiniz özel bir konu yazın (örn: Mars üssünde fırtına, antik saatçi)..."
+            placeholder={t("read_gen_custom_topic_ph", "Veya dilediğiniz özel bir konu yazın (örn: Mars üssünde fırtına, antik saatçi)...")}
             className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
         </div>
@@ -896,10 +896,10 @@ export default function StoryGeneratorModal({
           <div className="text-xs text-slate-400">
             {selectedWords.length > 0 ? (
               <span className="text-emerald-400 font-medium">
-                ✓ {selectedWords.length} hedef kelime hikayede amber parıltıyla vurgulanacak.
+                {t("read_gen_selected_note", "✓ {count} hedef kelime hikayede amber parıltıyla vurgulanacak.", { count: selectedWords.length })}
               </span>
             ) : (
-              <span>Lütfen en az 3-4 kelime seçin.</span>
+              <span>{t("read_gen_min_words", "Lütfen en az 3-4 kelime seçin.")}</span>
             )}
           </div>
 
@@ -910,7 +910,7 @@ export default function StoryGeneratorModal({
               disabled={isGenerating}
               className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer"
             >
-              İptal
+              {t("cancel", "İptal")}
             </button>
 
             <button
@@ -922,12 +922,12 @@ export default function StoryGeneratorModal({
               {isGenerating ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{loadingStepText || "Hikaye Üretiliyor..."}</span>
+                  <span>{loadingStepText || t("read_gen_generating", "Hikaye Üretiliyor...")}</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>Özgün Hikayeyi Üret ➔</span>
+                  <span>{t("read_gen_submit", "Özgün Hikayeyi Üret ➔")}</span>
                 </>
               )}
             </button>

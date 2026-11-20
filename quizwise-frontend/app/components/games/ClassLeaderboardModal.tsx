@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Globe
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface StudentLeaderboardEntry {
   rank: number;
@@ -71,6 +72,7 @@ export default function ClassLeaderboardModal({
   userClassrooms = DEFAULT_CLASSES,
   userXP = 2665,
 }: ClassLeaderboardModalProps) {
+  const { t } = useLanguage();
   // Sınıf seçimi ve görünüm durumu
   const [selectedClassId, setSelectedClassId] = useState<string>(
     userClassrooms.length > 0 ? userClassrooms[0].id : ""
@@ -122,13 +124,13 @@ export default function ClassLeaderboardModal({
             </div>
             <div>
               <h3 className="text-base font-black text-white flex items-center gap-1.5">
-                <span>Sınıf Liderlik Tablosu</span>
+                <span>{t("game_clb_title", "Sınıf Liderlik Tablosu")}</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  Canlı Podyum
+                  {t("game_clb_live_badge", "Canlı Podyum")}
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Arkadaşlarınla haftalık XP rekabeti ve şeref kürsüsü
+                {t("game_clb_sub", "Arkadaşlarınla haftalık XP rekabeti ve şeref kürsüsü")}
               </p>
             </div>
           </div>
@@ -155,10 +157,10 @@ export default function ClassLeaderboardModal({
                 </div>
                 <div className="space-y-1">
                   <h4 className="text-sm font-black text-white">
-                    Henüz bir sınıfa dahil değilsin!
+                    {t("game_clb_no_class_t", "Henüz bir sınıfa dahil değilsin!")}
                   </h4>
                   <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                    Öğretmeninden aldığın 6 haneli sınıf kodu ile sınıfa katılabilir ve sınıf arkadaşlarınla puan yarışına başlayabilirsin.
+                    {t("game_clb_no_class_d", "Öğretmeninden aldığın 6 haneli sınıf kodu ile sınıfa katılabilir ve sınıf arkadaşlarınla puan yarışına başlayabilirsin.")}
                   </p>
                 </div>
 
@@ -171,7 +173,7 @@ export default function ClassLeaderboardModal({
                   className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-1.5 mx-auto active:scale-95 cursor-pointer"
                 >
                   <KeyRound className="w-4 h-4 text-indigo-200" />
-                  <span>🔑 Sınıf Kodu Gir</span>
+                  <span>{t("game_clb_enter_code", "🔑 Sınıf Kodu Gir")}</span>
                 </button>
               </div>
 
@@ -180,9 +182,9 @@ export default function ClassLeaderboardModal({
                 <div className="flex items-center justify-between text-xs text-slate-400 px-1">
                   <span className="font-bold text-slate-300 flex items-center gap-1.5">
                     <Globe className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>🌍 Genel Haftalık Lig (Top 5)</span>
+                    <span>{t("game_clb_global_top5", "🌍 Genel Haftalık Lig (Top 5)")}</span>
                   </span>
-                  <span className="text-[10px] font-mono">Dinamik 7 Gün</span>
+                  <span className="text-[10px] font-mono">{t("game_clb_7days", "Dinamik 7 Gün")}</span>
                 </div>
 
                 <div className="space-y-2">
@@ -209,7 +211,7 @@ export default function ClassLeaderboardModal({
                             {entry.name}
                           </p>
                           <span className="text-[10px] text-slate-500 font-mono">
-                            Lv.{entry.level} Kaşif
+                            Lv.{entry.level} {t("game_clb_explorer", "Kaşif")}
                           </span>
                         </div>
                       </div>
@@ -239,7 +241,7 @@ export default function ClassLeaderboardModal({
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-ping" />
                     <span className="text-xs font-bold text-white truncate">
-                      {currentClass?.name || "10-A İngilizce"}
+                      {currentClass?.name || "10-A"}
                     </span>
                   </div>
                   <ChevronDown
@@ -287,7 +289,7 @@ export default function ClassLeaderboardModal({
                   }`}
                 >
                   <Flame className="w-3.5 h-3.5 text-amber-400 fill-current" />
-                  <span>Bu Haftanın Yarışı</span>
+                  <span>{t("game_clb_tab_weekly", "Bu Haftanın Yarışı")}</span>
                 </button>
 
                 <button
@@ -300,7 +302,7 @@ export default function ClassLeaderboardModal({
                   }`}
                 >
                   <Crown className="w-3.5 h-3.5 text-yellow-400 fill-current" />
-                  <span>Tüm Zamanlar</span>
+                  <span>{t("game_clb_tab_alltime", "Tüm Zamanlar")}</span>
                 </button>
               </div>
 
@@ -329,7 +331,7 @@ export default function ClassLeaderboardModal({
                           {entry.name}
                         </p>
                         <span className="text-[10px] text-slate-500 font-mono">
-                          Lv.{entry.level} Seviye
+                          Lv.{entry.level} {t("level", "Seviye")}
                         </span>
                       </div>
                     </div>
@@ -353,15 +355,15 @@ export default function ClassLeaderboardModal({
               <span className="text-base">🦊</span>
               <div>
                 <span className="text-xs font-black text-white block">
-                  Sen: {activeTab === "weekly" ? "4. Sıra" : "2. Sıra"}
+                  {t("lb_you", "Sen")}: {activeTab === "weekly" ? t("game_clb_rank_4", "4. Sıra") : t("game_clb_rank_2", "2. Sıra")}
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono">
-                  {activeTab === "weekly" ? "Haftalık: 940 XP" : "Toplam: 5,410 XP"}
+                  {activeTab === "weekly" ? `${t("game_clb_weekly_lbl", "Haftalık")}: 940 XP` : `${t("game_clb_total_lbl", "Toplam")}: 5,410 XP`}
                 </span>
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-black font-mono">
-              🥈 Şeref Kürsüsü
+              {t("game_clb_podium_badge", "🥈 Şeref Kürsüsü")}
             </span>
           </div>
         )}

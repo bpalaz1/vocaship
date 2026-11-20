@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { X, Sparkles, Camera, CheckCircle2, Loader2, Link2, Volume2 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export const RPM_AVATAR_GLB_STORAGE_KEY = "vocaship_user_avatar_glb";
 export const RPM_AVATAR_META_STORAGE_KEY = "vocaship_user_avatar_meta";
@@ -31,12 +32,14 @@ export default function RPMCreatorModal({
   onClose,
   initialGlbUrl,
   initialGender = "male",
-  initialName = "Benim Avatarım",
+  initialName,
   onAvatarExported,
 }: RPMCreatorModalProps) {
+  const { t } = useLanguage();
+  const defaultName = initialName || t("av_rpm_my_avatar", "Benim Avatarım");
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [iframeLoaded, setIframeLoaded] = useState<boolean>(false);
-  const [avatarName, setAvatarName] = useState<string>(initialName || "Benim Avatarım");
+  const [avatarName, setAvatarName] = useState<string>(defaultName);
   const [voiceGender, setVoiceGender] = useState<RPMAvatarVoiceGender>(initialGender);
   const [manualGlbInput, setManualGlbInput] = useState<string>(initialGlbUrl || "");
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
@@ -44,11 +47,11 @@ export default function RPMCreatorModal({
   useEffect(() => {
     if (isOpen) {
       setIframeLoaded(false);
-      setAvatarName(initialName || "Benim Avatarım");
+      setAvatarName(initialName || t("av_rpm_my_avatar", "Benim Avatarım"));
       setVoiceGender(initialGender || "male");
       setManualGlbInput(initialGlbUrl || "");
     }
-  }, [isOpen, initialGlbUrl, initialGender, initialName]);
+  }, [isOpen, initialGlbUrl, initialGender, initialName, t]);
 
   // Ready Player Me Frame API 'message' dinleyicisi
   useEffect(() => {
@@ -123,7 +126,7 @@ export default function RPMCreatorModal({
 
     const meta: RPMAvatarMetadata = {
       glbUrl: enhancedGlbUrl,
-      name: avatarName.trim() || "Benim Avatarım",
+      name: avatarName.trim() || t("av_rpm_my_avatar", "Benim Avatarım"),
       gender: voiceGender,
       createdAt: new Date().toISOString(),
     };
@@ -162,13 +165,13 @@ export default function RPMCreatorModal({
             </div>
             <div>
               <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
-                <span>Ready Player Me • 3D Avatar Stüdyosu</span>
+                <span>{t("av_rpm_title", "Ready Player Me • 3D Avatar Stüdyosu")}</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Fotoğraftan 3D&apos;ye
+                  {t("av_rpm_badge", "Fotoğraftan 3D'ye")}
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                Kameranızla selfie çekin veya fotoğraf yükleyin; sağ üstteki &ldquo;Next / Done&rdquo; butonuna bastığınızda 3D avatarınız otomatik sahneye aktarılır.
+                {t("av_rpm_sub", "Kameranızla selfie çekin veya fotoğraf yükleyin; \"Next / Done\" butonuna bastığınızda 3D avatarınız otomatik sahneye aktarılır.")}
               </p>
             </div>
           </div>
@@ -187,7 +190,7 @@ export default function RPMCreatorModal({
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                👩 Kadın Sesi
+                👩 {t("av_voice_female", "Kadın Sesi")}
               </button>
               <button
                 type="button"
@@ -198,7 +201,7 @@ export default function RPMCreatorModal({
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                👨 Erkek Sesi
+                👨 {t("av_voice_male", "Erkek Sesi")}
               </button>
               <button
                 type="button"
@@ -209,7 +212,7 @@ export default function RPMCreatorModal({
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                🧒 Çocuk Sesi
+                🧒 {t("av_voice_child", "Çocuk Sesi")}
               </button>
             </div>
 
@@ -217,7 +220,7 @@ export default function RPMCreatorModal({
               type="button"
               onClick={onClose}
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
-              title="Kapat"
+              title={t("close", "Kapat")}
             >
               <X className="w-4 h-4" />
             </button>
@@ -230,10 +233,10 @@ export default function RPMCreatorModal({
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/90 z-10">
               <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
               <p className="text-xs font-bold text-slate-200">
-                Ready Player Me 3D Avatar Stüdyosu Yükleniyor...
+                {t("av_rpm_loading", "Ready Player Me 3D Avatar Stüdyosu Yükleniyor...")}
               </p>
               <p className="text-[11px] text-slate-500">
-                Kamera izni vererek fotoğrafınızdan saniyeler içinde 3D avatar oluşturabilirsiniz.
+                {t("av_rpm_loading_sub", "Kamera izni vererek fotoğrafınızdan saniyeler içinde 3D avatar oluşturabilirsiniz.")}
               </p>
             </div>
           )}
@@ -254,7 +257,7 @@ export default function RPMCreatorModal({
           <div className="flex items-center gap-2 text-slate-400">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span className="text-[11px]">
-              Stüdyoda tasarımınızı bitirip <strong className="text-emerald-300">Next / Done</strong> butonuna bastığınızda avatarınız otomatik kaydedilir.
+              {t("av_rpm_footer_hint", "Stüdyoda tasarımınızı bitirip Next / Done butonuna bastığınızda avatarınız otomatik kaydedilir.")}
             </span>
           </div>
 
@@ -265,7 +268,7 @@ export default function RPMCreatorModal({
               className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer"
             >
               <Link2 className="w-3 h-3 text-emerald-400" />
-              <span>.GLB Linki Yapıştır</span>
+              <span>{t("av_rpm_paste_glb", ".GLB Linki Yapıştır")}</span>
             </button>
           </div>
 
@@ -291,7 +294,7 @@ export default function RPMCreatorModal({
                 className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>3D Avatarı Kaydet</span>
+                <span>{t("av_rpm_save_3d", "3D Avatarı Kaydet")}</span>
               </button>
             </form>
           )}

@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Depends, Request, status
+from fastapi import APIRouter, HTTPException, Depends, Request, Body, status
 from fastapi.responses import JSONResponse
 from supabase import Client
 from app.core.database import get_db
@@ -138,7 +138,7 @@ def get_assignments_by_code(code: str, student_id: Optional[str] = None, db: Cli
     )
     return {
         "code": code.upper(),
-        "class_name": matching_cls["name"] if matching_cls else "Vocaship Sınıfı",
+        "class_name": matching_cls["name"] if matching_cls else "VocaShip Sınıfı",
         "grade_level": matching_cls.get("grade_level", "Genel"),
         "student_count": matching_cls["student_count"] if matching_cls else 0,
         "assignments": assignments
@@ -387,15 +387,73 @@ def get_classroom_timeline(
     return classroom_service.get_user_timeline(user_id=user_id.strip(), db=db)
 
 
+class StartLiveSessionPayload(BaseModel):
+    teacher_id: Optional[str] = None
+    class_name: Optional[str] = None
+
+
+class CompleteSessionPayload(BaseModel):
+    duration_minutes: Optional[int] = None
+    notes: Optional[str] = None
+
+
+@router.post("/classes/{class_id}/start-live", status_code=status.HTTP_200_OK)
+def start_live_session_endpoint(
+    class_id: str,
+    payload: Optional[StartLiveSessionPayload] = Body(default=None),
+    db: Client = Depends(get_db),
+):
+    """
+    Tahtada Aç butonuna basıldığında arka planda canlı ders oturumunu başlatır.
+    Mevcut bir 'live' oturum varsa onu döner, yoksa yeni oturum ve kısa kod (7A2-5K9) üretir.
+    """
+    result = classroom_service.start_live_session(
+        class_id=class_id,
+        teacher_id=payload.teacher_id if payload else None,
+        class_name=payload.class_name if payload else None,
+        db=db,
+    )
+    join_code = result.get("join_code") or ""
+    clean_code = join_code.replace("-", "").upper()
+    if clean_code:
+        ACTIVE_LIVE_SESSIONS[clean_code] = {
+            "id": result["session_id"],
+            "classId": class_id,
+            "className": result.get("class_name", "Canlı Ders Odası"),
+            "classCode": join_code,
+            "title": result.get("class_name", "Canlı Ders Odası"),
+            "isLive": True,
+            "is_live": True,
+            "teacherName": "Eğitmen Stüdyosu",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    return result
+
+
 @router.post("/sessions/{session_id}/complete", status_code=status.HTTP_200_OK)
-def complete_session_endpoint(session_id: str, db: Client = Depends(get_db)):
+def complete_session_endpoint(
+    session_id: str,
+    payload: Optional[CompleteSessionPayload] = Body(default=None),
+    db: Client = Depends(get_db),
+):
     """
     Eğitmen dersi bitirdiğinde status='completed' ve ended_at=NOW() yapar.
     Otomatik AI özeti veya SM-2 kart üretimi YAPILMAZ.
     """
-    result = classroom_service.complete_session(session_id=session_id, db=db)
+    result = classroom_service.complete_session(
+        session_id=session_id,
+        duration_minutes=payload.duration_minutes if payload else None,
+        notes=payload.notes if payload else None,
+        db=db,
+    )
     if not result:
         raise HTTPException(status_code=404, detail="Oturum bulunamadı.")
+
+    for sess in ACTIVE_LIVE_SESSIONS.values():
+        if sess.get("id") == session_id:
+            sess["isLive"] = False
+            sess["is_live"] = False
+
     return result
 
 

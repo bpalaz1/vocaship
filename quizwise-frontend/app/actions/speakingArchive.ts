@@ -1,4 +1,5 @@
 import { API_BASE } from "../config";
+import { pickUiText } from "../utils/uiLocale";
 
 export interface ArchiveTurnItem {
   sender: "user" | "ai";
@@ -38,7 +39,7 @@ export async function saveSpeakingArchiveSession(payload: {
   });
 
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: Konuşma oturumu arşivlenemedi.`);
+    throw new Error(`HTTP ${res.status}: ${pickUiText({ tr: "Konuşma oturumu arşivlenemedi.", en: "Could not archive speaking session.", de: "Sprachsitzung konnte nicht archiviert werden.", es: "No se pudo archivar la sesión.", fr: "Impossible d'archiver la session." })}`);
   }
 
   return await res.json();
@@ -56,7 +57,7 @@ export async function getSpeakingArchives(userId?: string): Promise<SpeakingArch
   });
 
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: Konuşma arşivleri alınamadı.`);
+    throw new Error(`HTTP ${res.status}: ${pickUiText({ tr: "Konuşma arşivleri alınamadı.", en: "Could not fetch speaking archives.", de: "Spracharchive konnten nicht abgerufen werden.", es: "No se pudieron obtener los archivos.", fr: "Impossible de récupérer les archives." })}`);
   }
 
   return await res.json();
@@ -70,7 +71,7 @@ export async function getSpeakingArchiveById(archiveId: string): Promise<Speakin
   });
 
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: Arşiv detayı alınamadı.`);
+    throw new Error(`HTTP ${res.status}: ${pickUiText({ tr: "Arşiv detayı alınamadı.", en: "Could not load archive details.", de: "Archivdetails konnten nicht geladen werden.", es: "No se pudieron cargar los detalles.", fr: "Impossible de charger les détails." })}`);
   }
 
   return await res.json();

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Shuffle, Clock, X, Trophy, Sparkles, Check, RotateCcw } from "lucide-react";
+import { Shuffle, Clock, X, Trophy, Sparkles, Check, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
 import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
@@ -10,6 +10,9 @@ import {
   shouldTriggerMysteryChest,
 } from "../../utils/gamificationEngine";
 import { GameMistakeItem } from "./GameOverSummary";
+import StreakMilestoneBar from "./StreakMilestoneBar";
+import { playArenaSound } from "../../utils/soundEffects";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface MatchPairItem {
   id: string;
@@ -29,10 +32,12 @@ export interface MatchGameProps {
 
 export default function MatchGame({
   cards,
-  deckTitle = "Genel Deste",
+  deckTitle,
   onClose,
   onAwardXP,
 }: MatchGameProps) {
+  const { t } = useLanguage();
+  const resolvedDeckTitle = deckTitle || t("game_default_deck", "Genel Deste");
   const [gridItems, setGridItems] = useState<MatchPairItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [mismatchedIds, setMismatchedIds] = useState<string[]>([]);
@@ -40,6 +45,7 @@ export default function MatchGame({
   const [isFinished, setIsFinished] = useState(false);
   const [score, setScore] = useState(0);
   const [combos, setCombos] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [isMysteryOpen, setIsMysteryOpen] = useState(false);
   const [mysteryBuff, setMysteryBuff] = useState(1.0);
   const [mysteryBuffCount, setMysteryBuffCount] = useState(0);
@@ -121,6 +127,11 @@ export default function MatchGame({
 
           const nextCombos = combos + 1;
           setCombos(nextCombos);
+          if (nextCombos % 5 === 0) {
+            playArenaSound("milestone", soundEnabled);
+          } else {
+            playArenaSound("correct", soundEnabled);
+          }
 
           // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
           const wordKey = first.word || item.word || "word";
@@ -155,6 +166,7 @@ export default function MatchGame({
         // HATALI EŞLEŞME: Kırmızı Titreme (Shake)
         setMismatchedIds(newSelected);
         setCombos(0);
+        playArenaSound("wrong", soundEnabled);
 
         const wordCard = cards.find(
           (c) =>
@@ -193,9 +205,9 @@ export default function MatchGame({
           </div>
           <div>
             <h2 className="text-base sm:text-lg font-black text-white">
-              Kart Eşleştirme (Match)
+              {t("game_match_title", "Kart Eşleştirme (Match)")}
             </h2>
-            <p className="text-xs text-slate-400 font-medium">{deckTitle}</p>
+            <p className="text-xs text-slate-400 font-medium">{resolvedDeckTitle}</p>
           </div>
         </div>
 
@@ -208,19 +220,37 @@ export default function MatchGame({
 
           {/* Skor */}
           <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs font-bold text-yellow-400">
-            {score} Puan
+            {score} {t("game_points_unit", "Puan")}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+            title={soundEnabled ? t("game_sound_off", "Sesi Kapat") : t("game_sound_on", "Sesi Aç")}
+          >
+            {soundEnabled ? (
+              <Volume2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <VolumeX className="w-4 h-4 text-slate-500" />
+            )}
+          </button>
 
           {/* Çıkış */}
           <button
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            title="Oyundan Çık"
+            title={t("game_exit", "Oyundan Çık")}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+      </div>
+
+      {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
+      <div className="max-w-4xl mx-auto w-full pt-3">
+        <StreakMilestoneBar streak={combos} />
       </div>
 
       {/* 12'li Karışık Izgara */}
@@ -263,8 +293,8 @@ export default function MatchGame({
       {/* Oyun Sonu Ekranı (5 Saniyelik Hata Telafisi ile) */}
       {isFinished && (
         <GameOverScreen
-          gameTitle="🃏 Kart Eşleştirme"
-          deckTitle={deckTitle}
+          gameTitle={t("game_match_over_title", "🃏 Kart Eşleştirme")}
+          deckTitle={resolvedDeckTitle}
           score={score}
           timeSeconds={seconds}
           awardedXP={Math.max(40, score)}

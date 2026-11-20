@@ -4,6 +4,7 @@
  */
 
 import { API_BASE } from "../config";
+import { pickUiText } from "../utils/uiLocale";
 
 export interface ActiveStoryContext {
   storyId?: string;
@@ -33,7 +34,7 @@ export interface StoryDebateQuestionsResult {
 export async function generateStoryDebateQuestions(
   story: ActiveStoryContext
 ): Promise<StoryDebateQuestionsResult> {
-  const cleanTitle = story.title || "Hikaye";
+  const cleanTitle = story.title || pickUiText({ tr: "Hikaye", en: "Story", de: "Geschichte", es: "Historia", fr: "Histoire" });
   const targetWords = story.targetWords || story.target_vocabulary || [];
 
   const defaultResult: StoryDebateQuestionsResult = {
@@ -41,19 +42,19 @@ export async function generateStoryDebateQuestions(
     questions: [
       {
         question: `What was the most critical decision in '${cleanTitle}', and how did it shape the outcome?`,
-        theme_hint: "Dönüm Noktası & Karar",
+        theme_hint: pickUiText({ tr: "Dönüm Noktası & Karar", en: "Turning Point & Decision", de: "Wendepunkt & Entscheidung", es: "Punto de inflexión y decisión", fr: "Tournant & Décision" }),
       },
       {
         question: `If you were placed in the protagonist's shoes during this conflict, what would you have done differently?`,
-        theme_hint: "Empati & Ahlaki İkilem",
+        theme_hint: pickUiText({ tr: "Empati & Ahlaki İkilem", en: "Empathy & Moral Dilemma", de: "Empathie & Moralisches Dilemma", es: "Empatía y dilema moral", fr: "Empathie & Dilemme moral" }),
       },
       {
         question: `Which character's actions surprised you the most, and why do you think they reacted that way?`,
-        theme_hint: "Karakter Motivasyonu",
+        theme_hint: pickUiText({ tr: "Karakter Motivasyonu", en: "Character Motivation", de: "Charaktermotivation", es: "Motivación del personaje", fr: "Motivation du personnage" }),
       },
       {
         question: `How does the central theme of '${cleanTitle}' reflect challenges or ethical decisions in modern life?`,
-        theme_hint: "Tematik Bağlantı",
+        theme_hint: pickUiText({ tr: "Tematik Bağlantı", en: "Thematic Connection", de: "Thematische Verbindung", es: "Conexión temática", fr: "Lien thématique" }),
       },
     ],
   };

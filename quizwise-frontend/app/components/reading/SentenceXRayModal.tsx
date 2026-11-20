@@ -18,6 +18,7 @@ import {
   DecompiledComponent,
 } from "../../utils/sentenceDecompiler";
 import { playNeuralTTS, stopSpeech } from "../../utils/tts";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SentenceXRayModalProps {
   sentence: string;
@@ -32,6 +33,7 @@ export default function SentenceXRayModal({
   onClose,
   onOpenShadowing,
 }: SentenceXRayModalProps) {
+  const { t } = useLanguage();
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
 
   // Cümleyi X-Ray sözdizim motoruyla ayrıştır
@@ -57,7 +59,7 @@ export default function SentenceXRayModal({
     <div
       role="dialog"
       aria-modal="false"
-      aria-label="X-Ray Cümle Röntgeni"
+      aria-label={t("read_xray_title", "X-Ray Cümle Röntgeni")}
       className="fixed bottom-24 right-4 sm:right-8 z-50 w-[calc(100%-2rem)] sm:w-[520px] max-h-[78vh] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200"
     >
       <div className="relative w-full max-h-[78vh] bg-slate-900/95 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-cyan-500/20 backdrop-blur-2xl text-slate-100">
@@ -72,14 +74,14 @@ export default function SentenceXRayModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs sm:text-sm font-black text-white tracking-tight">
-                  X-Ray Cümle Röntgeni
+                  {t("read_xray_title", "X-Ray Cümle Röntgeni")}
                 </h3>
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
                   DECOMPILER
                 </span>
               </div>
               <p className="text-[10px] text-slate-400">
-                Gramer iskeletini ve ögelerini renk bloklarıyla keşfedin.
+                {t("read_xray_sub", "Gramer iskeletini ve ögelerini renk bloklarıyla keşfedin.")}
               </p>
             </div>
           </div>
@@ -91,7 +93,7 @@ export default function SentenceXRayModal({
               onClose();
             }}
             className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -104,23 +106,23 @@ export default function SentenceXRayModal({
           {/* RENK LEJANTI (COLOR LEGEND) */}
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
             <span className="bg-blue-950/60 border border-blue-500/40 text-blue-200 px-2.5 py-1 rounded-lg">
-              🔵 Özne (Subject)
+              {t("read_xray_subj", "🔵 Özne (Subject)")}
             </span>
             <span className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 px-2.5 py-1 rounded-lg">
-              🟢 Yüklem (Verb Phrase)
+              {t("read_xray_verb", "🟢 Yüklem (Verb Phrase)")}
             </span>
             <span className="bg-amber-950/60 border border-amber-500/40 text-amber-200 px-2.5 py-1 rounded-lg">
-              🟡 Nesne (Object)
+              {t("read_xray_obj", "🟡 Nesne (Object)")}
             </span>
             <span className="bg-purple-950/60 border border-purple-500/40 text-purple-200 px-2.5 py-1 rounded-lg">
-              🟣 Zarf / Koşul (Adverbial)
+              {t("read_xray_adv", "🟣 Zarf / Koşul (Adverbial)")}
             </span>
           </div>
 
           {/* İNTERAKTİF RENKLİ CÜMLE RÖNTGENİ GÖRÜNÜMÜ */}
           <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-slate-800/90 shadow-inner space-y-3">
             <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 block">
-              Gramer Röntgeni (Sözdizim İskeleti):
+              {t("read_xray_skeleton_hdr", "Gramer Röntgeni (Sözdizim İskeleti):")}
             </span>
 
             <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base font-semibold leading-relaxed">
@@ -137,7 +139,7 @@ export default function SentenceXRayModal({
 
             {decompiled.structureFormula && (
               <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-mono">
-                <span>Formül:</span>
+                <span>{t("read_xray_formula", "Formül:")}</span>
                 <span className="text-cyan-300 font-bold">
                   {decompiled.structureFormula}
                 </span>
@@ -149,7 +151,7 @@ export default function SentenceXRayModal({
           <div className="space-y-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Öge Ayrıştırma & Açıklamalar</span>
+              <span>{t("read_xray_parts_hdr", "Öge Ayrıştırma & Açıklamalar")}</span>
             </span>
 
             <div className="grid grid-cols-1 gap-2.5">
@@ -180,20 +182,20 @@ export default function SentenceXRayModal({
           <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 border border-indigo-500/30 space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
               <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span>Türkçe Mantıksal Çeviri Akışı:</span>
+              <span>{t("read_xray_flow_hdr", "Mantıksal Çeviri Akışı:")}</span>
             </div>
             <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               {decompiled.turkishSkeleton}
             </p>
             <p className="text-[11px] text-slate-400 italic">
-              💡 İpucu: İngilizcede yüklem (Fiil) hemen özneden sonra gelirken (SVO), Türkçede yüklem cümlenin en sonuna taşınır (SOV).
+              {t("read_xray_tip", "💡 İpucu: İngilizcede yüklem (Fiil) hemen özneden sonra gelirken (SVO), Türkçede yüklem cümlenin en sonuna taşınır (SOV).")}
             </p>
           </div>
 
           {/* BAĞLAÇLAR (VARSA) */}
           {decompiled.conjunctions.length > 0 && (
             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-              <span>Tespit Edilen Bağlaçlar:</span>
+              <span>{t("read_xray_conj", "Tespit Edilen Bağlaçlar:")}</span>
               <div className="flex items-center gap-1">
                 {decompiled.conjunctions.map((conj, i) => (
                   <span
@@ -223,7 +225,7 @@ export default function SentenceXRayModal({
             }`}
           >
             <Volume2 className="w-4 h-4 text-indigo-300" />
-            <span>{isPlayingAudio ? "Okunuyor..." : "Cümleyi Dinle"}</span>
+            <span>{isPlayingAudio ? t("read_shadow_playing", "Okunuyor...") : t("read_xray_listen", "Cümleyi Dinle")}</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -238,7 +240,7 @@ export default function SentenceXRayModal({
                 className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm transition flex items-center gap-1.5 shadow-md shadow-indigo-600/30 cursor-pointer"
               >
                 <Mic className="w-4 h-4" />
-                <span>Gölgele & Telaffuz Et</span>
+                <span>{t("read_xray_shadow_cta", "Gölgele & Telaffuz Et")}</span>
               </button>
             )}
 
@@ -250,7 +252,7 @@ export default function SentenceXRayModal({
               }}
               className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition cursor-pointer"
             >
-              Tamam
+              {t("ok", "Tamam")}
             </button>
           </div>
         </div>

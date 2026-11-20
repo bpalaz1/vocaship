@@ -1,5 +1,5 @@
 """
-Vocaship Backend - ASGI Application Entrypoint
+VocaShip Backend - ASGI Application Entrypoint
 Exposes `app` for `uvicorn app.main:app` and `uvicorn main:app`.
 """
 
@@ -13,7 +13,7 @@ from app.api.v1.endpoints import tts
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.services.quota_service import QuotaExceededException, ProRequiredException
 
-app = FastAPI(title="Vocaship Backend", version="1.0.0")
+app = FastAPI(title="VocaShip API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,7 +72,7 @@ app.include_router(tts.router, prefix="/tts", tags=["TTS"])
 
 @app.get("/")
 async def root():
-    return {"message": "Vocaship Backend Calisiyor"}
+    return {"message": "VocaShip API Calisiyor"}
 
 
 @app.get("/health")

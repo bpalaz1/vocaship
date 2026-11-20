@@ -24,6 +24,8 @@ class ReviewCardResponse(BaseModel):
 class ReviewResultRequest(BaseModel):
     is_correct: bool = Field(..., description="Kullanıcı kelimeyi doğru hatırladı mı?")
     rating: Optional[int] = Field(None, ge=0, le=5, description="Opsiyonel manuel puanlama")
+    force_clear: bool = Field(default=False, description="Tek doğrulamada zayıf noktayı tamamen temizle")
+    meaning: Optional[str] = Field(default=None, description="Opsiyonel Türkçe anlam (oyun hatalarından otomatik kayıt için)")
 
 
 class ReviewResultResponse(BaseModel):

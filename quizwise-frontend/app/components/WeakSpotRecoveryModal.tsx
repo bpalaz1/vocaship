@@ -17,6 +17,11 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { API_BASE } from "../config";
+import {
+  syncUnifiedWeakSpots,
+  removeArenaMistake,
+  getArenaMistakes,
+} from "../utils/arenaMistakes";
 
 export interface WeakSpotCard {
   id: string;
@@ -55,7 +60,7 @@ export default function WeakSpotRecoveryModal({
   const [sessionFinished, setSessionFinished] = useState(false);
   const [allClearedCelebration, setAllClearedCelebration] = useState(false);
 
-  // 1. Zayıf kartları API'den çek
+  // 1. Ortak Zayıf Nokta & İntikam Arenası havuzunu senkronize çek
   useEffect(() => {
     if (!isOpen) return;
 
@@ -67,13 +72,11 @@ export default function WeakSpotRecoveryModal({
       setIsFlipped(false);
       setClearedCount(0);
       try {
-        const res = await fetch(`${API_BASE}/cards/weak-spots?limit=50`);
-        if (res.ok) {
-          const data = await res.json();
-          setCards(data.cards || []);
-        }
+        const synced = await syncUnifiedWeakSpots();
+        setCards(synced as WeakSpotCard[]);
       } catch (err) {
-        console.error("Zayıf noktalar çekilemedi:", err);
+        console.error("Ortak zayıf noktalar çekilemedi:", err);
+        setCards(getArenaMistakes() as WeakSpotCard[]);
       } finally {
         setLoading(false);
       }
@@ -119,28 +122,49 @@ export default function WeakSpotRecoveryModal({
     window.speechSynthesis.speak(utterance);
   };
 
-  // 4. İkili Cevaplama (Biliyorum / Bilemedim)
+  // 4. İkili Cevaplama (Biliyorum / Bilemedim) — İntikam Arenası & Backend Çift Yönlü Senkron
   const handleAnswer = async (isCorrect: boolean) => {
     const currentCard = cards[currentIndex];
     if (!currentCard) return;
 
-    try {
-      const res = await fetch(`${API_BASE}/cards/${currentCard.id}/review-result`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_correct: isCorrect }),
+    const backendTarget =
+      currentCard.id && !String(currentCard.id).startsWith("mistake_")
+        ? currentCard.id
+        : currentCard.word;
+
+    if (isCorrect) {
+      // İntikam Arenası yerel listesinden (vocaship_arena_mistakes) anında sil
+      removeArenaMistake(currentCard.word, {
+        syncBackend: false,
+        cardId: backendTarget,
       });
+    }
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/cards/${encodeURIComponent(backendTarget)}/review-result`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            is_correct: isCorrect,
+            force_clear: isCorrect,
+          }),
+        }
+      );
 
       if (res.ok) {
         const updateData = await res.json();
-        // Eğer kart kurtarıldıysa (consecutive_correct >= 2)
-        if (!updateData.needs_review) {
+        if (isCorrect || !updateData.needs_review) {
           setClearedCount((prev) => prev + 1);
           if (onMasteredWord) onMasteredWord(currentCard.id);
         }
+      } else if (isCorrect) {
+        setClearedCount((prev) => prev + 1);
       }
     } catch (e) {
       console.error(e);
+      if (isCorrect) setClearedCount((prev) => prev + 1);
     }
 
     // Sıradaki karta geç
@@ -149,17 +173,12 @@ export default function WeakSpotRecoveryModal({
       setTimeout(() => setCurrentIndex((p) => p + 1), 120);
     } else {
       setSessionFinished(true);
-      // Backend'deki güncel zayıf nokta sayısını kontrol et
       try {
-        const checkRes = await fetch(`${API_BASE}/cards/weak-spots?limit=100`);
-        if (checkRes.ok) {
-          const checkData = await checkRes.json();
-          const remaining = checkData.total !== undefined ? checkData.total : (checkData.cards ? checkData.cards.length : 0);
-          if (remaining === 0) {
-            setAllClearedCelebration(true);
-            if (onAllWeakSpotsCleared) {
-              onAllWeakSpotsCleared();
-            }
+        const remainingList = await syncUnifiedWeakSpots();
+        if (remainingList.length === 0) {
+          setAllClearedCelebration(true);
+          if (onAllWeakSpotsCleared) {
+            onAllWeakSpotsCleared();
           }
         }
       } catch (err) {
@@ -380,10 +399,10 @@ export default function WeakSpotRecoveryModal({
                         <div className="flex items-center justify-between text-xs text-slate-500">
                           <span className="uppercase tracking-wider font-bold text-emerald-400 flex items-center gap-1.5">
                             <Flame className="w-3.5 h-3.5" />
-                            TANIM & ANLAM
+                            {t("ws_def_meaning_hdr", "TANIM & ANLAM")}
                           </span>
                           <span className="text-[11px] bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-400 font-medium">
-                            Ön Yüze Dön
+                            {t("ws_flip_front", "Ön Yüze Dön")}
                           </span>
                         </div>
 
@@ -397,7 +416,7 @@ export default function WeakSpotRecoveryModal({
                                 type="button"
                                 onClick={(e) => speakText(cardMeaning, "tr", e)}
                                 className="p-2 rounded-xl bg-slate-800 hover:bg-emerald-600 text-emerald-300 hover:text-white transition"
-                                title="Seslendir"
+                                title={t("listen", "Seslendir")}
                               >
                                 <Volume2 className="w-4 h-4" />
                               </button>

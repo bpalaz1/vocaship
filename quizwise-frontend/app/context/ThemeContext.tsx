@@ -6,22 +6,27 @@ export type Theme = "light" | "dark";
 
 interface ThemeContextType {
   theme: Theme;
+  isDark: boolean;
+  setAppTheme: (theme: Theme) => void;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
   theme: "dark",
+  isDark: true,
+  setAppTheme: () => {},
   setTheme: () => {},
   toggleTheme: () => {},
 });
 
-export const useTheme = () => useContext(ThemeContext);
+export const useAppTheme = () => useContext(ThemeContext);
+export const useTheme = useAppTheme;
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
 
-  const applyTheme = useCallback((newTheme: Theme) => {
+  const setAppTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
     if (typeof window !== "undefined") {
       try {
@@ -29,65 +34,48 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem("vocaship_reader_theme", newTheme);
       } catch {}
       document.documentElement.setAttribute("data-theme", newTheme);
-      if (newTheme === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
+      document.documentElement.classList.toggle("dark", newTheme === "dark");
       window.dispatchEvent(new Event("vocaship-theme-change"));
     }
   }, []);
 
-  const setTheme = useCallback(
-    (newTheme: Theme) => {
-      applyTheme(newTheme);
-    },
-    [applyTheme]
-  );
-
   const toggleTheme = useCallback(() => {
-    applyTheme(theme === "dark" ? "light" : "dark");
-  }, [theme, applyTheme]);
+    setAppTheme(theme === "dark" ? "light" : "dark");
+  }, [theme, setAppTheme]);
 
   useEffect(() => {
-    const readInitialTheme = () => {
+    const syncFromStorage = () => {
       try {
         const stored = (localStorage.getItem("vocaship_app_theme") ||
-          localStorage.getItem("vocaship_reader_theme")) as Theme | null;
-        if (stored === "light" || stored === "dark") {
-          setThemeState(stored);
-          document.documentElement.setAttribute("data-theme", stored);
-          if (stored === "dark") {
-            document.documentElement.classList.add("dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-          }
-        }
+          localStorage.getItem("vocaship_reader_theme") ||
+          "dark") as Theme;
+        const resolved: Theme = stored === "light" ? "light" : "dark";
+        setThemeState(resolved);
+        document.documentElement.setAttribute("data-theme", resolved);
+        document.documentElement.classList.toggle("dark", resolved === "dark");
       } catch {}
     };
 
-    readInitialTheme();
+    syncFromStorage();
 
-    const handleThemeChange = () => {
-      try {
-        const stored = (localStorage.getItem("vocaship_app_theme") ||
-          localStorage.getItem("vocaship_reader_theme")) as Theme | null;
-        if (stored === "light" || stored === "dark") {
-          setThemeState(stored);
-        }
-      } catch {}
-    };
-
-    window.addEventListener("vocaship-theme-change", handleThemeChange);
-    window.addEventListener("storage", handleThemeChange);
+    window.addEventListener("vocaship-theme-change", syncFromStorage);
+    window.addEventListener("storage", syncFromStorage);
     return () => {
-      window.removeEventListener("vocaship-theme-change", handleThemeChange);
-      window.removeEventListener("storage", handleThemeChange);
+      window.removeEventListener("vocaship-theme-change", syncFromStorage);
+      window.removeEventListener("storage", syncFromStorage);
     };
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider
+      value={{
+        theme,
+        isDark: theme === "dark",
+        setAppTheme,
+        setTheme: setAppTheme,
+        toggleTheme,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

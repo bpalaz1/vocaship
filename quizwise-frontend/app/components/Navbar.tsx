@@ -17,11 +17,11 @@ import {
   User,
   LogOut,
   Settings,
-  CreditCard,
   Volume2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import LanguageSelector from "./LanguageSelector";
+import { VocaShipLogo } from "./brand/VocaShipLogo";
 import { useTranslation } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
@@ -43,6 +43,38 @@ export default function Navbar() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [streakCount, setStreakCount] = useState<number>(1);
+
+  useEffect(() => {
+    const syncStreak = () => {
+      try {
+        const rawStreak = localStorage.getItem("vocaship_streak");
+        if (rawStreak) {
+          const parsed = parseInt(rawStreak, 10);
+          if (Number.isFinite(parsed) && parsed > 0) {
+            setStreakCount(parsed);
+            return;
+          }
+        }
+        const rawStats = localStorage.getItem("vocaship_unified_stats");
+        if (rawStats) {
+          const stats = JSON.parse(rawStats);
+          const s = Number(stats?.streak || stats?.dailyStreak || 0);
+          if (Number.isFinite(s) && s > 0) {
+            setStreakCount(s);
+            return;
+          }
+        }
+      } catch {}
+    };
+    syncStreak();
+    window.addEventListener("storage", syncStreak);
+    window.addEventListener("vocaship_unified_stats_updated", syncStreak);
+    return () => {
+      window.removeEventListener("storage", syncStreak);
+      window.removeEventListener("vocaship_unified_stats_updated", syncStreak);
+    };
+  }, []);
 
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -95,13 +127,6 @@ export default function Navbar() {
       isActive: pathname.startsWith("/games"),
     },
     {
-      name: t("nav_museum", "Müzem"),
-      href: "/museum",
-      icon: Trophy,
-      emoji: "🏛️",
-      isActive: pathname.startsWith("/museum"),
-    },
-    {
       name: t("nav_classroom", "Sınıfım"),
       href: "/classroom",
       icon: GraduationCap,
@@ -138,31 +163,19 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 w-full h-16 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 overflow-visible">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full h-16 bg-[#0B0F19]/95 backdrop-blur-xl border-b border-slate-800/80 shadow-lg overflow-visible">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full overflow-visible">
           <div className="flex items-center justify-between h-full gap-3 sm:gap-4 overflow-visible">
             {/* SOL: LOGO & İSİM */}
             <div className="flex items-center space-x-3 shrink-0">
               <Link
                 href="/"
-                className="flex items-center space-x-2.5 group hover:scale-[1.02] active:scale-95 transition-all duration-150 shrink-0"
+                className="flex items-center group hover:scale-[1.02] active:scale-95 transition-all duration-150 shrink-0"
               >
-                <div className="p-2 sm:p-2.5 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 rounded-2xl shadow-lg shadow-indigo-500/25 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-200">
-                  <BrainCircuit className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base sm:text-lg font-black tracking-tight text-white group-hover:text-indigo-300 transition-colors">
-                      Vocaship
-                    </span>
-                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                      PRO
-                    </span>
-                  </div>
-                  <span className="hidden xl:inline-block text-[10px] text-slate-400 font-medium leading-none">
-                    {t("nav_subtitle")}
-                  </span>
-                </div>
+                <VocaShipLogo
+                  variant="horizontal"
+                  className="[&>div>span:first-child]:text-white"
+                />
               </Link>
             </div>
 
@@ -175,14 +188,14 @@ export default function Navbar() {
                     href={item.href}
                     className={`relative flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:scale-[1.02] active:scale-95 transition-all duration-150 ${
                       item.isActive
-                        ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 shadow-sm shadow-indigo-500/10 font-bold"
-                        : "text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent"
+                        ? "bg-gradient-to-r from-indigo-500/20 to-emerald-500/15 border border-emerald-500/30 text-white shadow-sm font-bold"
+                        : "text-slate-400 hover:bg-slate-800/60 hover:text-white transition-all border border-transparent"
                     }`}
                   >
                     <span className="text-sm leading-none">{item.emoji}</span>
                     <span>{item.name}</span>
                     {item.isActive && (
-                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-indigo-400 rounded-full" />
+                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-emerald-400 rounded-full" />
                     )}
                   </Link>
                 );
@@ -194,6 +207,15 @@ export default function Navbar() {
               {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR) */}
               <LanguageSelector align="right" />
 
+              {/* Kompakt Günlük Seri (Streak) Rozeti */}
+              <div
+                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold shrink-0 select-none"
+                title={t("nav_streak_tip", "Günlük Seri")}
+              >
+                <span>🔥</span>
+                <span>{streakCount}</span>
+              </div>
+
               {/* SADE KULLANICI KAPSÜLÜ (USER CAPSULE) */}
               <div className="relative shrink-0 overflow-visible" ref={userDropdownRef}>
                 <button
@@ -202,7 +224,7 @@ export default function Navbar() {
                   onClick={() => setIsUserDropdownOpen((prev) => !prev)}
                   className="flex items-center gap-2 px-1.5 py-1 sm:pr-3 rounded-full bg-slate-900/90 hover:bg-slate-850 border border-slate-800/90 hover:border-slate-700 transition-all cursor-pointer shadow-sm active:scale-95 select-none"
                   aria-expanded={isUserDropdownOpen}
-                  title="Hesap Menüsü"
+                  title={t("nav_account_menu")}
                 >
                   {/* Seçili Avatar İkonu (36x36 yuvarlak portre) */}
                   <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600/40 to-violet-600/30 border border-indigo-400/40 flex items-center justify-center text-base shadow-inner shrink-0 overflow-hidden">
@@ -217,25 +239,10 @@ export default function Navbar() {
                     )}
                   </div>
 
-                  {/* Yanında sadece @username */}
-                  <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[90px] sm:max-w-[120px] truncate">
-                    @{currentUsername}
+                  {/* Yanında yalnızca username */}
+                  <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate">
+                    {currentUsername.replace(/^@+/, "")}
                   </span>
-
-                  {/* Minik şık Plan rozeti (PRO / PLUS / BASIC) */}
-                  {planTier === "pro" ? (
-                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[10px] tracking-wide leading-none shrink-0 shadow-sm flex items-center gap-0.5">
-                      👑 PRO
-                    </span>
-                  ) : planTier === "plus" ? (
-                    <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold text-[10px] tracking-wide leading-none shrink-0 shadow-sm flex items-center gap-0.5">
-                      ⚡ PLUS
-                    </span>
-                  ) : (
-                    <span className="px-1.5 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 font-extrabold text-[10px] tracking-wide leading-none shrink-0 shadow-sm">
-                      BASIC
-                    </span>
-                  )}
 
                   <ChevronDown
                     className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 hidden sm:block ${
@@ -283,7 +290,7 @@ export default function Navbar() {
                           )}
                         </div>
                         <p className="text-[11px] text-slate-400 truncate font-mono">
-                          @{currentUsername}
+                          {currentUsername.replace(/^@+/, "")}
                         </p>
                       </div>
                     </div>
@@ -299,7 +306,7 @@ export default function Navbar() {
                       className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
                     >
                       <User className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span>👤 Profil & Hesap Ayarları</span>
+                      <span>👤 {t("nav_profile_account")}</span>
                     </button>
 
                     {/* 📖 Öğrenme & Dil Tercihleri */}
@@ -313,7 +320,7 @@ export default function Navbar() {
                       className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
                     >
                       <BookOpen className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span>📖 Öğrenme & Dil Tercihleri</span>
+                      <span>📖 {t("nav_learning_prefs")}</span>
                     </button>
 
                     {/* 🔊 Ses & Tema Ayarları */}
@@ -327,21 +334,7 @@ export default function Navbar() {
                       className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
                     >
                       <Volume2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span>🔊 Ses & Tema Ayarları</span>
-                    </button>
-
-                    {/* 💳 Hakediş & IBAN Ayarları */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUserDropdownOpen(false);
-                        setSettingsInitialTab("payout");
-                        setIsSettingsModalOpen(true);
-                      }}
-                      className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
-                    >
-                      <CreditCard className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>💳 Hakediş & IBAN Ayarları</span>
+                      <span>🔊 {t("nav_audio_theme")}</span>
                     </button>
 
                     {/* 🚪 Çıkış Yap / Giriş Yap */}
@@ -356,7 +349,7 @@ export default function Navbar() {
                           className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left cursor-pointer flex items-center gap-2.5"
                         >
                           <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
-                          <span>🚪 Çıkış Yap</span>
+                          <span>🚪 {t("nav_logout")}</span>
                         </button>
                       ) : (
                         <button
@@ -368,7 +361,7 @@ export default function Navbar() {
                           className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 transition text-left cursor-pointer flex items-center gap-2.5"
                         >
                           <User className="w-4 h-4 text-indigo-400 shrink-0" />
-                          <span>🔑 Giriş Yap / Kaydol</span>
+                          <span>🔑 {t("nav_login_register")}</span>
                         </button>
                       )}
                     </div>
@@ -380,7 +373,7 @@ export default function Navbar() {
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:scale-[1.02] active:scale-95 transition-all duration-150 shrink-0 cursor-pointer"
-                aria-label="Menüyü Aç"
+                aria-label={t("nav_open_menu")}
               >
                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
@@ -419,7 +412,7 @@ export default function Navbar() {
                 className="w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-900 text-left cursor-pointer"
               >
                 <Settings className="w-4 h-4 text-indigo-400" />
-                <span>⚙️ Hesap Ayarları</span>
+                <span>⚙️ {t("nav_account_settings")}</span>
               </button>
             </div>
           </div>

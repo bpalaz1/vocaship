@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Send, FileText, CheckCircle2, AlertCircle, X, Paperclip } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 interface SendMaterialModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export default function SendMaterialModal({
   className,
   teacherId,
 }: SendMaterialModalProps) {
+  const { t } = useLanguage();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
@@ -30,11 +32,11 @@ export default function SendMaterialModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim()) {
-      setErrorMsg("Lütfen bir konu veya başlık girin.");
+      setErrorMsg(t("cls_mat_err_subject", "Lütfen bir konu veya başlık girin."));
       return;
     }
     if (!message.trim()) {
-      setErrorMsg("Lütfen öğrenci mesajı veya ödev notu girin.");
+      setErrorMsg(t("cls_mat_err_msg", "Lütfen öğrenci mesajı veya ödev notu girin."));
       return;
     }
 
@@ -89,9 +91,9 @@ export default function SendMaterialModal({
             <Send className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">Manuel Materyal & Not Gönder</h3>
+            <h3 className="text-lg font-bold text-white">{t("cls_mat_title", "Manuel Materyal & Not Gönder")}</h3>
             <p className="text-xs text-slate-400">
-              Sınıf: <span className="text-indigo-400 font-medium">{className}</span>
+              {t("cls_mat_class_lbl", "Sınıf:")} <span className="text-indigo-400 font-medium">{className}</span>
             </p>
           </div>
         </div>
@@ -102,9 +104,9 @@ export default function SendMaterialModal({
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div>
-              <h4 className="text-base font-semibold text-white">Materyal Başarıyla Gönderildi!</h4>
+              <h4 className="text-base font-semibold text-white">{t("cls_mat_sent_title", "Materyal Başarıyla Gönderildi!")}</h4>
               <p className="text-sm text-slate-300 mt-1">
-                Bu sınıfa kayıtlı <span className="font-bold text-emerald-400">{successInfo.sentCount}</span> öğrenciye e-posta ve bildirim ulaştırıldı.
+                {t("cls_mat_sent_desc", "Bu sınıfa kayıtlı {count} öğrenciye e-posta ve bildirim ulaştırıldı.", { count: successInfo.sentCount })}
               </p>
             </div>
             <button
@@ -114,7 +116,7 @@ export default function SendMaterialModal({
               }}
               className="mt-4 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition"
             >
-              Kapat
+              {t("close", "Kapat")}
             </button>
           </div>
         ) : (
@@ -128,26 +130,26 @@ export default function SendMaterialModal({
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Konu / Başlık <span className="text-red-400">*</span>
+                {t("cls_mat_subject_lbl", "Konu / Başlık")} <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="Örn: Hafta 3 Ders Notları ve Okuma Parçası"
+                placeholder={t("cls_mat_subject_ph", "Örn: Hafta 3 Ders Notları ve Okuma Parçası")}
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Mesaj / Not <span className="text-red-400">*</span>
+                Message / Note <span className="text-red-400">*</span>
               </label>
               <textarea
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Öğrencilerinize iletmek istediğiniz açıklama, ödev veya çalışma yönergeleri..."
+                placeholder={t("cls_mat_msg_ph", "Öğrencilerinize iletmek istediğiniz açıklama, ödev veya çalışma yönergeleri...")}
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition resize-none"
               />
             </div>
@@ -155,13 +157,13 @@ export default function SendMaterialModal({
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                 <Paperclip className="w-3.5 h-3.5 text-slate-400" />
-                Dosya / PDF Linki <span className="text-slate-500 font-normal">(Opsiyonel)</span>
+                PDF / Link <span className="text-slate-500 font-normal">(Opt.)</span>
               </label>
               <input
                 type="url"
                 value={attachmentUrl}
                 onChange={(e) => setAttachmentUrl(e.target.value)}
-                placeholder="https://drive.google.com/... veya PDF bağlantısı"
+                placeholder={t("cls_mat_url_ph", "https://drive.google.com/... veya PDF bağlantısı")}
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
               />
             </div>
@@ -172,7 +174,7 @@ export default function SendMaterialModal({
                 onClick={onClose}
                 className="px-4 py-2 text-sm text-slate-400 hover:text-white rounded-xl transition"
               >
-                Vazgeç
+                {t("cancel", "Vazgeç")}
               </button>
               <button
                 type="submit"
@@ -182,12 +184,12 @@ export default function SendMaterialModal({
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Gönderiliyor...</span>
+                    <span>{t("cls_mat_sending", "Gönderiliyor...")}</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>📧 E-posta ile Öğrencilere Gönder</span>
+                    <span>{t("cls_mat_send_btn", "📧 E-posta ile Öğrencilere Gönder")}</span>
                   </>
                 )}
               </button>

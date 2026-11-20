@@ -22,8 +22,17 @@ import {
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
-import { calculateWordReward, awardGamificationReward } from "../../utils/gamificationEngine";
+import {
+  calculateWordReward,
+  awardGamificationReward,
+  getStreakMultiplier,
+  getFiveCardMilestoneReward,
+} from "../../utils/gamificationEngine";
 import { GameMistakeItem } from "./GameOverSummary";
+import StreakMilestoneBar from "./StreakMilestoneBar";
+import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
+import { getEquippedMuseumBuff } from "../../data/museumItems";
+import { playArenaSound } from "../../utils/soundEffects";
 
 export interface FlashcardItem {
   id: string;
@@ -38,6 +47,7 @@ export interface GoldQuestGameProps {
   cards: FlashcardItem[];
   deckTitle?: string;
   userName?: string;
+  isSoloMode?: boolean;
   onClose: () => void;
   onAwardXP?: (amount: number, label: string) => void;
 }
@@ -87,40 +97,62 @@ const FALLBACK_WORDS: FlashcardItem[] = [
 
 export default function GoldQuestGame({
   cards,
-  deckTitle = "Kelime Destesi",
-  userName = "Sen",
+  deckTitle,
+  userName,
+  isSoloMode = true,
   onClose,
   onAwardXP
 }: GoldQuestGameProps) {
   const { t } = useLanguage();
+  const resolvedDeckTitle = deckTitle || t("game_default_deck", "Kelime Destesi");
+  const resolvedUserName = userName || t("lb_you", "Sen");
   // Aktif kelimeler havuzu
   const pool = useMemo(() => {
     const valid = cards && cards.length >= 2 ? cards : FALLBACK_WORDS;
     return valid;
   }, [cards]);
 
+  const equippedBuff = useMemo(() => getEquippedMuseumBuff(), []);
+  const initialTimerSeconds = equippedBuff?.type === "extra_time" ? 182 : 180;
+
   // Ses Durumu
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   // Oyun Durumları
   const [phase, setPhase] = useState<GamePhase>("START");
-  const [timeLeft, setTimeLeft] = useState(180); // 3 dakika = 180 saniye
+  const [timeLeft, setTimeLeft] = useState(initialTimerSeconds); // 3 dakika (+2s buff varsa 182s)
+  const [isMysteryOpen, setIsMysteryOpen] = useState(false);
+  const [mysteryBuff, setMysteryBuff] = useState(1.0);
+  const [mysteryBuffCount, setMysteryBuffCount] = useState(0);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [selectedOptionIdx, setSelectedOptionIdx] = useState<number | null>(null);
   const [stats, setStats] = useState({ correct: 0, wrong: 0, goldEarned: 0 });
+  const [streak, setStreak] = useState(0);
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [personalBestGold, setPersonalBestGold] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = parseInt(localStorage.getItem("vocaship_gold_quest_best") || "150", 10);
+      return isNaN(saved) ? 150 : saved;
+    }
+    return 150;
+  });
   const [sessionMistakes, setSessionMistakes] = useState<GameMistakeItem[]>([]);
   const [compensatedWords, setCompensatedWords] = useState<Record<string, boolean>>({});
   const [activeSpeakingWord, setActiveSpeakingWord] = useState<string | null>(null);
 
-  // Canlı Sınıf Arkadaşları
-  const [players, setPlayers] = useState<Player[]>([
-    { id: "user", name: userName, avatar: "🤠", gold: 0, isUser: true, color: "from-amber-500 to-yellow-400" },
-    { id: "p1", name: "Zeynep", avatar: "👩‍🎓", gold: 130, isUser: false, color: "from-purple-500 to-indigo-500" },
-    { id: "p2", name: "Can", avatar: "🧑‍🚀", gold: 110, isUser: false, color: "from-blue-500 to-cyan-500" },
-    { id: "p3", name: "Defne", avatar: "👩‍🎨", gold: 85, isUser: false, color: "from-emerald-500 to-teal-500" },
-    { id: "p4", name: "Emir", avatar: "🧑‍💻", gold: 70, isUser: false, color: "from-rose-500 to-orange-500" }
-  ]);
+  // Canlı Sınıf Arkadaşları (Yalnızca çok oyunculu modda kullanılır)
+  const [players, setPlayers] = useState<Player[]>(
+    isSoloMode
+      ? [{ id: "user", name: resolvedUserName, avatar: "🤠", gold: 0, isUser: true, color: "from-amber-500 to-yellow-400" }]
+      : [
+          { id: "user", name: resolvedUserName, avatar: "🤠", gold: 0, isUser: true, color: "from-amber-500 to-yellow-400" },
+          { id: "p1", name: "Zeynep", avatar: "👩‍🎓", gold: 130, isUser: false, color: "from-purple-500 to-indigo-500" },
+          { id: "p2", name: "Can", avatar: "🧑‍🚀", gold: 110, isUser: false, color: "from-blue-500 to-cyan-500" },
+          { id: "p3", name: "Defne", avatar: "👩‍🎨", gold: 85, isUser: false, color: "from-emerald-500 to-teal-500" },
+          { id: "p4", name: "Emir", avatar: "🧑‍💻", gold: 70, isUser: false, color: "from-rose-500 to-orange-500" }
+        ]
+  );
 
   // Canlı Olay Akışı (Ticker)
   const [activityFeed, setActivityFeed] = useState<string[]>([]);
@@ -278,12 +310,12 @@ export default function GoldQuestGame({
   // Rastgele Sandık Ödülleri Üretici (Pedagojik Kural: Kesinlikle Bomba/Tuzak Yok)
   const rollChestRewards = (): ChestReward[] => {
     const possibleRewards: ChestReward[] = [
-      { type: "gold_25", title: "+25 Altın", description: "Küçük bir hazine sandığı buldun!", icon: "💰", amount: 25 },
-      { type: "gold_50", title: "+50 Altın", description: "Korsan altınları!", icon: "💎", amount: 50 },
-      { type: "gold_75", title: "+75 Altın!", description: "Büyük altın sandığı!", icon: "✨", amount: 75 },
-      { type: "gold_100", title: "+100 Altın!", description: "Büyük ganimet çantası!", icon: "👑", amount: 100 },
-      { type: "multiplier_2x", title: "2x Çarpan! 🔥", description: "Tüm altınların 2 katına çıktı!", icon: "⚡" },
-      { type: "steal", title: "Altın Çalma! 🏴‍☠️", description: "Bir arkadaşının %25 altınını kap!", icon: "🥷" },
+      { type: "gold_25", title: t("game_gq_rew_25_t", "+25 Altın"), description: t("game_gq_rew_25_d", "Küçük bir hazine sandığı buldun!"), icon: "💰", amount: 25 },
+      { type: "gold_50", title: t("game_gq_rew_50_t", "+50 Altın"), description: t("game_gq_rew_50_d", "Korsan altınları!"), icon: "💎", amount: 50 },
+      { type: "gold_75", title: t("game_gq_rew_75_t", "+75 Altın!"), description: t("game_gq_rew_75_d", "Büyük altın sandığı!"), icon: "✨", amount: 75 },
+      { type: "gold_100", title: t("game_gq_rew_100_t", "+100 Altın!"), description: t("game_gq_rew_100_d", "Büyük ganimet çantası!"), icon: "👑", amount: 100 },
+      { type: "multiplier_2x", title: t("game_gq_rew_2x_t", "2x Çarpan! 🔥"), description: t("game_gq_rew_2x_d", "Tüm altınların 2 katına çıktı!"), icon: "⚡" },
+      { type: "steal", title: t("game_gq_rew_steal_t", "Altın Çalma! 🏴‍☠️"), description: t("game_gq_rew_steal_d", "Bir arkadaşının %25 altınını kap!"), icon: "🥷" },
     ];
 
     // 3 sandık için ağırlıklı rastgele seçim (Kayıpsız pozitif ödüller)
@@ -292,9 +324,9 @@ export default function GoldQuestGame({
       if (r < 0.28) return possibleRewards[0]; // +25
       if (r < 0.55) return possibleRewards[1]; // +50
       if (r < 0.72) return possibleRewards[2]; // +75
-      if (r < 0.85) return possibleRewards[3]; // +100
-      if (r < 0.93) return possibleRewards[4]; // 2x
-      return possibleRewards[5]; // Steal
+      if (r < 0.88) return possibleRewards[3]; // +100
+      if (isSoloMode || r < 0.96) return possibleRewards[4]; // 2x
+      return possibleRewards[5]; // Steal (yalnızca çok oyunculu modda)
     };
 
     return [getWeighted(), getWeighted(), getWeighted()];
@@ -323,7 +355,7 @@ export default function GoldQuestGame({
 
     if (!compensatedWords[wordKey]) {
       setCompensatedWords((prev) => ({ ...prev, [wordKey]: true }));
-      awardGamificationReward(0, 15, `🎯 Telafi: ${item.word}`);
+      awardGamificationReward(0, 15, `🎯 ${t("game_comp_reward_lbl", "Telafi")}: ${item.word}`);
       saveArenaMistake({
         word: item.word,
         meaning: item.meaning,
@@ -336,8 +368,10 @@ export default function GoldQuestGame({
   // Oyunu Başlat
   const startGame = () => {
     setPhase("QUESTION");
-    setTimeLeft(180);
+    setTimeLeft(initialTimerSeconds);
     setStats({ correct: 0, wrong: 0, goldEarned: 0 });
+    setStreak(0);
+    setMaxStreak(0);
     setPlayers((prev) => prev.map((p) => (p.isUser ? { ...p, gold: 0 } : p)));
     setQuestionIndex(0);
     setCurrentQuestion(generateQuestion(0));
@@ -363,9 +397,9 @@ export default function GoldQuestGame({
     return () => clearInterval(timer);
   }, [phase]);
 
-  // Canlı Sınıf Arkadaşları Simülasyonu (Vocaship Canlı Yarış Hissi)
+  // Canlı Sınıf Arkadaşları Simülasyonu (Yalnızca Çok Oyunculu Modda Aktif)
   useEffect(() => {
-    if (phase === "START" || phase === "GAME_OVER") return;
+    if (isSoloMode || phase === "START" || phase === "GAME_OVER") return;
 
     const botInterval = setInterval(() => {
       // Rastgele bir bot seç
@@ -382,16 +416,16 @@ export default function GoldQuestGame({
 
           if (botAction < 0.6) {
             delta = Math.random() < 0.5 ? 25 : 50;
-            actionText = `${p.name} sandıktan +${delta} 💰 buldu!`;
+            actionText = t("game_gq_bot_found", "{name} sandıktan +{delta} 💰 buldu!", { name: p.name, delta });
           } else if (botAction < 0.75) {
             delta = 100;
-            actionText = `${p.name} büyük ganimet (+100 💰) kaptı!`;
+            actionText = t("game_gq_bot_big", "{name} büyük ganimet (+100 💰) kaptı!", { name: p.name });
           } else if (botAction < 0.88) {
             delta = Math.floor(p.gold * 0.5);
-            actionText = `${p.name} 2x Çarpan buldu! 🔥`;
+            actionText = t("game_gq_bot_2x", "{name} 2x Çarpan buldu! 🔥", { name: p.name });
           } else {
             delta = 35;
-            actionText = `${p.name} gizemli hazine (+35 💰) buldu! ✨`;
+            actionText = t("game_gq_bot_myst", "{name} gizemli hazine (+35 💰) buldu! ✨", { name: p.name });
           }
 
           const newGold = Math.max(0, p.gold + delta);
@@ -416,28 +450,60 @@ export default function GoldQuestGame({
     const isCorrect = currentQuestion.options[optionIdx].isCorrect;
 
     if (isCorrect) {
-      playSound("correct");
       const nextCorrect = stats.correct + 1;
+      const nextStreak = streak + 1;
       setStats((s) => ({ ...s, correct: nextCorrect }));
+      setStreak(nextStreak);
+      setMaxStreak((prev) => Math.max(prev, nextStreak));
 
       const targetWord = currentQuestion.card?.word || currentQuestion.prompt;
+      const milestone = getFiveCardMilestoneReward(nextStreak);
+      if (milestone.isMilestone) {
+        playArenaSound("milestone", soundEnabled);
+      } else {
+        playSound("correct");
+      }
+
       calculateWordReward({
         word: targetWord,
-        streak: nextCorrect,
+        streak: nextStreak,
         isCorrect: true,
+        activeBuffMultiplier: mysteryBuff,
       });
 
-      // Sandık seçim ekranına geç
-      const rewards = rollChestRewards();
-      setChestRewards(rewards);
-      setSelectedChestIdx(null);
-      setActiveReward(null);
+      if (mysteryBuffCount > 0) {
+        const nextRem = mysteryBuffCount - 1;
+        setMysteryBuffCount(nextRem);
+        if (nextRem <= 0) setMysteryBuff(1.0);
+      }
+
+      if (milestone.isMilestone) {
+        const goldBuffed =
+          equippedBuff?.type === "bonus_gold"
+            ? Math.round(milestone.bonusGold * 1.15)
+            : milestone.bonusGold;
+        updateUserGold(goldBuffed);
+        setStats((s) => ({ ...s, goldEarned: s.goldEarned + goldBuffed }));
+        setActivityFeed((feed) => [milestone.milestoneLabel, ...feed.slice(0, 3)]);
+
+        // 5., 10., 15. doğru cevaplarda "Al veya Değiştir" 3 Gizemli Sandık Modalını aç
+        setTimeout(() => {
+          setIsMysteryOpen(true);
+        }, 450);
+        return;
+      } else {
+        setActivityFeed((feed) => [
+          `✅ ${t("game_correct_short", "Doğru")} (${milestone.progressInCycle}/5 ${t("game_streak_word", "Seri")}) — ${targetWord}`,
+          ...feed.slice(0, 3),
+        ]);
+      }
 
       setTimeout(() => {
-        setPhase("CHEST_SELECT");
-      }, 700);
+        nextQuestion();
+      }, 650);
     } else {
       playSound("wrong");
+      setStreak(0);
       setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
       setPhase("FEEDBACK_WRONG");
 
@@ -529,7 +595,19 @@ export default function GoldQuestGame({
   // Kullanıcı Altınını Güncelle
   const updateUserGold = (delta: number) => {
     setPlayers((prev) =>
-      prev.map((p) => (p.isUser ? { ...p, gold: Math.max(0, p.gold + delta), recentChange: delta } : p))
+      prev.map((p) => {
+        if (!p.isUser) return p;
+        const nextGold = Math.max(0, p.gold + delta);
+        if (nextGold > personalBestGold) {
+          setPersonalBestGold(nextGold);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("vocaship_gold_quest_best", String(nextGold));
+            } catch {}
+          }
+        }
+        return { ...p, gold: nextGold, recentChange: delta };
+      })
     );
   };
 
@@ -554,7 +632,7 @@ export default function GoldQuestGame({
     );
 
     setStats((s) => ({ ...s, goldEarned: s.goldEarned + stolenAmount }));
-    setActivityFeed((feed) => [`${victim.name}'den ${stolenAmount} 💰 çaldın! 🥷`, ...feed.slice(0, 3)]);
+    setActivityFeed((feed) => [t("game_gq_stole_feed", "{name} oyuncusundan {amt} 💰 çaldın! 🥷", { name: victim.name, amt: stolenAmount }), ...feed.slice(0, 3)]);
 
     setTimeout(() => {
       setStealVictim(null);
@@ -592,7 +670,7 @@ export default function GoldQuestGame({
     const totalEarnedXP = Math.max(20, baseXP + rankBonus);
 
     if (onAwardXP) {
-      onAwardXP(totalEarnedXP, `🏴‍☠️ Hazine Avı (${rank}. Sıra - +${totalEarnedXP} XP)`);
+      onAwardXP(totalEarnedXP, t("game_gq_xp_label", "🏴‍☠️ Hazine Avı ({rank}. Sıra - +{xp} XP)", { rank, xp: totalEarnedXP }));
     }
   };
 
@@ -608,6 +686,22 @@ export default function GoldQuestGame({
   const userGold = useMemo(() => {
     return players.find((p) => p.isUser)?.gold || 0;
   }, [players]);
+
+  // Klavye Kısayolları (1-2-3-4)
+  useEffect(() => {
+    if (phase !== "QUESTION" || selectedOptionIdx !== null || !currentQuestion || isMysteryOpen) {
+      return;
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const idx = ["1", "2", "3", "4"].indexOf(e.key);
+      if (idx !== -1 && currentQuestion.options[idx]) {
+        e.preventDefault();
+        handleAnswer(idx);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [phase, selectedOptionIdx, currentQuestion, isMysteryOpen]);
 
   // Süre Formatlayıcı
   const formatTime = (secs: number) => {
@@ -651,7 +745,7 @@ export default function GoldQuestGame({
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-            title={soundEnabled ? "Sesi Kapat" : "Sesi Aç"}
+            title={soundEnabled ? t("game_sound_off", "Sesi Kapat") : t("game_sound_on", "Sesi Aç")}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
           </button>
@@ -679,7 +773,7 @@ export default function GoldQuestGame({
                   {t("treasure_hunt_title", "Hazine & Altın Avı")}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300">
-                  {t("treasure_hunt_subtitle", "\"{deck}\" destesinden kelime sorularını doğru cevapla, gizemli sandıkları aç, rakiplerinden altın çal ve sınıf lideri ol!", { deck: deckTitle })}
+                  {t("treasure_hunt_subtitle", "\"{deck}\" destesinden kelime sorularını doğru cevapla, gizemli sandıkları aç, rakiplerinden altın çal ve sınıf lideri ol!", { deck: resolvedDeckTitle })}
                 </p>
               </div>
 
@@ -707,11 +801,14 @@ export default function GoldQuestGame({
 
           {/* 2. SORU AŞAMASI */}
           {(phase === "QUESTION" || phase === "FEEDBACK_WRONG") && currentQuestion && (
-            <div className="w-full max-w-xl space-y-6 animate-in fade-in duration-200">
+            <div className="w-full max-w-xl space-y-4 animate-in fade-in duration-200">
+              {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
+              <StreakMilestoneBar streak={streak} />
+
               {/* Soru Başlığı */}
               <div className="text-center space-y-2 p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden">
                 <span className="text-[11px] font-bold tracking-wider uppercase text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
-                  Kelime #{questionIndex + 1}
+                  {t("game_word_num", "Kelime #{n}", { n: questionIndex + 1 })}
                 </span>
                 <h3 className="text-2xl sm:text-3xl font-black text-white tracking-wide pt-1">
                   {currentQuestion.prompt}
@@ -719,7 +816,7 @@ export default function GoldQuestGame({
                 {currentQuestion.phonetic && (
                   <p className="text-xs font-mono text-slate-400">{currentQuestion.phonetic}</p>
                 )}
-                <p className="text-xs text-slate-400 pt-1">Bu kelimenin doğru karşılığı hangisidir?</p>
+                <p className="text-xs text-slate-400 pt-1">{t("game_gq_which_meaning", "Bu kelimenin doğru karşılığı hangisidir?")}</p>
               </div>
 
               {/* 4 Şık Butonu */}
@@ -750,8 +847,8 @@ export default function GoldQuestGame({
                       className={`p-4 rounded-2xl border text-sm sm:text-base font-bold transition-all text-left flex items-center justify-between gap-3 shadow-md ${style}`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="w-7 h-7 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-xs font-mono text-slate-300">
-                          {String.fromCharCode(65 + optIdx)}
+                        <span className="px-2 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700/80 flex items-center justify-center text-[11px] font-mono font-bold text-amber-300 shrink-0">
+                          [{optIdx + 1}]
                         </span>
                         <span className="leading-snug">{opt.text}</span>
                       </div>
@@ -764,7 +861,7 @@ export default function GoldQuestGame({
 
               {phase === "FEEDBACK_WRONG" && (
                 <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-center text-xs font-semibold animate-pulse">
-                  ❌ Yanlış cevap! Sandık açılamadı, sıradaki soruya geçiliyor...
+                  {t("game_gq_wrong_fb", "❌ Yanlış cevap! Sandık açılamadı, sıradaki soruya geçiliyor...")}
                 </div>
               )}
             </div>
@@ -775,12 +872,12 @@ export default function GoldQuestGame({
             <div className="w-full max-w-xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
               <div className="space-y-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">
-                  🎯 Doğru Cevap!
+                  {t("game_gq_correct_badge", "🎯 Doğru Cevap!")}
                 </span>
                 <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  Bir Hazine Sandığı Seç!
+                  {t("game_gq_pick_chest", "Bir Hazine Sandığı Seç!")}
                 </h3>
-                <p className="text-xs text-slate-400">Sandıkların ardında gizlenmiş altınlar ve sürprizler var.</p>
+                <p className="text-xs text-slate-400">{t("game_gq_pick_chest_sub", "Sandıkların ardında gizlenmiş altınlar ve sürprizler var.")}</p>
               </div>
 
               {/* 3 Tıklanabilir Sandık */}
@@ -795,10 +892,10 @@ export default function GoldQuestGame({
                       🎁
                     </div>
                     <span className="text-xs sm:text-sm font-black text-amber-300 group-hover:text-amber-200">
-                      Sandık #{cIdx + 1}
+                      {t("game_myst_chest_n", "Sandık #{n}", { n: cIdx + 1 })}
                     </span>
                     <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-                      Açmak İçin Tıkla
+                      {t("game_gq_click_open", "Açmak İçin Tıkla")}
                     </span>
                   </button>
                 ))}
@@ -822,7 +919,7 @@ export default function GoldQuestGame({
 
               {/* Diğer Sandıklarda Ne Vardı? */}
               <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs text-slate-400">
-                <span className="font-semibold text-slate-300 block mb-1">Diğer sandıklarda ne vardı?</span>
+                <span className="font-semibold text-slate-300 block mb-1">{t("game_gq_other_chests", "Diğer sandıklarda ne vardı?")}</span>
                 <div className="flex justify-around items-center pt-1 text-[11px]">
                   {chestRewards.map((cr, idx) => (
                     <span key={idx} className={idx === selectedChestIdx ? "text-amber-400 font-bold" : "text-slate-500"}>
@@ -837,7 +934,7 @@ export default function GoldQuestGame({
                   onClick={nextQuestion}
                   className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/30 transition flex items-center justify-center gap-2"
                 >
-                  <span>Sonraki Soruya Geç</span>
+                  <span>{t("game_next_q", "Sonraki Soruya Geç")}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               )}
@@ -849,10 +946,10 @@ export default function GoldQuestGame({
             <div className="w-full max-w-lg text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
               <div className="space-y-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-rose-400 bg-rose-400/10 px-3 py-1 rounded-full border border-rose-400/20">
-                  🏴‍☠️ Korsan Baskını
+                  {t("game_gq_pirate_raid", "🏴‍☠️ Korsan Baskını")}
                 </span>
-                <h3 className="text-2xl font-black text-white">Kimin Altınını Çalacaksın?</h3>
-                <p className="text-xs text-slate-400">Seçtiğin arkadaşının hazinesinin %25'ini anında kasanıza aktaracaksın!</p>
+                <h3 className="text-2xl font-black text-white">{t("game_gq_steal_who", "Kimin Altınını Çalacaksın?")}</h3>
+                <p className="text-xs text-slate-400">{t("game_gq_steal_desc", "Seçtiğin arkadaşının hazinesinin %25'ini anında kasanıza aktaracaksın!")}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
@@ -869,7 +966,7 @@ export default function GoldQuestGame({
                         <div className="flex items-center justify-between">
                           <span className="text-2xl">{player.avatar}</span>
                           <span className="text-xs font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-md">
-                            +{stealable} 💰 Çal
+                            +{stealable} 💰 {t("game_gq_steal_btn", "Çal")}
                           </span>
                         </div>
                         <div>
@@ -877,7 +974,7 @@ export default function GoldQuestGame({
                             {player.name}
                           </div>
                           <div className="text-xs text-slate-400">
-                            Mevcut: <span className="font-mono text-slate-300">{player.gold}</span> 💰
+                            {t("game_gq_current_lbl", "Mevcut:")} <span className="font-mono text-slate-300">{player.gold}</span> 💰
                           </div>
                         </div>
                       </button>
@@ -892,10 +989,10 @@ export default function GoldQuestGame({
             <div className="w-full max-w-lg text-center space-y-6 animate-in fade-in zoom-in-90 duration-500">
               <div className="space-y-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
-                  ⏱️ Süre Doldu!
+                  {t("game_gq_time_up", "⏱️ Süre Doldu!")}
                 </span>
-                <h2 className="text-3xl font-black text-white">Hazine Avı Şampiyonası</h2>
-                <p className="text-xs text-slate-300">İşte 3 dakikalık rekabetin ardından sınıf liderlik podyumu!</p>
+                <h2 className="text-3xl font-black text-white">{t("game_gq_championship", "Hazine Avı Şampiyonası")}</h2>
+                <p className="text-xs text-slate-300">{t("game_gq_championship_sub", "İşte 3 dakikalık rekabetin ardından sınıf liderlik podyumu!")}</p>
               </div>
 
               {/* 3'lü Podyum Tasarımı (1st, 2nd, 3rd) */}
@@ -955,14 +1052,14 @@ export default function GoldQuestGame({
               {/* Kullanıcı Skor Kartı */}
               <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/30 flex items-center justify-between text-left">
                 <div>
-                  <div className="text-xs text-slate-400">Senin Sıralaman:</div>
+                  <div className="text-xs text-slate-400">{t("game_gq_your_rank", "Senin Sıralaman:")}</div>
                   <div className="text-base font-black text-white flex items-center gap-1.5">
-                    <span>{userRank}. Sıradasın</span>
-                    <span className="text-xs font-bold text-amber-400 font-mono">({userGold} Altın)</span>
+                    <span>{t("game_gq_ranked_n", "{rank}. Sıradasın", { rank: userRank })}</span>
+                    <span className="text-xs font-bold text-amber-400 font-mono">({userGold} {t("game_gold", "Altın")})</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-slate-400">Kazanılan XP Bonusu:</div>
+                  <div className="text-xs text-slate-400">{t("game_gq_earned_xp_bonus", "Kazanılan XP Bonusu:")}</div>
                   <div className="text-sm font-black text-emerald-400 flex items-center gap-1 justify-end">
                     <Sparkles className="w-4 h-4 text-emerald-400" />
                     <span>+{Math.max(20, Math.floor(userGold * 0.15) + (userRank === 1 ? 35 : userRank === 2 ? 20 : 10))} XP</span>
@@ -975,15 +1072,15 @@ export default function GoldQuestGame({
                 <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 text-left space-y-2.5">
                   <div className="flex items-center justify-between flex-wrap gap-1">
                     <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
-                      <span>🎯 5 Saniyelik Hata Telafisi</span>
+                      <span>{t("game_5s_recovery", "🎯 5 Saniyelik Hata Telafisi")}</span>
                     </div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
-                      Kelime Başına +15 🪙
+                      {t("game_gq_per_word_15", "Kelime Başına +15 🪙")}
                     </span>
                   </div>
 
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    Bu turda kaçırdığın kelimeleri dinle; hem telaffuzunu pekiştir hem de telafi altını kazan!
+                    {t("game_gq_missed_listen_desc", "Bu turda kaçırdığın kelimeleri dinle; hem telaffuzunu pekiştir hem de telafi altını kazan!")}
                   </p>
 
                   <div className="space-y-1.5 pt-1">
@@ -1016,9 +1113,9 @@ export default function GoldQuestGame({
                             }`}
                           >
                             {isComp ? (
-                              <span>✅ +15 🪙 Alındı</span>
+                              <span>✅ {t("game_15_claimed", "+15 🪙 Alındı")}</span>
                             ) : (
-                              <span>🔊 Dinle & +15 🪙</span>
+                              <span>🔊 {t("game_listen_15", "Dinle & +15 🪙")}</span>
                             )}
                           </button>
                         </div>
@@ -1035,80 +1132,155 @@ export default function GoldQuestGame({
                   className="flex-1 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 transition flex items-center justify-center gap-2"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  <span>Tekrar Oyna</span>
+                  <span>{t("game_play_again", "Tekrar Oyna")}</span>
                 </button>
                 <button
                   onClick={onClose}
                   className="flex-1 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm transition"
                 >
-                  Desteye Dön
+                  {t("game_back_deck", "Desteye Dön")}
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* SAĞ: Canlı Sınıf Sıralama Çubuğu (Live Leaderboard) & Olay Akışı */}
+        {/* SAĞ: Solo Modda Kişisel Seri/Altın/Rekor Paneli, Çok Oyunculu Modda Canlı Sıralama */}
         <aside className="p-5 bg-slate-900/90 border-t lg:border-t-0 lg:border-l border-slate-800/80 flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                <Trophy className="w-3.5 h-3.5" />
-                <span>{t("label_live_leaderboard", "CANLI SIRALAMA")}</span>
-              </h4>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            </div>
+          {isSoloMode ? (
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{t("game_gq_solo_panel", "SOLO PERFORMANS PANELİ")}</span>
+                </h4>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              </div>
 
-            {/* Sıralama Listesi */}
-            <div className="space-y-2">
-              {sortedPlayers.map((player, idx) => {
-                const isLeader = idx === 0;
-                return (
-                  <div
-                    key={player.id}
-                    className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-between gap-2 ${
-                      player.isUser
-                        ? "bg-amber-500/15 border-amber-500/40 text-amber-200 shadow-md ring-1 ring-amber-400/40"
-                        : "bg-slate-950/60 border-slate-800/80 text-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-black font-mono shrink-0 ${
-                        idx === 0
-                          ? "bg-yellow-400 text-slate-950"
-                          : idx === 1
-                          ? "bg-slate-300 text-slate-950"
-                          : idx === 2
-                          ? "bg-amber-700 text-white"
-                          : "bg-slate-800 text-slate-400"
-                      }`}>
-                        {idx + 1}
-                      </span>
-                      <span className="text-base shrink-0">{player.avatar}</span>
-                      <span className={`text-xs font-bold truncate ${player.isUser ? "text-amber-300" : "text-slate-200"}`}>
-                        {player.name} {player.isUser && `(${t("label_you", "Sen")})`}
-                      </span>
-                    </div>
+              {/* 1. 5'li Seri Durumu */}
+              <div className="p-3 rounded-2xl bg-slate-950/90 border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-300">{t("game_gq_5streak_state", "5'li Seri Durumu")}</span>
+                  <span className="font-mono font-black text-amber-300">
+                    {streak === 0 ? 0 : ((streak - 1) % 5) + 1} / 5 ({getStreakMultiplier(streak).multiplier}x)
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-1">
+                  {[1, 2, 3, 4, 5].map((step) => {
+                    const activeSteps = streak === 0 ? 0 : ((streak - 1) % 5) + 1;
+                    return (
+                      <div
+                        key={step}
+                        className={`h-2 rounded-full transition-all ${
+                          step <= activeSteps
+                            ? "bg-gradient-to-r from-amber-400 to-yellow-300 shadow-[0_0_6px_rgba(251,191,36,0.6)]"
+                            : "bg-slate-800"
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  {t("game_gq_streak_rules", "5. doğruda x2 & +25🪙 • 10. doğruda x3 & +50🪙 + Sandık • 15+ doğruda x5 & +100🪙")}
+                </p>
+              </div>
 
-                    <div className="flex items-center gap-1 font-mono text-xs font-black text-amber-400 shrink-0">
-                      <span>{player.gold}</span>
-                      <span className="text-[10px]">💰</span>
-                    </div>
-                  </div>
-                );
-              })}
+              {/* 2. Kazanılan Altın */}
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-amber-300/80 block">
+                    {t("game_earned_gold", "Kazanılan Altın")}
+                  </span>
+                  <span className="text-lg font-black font-mono text-amber-300">
+                    {userGold} 🪙
+                  </span>
+                </div>
+                <Coins className="w-6 h-6 text-amber-400" />
+              </div>
+
+              {/* 3. Kişisel Rekor */}
+              <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-indigo-300 flex items-center gap-1">
+                    <Trophy className="w-3 h-3 text-amber-400" />
+                    <span>{t("game_gq_personal_best", "Kişisel Rekor")}</span>
+                  </span>
+                  <span className="text-xs font-mono font-black text-white">
+                    {Math.max(personalBestGold, userGold)} 🪙
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>{t("game_gq_best_streak", "En Yüksek Seri:")}</span>
+                  <span className="font-mono font-bold text-emerald-400">{maxStreak} {t("game_correct_short", "Doğru")}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>{t("game_gq_cw_ratio", "Doğru / Yanlış:")}</span>
+                  <span className="font-mono font-bold text-slate-200">
+                    {stats.correct}{t("game_c_abbr", "D")} / {stats.wrong}{t("game_w_abbr", "Y")}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5" />
+                  <span>{t("label_live_leaderboard", "CANLI SIRALAMA")}</span>
+                </h4>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              </div>
+
+              {/* Sıralama Listesi */}
+              <div className="space-y-2">
+                {sortedPlayers.map((player, idx) => {
+                  return (
+                    <div
+                      key={player.id}
+                      className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-between gap-2 ${
+                        player.isUser
+                          ? "bg-amber-500/15 border-amber-500/40 text-amber-200 shadow-md ring-1 ring-amber-400/40"
+                          : "bg-slate-950/60 border-slate-800/80 text-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-black font-mono shrink-0 ${
+                          idx === 0
+                            ? "bg-yellow-400 text-slate-950"
+                            : idx === 1
+                            ? "bg-slate-300 text-slate-950"
+                            : idx === 2
+                            ? "bg-amber-700 text-white"
+                            : "bg-slate-800 text-slate-400"
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <span className="text-base shrink-0">{player.avatar}</span>
+                        <span className={`text-xs font-bold truncate ${player.isUser ? "text-amber-300" : "text-slate-200"}`}>
+                          {player.name} {player.isUser && `(${t("label_you", "Sen")})`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 font-mono text-xs font-black text-amber-400 shrink-0">
+                        <span>{player.gold}</span>
+                        <span className="text-[10px]">💰</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Canlı Olay Akışı (Ticker) */}
           <div className="pt-3 border-t border-slate-800 space-y-1.5">
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1">
               <Flame className="w-3 h-3 text-orange-400" />
-              <span>Oyun Akışı</span>
+              <span>{t("game_gq_feed_hdr", "Oyun Akışı")}</span>
             </span>
             <div className="space-y-1 min-h-[60px] text-[11px] text-slate-400">
               {activityFeed.length === 0 ? (
-                <p className="text-slate-500 italic text-[10px]">Oyun başladığında olaylar burada akacak...</p>
+                <p className="text-slate-500 italic text-[10px]">{t("game_gq_feed_empty", "Oyun başladığında olaylar burada akacak...")}</p>
               ) : (
                 activityFeed.slice(0, 3).map((item, idx) => (
                   <div key={idx} className="truncate animate-in fade-in slide-in-from-bottom-1 duration-200 text-slate-300">
@@ -1120,6 +1292,25 @@ export default function GoldQuestGame({
           </div>
         </aside>
       </div>
+      {/* 5'li Seri Sonu "Al veya Değiştir" 3 Gizemli Sandık Modalı */}
+      <MysteryChestModal
+        isOpen={isMysteryOpen}
+        streak={streak}
+        onClose={() => {
+          setIsMysteryOpen(false);
+          nextQuestion();
+        }}
+        onClaimReward={(reward: MysteryReward) => {
+          if (reward.goldAmount) {
+            updateUserGold(reward.goldAmount);
+            setStats((s) => ({ ...s, goldEarned: s.goldEarned + (reward.goldAmount || 0) }));
+          }
+          if (reward.multiplier) {
+            setMysteryBuff(reward.multiplier);
+            setMysteryBuffCount(reward.buffQuestions || 3);
+          }
+        }}
+      />
     </div>
   );
 }

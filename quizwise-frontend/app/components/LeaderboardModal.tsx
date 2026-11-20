@@ -97,8 +97,8 @@ export default function LeaderboardModal({
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {timeframe === "weekly"
-                    ? "🔥 Bu Haftanın Dinamik Ligi • Pazar 23:59'da sıfırlanmadan devreder"
-                    : "👑 Kalıcı Şeref Kürsüsü • Toplam puanlar asla silinmez!"}
+                    ? t("lb_weekly_sub", "🔥 Bu Haftanın Dinamik Ligi • Pazar 23:59'da sıfırlanmadan devreder")
+                    : t("lb_alltime_sub", "👑 Kalıcı Şeref Kürsüsü • Toplam puanlar asla silinmez!")}
                 </p>
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function LeaderboardModal({
               }`}
             >
               <Flame className="w-4 h-4 text-amber-200" />
-              <span>🔥 Bu Haftanın Yarışı</span>
+              <span>{t("lb_tab_weekly", "🔥 Bu Haftanın Yarışı")}</span>
             </button>
 
             {/* Sekme 2: Tüm Zamanların Efsaneleri */}
@@ -152,7 +152,7 @@ export default function LeaderboardModal({
               }`}
             >
               <Crown className="w-4 h-4 text-yellow-300" />
-              <span>👑 Tüm Zamanların Efsaneleri</span>
+              <span>{t("lb_tab_alltime", "👑 Tüm Zamanların Efsaneleri")}</span>
             </button>
           </div>
         </div>
@@ -165,7 +165,7 @@ export default function LeaderboardModal({
             <div className="py-20 flex flex-col items-center justify-center space-y-3">
               <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
               <p className="text-xs text-slate-400 font-medium">
-                Sıralama verileri yükleniyor...
+                {t("lb_loading", "Sıralama verileri yükleniyor...")}
               </p>
             </div>
           ) : (
@@ -276,7 +276,7 @@ export default function LeaderboardModal({
                 <div className="flex items-center justify-between text-xs uppercase font-bold text-slate-400 tracking-wider px-1">
                   <span>{t("ranking_others_label", "Diğer Sıralamalar")}</span>
                   <span className="text-[10px] font-mono text-slate-500">
-                    {timeframe === "weekly" ? "Haftalık Lig" : "Tüm Zamanlar"}
+                    {timeframe === "weekly" ? t("lb_weekly_badge", "Haftalık Lig") : t("lb_alltime_badge", "Tüm Zamanlar")}
                   </span>
                 </div>
 
@@ -317,7 +317,7 @@ export default function LeaderboardModal({
                               </h5>
                               {isYou && (
                                 <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                  Sen
+                                  {t("lb_you", "Sen")}
                                 </span>
                               )}
                             </div>
@@ -364,17 +364,17 @@ export default function LeaderboardModal({
               <UserCheck className="w-4 h-4" />
             </span>
             <span className="text-slate-200 font-semibold">
-              Sen:{" "}
+              {t("lb_you", "Sen")}:{" "}
               <strong className="text-emerald-400 font-mono font-extrabold">
-                {userRank}. Sıra
+                #{userRank}
               </strong>{" "}
               •{" "}
               <span className="text-amber-300 font-bold font-mono">
-                {userWeeklyXP.toLocaleString()} XP (Haftalık)
+                {userWeeklyXP.toLocaleString()} XP ({t("lb_weekly_short", "Haftalık")})
               </span>{" "}
               |{" "}
               <span className="text-indigo-300 font-medium">
-                Toplam:{" "}
+                {t("lb_total_lbl", "Toplam:")}{" "}
                 <strong className="text-white font-mono font-bold">
                   {userAllTimeXP.toLocaleString()} XP
                 </strong>{" "}
@@ -385,7 +385,7 @@ export default function LeaderboardModal({
 
           <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono hidden sm:inline-flex">
             <Shield className="w-3 h-3 text-emerald-400" />
-            <span>Kalıcı Puan Koruma Aktif</span>
+            <span>{t("lb_perm_shield", "Kalıcı Puan Koruma Aktif")}</span>
           </div>
         </div>
       </div>

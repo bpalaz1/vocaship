@@ -156,13 +156,13 @@ export default function GamificationBadge({
         type="button"
         onClick={() => setShowDetails(!showDetails)}
         className={`group cursor-pointer select-none flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 rounded-2xl border transition-all duration-150 shadow-sm ${theme.bg} ${theme.border} hover:scale-[1.02] active:scale-95`}
-        title="Gelişim Karnesi, Altın ve Hızlı Menü"
+        title={t("badge_btn_title", "Gelişim Karnesi, Altın ve Hızlı Menü")}
         aria-expanded={showDetails}
       >
         {/* Aktif Avatar / Simge */}
         <span
           className="w-6 h-6 rounded-xl bg-slate-950 border border-white/10 flex items-center justify-center text-xs shadow-inner shrink-0"
-          title="Seçili Avatar"
+          title={t("badge_active_avatar", "Seçili Avatar")}
         >
           {profile.active_avatar || "🌟"}
         </span>
@@ -299,7 +299,7 @@ export default function GamificationBadge({
               </Link>
 
               <Link
-                href="/shop"
+                href="/games?tab=shop"
                 onClick={() => setShowDetails(false)}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-slate-800/80 text-xs font-semibold text-slate-300 hover:text-white transition group"
               >
@@ -335,10 +335,10 @@ export default function GamificationBadge({
               </span>
               <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-400">
                 <span className="p-1 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                  ⚔️ {t("tab_boss_fight", "Boss Fight")}: <strong className="text-emerald-400">XP & Altın</strong>
+                  ⚔️ {t("tab_boss_fight", "Boss Fight")}: <strong className="text-emerald-400">{t("xp_and_gold", "XP & Altın")}</strong>
                 </span>
                 <span className="p-1 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                  💰 {t("tab_treasure_hunt", "Hazine Avı")}: <strong className="text-emerald-400">XP & Altın</strong>
+                  💰 {t("tab_treasure_hunt", "Hazine Avı")}: <strong className="text-emerald-400">{t("xp_and_gold", "XP & Altın")}</strong>
                 </span>
               </div>
             </div>

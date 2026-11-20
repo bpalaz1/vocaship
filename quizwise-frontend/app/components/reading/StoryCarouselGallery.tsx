@@ -634,7 +634,7 @@ export default function StoryCarouselGallery({
                     onDelete={
                       isCustom
                         ? () => {
-                            if (confirm(`"${story.title}" kütüphanenizden silinsin mi?`)) {
+                            if (confirm(t("read_confirm_delete_story", "\"{title}\" kütüphanenizden silinsin mi?", { title: story.title }))) {
                               deleteUserStory(story.id);
                             }
                           }

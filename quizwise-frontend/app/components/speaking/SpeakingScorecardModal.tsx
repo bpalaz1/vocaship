@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Award,
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SpeakingScorecardModalProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ export default function SpeakingScorecardModal({
   onResetSession,
   onPlaySpeech,
 }: SpeakingScorecardModalProps) {
+  const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
@@ -70,21 +72,21 @@ export default function SpeakingScorecardModal({
             <div className="flex items-center gap-2">
               <span className="text-2xl">🎉</span>
               <h3 className="text-lg sm:text-xl font-black text-white">
-                Oturum Sonu Konuşma Karnesi
+                {t("speak_sc_modal_title", "Oturum Sonu Konuşma Karnesi")}
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 {targetLevel}
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              {sessionTitle || "Harika bir pratik oturumu tamamladınız"} (+30 XP).
+              {sessionTitle || t("speak_sc_default_sub", "Harika bir pratik oturumu tamamladınız")} (+30 XP).
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -94,7 +96,7 @@ export default function SpeakingScorecardModal({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-center space-y-1">
             <span className="text-[10px] uppercase font-bold text-indigo-400 block tracking-wider">
-              Genel Uyum
+              {t("speak_sc_overall", "Genel Uyum")}
             </span>
             <span className="text-2xl font-black text-white font-mono">{overall}</span>
             <span className="text-[10px] text-indigo-300 block">/ 100</span>
@@ -102,7 +104,7 @@ export default function SpeakingScorecardModal({
 
           <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-center space-y-1">
             <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
-              Akıcılık
+              {t("speak_sc_fluency", "Akıcılık")}
             </span>
             <span className="text-2xl font-black text-white font-mono">{fluency}</span>
             <span className="text-[10px] text-emerald-300 block">/ 100</span>
@@ -110,7 +112,7 @@ export default function SpeakingScorecardModal({
 
           <div className="p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 text-center space-y-1">
             <span className="text-[10px] uppercase font-bold text-cyan-400 block tracking-wider">
-              Kelime
+              {t("speak_sc_vocab", "Kelime")}
             </span>
             <span className="text-2xl font-black text-white font-mono">{vocabulary}</span>
             <span className="text-[10px] text-cyan-300 block">/ 100</span>
@@ -118,7 +120,7 @@ export default function SpeakingScorecardModal({
 
           <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/30 text-center space-y-1">
             <span className="text-[10px] uppercase font-bold text-amber-400 block tracking-wider">
-              Dilbilgisi
+              {t("speak_sc_grammar", "Dilbilgisi")}
             </span>
             <span className="text-2xl font-black text-white font-mono">{grammar}</span>
             <span className="text-[10px] text-amber-300 block">/ 100</span>
@@ -129,9 +131,9 @@ export default function SpeakingScorecardModal({
         {targetWords && targetWords.length > 0 && (
           <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              <span>🎯 Yakalanan Hedef Kelimeler ({capturedWords.length}/{targetWords.length})</span>
+              <span>{t("speak_sc_captured", "🎯 Yakalanan Hedef Kelimeler ({c}/{t})", { c: capturedWords.length, t: targetWords.length })}</span>
               <span className="text-emerald-400 font-mono">
-                {Math.round((capturedWords.length / targetWords.length) * 100)}% Başarı
+                {t("speak_sc_success_pct", "%{rate} Başarı", { rate: Math.round((capturedWords.length / targetWords.length) * 100) })}
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -166,36 +168,36 @@ export default function SpeakingScorecardModal({
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5 uppercase tracking-wider">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>💎 Altın Cümle (Executive Phrasing)</span>
+              <span>{t("speak_sc_golden_exec", "💎 Altın Cümle (Executive Phrasing)")}</span>
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => onPlaySpeech(scorecard.better_alternative)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-700 text-xs text-slate-300 hover:text-white transition cursor-pointer"
-                title="Altın Cümleyi Dinle"
+                title={t("speak_sc_listen_golden", "Altın Cümleyi Dinle")}
               >
                 <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Dinle</span>
+                <span>{t("speak_listen_btn", "Dinle")}</span>
               </button>
               <button
                 type="button"
                 onClick={handleCopy}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-700 text-xs text-slate-300 hover:text-white transition cursor-pointer"
-                title="Panoya Kopyala"
+                title={t("speak_sc_copy_clip", "Panoya Kopyala")}
               >
                 {copied ? (
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
                 ) : (
                   <Copy className="w-3.5 h-3.5 text-slate-400" />
                 )}
-                <span>{copied ? "Kopyalandı" : "Kopyala"}</span>
+                <span>{copied ? t("speak_sc_copied", "Kopyalandı") : t("speak_sc_copy", "Kopyala")}</span>
               </button>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-400">
-            Bunu yerel / kurumsal bir konuşmacı gibi şöyle ifade edebilirdin:
+            {t("speak_sc_native_hint", "Bunu yerel / kurumsal bir konuşmacı gibi şöyle ifade edebilirdin:")}
           </p>
 
           <p className="text-sm font-medium text-emerald-300 leading-relaxed bg-slate-900/80 p-3 rounded-xl border border-emerald-500/20 shadow-inner">
@@ -204,7 +206,7 @@ export default function SpeakingScorecardModal({
 
           {scorecard.improvement_suggestion && (
             <p className="text-xs text-slate-400 leading-relaxed pt-1">
-              💡 <span className="font-semibold text-slate-300">Geri Bildirim:</span>{" "}
+              💡 <span className="font-semibold text-slate-300">{t("speak_sc_feedback_lbl", "Geri Bildirim:")}</span>{" "}
               {scorecard.improvement_suggestion}
             </p>
           )}
@@ -221,7 +223,7 @@ export default function SpeakingScorecardModal({
             className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-indigo-500/50 text-indigo-300 font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
           >
             <Archive className="w-4 h-4" />
-            <span>🗂️ Tüm Konuşma Arşivimi Aç</span>
+            <span>{t("speak_sc_open_archive", "🗂️ Tüm Konuşma Arşivimi Aç")}</span>
           </button>
 
           <button
@@ -233,7 +235,7 @@ export default function SpeakingScorecardModal({
             className="w-full sm:w-auto px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Yeni Oturum Başlat</span>
+            <span>{t("speak_sc_start_new", "Yeni Oturum Başlat")}</span>
           </button>
         </div>
       </div>

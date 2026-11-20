@@ -603,6 +603,12 @@ def update_user_profile(
         update_data["avatar_url"] = clean_avatar
         meta_data["avatar_url"] = clean_avatar
 
+    if payload.email is not None:
+        clean_email = str(payload.email).strip().lower()
+        if clean_email:
+            update_data["email"] = clean_email
+            meta_data["email"] = clean_email
+
     if not update_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -635,7 +641,7 @@ def update_user_profile(
 
     final_full_name = str(update_data.get("full_name") or updated_user.get("full_name") or current_user.get("full_name") or "")
     final_username = str(update_data.get("username") or updated_user.get("username") or current_user.get("username") or "")
-    final_email = str(updated_user.get("email") or current_user.get("email") or "")
+    final_email = str(update_data.get("email") or updated_user.get("email") or current_user.get("email") or "")
     final_role = str(updated_user.get("role") or current_user.get("role") or "user")
     final_is_pro = bool(updated_user.get("is_pro", current_user.get("is_pro", False)))
     final_avatar = update_data.get("avatar_url", updated_user.get("avatar_url"))

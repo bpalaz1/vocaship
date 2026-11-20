@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { SimliClient, generateSimliSessionToken, generateIceServers } from "simli-client";
 import { Radio, Sparkles, WifiOff, Mic } from "lucide-react";
 import type { AvatarAnimationState } from "./AvatarDisplay";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SimliLiveAvatarProps {
   avatarState: AvatarAnimationState;
@@ -23,6 +24,7 @@ export default function SimliLiveAvatar({
   avatarIcon = "✨",
   onFallbackTriggered,
 }: SimliLiveAvatarProps) {
+  const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const simliClientRef = useRef<SimliClient | null>(null);
@@ -47,7 +49,7 @@ export default function SimliLiveAvatar({
       if (!apiKey || apiKey.trim() === "") {
         if (!isMounted) return;
         setConnectionStatus("fallback");
-        const msg = "PRO Canlı Yayın Başlatılamadı (Fallback Devrede)";
+        const msg = t("av_simli_fallback", "PRO Canlı Yayın Başlatılamadı (Fallback Devrede)");
         setFallbackNotice(msg);
         onFallbackTriggered?.(msg);
         return;

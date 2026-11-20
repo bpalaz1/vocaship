@@ -9,6 +9,7 @@ import {
   User,
 } from "lucide-react";
 import LiveTranscript from "./LiveTranscript";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface DialogueTurn {
   role: "assistant" | "user";
@@ -45,8 +46,9 @@ export default function SpeakingTranscript({
   rate = 0.86,
   personaName = "AI Mentor",
   onPlayAudio,
-  emptyStateMessage = "Mikrofon butonuna basarak ilk cümleni söyleyebilirsin. Hazır olduğunda seni dinliyorum!",
+  emptyStateMessage,
 }: SpeakingTranscriptProps) {
+  const { t } = useLanguage();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Otomatik yumuşak kaydırma (Auto-Scroll)
@@ -73,16 +75,16 @@ export default function SpeakingTranscript({
 
           <div className="space-y-1.5 max-w-sm px-2">
             <h3 className="text-sm font-extrabold text-slate-900">
-              Konuşma Başlatılmaya Hazır
+              {t("speak_tr_ready_title", "Konuşma Başlatılmaya Hazır")}
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              {emptyStateMessage}
+              {emptyStateMessage || t("speak_tr_ready_empty", "Mikrofon butonuna basarak ilk cümleni söyleyebilirsin. Hazır olduğunda seni dinliyorum!")}
             </p>
           </div>
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-mono font-bold text-emerald-400 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>AI Mentor ({personaName}) Çevrim içi</span>
+            <span>{t("speak_tr_mentor_online", "AI Mentor ({name}) Çevrim içi", { name: personaName })}</span>
           </div>
         </div>
       )}
@@ -156,7 +158,7 @@ export default function SpeakingTranscript({
         <div className="flex flex-col items-end max-w-[85%] sm:max-w-[80%] ml-auto space-y-1 animate-pulse">
           <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 pr-1">
             <Mic className="w-3 h-3 animate-bounce" />
-            <span>Canlı Deşifre Ediliyor...</span>
+            <span>{t("speak_tr_transcribing", "Canlı Deşifre Ediliyor...")}</span>
           </div>
 
           <div className="bg-emerald-950/40 text-emerald-200 border border-emerald-500/40 rounded-2xl rounded-tr-none px-4 py-3 shadow-md text-xs sm:text-sm leading-relaxed font-medium break-words">
@@ -171,7 +173,7 @@ export default function SpeakingTranscript({
       {isThinking && (
         <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs text-slate-400 animate-pulse max-w-[80%] mr-auto">
           <Sparkles className="w-4 h-4 text-emerald-400 animate-spin shrink-0" />
-          <span>AI Mentor değerlendiriyor ve yanıt hazırlıyor...</span>
+          <span>{t("speak_tr_evaluating", "AI Mentor değerlendiriyor ve yanıt hazırlıyor...")}</span>
         </div>
       )}
 

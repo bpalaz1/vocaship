@@ -21,9 +21,14 @@ import { saveArenaMistake } from "../../utils/arenaMistakes";
 import {
   calculateWordReward,
   shouldTriggerMysteryChest,
-  awardGamificationReward,
+  getStreakMultiplier,
+  getFiveCardMilestoneReward,
 } from "../../utils/gamificationEngine";
 import { GameMistakeItem } from "./GameOverSummary";
+import StreakMilestoneBar from "./StreakMilestoneBar";
+import { getEquippedMuseumBuff } from "../../data/museumItems";
+import { playArenaSound } from "../../utils/soundEffects";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface BossFightGameProps {
   cards: Array<{ word: string; meaning: string; phonetic?: string }>;
@@ -110,11 +115,13 @@ const playSoundEffect = (type: "hit" | "crit" | "boss_attack" | "victory") => {
 
 export default function BossFightGame({
   cards,
-  deckTitle = "Genel Deste",
+  deckTitle,
   onClose,
   onAwardXP,
   onAwardGold,
 }: BossFightGameProps) {
+  const { t } = useLanguage();
+  const resolvedDeckTitle = deckTitle || t("game_default_deck", "Genel Deste");
   const MAX_BOSS_HP = 1000;
   const [bossHp, setBossHp] = useState(MAX_BOSS_HP);
   const [playerScore, setPlayerScore] = useState(0);
@@ -129,8 +136,11 @@ export default function BossFightGame({
   const [showPodium, setShowPodium] = useState(false);
   const [answeredIndex, setAnsweredIndex] = useState<number | null>(null);
 
+  const equippedBuff = useMemo(() => getEquippedMuseumBuff(), []);
+  const initialLives = equippedBuff?.type === "extra_life" ? 4 : 3;
+
   // Sıfır Eleme (Respawn), Gizemli Sandık ve Oyunlaştırma State'leri
-  const [playerLives, setPlayerLives] = useState(3);
+  const [playerLives, setPlayerLives] = useState(initialLives);
   const [isRespawnOpen, setIsRespawnOpen] = useState(false);
   const [hasRespawned, setHasRespawned] = useState(false);
   const [isDefeated, setIsDefeated] = useState(false);
@@ -175,22 +185,29 @@ export default function BossFightGame({
     const isCorrect = optionText === activeCard.meaning;
 
     if (isCorrect) {
-      // DOĞRU CEVAP
+      // DOĞRU CEVAP (5-Card Streak Engine)
       setFeedback("correct");
       const nextCombo = combo + 1;
       setCombo(nextCombo);
       if (nextCombo > maxCombo) setMaxCombo(nextCombo);
 
-      const isCrit = nextCombo >= 3;
-      const dmg = isCrit ? 220 : 100;
+      const streakInfo = getStreakMultiplier(nextCombo);
+      const milestone = getFiveCardMilestoneReward(nextCombo);
+      const isCrit = milestone.isMilestone || streakInfo.multiplier >= 2;
+      const bossCritMultiplier = equippedBuff?.type === "boss_crit" ? 1.15 : 1.0;
+      const dmg = Math.round(100 * streakInfo.multiplier * bossCritMultiplier);
 
-      // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
+      // Ortak Oyunlaştırma Motoru (5'li Seri Çarpanı & Milestone Altını)
       const reward = calculateWordReward({
         word: activeCard.word,
         streak: nextCombo,
         isCorrect: true,
         activeBuffMultiplier: mysteryBuff,
       });
+
+      if (milestone.isMilestone && milestone.bonusGold > 0 && onAwardGold) {
+        onAwardGold(milestone.bonusGold);
+      }
 
       if (mysteryBuffCount > 0) {
         const nextRem = mysteryBuffCount - 1;
@@ -199,19 +216,30 @@ export default function BossFightGame({
       }
 
       if (soundEnabled) {
-        playSoundEffect(isCrit ? "crit" : "hit");
+        if (milestone.isMilestone) {
+          playArenaSound("milestone", true);
+        } else {
+          playSoundEffect(isCrit ? "crit" : "hit");
+        }
       }
 
       // Ejderha darbe animasyonu (350ms darbe sarsıntısı & parlama)
       setBossState("hit");
       setTimeout(() => setBossState("idle"), 350);
 
-      // Uçan hasar yazısı (-100 HP! 💥 veya -220 HP KRİTİK! 🔥)
-      triggerDamage(isCrit ? `💥 -${dmg} HP CRIT!` : `-${dmg} HP! 💥`, isCrit);
+      // Uçan hasar yazısı
+      triggerDamage(
+        milestone.isMilestone
+          ? `🔥 ${nextCombo} ${t("game_streak_upper", "SERİ!")} -${dmg} HP (+${milestone.bonusGold}🪙)`
+          : isCrit
+          ? `💥 -${dmg} HP (${streakInfo.multiplier}x)!`
+          : `-${dmg} HP! 💥`,
+        isCrit
+      );
 
-      setPlayerScore((prev) => prev + (isCrit ? reward.totalXP * 1.5 : reward.totalXP));
+      setPlayerScore((prev) => prev + reward.totalXP);
 
-      // Her 3 doğru seride 3 Gizemli Sandık Aç
+      // 10. ve 15+ doğru seride Gizemli Sandık Bonusu Aç
       if (shouldTriggerMysteryChest(nextCombo)) {
         setTimeout(() => setIsMysteryOpen(true), 400);
       }
@@ -274,7 +302,7 @@ export default function BossFightGame({
       setBossState("attack");
       setTimeout(() => setBossState("idle"), 500);
 
-      triggerDamage("ISKALANDI! 🔥", false);
+      triggerDamage(t("game_boss_missed", "ISKALANDI! 🔥"), false);
 
       // Sıradaki Soru
       setTimeout(() => {
@@ -297,7 +325,7 @@ export default function BossFightGame({
       origin: { y: 0.6 },
     });
     if (onAwardXP) {
-      onAwardXP(250, "Ejderha Baskını Zaferi");
+      onAwardXP(250, t("game_boss_victory_xp", "Ejderha Baskını Zaferi"));
     }
     if (onAwardGold) {
       onAwardGold(150);
@@ -319,14 +347,30 @@ export default function BossFightGame({
     setSessionMistakes([]);
   };
 
+  // Klavye Kısayolları (1-2-3-4)
+  useEffect(() => {
+    if (feedback !== null || bossHp <= 0 || playerLives <= 0 || isRespawnOpen || isMysteryOpen) {
+      return;
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const idx = ["1", "2", "3", "4"].indexOf(e.key);
+      if (idx !== -1 && options[idx]) {
+        e.preventDefault();
+        handleAnswer(options[idx], idx);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [feedback, bossHp, playerLives, isRespawnOpen, isMysteryOpen, options]);
+
   const hpPercent = Math.max(0, Math.round((bossHp / MAX_BOSS_HP) * 100));
 
   if (isVictory || isDefeated) {
     return (
       <>
         <GameOverScreen
-          gameTitle={isVictory ? "🐉 Ejderha Baskını: Zafer!" : "🐉 Ejderha Baskını: Mücadele Tamamlandı"}
-          deckTitle={deckTitle}
+          gameTitle={isVictory ? t("game_boss_over_win", "🐉 Ejderha Baskını: Zafer!") : t("game_boss_over_done", "🐉 Ejderha Baskını: Mücadele Tamamlandı")}
+          deckTitle={resolvedDeckTitle}
           score={playerScore}
           accuracyPercent={Math.round((maxCombo / Math.max(1, currentRound + 1)) * 100)}
           awardedXP={isVictory ? 250 : Math.max(40, playerScore)}
@@ -346,9 +390,9 @@ export default function BossFightGame({
               onClose();
             }}
             sessionId={`boss-${Date.now()}`}
-            gameTitle="🐉 Ejderha Baskını (Boss Fight)"
+            gameTitle={t("game_boss_podium_title", "🐉 Ejderha Baskını (Boss Fight)")}
             currentUserRank={1}
-            currentUserName="Sen (Ejderha Avcısı)"
+            currentUserName={t("game_boss_hunter_you", "Sen (Ejderha Avcısı)")}
           />
         )}
       </>
@@ -426,7 +470,7 @@ export default function BossFightGame({
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-300 transition active:scale-95 cursor-pointer shadow-sm"
         >
           <X className="w-4 h-4 text-rose-400" />
-          <span>Arenaya Dön</span>
+          <span>{t("game_back_arena", "Arenaya Dön")}</span>
         </button>
 
         <div className="flex items-center space-x-2">
@@ -443,17 +487,17 @@ export default function BossFightGame({
           )}
 
           <span className="text-xs font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl hidden sm:inline">
-            {deckTitle}
+            {resolvedDeckTitle}
           </span>
           <span className="text-xs font-black text-white px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 font-mono">
-            {playerScore} Skor
+            {playerScore} {t("game_score_word", "Skor")}
           </span>
         </div>
 
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
           className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer shadow-sm"
-          title={soundEnabled ? "Sesi Kapat" : "Sesi Aç"}
+          title={soundEnabled ? t("game_sound_off", "Sesi Kapat") : t("game_sound_on", "Sesi Aç")}
         >
           {soundEnabled ? (
             <Volume2 className="w-4 h-4 text-emerald-400" />
@@ -466,7 +510,10 @@ export default function BossFightGame({
       {/* ========================================================================= */}
       {/* 2. ORTA SAVAŞ ALANI: EPİK SİNEMATİK BOSS SAHNESİ, CAN BARI VE HASAR SAYISI */}
       {/* ========================================================================= */}
-      <main className="w-full max-w-4xl mx-auto px-4 py-2 flex-1 flex flex-col items-center justify-center text-center relative gap-3">
+      <main className="w-full max-w-4xl mx-auto px-4 py-2 flex-1 flex flex-col items-center justify-center text-center relative gap-2.5">
+        {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
+        <StreakMilestoneBar streak={combo} />
+
         {/* Sahne Çerçevesi (Stage Container) */}
         <div className="w-full max-w-md h-56 mx-auto relative flex items-center justify-center rounded-3xl overflow-hidden bg-slate-900/80 border border-rose-500/30 backdrop-blur-md shadow-[0_0_40px_rgba(244,63,94,0.2)]">
           {/* Arkasında Hafif Kızıl-Kehribar Ortam Parıltısı */}
@@ -509,7 +556,7 @@ export default function BossFightGame({
             {/* Gerçek Ejderha Görseli */}
             <img
               src="/bosses/dragon_ignis.png"
-              alt="Antik Volkanik Ejderha Ignis"
+              alt={t("game_boss_name", "Antik Volkanik Ejderha Ignis")}
               className="w-full h-full object-contain filter drop-shadow-[0_12px_24px_rgba(225,29,72,0.45)]"
               onError={(e) => {
                 // Fallback: Yüksek kaliteli şık SVG illüstrasyonu
@@ -539,14 +586,14 @@ export default function BossFightGame({
         <div className="space-y-0.5">
           <div className="flex items-center justify-center gap-2">
             <h2 className="text-base sm:text-lg font-black text-white tracking-wide">
-              🐉 Antik Volkanik Ejderha Ignis
+              🐉 {t("game_boss_name", "Antik Volkanik Ejderha Ignis")}
             </h2>
             <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
               BOSS
             </span>
           </div>
           <p className="text-[11px] text-slate-400 font-medium">
-            Magma ve kül efendisi hazineyi savunuyor!
+            {t("game_boss_sub", "Magma ve kül efendisi hazineyi savunuyor!")}
           </p>
         </div>
 
@@ -555,7 +602,7 @@ export default function BossFightGame({
           <div className="flex items-center justify-between text-xs font-mono font-bold">
             <span className="text-rose-400 flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-amber-400" />
-              <span>Can: {bossHp} / {MAX_BOSS_HP} HP</span>
+              <span>{t("game_boss_hp_lbl", "Can:")} {bossHp} / {MAX_BOSS_HP} HP</span>
             </span>
             <span className="text-amber-300 font-black">%{hpPercent}</span>
           </div>
@@ -571,7 +618,7 @@ export default function BossFightGame({
         {combo > 1 && (
           <div className="flex items-center gap-1.5 text-xs font-black text-amber-300 animate-pulse bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30 shadow-sm">
             <Zap className="w-3.5 h-3.5 fill-amber-400" />
-            <span>{combo}x Kombo Çarpanı!</span>
+            <span>{t("game_combo_mult", "{n}x Kombo Çarpanı!", { n: combo })}</span>
           </div>
         )}
       </main>
@@ -580,17 +627,24 @@ export default function BossFightGame({
       {/* 3. ALT SALDIRI PANELİ: KELİME SORUSU VE 4 SEÇENEK                           */}
       {/* ========================================================================= */}
       <footer className="w-full max-w-2xl mx-auto px-4 pb-6 space-y-3 shrink-0">
-        {/* Hedef Kelime (Antrasit RPG Saldırı Kartı) */}
-        <div className="text-center py-4 px-6 rounded-3xl bg-slate-950/95 border-2 border-rose-500/50 backdrop-blur-md shadow-[0_0_25px_rgba(0,0,0,0.85)] ring-1 ring-rose-500/30">
-          <span className="inline-block text-[11px] uppercase font-black tracking-widest text-amber-400 font-mono bg-rose-950/60 px-3 py-0.5 rounded-full border border-amber-500/30 shadow-sm">
-            ⚔️ SALDIRI KELİMESİ
+        {/* Hedef Kelime (Yüksek Kontrastlı Koyu Saldırı Kartı) */}
+        <div
+          data-theme-preserve="dark"
+          style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
+          className="text-center py-4 px-6 rounded-3xl bg-slate-900 border-2 border-amber-500/40 backdrop-blur-md shadow-[0_0_25px_rgba(0,0,0,0.85)] ring-1 ring-amber-500/30"
+        >
+          <span className="inline-block text-[11px] uppercase font-black tracking-widest text-amber-400 font-mono bg-slate-950 px-3 py-0.5 rounded-full border border-amber-500/40 shadow-sm">
+            {t("game_boss_attack_word", "⚔️ SALDIRI KELİMESİ")}
           </span>
           <div className="flex items-center justify-center gap-3 mt-1.5">
-            <h3 className="text-3xl sm:text-4xl font-black text-white tracking-wide drop-shadow-[0_2px_12px_rgba(255,255,255,0.4)]">
+            <h3
+              style={{ color: "#ffffff" }}
+              className="text-3xl sm:text-4xl font-extrabold !text-white tracking-wide drop-shadow-[0_2px_12px_rgba(255,255,255,0.35)]"
+            >
               {activeCard.word}
             </h3>
             {activeCard.phonetic && (
-              <span className="text-xs text-indigo-300 font-mono font-bold bg-indigo-950/70 px-2.5 py-1 rounded-lg border border-indigo-500/40 shadow-sm">
+              <span className="text-xs text-indigo-200 font-mono font-bold bg-indigo-950/90 px-2.5 py-1 rounded-lg border border-indigo-500/40 shadow-sm">
                 {activeCard.phonetic}
               </span>
             )}
@@ -624,12 +678,12 @@ export default function BossFightGame({
                 type="button"
                 disabled={feedback !== null}
                 onClick={() => handleAnswer(option, idx)}
-                className={`py-3.5 px-4 rounded-2xl border text-xs sm:text-sm font-bold text-left transition-all active:scale-95 flex items-center justify-between cursor-pointer ${btnStyle}`}
+                className={`py-3.5 px-4 rounded-2xl border text-xs sm:text-sm font-bold text-left transition-all active:scale-95 flex items-center gap-2.5 cursor-pointer ${btnStyle}`}
               >
-                <span className="truncate mr-2">{option}</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-950/80 text-slate-400 border border-slate-800 shrink-0 font-bold">
-                  {String.fromCharCode(65 + idx)}
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-950/90 text-amber-300 border border-slate-700 shrink-0 font-bold">
+                  [{idx + 1}]
                 </span>
+                <span className="truncate">{option}</span>
               </button>
             );
           })}

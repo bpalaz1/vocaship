@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { X, Upload, Camera, Check, Sparkles, Volume2 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export type CustomAvatarVoiceGender = "female" | "male" | "child";
 
@@ -75,7 +76,8 @@ export default function CustomAvatarModal({
   initialData,
   onSave,
 }: CustomAvatarModalProps) {
-  const [name, setName] = useState<string>(initialData?.name || "Benim Mentorüm");
+  const { t } = useLanguage();
+  const [name, setName] = useState<string>(initialData?.name || t("av_cust_default_name", "Benim Mentorüm"));
   const [gender, setGender] = useState<CustomAvatarVoiceGender>(
     initialData?.gender || "female"
   );
@@ -90,19 +92,19 @@ export default function CustomAvatarModal({
 
   useEffect(() => {
     if (isOpen) {
-      setName(initialData?.name || "Benim Mentorüm");
+      setName(initialData?.name || t("av_cust_default_name", "Benim Mentorüm"));
       setGender(initialData?.gender || "female");
       setImagePreview(initialData?.imageDataUrl || "");
       setErrorMsg(null);
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, t]);
 
   if (!isOpen) return null;
 
   const handleFileSelect = async (file: File | null | undefined) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setErrorMsg("Lütfen geçerli bir görsel dosyası (PNG, JPG, WEBP) seçin.");
+      setErrorMsg(t("av_invalid_img", "Lütfen geçerli bir görsel dosyası (PNG, JPG, WEBP) seçin."));
       return;
     }
 
@@ -112,7 +114,7 @@ export default function CustomAvatarModal({
       const dataUrl = await compressImageFileToDataUrl(file);
       setImagePreview(dataUrl);
     } catch {
-      setErrorMsg("Görsel işlenirken bir hata oluştu. Lütfen başka bir fotoğraf deneyin.");
+      setErrorMsg(t("av_cust_img_err", "Görsel işlenirken bir hata oluştu. Lütfen başka bir fotoğraf deneyin."));
     } finally {
       setIsProcessing(false);
     }
@@ -129,11 +131,11 @@ export default function CustomAvatarModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!imagePreview) {
-      setErrorMsg("Lütfen önce bir avatar fotoğrafı yükleyin.");
+      setErrorMsg(t("av_cust_no_photo", "Lütfen önce bir avatar fotoğrafı yükleyin."));
       return;
     }
 
-    const cleanName = name.trim() || "Benim Mentorüm";
+    const cleanName = name.trim() || t("av_cust_default_name", "Benim Mentorüm");
     const avatarData: CustomUserAvatarData = {
       name: cleanName,
       gender,
@@ -175,10 +177,10 @@ export default function CustomAvatarModal({
             </div>
             <div>
               <h2 className="text-sm font-black uppercase tracking-wider text-white">
-                Kendi Avatarını Oluştur &amp; Konuş
+                {t("av_cust_title", "Kendi Avatarını Oluştur & Konuş")}
               </h2>
               <p className="text-[11px] text-slate-400">
-                Fotoğrafını yükle, ses tonunu seç ve canlı konuşmaya başla
+                {t("av_cust_sub", "Fotoğrafını yükle, ses tonunu seç ve canlı konuşmaya başla")}
               </p>
             </div>
           </div>
@@ -187,7 +189,7 @@ export default function CustomAvatarModal({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -197,14 +199,14 @@ export default function CustomAvatarModal({
           {/* 1. FOTOĞRAF YÜKLEYİCİ (Dosya Seç veya Sürükle-Bırak + Önizleme) */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-              <span>1. Avatar Fotoğrafı</span>
+              <span>{t("av_cust_step1", "1. Avatar Fotoğrafı")}</span>
               {imagePreview && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold underline cursor-pointer"
                 >
-                  Fotoğrafı Değiştir
+                  {t("av_cust_change_photo", "Fotoğrafı Değiştir")}
                 </button>
               )}
             </label>
@@ -239,7 +241,7 @@ export default function CustomAvatarModal({
                   <div className="relative w-32 h-32 rounded-2xl overflow-hidden border-2 border-emerald-400/80 shadow-xl shadow-emerald-500/20">
                     <img
                       src={imagePreview}
-                      alt="Özel Avatar Önizleme"
+                      alt="Custom Avatar Preview"
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shadow-md">
@@ -247,7 +249,7 @@ export default function CustomAvatarModal({
                     </div>
                   </div>
                   <span className="text-[11px] text-emerald-300 font-semibold">
-                    Fotoğraf hazır • Değiştirmek için tıklayın veya sürükleyin
+                    {t("av_cust_photo_ready", "Fotoğraf hazır • Değiştirmek için tıklayın veya sürükleyin")}
                   </span>
                 </div>
               ) : (
@@ -258,11 +260,11 @@ export default function CustomAvatarModal({
                   <div className="space-y-0.5">
                     <p className="text-xs font-bold text-slate-200">
                       {isProcessing
-                        ? "Fotoğraf işleniyor..."
-                        : "Fotoğraf Seç veya Buraya Sürükle-Bırak"}
+                        ? t("av_cust_processing", "Fotoğraf işleniyor...")
+                        : t("av_cust_drop_cta", "Fotoğraf Seç veya Buraya Sürükle-Bırak")}
                     </p>
                     <p className="text-[11px] text-slate-500">
-                      PNG, JPG veya WEBP • Portre veya kare fotoğraflar önerilir
+                      {t("av_cust_drop_hint", "PNG, JPG veya WEBP • Portre veya kare fotoğraflar önerilir")}
                     </p>
                   </div>
                 </div>
@@ -276,7 +278,7 @@ export default function CustomAvatarModal({
               htmlFor="custom-avatar-name"
               className="text-xs font-bold text-slate-300 block"
             >
-              2. Avatar / Mentor İsmi
+              {t("av_cust_step2", "2. Avatar / Mentor İsmi")}
             </label>
             <input
               id="custom-avatar-name"
@@ -284,7 +286,7 @@ export default function CustomAvatarModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Örn: Benim Mentorüm"
+              placeholder={t("av_cust_default_name", "Örn: Benim Mentorüm")}
               maxLength={32}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition"
             />
@@ -293,15 +295,15 @@ export default function CustomAvatarModal({
           {/* 3. CİNSİYET VE SES TONU SEÇİCİ */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-              <span>3. Ses Tonu &amp; Cinsiyet Seçimi</span>
+              <span>{t("av_cust_step3", "3. Ses Tonu & Cinsiyet Seçimi")}</span>
               <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
                 <Volume2 className="w-3 h-3" />
                 <span>
                   {gender === "female"
-                    ? "Kadın Nöral Ses (Pitch: 1.05)"
+                    ? t("av_cust_vf", "Kadın Nöral Ses (Pitch: 1.05)")
                     : gender === "male"
-                    ? "Tok Erkek Nöral Ses (Pitch: 0.92)"
-                    : "Neşeli Çocuk Sesi (Pitch: 1.20)"}
+                    ? t("av_cust_vm", "Tok Erkek Nöral Ses (Pitch: 0.92)")
+                    : t("av_cust_vc", "Neşeli Çocuk Sesi (Pitch: 1.20)")}
                 </span>
               </span>
             </label>
@@ -318,7 +320,7 @@ export default function CustomAvatarModal({
                 }`}
               >
                 <span className="text-lg">👩</span>
-                <span>Kadın</span>
+                <span>{t("av_female", "Kadın")}</span>
               </button>
 
               <button
@@ -332,7 +334,7 @@ export default function CustomAvatarModal({
                 }`}
               >
                 <span className="text-lg">👨</span>
-                <span>Erkek</span>
+                <span>{t("av_male", "Erkek")}</span>
               </button>
 
               <button
@@ -346,7 +348,7 @@ export default function CustomAvatarModal({
                 }`}
               >
                 <span className="text-lg">🧒</span>
-                <span>Çocuk</span>
+                <span>{t("av_child", "Çocuk")}</span>
               </button>
             </div>
           </div>
@@ -364,7 +366,7 @@ export default function CustomAvatarModal({
               onClick={onClose}
               className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
             >
-              İptal
+              {t("btn_cancel", "İptal")}
             </button>
             <button
               type="submit"
@@ -373,7 +375,7 @@ export default function CustomAvatarModal({
               className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition cursor-pointer active:scale-98 disabled:opacity-50"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Kaydet &amp; Avatarım Yap</span>
+              <span>{t("av_cust_save_btn", "Kaydet & Avatarım Yap")}</span>
             </button>
           </div>
         </form>

@@ -6,6 +6,8 @@
  * $0.00 harici API maliyeti, sıfır gecikme.
  */
 
+import { pickUiText } from "./uiLocale";
+
 export interface WordAccuracy {
   word: string; // Orijinal noktalama işaretli hali
   cleanWord: string; // Küçük harf, noktalama temizlenmiş hali
@@ -93,7 +95,7 @@ export function evaluatePronunciation(
       recognizedText: spokenText || "",
       correctCount: 0,
       totalCount: 0,
-      badge: "Tekrar Dene! 💪",
+      badge: pickUiText({ tr: "Tekrar Dene! 💪", en: "Try Again! 💪", de: "Erneut versuchen! 💪", es: "¡Inténtalo de nuevo! 💪", fr: "Réessayez ! 💪" }),
       xpBonus: 0,
     };
   }
@@ -169,17 +171,17 @@ export function evaluatePronunciation(
   const overallScore =
     totalCount > 0 ? Math.round(totalScoreSum / totalCount) : 0;
 
-  let badge = "Tekrar Dene! 💪";
+  let badge = pickUiText({ tr: "Tekrar Dene! 💪", en: "Try Again! 💪", de: "Erneut versuchen! 💪", es: "¡Inténtalo de nuevo! 💪", fr: "Réessayez ! 💪" });
   let xpBonus = 0;
 
   if (overallScore >= 90) {
-    badge = "Mükemmel Telaffuz! 🌟 (+15 XP)";
+    badge = pickUiText({ tr: "Mükemmel Telaffuz! 🌟 (+15 XP)", en: "Perfect Pronunciation! 🌟 (+15 XP)", de: "Perfekte Aussprache! 🌟 (+15 XP)", es: "¡Pronunciación perfecta! 🌟 (+15 XP)", fr: "Prononciation parfaite ! 🌟 (+15 XP)" });
     xpBonus = 15;
   } else if (overallScore >= 75) {
-    badge = "Çok İyi Telaffuz! 👏 (+10 XP)";
+    badge = pickUiText({ tr: "Çok İyi Telaffuz! 👏 (+10 XP)", en: "Great Pronunciation! 👏 (+10 XP)", de: "Sehr gute Aussprache! 👏 (+10 XP)", es: "¡Muy buena pronunciación! 👏 (+10 XP)", fr: "Très bonne prononciation ! 👏 (+10 XP)" });
     xpBonus = 10;
   } else if (overallScore >= 60) {
-    badge = "Güzel Deneme! 👍 (+5 XP)";
+    badge = pickUiText({ tr: "Güzel Deneme! 👍 (+5 XP)", en: "Nice Try! 👍 (+5 XP)", de: "Guter Versuch! 👍 (+5 XP)", es: "¡Buen intento! 👍 (+5 XP)", fr: "Bon essai ! 👍 (+5 XP)" });
     xpBonus = 5;
   }
 

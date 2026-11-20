@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { BoardTerm } from "../../classroom/board/page";
+import { useLanguage } from "../../context/LanguageContext";
 
 // =========================================================================
 // HEDEF AKADEMİK VE BRANŞ TERİM LİSTESİ (KEYWORD DICTIONARY)
@@ -266,6 +267,7 @@ export default function LiveWhisperPanel({
   activeBranch = "science",
   alreadyCoveredIds = [],
 }: LiveWhisperPanelProps) {
+  const { t } = useLanguage();
   const [isListening, setIsListening] = useState(false);
   const [transcriptHistory, setTranscriptHistory] = useState<string[]>([]);
   const [currentInterim, setCurrentInterim] = useState<string>("");
@@ -361,7 +363,7 @@ export default function LiveWhisperPanel({
 
     if (!SpeechRecognition) {
       setHasSpeechSupport(false);
-      setMicError("Tarayıcınız Web Speech API tanımayı desteklemiyor (Chrome/Edge önerilir).");
+      setMicError(t("brd_wh_no_speech", "Tarayıcınız Web Speech API tanımayı desteklemiyor (Chrome/Edge önerilir)."));
       return;
     }
 
@@ -408,14 +410,14 @@ export default function LiveWhisperPanel({
       recognition.onerror = (event: any) => {
         console.warn("Speech recognition error:", event.error);
         if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-          setMicError("Mikrofon erişim izni reddedildi. Lütfen tarayıcı ayarlarından mikrofonu açın.");
+          setMicError(t("brd_wh_mic_denied", "Mikrofon erişim izni reddedildi. Lütfen tarayıcı ayarlarından mikrofonu açın."));
           setIsListening(false);
         } else if (event.error === "no-speech") {
           // Normal sessizlik durumu, hata rozetine gerek yok
         } else if (event.error === "aborted") {
           // Kullanıcı durdurdu
         } else {
-          setMicError(`Konuşma tanıma uyarısı: ${event.error}`);
+          setMicError(`${t("brd_wh_warn", "Konuşma tanıma uyarısı:")} ${event.error}`);
         }
       };
 
@@ -435,7 +437,7 @@ export default function LiveWhisperPanel({
       recognitionRef.current = recognition;
     } catch (err: any) {
       setHasSpeechSupport(false);
-      setMicError(`Başlatma hatası: ${err?.message || "Bilinmiyor"}`);
+      setMicError(`${t("brd_wh_start_err", "Başlatma hatası:")} ${err?.message || "Unknown"}`);
     }
 
     return () => {
@@ -459,7 +461,7 @@ export default function LiveWhisperPanel({
   // Dinleme Başlat / Durdur
   const toggleListening = () => {
     if (!hasSpeechSupport) {
-      setMicError("Tarayıcınız ses tanımayı desteklemiyor.");
+      setMicError(t("brd_wh_no_speech_short", "Tarayıcınız ses tanımayı desteklemiyor."));
       return;
     }
 
@@ -556,12 +558,12 @@ export default function LiveWhisperPanel({
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
                 </span>
                 <Radio className="w-4 h-4 animate-pulse text-white" />
-                <span>🎙️ Canlı Dinleniyor (Kapat)</span>
+                <span>{t("brd_wh_listening_stop", "🎙️ Canlı Dinleniyor (Kapat)")}</span>
               </>
             ) : (
               <>
                 <Mic className="w-4 h-4 text-emerald-400" />
-                <span>🎙️ Canlı Dinlemeyi Başlat</span>
+                <span>{t("brd_wh_listening_start", "🎙️ Canlı Dinlemeyi Başlat")}</span>
               </>
             )}
           </button>
@@ -571,7 +573,7 @@ export default function LiveWhisperPanel({
             type="button"
             onClick={toggleLanguage}
             className="min-h-[48px] px-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
-            title={`Dinleme Dilini Değiştir (Şu an: ${language})`}
+            title={`${t("brd_wh_lang_tip", "Dinleme Dilini Değiştir")} (${language})`}
           >
             <Languages className="w-3.5 h-3.5 text-indigo-400" />
             <span>{language === "en-US" ? "EN" : "TR"}</span>
@@ -582,7 +584,7 @@ export default function LiveWhisperPanel({
             type="button"
             onClick={handleClearTranscript}
             className="min-h-[48px] w-12 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer active:scale-95 shadow-sm"
-            title="Konuşma Geçmişini Temizle"
+            title={t("brd_wh_clear_tip", "Konuşma Geçmişini Temizle")}
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -592,10 +594,10 @@ export default function LiveWhisperPanel({
         <div className="flex items-center justify-between text-[11px] px-1 font-mono">
           <span className="flex items-center gap-1.5 text-slate-400">
             <Activity className={`w-3.5 h-3.5 ${isListening ? "text-rose-400 animate-pulse" : "text-slate-500"}`} />
-            <span>{isListening ? "Akıllı Terim Dedektörü Aktif" : "Mikrofon Beklemede"}</span>
+            <span>{isListening ? t("brd_wh_detector_on", "Akıllı Terim Dedektörü Aktif") : t("brd_wh_mic_standby", "Mikrofon Beklemede")}</span>
           </span>
           <span className="text-emerald-400 font-bold">
-            {capturedWords.length} Terim Yakalandı
+            {t("brd_wh_caught_cnt", "{count} Terim Yakalandı").replace("{count}", String(capturedWords.length))}
           </span>
         </div>
       </div>
@@ -608,10 +610,10 @@ export default function LiveWhisperPanel({
           <div className="h-full flex flex-col items-center justify-center text-center p-4 space-y-1.5 text-slate-500">
             <Mic className="w-6 h-6 stroke-[1.5] text-slate-600 animate-bounce" />
             <p className="text-xs font-medium text-slate-400">
-              Ders anlatımını dinlemek için mikrofonu başlatın.
+              {t("brd_wh_empty_1", "Ders anlatımını dinlemek için mikrofonu başlatın.")}
             </p>
             <span className="text-[10px] text-slate-600">
-              Öğretmen hedef kelimeleri söylediğinde otomatik tespit edilir.
+              {t("brd_wh_empty_2", "Öğretmen hedef kelimeleri söylediğinde otomatik tespit edilir.")}
             </span>
           </div>
         ) : (
@@ -622,8 +624,8 @@ export default function LiveWhisperPanel({
                 className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800/80 text-xs text-slate-200 leading-relaxed shadow-sm animate-in fade-in slide-in-from-bottom-1 duration-200"
               >
                 <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1 font-mono">
-                  <span>Öğretmen</span>
-                  <span>Cümle #{idx + 1}</span>
+                  <span>{t("brd_wh_teacher", "Öğretmen")}</span>
+                  <span>{t("brd_wh_sentence_num", "Cümle #{num}").replace("{num}", String(idx + 1))}</span>
                 </div>
                 <p>{text}</p>
               </div>
@@ -649,11 +651,11 @@ export default function LiveWhisperPanel({
         <div className="flex items-center justify-between text-xs">
           <span className="font-bold text-slate-300 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Canlı Yakalanan Terimler</span>
+            <span>{t("brd_wh_live_terms", "Canlı Yakalanan Terimler")}</span>
           </span>
           {recentCaughtPill && (
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-bold animate-bounce shadow-sm">
-              🎯 &ldquo;{recentCaughtPill}&rdquo; Yakalandı!
+              {t("brd_wh_caught_badge", "🎯 \"{word}\" Yakalandı!").replace("{word}", recentCaughtPill)}
             </span>
           )}
         </div>
@@ -662,7 +664,7 @@ export default function LiveWhisperPanel({
         <div className="min-h-[46px] max-h-[88px] overflow-y-auto p-1 flex flex-wrap gap-1.5 scrollbar-thin scrollbar-thumb-slate-800">
           {capturedWords.length === 0 ? (
             <span className="text-[11px] text-slate-500 italic py-1 px-1">
-              Henüz konuşmada hedef akademik terim geçmedi.
+              {t("brd_wh_none_yet", "Henüz konuşmada hedef akademik terim geçmedi.")}
             </span>
           ) : (
             capturedWords.map((word, idx) => (

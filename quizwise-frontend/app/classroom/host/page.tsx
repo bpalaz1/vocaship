@@ -32,6 +32,7 @@ import confetti from "canvas-confetti";
 import CoopBossArena from "../../components/games/CoopBossArena";
 import PostGameWeakWords from "../../components/games/PostGameWeakWords";
 import ClassroomPodiumModal from "../../components/games/ClassroomPodiumModal";
+import { useLanguage } from "../../context/LanguageContext";
 
 export type HostGameMode = "coop_boss" | "gold_raid" | "speed_recall";
 
@@ -62,6 +63,7 @@ const INITIAL_STUDENTS: ConnectedStudent[] = [
 ];
 
 function HostConsoleContent() {
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -70,7 +72,7 @@ function HostConsoleContent() {
   // Oyun Ayarları
   const [selectedMode, setSelectedMode] = useState<HostGameMode>(initialMode);
   const [durationGoal, setDurationGoal] = useState<string>("boss_barrage"); // '3m' | '5m' | 'boss_barrage'
-  const [className, setClassName] = useState<string>("Sosyal Oyun Odası");
+  const [className, setClassName] = useState<string>(() => t("brd_host_default_room", "Sosyal Oyun Odası"));
   const [classPin, setClassPin] = useState<string>("VRG-8421");
   const [origin, setOrigin] = useState<string>("http://localhost:3000");
 
@@ -188,10 +190,10 @@ function HostConsoleContent() {
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white">
-                  Seans Tamamlandı: {className}
+                  {t("brd_host_ended_hdr", "Seans Tamamlandı:")} {className}
                 </h1>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Oda Kurucusu Değerlendirme & Özet Konsolu
+                  {t("brd_host_ended_sub", "Oda Kurucusu Değerlendirme & Özet Konsolu")}
                 </p>
               </div>
             </div>
@@ -203,7 +205,7 @@ function HostConsoleContent() {
                 className="h-12 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95"
               >
                 <Trophy className="w-4 h-4" />
-                <span>🥇 Podyumu Göster</span>
+                <span>{t("brd_host_show_podium", "🥇 Podyumu Göster")}</span>
               </button>
 
               <button
@@ -212,7 +214,7 @@ function HostConsoleContent() {
                 className="h-12 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition"
               >
                 <RefreshCw className="w-4 h-4" />
-                <span>Yeni Oyun Lobisi Aç</span>
+                <span>{t("brd_host_new_lobby", "Yeni Oyun Lobisi Aç")}</span>
               </button>
             </div>
           </div>
@@ -226,9 +228,9 @@ function HostConsoleContent() {
               isOpen={showPodium}
               onClose={() => setShowPodium(false)}
               sessionId={`host-${Date.now()}`}
-              gameTitle="Canlı Oyun Odası Karşılaşması"
+              gameTitle={t("brd_host_match_title", "Canlı Oyun Odası Karşılaşması")}
               currentUserRank={1}
-              currentUserName="Oyun Odası Şampiyonları"
+              currentUserName={t("brd_host_champs", "Oyun Odası Şampiyonları")}
             />
           )}
         </div>
@@ -247,13 +249,13 @@ function HostConsoleContent() {
           <div className="flex items-center gap-3">
             <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs sm:text-sm font-black text-white font-mono tracking-wider">
-              CANLI YAYIN: {className}
+              {t("brd_host_live_lbl", "CANLI YAYIN:")} {className}
             </span>
             <span className="text-xs font-mono px-2.5 py-1 rounded-xl bg-slate-950 text-amber-400 border border-slate-800 font-bold">
-              KOD: {classPin}
+              {t("brd_host_code_lbl", "KOD:")} {classPin}
             </span>
             <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 hidden sm:inline">
-              👥 {students.length} Oyuncu Canlı
+              {t("brd_host_players_live", "👥 {count} Oyuncu Canlı").replace("{count}", String(students.length))}
             </span>
           </div>
 
@@ -270,7 +272,7 @@ function HostConsoleContent() {
               }`}
             >
               {isPaused ? <Play className="w-4 h-4 fill-slate-950" /> : <Pause className="w-4 h-4" />}
-              <span>{isPaused ? "▶️ OYUNU SÜRDÜR" : "⏸️ OYUNU DONDUR (MOLA)"}</span>
+              <span>{isPaused ? t("brd_host_resume", "▶️ OYUNU SÜRDÜR") : t("brd_host_pause", "⏸️ OYUNU DONDUR (MOLA)")}</span>
             </button>
 
             {/* OYUNU BİTİR BUTONU */}
@@ -280,7 +282,7 @@ function HostConsoleContent() {
               className="h-12 px-5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer shadow-md shadow-rose-600/30 active:scale-95"
             >
               <Square className="w-4 h-4 fill-white" />
-              <span>🛑 OYUNU BİTİR</span>
+              <span>{t("brd_host_stop", "🛑 OYUNU BİTİR")}</span>
             </button>
 
             {/* TAM EKRAN */}
@@ -298,7 +300,7 @@ function HostConsoleContent() {
         <div className="flex-1">
           <CoopBossArena
             cards={[]}
-            deckTitle="Oyun Odası Kelimeleri"
+            deckTitle={t("brd_host_deck_title", "Oyun Odası Kelimeleri")}
             className={className}
             isHost={true}
             isPaused={isPaused}
@@ -322,16 +324,16 @@ function HostConsoleContent() {
             className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1.5 text-xs font-bold"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Oyunlar Arenasına Dön</span>
+            <span className="hidden sm:inline">{t("brd_host_back_arena", "Oyunlar Arenasına Dön")}</span>
           </Link>
 
           <div>
             <h1 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
               <Gamepad2 className="w-5 h-5 text-indigo-400" />
-              <span>Oda Kurucusu Canlı Oyun Lobisi</span>
+              <span>{t("brd_host_lobby_badge", "Oda Kurucusu Canlı Oyun Lobisi")}</span>
             </h1>
             <p className="text-xs text-slate-400">
-              Oyun Odası Yönetici Konsolu • {className}
+              {t("brd_host_console_sub", "Oyun Odası Yönetici Konsolu")} • {className}
             </p>
           </div>
         </div>
@@ -342,7 +344,7 @@ function HostConsoleContent() {
           className="h-10 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer"
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          <span className="hidden sm:inline">Tam Ekran</span>
+          <span className="hidden sm:inline">{t("fullscreen", "Tam Ekran")}</span>
         </button>
       </header>
 
@@ -352,10 +354,10 @@ function HostConsoleContent() {
         <section className="bg-slate-900 border-2 border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col items-center text-center space-y-6 shadow-2xl relative overflow-hidden">
           <div className="space-y-1">
             <span className="text-xs font-black text-amber-400 uppercase tracking-widest block">
-              KATILIM KODU (ODA KODU)
+              {t("brd_host_room_code_hdr", "KATILIM KODU (ODA KODU)")}
             </span>
             <p className="text-xs text-slate-400">
-              Oyuncular cihazlarından kodu girerek lobiye bağlanır.
+              {t("brd_host_room_code_sub", "Oyuncular cihazlarından kodu girerek lobiye bağlanır.")}
             </p>
           </div>
 
@@ -368,7 +370,7 @@ function HostConsoleContent() {
               <button
                 type="button"
                 onClick={handleCopyPin}
-                title="Kodu Kopyala"
+                title={t("copy", "Kodu Kopyala")}
                 className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
               >
                 {copiedPin ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
@@ -376,7 +378,7 @@ function HostConsoleContent() {
               <button
                 type="button"
                 onClick={handleRegeneratePin}
-                title="Yeni Kod Üret"
+                title={t("brd_host_new_code_tip", "Yeni Kod Üret")}
                 className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -388,7 +390,7 @@ function HostConsoleContent() {
           <div className="p-4 rounded-3xl bg-white shadow-2xl flex flex-col items-center justify-center">
             <QRCodeSVG value={joinUrl} size={180} level="H" includeMargin={false} />
             <span className="text-[10px] font-black font-mono text-slate-900 mt-2">
-              Kamerayla Tara ve Katıl
+              {t("brd_host_scan_join", "Kamerayla Tara ve Katıl")}
             </span>
           </div>
 
@@ -396,10 +398,10 @@ function HostConsoleContent() {
           <div className="w-full py-3 px-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-indigo-400" />
-              <span className="text-xs font-bold text-white">Hazır Oyuncular:</span>
+              <span className="text-xs font-bold text-white">{t("brd_host_ready_players", "Hazır Oyuncular:")}</span>
             </div>
             <span className="text-sm font-black font-mono text-indigo-300">
-              {students.length} Oyuncu
+              {students.length} {t("brd_host_player_unit", "Oyuncu")}
             </span>
           </div>
         </section>
@@ -410,7 +412,7 @@ function HostConsoleContent() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <h2 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
               <Flame className="w-4 h-4 text-amber-400" />
-              <span>1. Canlı Oyun Modunu Seç</span>
+              <span>{t("brd_host_step1", "1. Canlı Oyun Modunu Seç")}</span>
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -426,13 +428,13 @@ function HostConsoleContent() {
               >
                 <div className="space-y-1.5">
                   <span className="text-2xl">🐉</span>
-                  <h3 className="text-xs sm:text-sm font-black">Ortak Boss Baskını</h3>
+                  <h3 className="text-xs sm:text-sm font-black">{t("brd_host_m1_t", "Ortak Boss Baskını")}</h3>
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    Tüm oyuncular tek 10.000 HP ejderhayı devirir; herkes takıma katkı sağlar.
+                    {t("brd_host_m1_d", "Tüm oyuncular tek 10.000 HP ejderhayı devirir; herkes takıma katkı sağlar.")}
                   </p>
                 </div>
                 <span className="mt-3 text-[10px] font-bold text-rose-400 uppercase tracking-wider">
-                  Co-op Raid (Tavsiye)
+                  {t("brd_host_m1_tag", "Co-op Raid (Tavsiye)")}
                 </span>
               </button>
 
@@ -448,13 +450,13 @@ function HostConsoleContent() {
               >
                 <div className="space-y-1.5">
                   <span className="text-2xl">🏴‍☠️</span>
-                  <h3 className="text-xs sm:text-sm font-black">Hazine Avı & Sandık</h3>
+                  <h3 className="text-xs sm:text-sm font-black">{t("brd_host_m2_t", "Hazine Avı & Sandık")}</h3>
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    Sandık açma, 2x altın çarpanı ve arkadaşlarından altın yağmalama mücadelesi.
+                    {t("brd_host_m2_d", "Sandık açma, 2x altın çarpanı ve arkadaşlarından altın yağmalama mücadelesi.")}
                   </p>
                 </div>
                 <span className="mt-3 text-[10px] font-bold text-amber-400 uppercase tracking-wider">
-                  Hazine Avı
+                  {t("brd_host_m2_tag", "Hazine Avı")}
                 </span>
               </button>
 
@@ -470,13 +472,13 @@ function HostConsoleContent() {
               >
                 <div className="space-y-1.5">
                   <span className="text-2xl">⚡</span>
-                  <h3 className="text-xs sm:text-sm font-black">5s Hızlı Kombo</h3>
+                  <h3 className="text-xs sm:text-sm font-black">{t("brd_host_m3_t", "5s Hızlı Kombo")}</h3>
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    5 saniyelik seri refleks turlarıyla anlık hız ve dikkat yarışı.
+                    {t("brd_host_m3_d", "5 saniyelik seri refleks turlarıyla anlık hız ve dikkat yarışı.")}
                   </p>
                 </div>
                 <span className="mt-3 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
-                  Seri Refleks
+                  {t("brd_host_m3_tag", "Seri Refleks")}
                 </span>
               </button>
             </div>
@@ -486,14 +488,14 @@ function HostConsoleContent() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <h2 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
               <Zap className="w-4 h-4 text-indigo-400" />
-              <span>2. Seans Süresi ve Baraj Hedefi</span>
+              <span>{t("brd_host_step2", "2. Seans Süresi ve Baraj Hedefi")}</span>
             </h2>
 
             <div className="flex flex-wrap gap-3">
               {[
-                { id: "boss_barrage", label: "🐉 10.000 HP Canavar Barajı", desc: "Canavar ölünceye kadar" },
-                { id: "3m", label: "⏱️ 3 Dakikalık Hızlı Tur", desc: "Zamana karşı hızlı sprint" },
-                { id: "5m", label: "⏱️ 5 Dakikalık Tam Karşılaşma", desc: "Kapsamlı pratik ve yarış" },
+                { id: "boss_barrage", label: t("brd_host_g1_t", "🐉 10.000 HP Canavar Barajı"), desc: t("brd_host_g1_d", "Canavar ölünceye kadar") },
+                { id: "3m", label: t("brd_host_g2_t", "⏱️ 3 Dakikalık Hızlı Tur"), desc: t("brd_host_g2_d", "Zamana karşı hızlı sprint") },
+                { id: "5m", label: t("brd_host_g3_t", "⏱️ 5 Dakikalık Tam Karşılaşma"), desc: t("brd_host_g3_d", "Kapsamlı pratik ve yarış") },
               ].map((opt) => (
                 <button
                   key={opt.id}
@@ -517,11 +519,11 @@ function HostConsoleContent() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h2 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-400" />
-                <span>3. Bağlanan Oyuncular ({students.length})</span>
+                <span>{t("brd_host_step3", "3. Bağlanan Oyuncular")} ({students.length})</span>
               </h2>
               <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
                 <Radio className="w-3.5 h-3.5 animate-pulse" />
-                <span>Canlı Bağlantı Açık</span>
+                <span>{t("brd_host_live_conn", "Canlı Bağlantı Açık")}</span>
               </span>
             </div>
 
@@ -548,7 +550,7 @@ function HostConsoleContent() {
             className="w-full h-16 rounded-3xl bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-slate-950 font-black text-base sm:text-lg flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/25 transition active:scale-98 cursor-pointer tracking-wide"
           >
             <Play className="w-6 h-6 fill-slate-950" />
-            <span>▶️ CANLI OYUNU BAŞLAT</span>
+            <span>{t("brd_host_start", "▶️ CANLI OYUNU BAŞLAT")}</span>
           </button>
         </section>
       </main>
@@ -557,13 +559,14 @@ function HostConsoleContent() {
 }
 
 export default function HostConsolePage() {
+  const { t } = useLanguage();
   return (
     <Suspense
       fallback={
         <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
           <div className="text-center space-y-2">
             <RefreshCw className="w-8 h-8 animate-spin text-amber-400 mx-auto" />
-            <p className="text-sm text-slate-400">Yönetici Konsolu Yükleniyor...</p>
+            <p className="text-sm text-slate-400">{t("brd_host_loading", "Yönetici Konsolu Yükleniyor...")}</p>
           </div>
         </div>
       }

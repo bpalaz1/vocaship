@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { API_BASE } from "../../config";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface AvatarStudioModalProps {
   isOpen: boolean;
@@ -95,6 +96,7 @@ export default function AvatarStudioModal({
   currentAvatarUrl,
   onAvatarChanged,
 }: AvatarStudioModalProps) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<"preset" | "ai_custom">("preset");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("leo");
 
@@ -140,7 +142,7 @@ export default function AvatarStudioModal({
       }
       setIsCameraActive(true);
     } catch (err: any) {
-      setErrorMessage("Kamera erişimi başlatılamadı. Lütfen fotoğraf yükleme seçeneğini kullanın.");
+      setErrorMessage(t("av_studio_cam_err", "Kamera erişimi başlatılamadı. Lütfen fotoğraf yükleme seçeneğini kullanın."));
     }
   };
 
@@ -170,7 +172,7 @@ export default function AvatarStudioModal({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setErrorMessage("Lütfen geçerli bir resim dosyası seçin (PNG, JPG, WEBP).");
+      setErrorMessage(t("av_invalid_img", "Lütfen geçerli bir resim dosyası seçin (PNG, JPG, WEBP)."));
       return;
     }
 
@@ -183,7 +185,7 @@ export default function AvatarStudioModal({
   // 3D Oyun Karakterine Dönüştür
   const handleTransformTo3D = async () => {
     if (!uploadedFile) {
-      setErrorMessage("Lütfen önce bir fotoğraf yükleyin veya kamerayla çekin.");
+      setErrorMessage(t("av_studio_no_photo", "Lütfen önce bir fotoğraf yükleyin veya kamerayla çekin."));
       return;
     }
 
@@ -213,7 +215,7 @@ export default function AvatarStudioModal({
       }
 
       if (!res.ok) {
-        let detailMsg = `Dönüştürme başarısız (HTTP ${res.status})`;
+        let detailMsg = `${t("av_studio_fail_http", "Dönüştürme başarısız")} (HTTP ${res.status})`;
         let isQuota = res.status === 429;
         try {
           const errData = await res.json();
@@ -242,7 +244,7 @@ export default function AvatarStudioModal({
       const finalUrl = data.transformed_avatar_url || data.data_url || data.url || data.avatar_url;
 
       if (!finalUrl) {
-        setErrorMessage("Görsel verisi alınamadı. Lütfen tekrar deneyin.");
+        setErrorMessage(t("av_studio_no_data", "Görsel verisi alınamadı. Lütfen tekrar deneyin."));
         return;
       }
 
@@ -259,7 +261,7 @@ export default function AvatarStudioModal({
       } else {
         setErrorMessage(
           msg ||
-          "AI görsel dönüşümü sırasında bir sorun oluştu. Lütfen tekrar deneyin veya hazır karakterlerden seçin."
+          t("av_studio_gen_err", "AI görsel dönüşümü sırasında bir sorun oluştu. Lütfen tekrar deneyin veya hazır karakterlerden seçin.")
         );
       }
     } finally {
@@ -306,13 +308,13 @@ export default function AvatarStudioModal({
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                <span>Avatar Stüdyosu</span>
+                <span>{t("av_studio_title", "Avatar Stüdyosu")}</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold">
                   3D Studio
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Profil karakterinizi belirleyin veya kendi fotoğrafınızı 3D oyun karakterine dönüştürün
+                {t("av_studio_3d_sub", "Profil karakterinizi belirleyin veya kendi fotoğrafınızı 3D oyun karakterine dönüştürün")}
               </p>
             </div>
           </div>
@@ -341,7 +343,7 @@ export default function AvatarStudioModal({
             }`}
           >
             <User className="w-4 h-4" />
-            <span>Hazır Karakterler</span>
+            <span>{t("av_tab_presets", "Hazır Karakterler")}</span>
           </button>
 
           <button
@@ -354,7 +356,7 @@ export default function AvatarStudioModal({
             }`}
           >
             <Wand2 className="w-4 h-4 text-amber-300" />
-            <span>Fotoğraf Yükle & 3D Karakter Yap</span>
+            <span>{t("av_tab_ai3d", "Fotoğraf Yükle & 3D Karakter Yap")}</span>
           </button>
         </div>
 
@@ -366,10 +368,10 @@ export default function AvatarStudioModal({
                 <span className="text-lg leading-none">💡</span>
                 <div className="space-y-1">
                   <p className="font-bold text-amber-300">
-                    Google AI Görsel Motoru Kota Bilgilendirmesi (429)
+                    {t("av_quota_title", "Google AI Görsel Motoru Kota Bilgilendirmesi (429)")}
                   </p>
                   <p className="text-slate-300 leading-relaxed">
-                    Google Gemini görsel üretim modeli şu an yoğun veya ücretsiz kota sınırında. Ekran kilitlenmeden, dilerseniz Vocaship&apos;in popüler 3D hazır karakterlerinden birini anında seçip profilinize uygulayabilirsiniz.
+                    {t("av_quota_desc", "Google Gemini görsel üretim modeli şu an yoğun veya ücretsiz kota sınırında. Dilerseniz VocaShip'in popüler 3D hazır karakterlerinden birini anında seçebilirsiniz.")}
                   </p>
                 </div>
               </div>
@@ -383,7 +385,7 @@ export default function AvatarStudioModal({
                   className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
                 >
                   <User className="w-3.5 h-3.5" />
-                  <span>Hazır Karakterlere Göz At (Sparky, Leo, Alex, Sarah, Mr. Harrison) ➔</span>
+                  <span>{t("av_browse_presets", "Hazır Karakterlere Göz At")} ➔</span>
                 </button>
               </div>
             </div>
@@ -399,7 +401,7 @@ export default function AvatarStudioModal({
           {activeTab === "preset" && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">
-                Aşağıdaki karakterlerden birini seçerek anında profilinize uygulayabilirsiniz:
+                {t("av_pick_preset_desc", "Aşağıdaki karakterlerden birini seçerek anında profilinize uygulayabilirsiniz:")}
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -437,10 +439,10 @@ export default function AvatarStudioModal({
                           </span>
                         </div>
                         <p className="text-xs text-slate-300 font-medium truncate mt-0.5">
-                          {char.title}
+                          {t(`av_char_${char.id}_title`, char.title)}
                         </p>
                         <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                          {char.desc}
+                          {t(`av_char_${char.id}_desc`, char.desc)}
                         </p>
                       </div>
 
@@ -464,7 +466,7 @@ export default function AvatarStudioModal({
               {/* Cinsiyet Seçimi */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-300 block">
-                  Karakter Cinsiyeti & Ses Tonu:
+                  {t("av_gender_voice_lbl", "Karakter Cinsiyeti & Ses Tonu:")}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -476,7 +478,7 @@ export default function AvatarStudioModal({
                         : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
                     }`}
                   >
-                    <span>👨 Erkek Karakter</span>
+                    <span>👨 {t("av_male_char", "Erkek Karakter")}</span>
                   </button>
 
                   <button
@@ -488,7 +490,7 @@ export default function AvatarStudioModal({
                         : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
                     }`}
                   >
-                    <span>👩 Kadın Karakter</span>
+                    <span>👩 {t("av_female_char", "Kadın Karakter")}</span>
                   </button>
                 </div>
               </div>
@@ -509,9 +511,9 @@ export default function AvatarStudioModal({
                       <Upload className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-white">Bir Portre Fotoğrafı Seçin</h4>
+                      <h4 className="text-sm font-bold text-white">{t("av_pick_portrait_hdr", "Bir Portre Fotoğrafı Seçin")}</h4>
                       <p className="text-xs text-slate-400">
-                        Yüzünüzün net göründüğü bir selfie veya vesikalık fotoğraf yükleyin
+                        {t("av_pick_portrait_sub", "Yüzünüzün net göründüğü bir selfie veya vesikalık fotoğraf yükleyin")}
                       </p>
                     </div>
 
@@ -522,7 +524,7 @@ export default function AvatarStudioModal({
                         className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5" />
-                        <span>Fotoğraf Yükle</span>
+                        <span>{t("av_upload_photo_btn", "Fotoğraf Yükle")}</span>
                       </button>
 
                       <button
@@ -531,7 +533,7 @@ export default function AvatarStudioModal({
                         className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
                       >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>Kamera Aç</span>
+                        <span>{t("av_open_cam_btn", "Kamera Aç")}</span>
                       </button>
                     </div>
                   </div>
@@ -553,14 +555,14 @@ export default function AvatarStudioModal({
                         className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md"
                       >
                         <Camera className="w-4 h-4" />
-                        <span>Fotoğraf Çek</span>
+                        <span>{t("av_take_photo_btn", "Fotoğraf Çek")}</span>
                       </button>
                       <button
                         type="button"
                         onClick={stopCamera}
                         className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
                       >
-                        İptal
+                        {t("btn_cancel", "İptal")}
                       </button>
                     </div>
                   </div>
@@ -572,12 +574,12 @@ export default function AvatarStudioModal({
                     {/* Orijinal Fotoğraf */}
                     <div className="flex flex-col items-center space-y-1.5">
                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        Kaynak Fotoğraf
+                        {t("av_source_photo", "Kaynak Fotoğraf")}
                       </span>
                       <div className="relative w-36 h-36 rounded-2xl overflow-hidden bg-black border-2 border-slate-700 shadow-md">
                         <Image
                           src={previewUrl}
-                          alt="Kaynak"
+                          alt="Source"
                           fill
                           className="object-cover"
                           unoptimized
@@ -592,7 +594,7 @@ export default function AvatarStudioModal({
                         }}
                         className="text-[11px] text-slate-500 hover:text-rose-400 underline transition cursor-pointer"
                       >
-                        Farklı Fotoğraf Seç
+                        {t("av_choose_other", "Farklı Fotoğraf Seç")}
                       </button>
                     </div>
 
@@ -602,13 +604,13 @@ export default function AvatarStudioModal({
                     <div className="flex flex-col items-center space-y-1.5">
                       <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
                         <Sparkles className="w-3 h-3 text-amber-400" />
-                        <span>3D Oyun Karakteri</span>
+                        <span>{t("av_3d_game_char", "3D Oyun Karakteri")}</span>
                       </span>
                       <div className="relative w-36 h-36 rounded-2xl overflow-hidden bg-slate-950 border-2 border-indigo-500/50 flex items-center justify-center shadow-lg">
                         {transformedResultUrl ? (
                           <Image
                             src={transformedResultUrl}
-                            alt="3D Oyun Karakteri"
+                            alt="3D Game Character"
                             fill
                             className="object-cover"
                             unoptimized
@@ -618,7 +620,7 @@ export default function AvatarStudioModal({
                             <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
                             <div className="space-y-0.5">
                               <p className="text-xs font-bold text-indigo-300">
-                                3D Oyun Karakteriniz Çiziliyor...
+                                {t("av_drawing_3d", "3D Oyun Karakteriniz Çiziliyor...")}
                               </p>
                               <p className="text-[10px] text-slate-400 font-mono">
                                 Google GenAI
@@ -628,7 +630,7 @@ export default function AvatarStudioModal({
                         ) : (
                           <div className="text-center p-3 text-slate-500 text-xs">
                             <Wand2 className="w-6 h-6 mx-auto mb-1 text-slate-600" />
-                            <span>Dönüştürmek için aşağıdaki butona basın</span>
+                            <span>{t("av_press_transform", "Dönüştürmek için aşağıdaki butona basın")}</span>
                           </div>
                         )}
                       </div>
@@ -647,12 +649,12 @@ export default function AvatarStudioModal({
                     {isTransforming ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>✨ AI 3D Karakterini Çiziyor...</span>
+                        <span>{t("av_ai_drawing", "✨ AI 3D Karakterini Çiziyor...")}</span>
                       </>
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4 text-amber-300" />
-                        <span>✨ 3D Oyun Karakterine Dönüştür</span>
+                        <span>{t("av_convert_3d_btn", "✨ 3D Oyun Karakterine Dönüştür")}</span>
                       </>
                     )}
                   </button>
@@ -669,7 +671,7 @@ export default function AvatarStudioModal({
             onClick={onClose}
             className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
           >
-            İptal
+            {t("btn_cancel", "İptal")}
           </button>
 
           {activeTab === "preset" ? (
@@ -684,7 +686,7 @@ export default function AvatarStudioModal({
               className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition cursor-pointer active:scale-95"
             >
               <Check className="w-4 h-4" />
-              <span>Seçili Karakteri Uygula</span>
+              <span>{t("av_apply_preset", "Seçili Karakteri Uygula")}</span>
             </button>
           ) : (
             <button
@@ -698,7 +700,7 @@ export default function AvatarStudioModal({
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check className="w-4 h-4" />
-              <span>3D Karakteri Profilime Kaydet ➔</span>
+              <span>{t("av_save_3d_profile", "3D Karakteri Profilime Kaydet ➔")}</span>
             </button>
           )}
         </footer>

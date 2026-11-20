@@ -1,6 +1,8 @@
 /**
- * Vocaship Takvim ve Saat Dilimi Yardımcı Fonksiyonları (Faz 4)
+ * VocaShip Takvim ve Saat Dilimi Yardımcı Fonksiyonları (Faz 4)
  */
+
+import { pickUiText, getCurrentUiLang } from "./uiLocale";
 
 export function getUserTimeZone(): string {
   try {
@@ -15,13 +17,15 @@ export function getUserTimeZone(): string {
  * Örn: "18 Kasım 2026, 20:00 (Europe/Istanbul)"
  */
 export function formatLocalSessionTime(utcIsoString?: string | null): string {
-  if (!utcIsoString) return "Tarih belirtilmedi";
+  if (!utcIsoString) return pickUiText({ tr: "Tarih belirtilmedi", en: "Date not specified", de: "Kein Datum angegeben", es: "Fecha no especificada", fr: "Date non spécifiée" });
   try {
     const date = new Date(utcIsoString);
-    if (isNaN(date.getTime())) return "Geçersiz Tarih";
+    if (isNaN(date.getTime())) return pickUiText({ tr: "Geçersiz Tarih", en: "Invalid Date", de: "Ungültiges Datum", es: "Fecha inválida", fr: "Date invalide" });
 
+    const locMap: Record<string, string> = { tr: "tr-TR", en: "en-US", de: "de-DE", es: "es-ES", fr: "fr-FR" };
+    const locale = locMap[getCurrentUiLang()] || "en-US";
     const userTz = getUserTimeZone();
-    const formatted = new Intl.DateTimeFormat("tr-TR", {
+    const formatted = new Intl.DateTimeFormat(locale, {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -50,7 +54,7 @@ export function downloadSessionIcs(
 
   const startDate = new Date(scheduledAtUtc);
   if (isNaN(startDate.getTime())) {
-    alert("Geçerli bir ders tarihi bulunamadı.");
+    alert(pickUiText({ tr: "Geçerli bir ders tarihi bulunamadı.", en: "No valid lesson date found.", de: "Kein gültiges Unterrichtsdatum gefunden.", es: "No se encontró una fecha de clase válida.", fr: "Aucune date de cours valide trouvée." }));
     return;
   }
 
@@ -64,13 +68,13 @@ export function downloadSessionIcs(
   const dtEnd = formatIcsDate(endDate);
   const dtStamp = formatIcsDate(new Date());
   const uid = `vocaship-session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}@vocaship.com`;
-  const cleanTitle = (title || "Vocaship Canlı Ders").replace(/[\r\n]+/g, " ");
-  const description = `Vocaship Canlı Ders\\nKatılım Bağlantısı: ${joinUrl || window.location.origin}`;
+  const cleanTitle = (title || "VocaShip Canlı Ders").replace(/[\r\n]+/g, " ");
+  const description = `VocaShip Canlı Ders\\nKatılım Bağlantısı: ${joinUrl || window.location.origin}`;
 
   const icsLines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Vocaship//Class Schedule//EN",
+    "PRODID:-//VocaShip//Class Schedule//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

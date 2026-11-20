@@ -137,7 +137,7 @@ def get_or_create_user(db, user_id: Optional[str] = None) -> Dict[str, Any]:
     new_user = {
         "id": "00000000-0000-0000-0000-000000000001",
         "email": "user@vocaship.com",
-        "full_name": "Vocaship Kahramanı",
+        "full_name": "VocaShip Kahramanı",
         "total_xp": 0,
         "level": 1,
         "streak_days": 1,
@@ -197,7 +197,7 @@ def get_user_profile(user_id: Optional[str] = None) -> UserProfileResponse:
     return UserProfileResponse(
         user_id=str(user.get("id")),
         email=str(user.get("email", "user@vocaship.com")),
-        full_name=str(user.get("full_name", "Vocaship Öğrencisi")),
+        full_name=str(user.get("full_name", "VocaShip Öğrencisi")),
         total_xp=curr_xp,
         level=lvl_info["level"],
         title=lvl_info["title"],
@@ -304,7 +304,7 @@ def award_xp(
     return UserProfileResponse(
         user_id=str(user.get("id")),
         email=str(user.get("email", "user@vocaship.com")),
-        full_name=str(user.get("full_name", "Vocaship Öğrencisi")),
+        full_name=str(user.get("full_name", "VocaShip Öğrencisi")),
         total_xp=new_total_xp,
         level=new_level,
         title=new_lvl_info["title"],
@@ -425,7 +425,7 @@ def get_leaderboard(timeframe: str = "weekly", user_id: Optional[str] = None) ->
 
     user_total_xp = int(current_user.get("total_xp") or 0)
     user_streak = int(current_user.get("streak_days") or 1)
-    user_name = str(current_user.get("full_name") or "Vocaship Kahramanı")
+    user_name = str(current_user.get("full_name") or "VocaShip Kahramanı")
     user_uid = str(current_user.get("id"))
 
     is_weekly = timeframe.lower() != "all_time"

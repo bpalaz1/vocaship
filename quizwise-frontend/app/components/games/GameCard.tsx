@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Play } from "lucide-react";
+import { useAppTheme } from "../../context/ThemeContext";
 
 export interface GameCardItem {
   id: string;
@@ -584,6 +585,7 @@ function getIllustrationGradient(mode: string, id: string): string {
 /* ========================================================================= */
 
 export default function GameCard({ game, onClick }: GameCardProps) {
+  const { isDark } = useAppTheme();
   const bgGrad = getIllustrationGradient(game.mode, game.id);
 
   return (
@@ -597,47 +599,51 @@ export default function GameCard({ game, onClick }: GameCardProps) {
           onClick();
         }
       }}
-      className="group relative rounded-3xl bg-white dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500/60 shadow-md dark:shadow-2xl hover:shadow-xl dark:hover:shadow-indigo-950/40 transition-all duration-300 flex flex-col justify-between overflow-hidden cursor-pointer select-none"
+      className={`group relative h-full min-h-0 rounded-3xl border transition-all duration-300 flex flex-col justify-between overflow-hidden cursor-pointer select-none ${
+        isDark
+          ? "bg-slate-900/90 border-slate-800 hover:border-indigo-500/60 shadow-2xl hover:shadow-indigo-950/40"
+          : "bg-[#f8fafc] border-slate-300 hover:border-indigo-400 shadow-sm hover:shadow-md"
+      }`}
     >
-      {/* Vektörel & Özel Tematik SVG Üst Sahne (h-36 sm:h-40) */}
+      {/* Vektörel & Özel Tematik SVG Üst Sahne (Kompakt h-24 xl:h-28) */}
       <div
-        className={`h-36 sm:h-40 relative overflow-hidden bg-gradient-to-br ${bgGrad} flex items-center justify-center shrink-0`}
+        className={`h-24 xl:h-28 relative overflow-hidden bg-gradient-to-br ${bgGrad} flex items-center justify-center shrink-0`}
       >
         {/* Özel Tematik SVG Sahnesi */}
         {renderIllustration(game.mode, game.id)}
 
         {/* Sol Üst Rozet (z-20 ile illüstrasyon üzerinde net) */}
-        <div className="absolute top-2.5 left-2.5 z-20">
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/70 text-white border border-white/20 backdrop-blur-md shadow-md">
+        <div className="absolute top-2 left-2 z-20">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/70 text-white border border-white/20 backdrop-blur-md shadow-md">
             {game.badge}
           </span>
         </div>
 
         {/* Sağ Üst Etiket (z-20 ile illüstrasyon üzerinde net) */}
-        <div className="absolute top-2.5 right-2.5 z-20">
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold font-mono bg-black/70 text-amber-300 border border-amber-500/40 backdrop-blur-md shadow-md">
+        <div className="absolute top-2 right-2 z-20">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-black/70 text-amber-300 border border-amber-500/40 backdrop-blur-md shadow-md">
             {game.tag}
           </span>
         </div>
       </div>
 
       {/* Kompakt İçerik & Aksiyon Alanı */}
-      <div className="p-4 flex flex-col justify-between flex-1 gap-3 bg-white dark:bg-slate-900">
+      <div className={`p-2.5 sm:p-3 flex flex-col justify-between flex-1 gap-1.5 ${isDark ? "bg-slate-900/90" : "bg-[#f8fafc]"}`}>
         <div className="space-y-1">
-          <h3 className="text-base font-black text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors truncate">
+          <h3 className={`text-sm sm:text-[15px] font-black transition-colors leading-tight ${isDark ? "text-white group-hover:text-indigo-300" : "text-slate-900 group-hover:text-indigo-700"}`}>
             {game.title}
           </h3>
-          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+          <p className={`text-[11px] sm:text-xs line-clamp-2 leading-snug ${isDark ? "text-slate-400" : "text-slate-600"}`}>
             {game.description}
           </p>
         </div>
 
         {/* Özellik Hapları */}
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 overflow-hidden flex-wrap">
+        <div className={`flex items-center gap-1.5 text-[10px] overflow-hidden flex-wrap ${isDark ? "text-slate-400" : "text-slate-700"}`}>
           {game.featurePills.map((pill, i) => (
             <span
               key={i}
-              className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center gap-1 shrink-0 font-medium"
+              className={`px-2 py-0.5 rounded-lg border flex items-center gap-1 shrink-0 font-medium ${isDark ? "bg-slate-950 border-slate-800 text-slate-300" : "bg-slate-100 border-slate-300 text-slate-800"}`}
             >
               {pill.icon}
               <span className="truncate max-w-[110px]">{pill.label}</span>
@@ -652,7 +658,7 @@ export default function GameCard({ game, onClick }: GameCardProps) {
             e.stopPropagation();
             onClick();
           }}
-          className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 shadow-md transition active:scale-95 cursor-pointer ${
+          className={`w-full py-2 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 shadow-md transition active:scale-95 cursor-pointer ${
             game.actionBg || "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30"
           }`}
         >

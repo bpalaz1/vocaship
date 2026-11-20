@@ -1750,7 +1750,120 @@ def get_user_timeline(user_id: str, db=None) -> Dict[str, Any]:
     }
 
 
-def complete_session(session_id: str, db=None) -> Optional[Dict[str, Any]]:
+def _generate_live_join_code() -> str:
+    """7A2-5K9 formatında kısa ve okunaklı canlı ders katılım kodu üretir."""
+    alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+    part1 = "".join(random.choices(alphabet, k=3))
+    part2 = "".join(random.choices(alphabet, k=3))
+    return f"{part1}-{part2}"
+
+
+def start_live_session(
+    class_id: str,
+    teacher_id: Optional[str] = None,
+    class_name: Optional[str] = None,
+    db=None,
+) -> Dict[str, Any]:
+    """
+    Sınıf için tek dokunuşla canlı ders oturumu başlatır.
+    Eğer bu sınıfta halihazırda status='live' olan bir oturum varsa onu döner,
+    yoksa yeni bir 'live' oturum açıp kısa katılım kodu (XXX-XXX) üretir.
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    resolved_name = class_name
+
+    # Sınıf adını bul (opsiyonel)
+    if not resolved_name:
+        if db:
+            for tbl in ("classes", "classrooms"):
+                try:
+                    c_res = db.table(tbl).select("name").eq("id", class_id).execute()
+                    if c_res.data and len(c_res.data) > 0:
+                        resolved_name = c_res.data[0].get("name")
+                        break
+                except Exception:
+                    pass
+        if not resolved_name:
+            mem_cls = next((c for c in IN_MEMORY_CLASSES if c.get("id") == class_id), None)
+            resolved_name = mem_cls.get("name") if mem_cls else "Canlı Ders Odası"
+
+    # 1. Mevcut canlı oturumu DB ve bellekte kontrol et
+    existing_live = None
+    if db:
+        try:
+            res = db.table("class_sessions").select("*").eq("class_id", class_id).eq("status", "live").execute()
+            if res.data and len(res.data) > 0:
+                existing_live = res.data[0]
+        except Exception as e:
+            print(f"[DB Start Live Select Error]: {e}")
+
+    if not existing_live:
+        existing_live = next(
+            (s for s in IN_MEMORY_CLASS_SESSIONS if s.get("class_id") == class_id and s.get("status") == "live"),
+            None,
+        )
+
+    if existing_live:
+        join_code = existing_live.get("join_code") or _generate_live_join_code()
+        if not existing_live.get("join_code"):
+            existing_live["join_code"] = join_code
+            if db:
+                try:
+                    db.table("class_sessions").update({"join_code": join_code}).eq("id", existing_live["id"]).execute()
+                except Exception:
+                    pass
+        return {
+            "success": True,
+            "session_id": existing_live["id"],
+            "class_id": class_id,
+            "class_name": resolved_name,
+            "status": "live",
+            "join_code": join_code,
+            "started_at": existing_live.get("started_at") or now_iso,
+            "already_live": True,
+        }
+
+    # 2. Yeni canlı oturum oluştur
+    session_id = str(uuid.uuid4())
+    join_code = _generate_live_join_code()
+    new_session = {
+        "id": session_id,
+        "class_id": class_id,
+        "session_date_utc": now_iso,
+        "duration_minutes": 60,
+        "status": "live",
+        "join_code": join_code,
+        "notes": None,
+        "started_at": now_iso,
+        "ended_at": None,
+        "created_at": now_iso,
+    }
+    IN_MEMORY_CLASS_SESSIONS.insert(0, new_session)
+
+    if db:
+        try:
+            db.table("class_sessions").insert(new_session).execute()
+        except Exception as e:
+            print(f"[DB Start Live Insert Error]: {e}")
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "class_id": class_id,
+        "class_name": resolved_name,
+        "status": "live",
+        "join_code": join_code,
+        "started_at": now_iso,
+        "already_live": False,
+    }
+
+
+def complete_session(
+    session_id: str,
+    duration_minutes: Optional[int] = None,
+    notes: Optional[str] = None,
+    db=None,
+) -> Optional[Dict[str, Any]]:
     """
     Eğitmen dersi bitirdiğinde status='completed' ve ended_at=NOW() yapar.
     Otomatik AI özeti veya SM-2 kartı üretilmez.
@@ -1770,16 +1883,47 @@ def complete_session(session_id: str, db=None) -> Optional[Dict[str, Any]]:
     if not session_record:
         return None
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+
+    computed_duration = duration_minutes
+    if computed_duration is None and session_record.get("started_at"):
+        try:
+            started_dt = datetime.fromisoformat(str(session_record["started_at"]).replace("Z", "+00:00"))
+            elapsed_mins = max(1, int(round((now_dt - started_dt).total_seconds() / 60)))
+            computed_duration = elapsed_mins
+        except Exception:
+            computed_duration = session_record.get("duration_minutes", 60)
+
     session_record["status"] = "completed"
     session_record["ended_at"] = now_iso
+    if computed_duration is not None:
+        session_record["duration_minutes"] = computed_duration
+    if notes is not None:
+        session_record["notes"] = notes
+
+    # Bellek içi kopyayı da senkron tut
+    for mem_s in IN_MEMORY_CLASS_SESSIONS:
+        if mem_s.get("id") == session_id:
+            mem_s["status"] = "completed"
+            mem_s["ended_at"] = now_iso
+            if computed_duration is not None:
+                mem_s["duration_minutes"] = computed_duration
+            if notes is not None:
+                mem_s["notes"] = notes
+
+    update_payload: Dict[str, Any] = {
+        "status": "completed",
+        "ended_at": now_iso,
+    }
+    if computed_duration is not None:
+        update_payload["duration_minutes"] = computed_duration
+    if notes is not None:
+        update_payload["notes"] = notes
 
     if db:
         try:
-            db.table("class_sessions").update({
-                "status": "completed",
-                "ended_at": now_iso
-            }).eq("id", session_id).execute()
+            db.table("class_sessions").update(update_payload).eq("id", session_id).execute()
         except Exception as e:
             print(f"[DB Complete Session Update Error]: {e}")
 
@@ -1787,7 +1931,8 @@ def complete_session(session_id: str, db=None) -> Optional[Dict[str, Any]]:
         "success": True,
         "session_id": session_id,
         "status": "completed",
-        "ended_at": now_iso
+        "ended_at": now_iso,
+        "duration_minutes": computed_duration or session_record.get("duration_minutes", 60),
     }
 
 

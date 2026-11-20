@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useLiveReadingSync } from "../../hooks/useLiveReadingSync";
 import { useLiveTranscription } from "../../hooks/useLiveTranscription";
+import { useLanguage } from "../../context/LanguageContext";
 import LiveSpeechToDeckPanel from "./LiveSpeechToDeckPanel";
 const WordCardModal = dynamic(() => import("../reading/WordCardModal"), { ssr: false });
 
@@ -117,10 +118,11 @@ export default function LiveReadingRoom({
   sessionId = "live-10a-0800",
   isTeacher = false,
   classCode = "VRG-2535",
-  className = "10-A Sınıfı • C1 Project Controls",
+  className = "10-A • C1 Project Controls",
   story = DEFAULT_LIVE_STORY,
   onClose,
 }: LiveReadingRoomProps) {
+  const { t } = useLanguage();
   // Canlı Senkronizasyon Kancası
   const {
     activeWordIndex,
@@ -224,14 +226,14 @@ export default function LiveReadingRoom({
               <Radio className="w-3.5 h-3.5 text-rose-400" />
               <span>
                 {isTeacher
-                  ? "🔴 Eşzamanlı Canlı Okuma • Öğretmen Yayını"
-                  : "🟢 Canlı Senkronize • Öğretmeni Takip Ediyorsun"}
+                  ? t("brd_lrr_teacher_badge", "🔴 Eşzamanlı Canlı Okuma • Öğretmen Yayını")
+                  : t("brd_lrr_student_badge", "🟢 Canlı Senkronize • Öğretmeni Takip Ediyorsun")}
               </span>
             </span>
           </div>
 
           <span className="text-xs text-slate-400 hidden md:inline">
-            Sınıf Kodu: <strong className="text-white font-mono">{classCode}</strong>
+            {t("brd_lrr_class_code", "Sınıf Kodu:")} <strong className="text-white font-mono">{classCode}</strong>
           </span>
         </div>
 
@@ -241,7 +243,7 @@ export default function LiveReadingRoom({
           {activeWordText && (
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold">
               <Sparkles className="w-3 h-3 text-amber-400" />
-              <span>Odak Kelime: &ldquo;{activeWordText}&rdquo;</span>
+              <span>{t("brd_lrr_focus_word", "Odak Kelime:")} &ldquo;{activeWordText}&rdquo;</span>
             </div>
           )}
 
@@ -251,10 +253,10 @@ export default function LiveReadingRoom({
               type="button"
               onClick={clearHighlight}
               className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-              title="Vurguyu Kaldır"
+              title={t("brd_lrr_clear_hl_tip", "Vurguyu Kaldır")}
             >
               <Eraser className="w-3.5 h-3.5 text-slate-400" />
-              <span className="hidden sm:inline">Vurguyu Temizle</span>
+              <span className="hidden sm:inline">{t("brd_lrr_clear_hl", "Vurguyu Temizle")}</span>
             </button>
           )}
 
@@ -294,7 +296,7 @@ export default function LiveReadingRoom({
               type="button"
               onClick={onClose}
               className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition cursor-pointer"
-              title="Canlı Okuma Odasını Kapat"
+              title={t("brd_lrr_close_tip", "Canlı Okuma Odasını Kapat")}
             >
               <X className="w-4 h-4" />
             </button>
@@ -311,7 +313,7 @@ export default function LiveReadingRoom({
           <div className="space-y-4">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 font-mono">
-                {story.level || "C1 Advanced"} • {story.topic || "Vaka Analizi"}
+                {story.level || "C1 Advanced"} • {story.topic || t("brd_lrr_case_topic", "Vaka Analizi")}
               </span>
               <h2 className="text-base font-black text-white leading-snug">
                 {story.title}
@@ -322,12 +324,12 @@ export default function LiveReadingRoom({
             <div className="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs space-y-1.5">
               <div className="flex items-center gap-1.5 font-bold text-indigo-300">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Eşzamanlı Canlı Yayın</span>
+                <span>{t("brd_lrr_sync_hdr", "Eşzamanlı Canlı Yayın")}</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
                 {isTeacher
-                  ? "Tıkladığınız kelime anında tüm öğrencilerin ekranında sarı-fosforlu parlar ve ilgili satıra otomatik odaklanır."
-                  : "Öğretmeniniz metni okurken açıkladığı kelimeler ekranınızda canlı olarak parlar. Bir kelimeye tıklayarak kişisel sözlüğünüzü açabilirsiniz."}
+                  ? t("brd_lrr_teacher_desc", "Tıkladığınız kelime anında tüm öğrencilerin ekranında sarı-fosforlu parlar ve ilgili satıra otomatik odaklanır.")
+                  : t("brd_lrr_student_desc", "Öğretmeniniz metni okurken açıkladığı kelimeler ekranınızda canlı olarak parlar. Bir kelimeye tıklayarak kişisel sözlüğünüzü açabilirsiniz.")}
               </p>
             </div>
 
@@ -370,8 +372,8 @@ export default function LiveReadingRoom({
           </div>
 
           <div className="pt-4 border-t border-slate-900 text-[11px] text-slate-500 flex items-center justify-between font-mono">
-            <span>Bağlantı: Aktif ✓</span>
-            <span>Gecikme: ~0ms</span>
+            <span>{t("brd_lrr_conn_ok", "Bağlantı: Aktif ✓")}</span>
+            <span>{t("brd_lrr_latency", "Gecikme: ~0ms")}</span>
           </div>
         </aside>
 
@@ -411,8 +413,8 @@ export default function LiveReadingRoom({
                       }`}
                       title={
                         isTeacher
-                          ? `Tıkla: Sınıfa yayınla & sözlükte aç (${tokenObj.clean})`
-                          : `Tıkla: Kişisel sözlüğü aç (${tokenObj.clean})`
+                          ? t("brd_lrr_click_bcast", "Tıkla: Sınıfa yayınla & sözlükte aç ({w})").replace("{w}", tokenObj.clean)
+                          : t("brd_lrr_click_dict", "Tıkla: Kişisel sözlüğü aç ({w})").replace("{w}", tokenObj.clean)
                       }
                     >
                       {tokenObj.raw}{" "}
@@ -438,7 +440,7 @@ export default function LiveReadingRoom({
               }`}
             >
               <HelpCircle className="w-3.5 h-3.5" />
-              <span>Anlama Soruları</span>
+              <span>{t("brd_lrr_comp_tab", "Anlama Soruları")}</span>
             </button>
             <button
               type="button"
@@ -481,7 +483,7 @@ export default function LiveReadingRoom({
               <div className="space-y-4">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400">
                   <HelpCircle className="w-4 h-4 text-indigo-400" />
-                  <span>Anlama Soruları (Comprehension)</span>
+                  <span>{t("comprehension_questions_title", "Anlama Soruları (Comprehension)")}</span>
                 </div>
 
                 <div className="space-y-3">
@@ -513,9 +515,9 @@ export default function LiveReadingRoom({
 
               {/* Hızlı Öğrenci Sözlük Yönergesi */}
               <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs text-slate-400 space-y-1">
-                <span className="font-bold text-slate-300 block">💡 İpucu:</span>
+                <span className="font-bold text-slate-300 block">{t("brd_lrr_tip_hdr", "💡 İpucu:")}</span>
                 <p className="text-[11px] leading-relaxed">
-                  Metindeki herhangi bir kelimeye tıklayarak Türkçe karşılığını, telaffuzunu ve örnek cümlelerini anında açabilirsiniz.
+                  {t("brd_lrr_tip_body", "Metindeki herhangi bir kelimeye tıklayarak karşılığını, telaffuzunu ve örnek cümlelerini anında açabilirsiniz.")}
                 </p>
               </div>
             </div>
@@ -530,7 +532,7 @@ export default function LiveReadingRoom({
         <WordCardModal
           word={selectedWordForModal.word}
           contextSentence={selectedWordForModal.contextSentence}
-          decks={[{ id: "deck-live", title: "Canlı Ders Kelimeleri" }]}
+          decks={[{ id: "deck-live", title: t("brd_lrr_live_deck", "Canlı Ders Kelimeleri") }]}
           selectedDeckId="deck-live"
           onClose={() => setSelectedWordForModal(null)}
           onCardSaved={() => {

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Play, Zap, ArrowRight, Brain } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface StudyResumeDeckInfo {
   id: string;
@@ -27,6 +28,7 @@ export default function StudyResumeCard({
   weakSpotCount = 0,
   onOpenWeakSpots,
 }: StudyResumeCardProps) {
+  const { t } = useLanguage();
   const percent = deck.progressPercent ?? 36;
   const studied = deck.studiedCards ?? 12;
   const total = deck.totalCards ?? 20;
@@ -40,10 +42,10 @@ export default function StudyResumeCard({
           <div className="flex items-center space-x-2">
             <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-wider border border-indigo-500/40 flex items-center gap-1.5">
               <Zap className="w-3 h-3 text-indigo-400" />
-              <span>ÇALIŞMAYA DEVAM ET</span>
+              <span>{t("dash_continue_badge", "ÇALIŞMAYA DEVAM ET")}</span>
             </span>
             <span className="text-xs text-slate-400 font-mono">
-              SuperMemo-2 • Aralıklı Tekrar
+              {t("dash_sm2_tag", "SuperMemo-2 • Aralıklı Tekrar")}
             </span>
           </div>
 
@@ -60,8 +62,10 @@ export default function StudyResumeCard({
           {/* İlerleme Çubuğu */}
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between text-xs font-semibold">
-              <span className="text-slate-400">Öğrenme İlerlemesi</span>
-              <span className="text-indigo-400 font-mono font-bold">%{percent} Tamamlandı</span>
+              <span className="text-slate-400">{t("dash_learning_prog", "Öğrenme İlerlemesi")}</span>
+              <span className="text-indigo-400 font-mono font-bold">
+                %{percent} {t("dash_completed", "Tamamlandı")}
+              </span>
             </div>
             <div className="w-full h-2.5 bg-slate-950 rounded-full border border-slate-800 overflow-hidden shadow-inner">
               <div
@@ -70,8 +74,8 @@ export default function StudyResumeCard({
               />
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-              <span>🧠 {studied} / {total} Kart Çalışıldı</span>
-              <span>⏱️ SM-2 Hatırlama Eşiği</span>
+              <span>🧠 {studied} / {total} {t("dash_cards_studied", "Kart Çalışıldı")}</span>
+              <span>⏱️ {t("dash_sm2_recall", "SM-2 Hatırlama Eşiği")}</span>
             </div>
           </div>
         </div>
@@ -84,7 +88,7 @@ export default function StudyResumeCard({
             className="w-full flex items-center justify-center space-x-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
           >
             <Play className="w-4 h-4 fill-current" />
-            <span>Devam Et</span>
+            <span>{t("btn_continue", "Devam Et")}</span>
           </button>
 
           {weakSpotCount > 0 && onOpenWeakSpots && (
@@ -95,9 +99,9 @@ export default function StudyResumeCard({
             >
               <div className="flex items-center space-x-2">
                 <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
-                <span>🎯 Zayıf Noktaları Erit ({weakSpotCount})</span>
+                <span>🎯 {t("dash_melt_weak", "Zayıf Noktaları Erit")} ({weakSpotCount})</span>
               </div>
-              <span className="text-[10px] font-mono text-rose-400">2 Dk ➔</span>
+              <span className="text-[10px] font-mono text-rose-400">2 {t("cls_min_short", "dk")} ➔</span>
             </button>
           )}
         </div>

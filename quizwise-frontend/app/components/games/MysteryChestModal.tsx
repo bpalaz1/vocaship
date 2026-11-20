@@ -2,19 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import confetti from "canvas-confetti";
-import { Sparkles, Coins, Zap, Flame, Check, RefreshCw, Gift } from "lucide-react";
+import { Sparkles, Flame } from "lucide-react";
 import { awardGamificationReward } from "../../utils/gamificationEngine";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface MysteryReward {
   id: string;
-  type: "gold_30" | "gold_75" | "multiplier_x3" | "magic_dust_25";
+  type: "gold_30" | "gold_75" | "multiplier_x3" | "gold_100";
   title: string;
   description: string;
   icon: string;
   goldAmount?: number;
   multiplier?: number;
   buffQuestions?: number;
-  magicDust?: number;
   badge: string;
   gradient: string;
 }
@@ -49,13 +49,13 @@ const GUARANTEED_POSITIVE_REWARDS: Omit<MysteryReward, "id">[] = [
     gradient: "from-cyan-400 to-blue-600",
   },
   {
-    type: "magic_dust_25",
-    title: "+25 Sihirli Toz",
-    description: "Sandık açılışları ve gacha için kozmik sihir tozu!",
-    icon: "✨",
-    magicDust: 25,
-    badge: "Kozmik Toz",
-    gradient: "from-purple-500 to-pink-500",
+    type: "gold_100",
+    title: "+100 Efsanevi Altın",
+    description: "Efsane sandık ödülü! Kasana anında +100 altın eklenir.",
+    icon: "💎",
+    goldAmount: 100,
+    badge: "Efsane Hazine",
+    gradient: "from-amber-400 to-orange-500",
   },
 ];
 
@@ -72,10 +72,16 @@ export default function MysteryChestModal({
   onClose,
   onClaimReward,
 }: MysteryChestModalProps) {
+  const { t } = useLanguage();
   const [chestRewards, setChestRewards] = useState<MysteryReward[]>([]);
-  const [openedIndex, setOpenedIndex] = useState<number | null>(null);
-  const [hasRerolled, setHasRerolled] = useState(false);
+  const [selectedChestIndex, setSelectedChestIndex] = useState<number | null>(null);
   const [isClaimed, setIsClaimed] = useState(false);
+
+  const getLocalizedReward = (r: MysteryReward) => ({
+    title: t(`game_myst_${r.type}_title`, r.title),
+    description: t(`game_myst_${r.type}_desc`, r.description),
+    badge: t(`game_myst_${r.type}_badge`, r.badge),
+  });
 
   // Modal açıldığında 3 sandığa pozitif ödülleri karıştırarak dağıt
   useEffect(() => {
@@ -88,14 +94,13 @@ export default function MysteryChestModal({
           id: `rew_${i}_${Date.now()}`,
         }));
       setChestRewards(shuffled);
-      setOpenedIndex(null);
-      setHasRerolled(false);
+      setSelectedChestIndex(null);
       setIsClaimed(false);
     }
   }, [isOpen]);
 
   // Ses Efekti (Web Audio API)
-  const playChime = (type: "open" | "claim" | "switch") => {
+  const playChime = (type: "open" | "claim") => {
     if (typeof window === "undefined") return;
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -115,7 +120,7 @@ export default function MysteryChestModal({
           osc.start(ctx.currentTime + i * 0.08);
           osc.stop(ctx.currentTime + i * 0.08 + 0.3);
         });
-      } else if (type === "claim") {
+      } else {
         [440, 554, 659, 880].forEach((f, i) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -128,26 +133,14 @@ export default function MysteryChestModal({
           osc.start(ctx.currentTime + i * 0.06);
           osc.stop(ctx.currentTime + i * 0.06 + 0.25);
         });
-      } else {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(400, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
       }
     } catch {}
   };
 
-  // Sandığı Aç
+  // Tek Seçim Kuralı: İlk seçilen sandık açılır ve kilitlenir
   const handleOpenChest = (index: number) => {
-    if (isClaimed) return;
-    setOpenedIndex(index);
+    if (selectedChestIndex !== null || isClaimed) return;
+    setSelectedChestIndex(index);
     playChime("open");
 
     try {
@@ -159,30 +152,10 @@ export default function MysteryChestModal({
     } catch {}
   };
 
-  // Başka Sandık Seç (Değiştir)
-  const handleSwitchChest = () => {
-    if (hasRerolled || openedIndex === null || isClaimed) return;
-    setHasRerolled(true);
-    playChime("switch");
-
-    // Kalan diğer sandıklardan birine geç
-    const remaining = [0, 1, 2].filter((i) => i !== openedIndex);
-    const nextIndex = remaining[Math.floor(Math.random() * remaining.length)];
-    setOpenedIndex(nextIndex);
-
-    try {
-      confetti({
-        particleCount: 40,
-        spread: 50,
-        origin: { y: 0.6 },
-      });
-    } catch {}
-  };
-
   // Ödülü Onayla ve Teslim Et
   const handleClaim = () => {
-    if (openedIndex === null || isClaimed) return;
-    const reward = chestRewards[openedIndex];
+    if (selectedChestIndex === null || isClaimed) return;
+    const reward = chestRewards[selectedChestIndex];
     if (!reward) return;
 
     setIsClaimed(true);
@@ -190,18 +163,11 @@ export default function MysteryChestModal({
 
     // 1. Altın ödülü ise hemen yaz
     if (reward.goldAmount) {
-      awardGamificationReward(0, reward.goldAmount, `🎁 Gizemli Sandık (${reward.title})`);
+      const loc = getLocalizedReward(reward);
+      awardGamificationReward(0, reward.goldAmount, `🎁 ${t("game_myst_title_short", "Gizemli Sandık")} (${loc.title})`);
     }
 
-    // 2. Sihirli Toz ise localStorage'a ekle
-    if (reward.magicDust && typeof window !== "undefined") {
-      try {
-        const curDust = parseInt(localStorage.getItem("vocaship_magic_dust") || "0", 10);
-        localStorage.setItem("vocaship_magic_dust", String(curDust + reward.magicDust));
-      } catch {}
-    }
-
-    // 3. Callback ile oyuna bildir (özellikle x3 çarpan buff'ı için)
+    // 2. Callback ile oyuna bildir (özellikle x3 çarpan buff'ı için)
     onClaimReward(reward);
 
     setTimeout(() => {
@@ -211,7 +177,7 @@ export default function MysteryChestModal({
 
   if (!isOpen) return null;
 
-  const currentReward = openedIndex !== null ? chestRewards[openedIndex] : null;
+  const currentReward = selectedChestIndex !== null ? chestRewards[selectedChestIndex] : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -224,59 +190,67 @@ export default function MysteryChestModal({
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold font-mono">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
-            <span>{streak} Doğru Kombo Bonusu!</span>
+            <span>{t("game_myst_streak_bonus", "{n} Doğru Kombo Bonusu!", { n: streak })}</span>
           </div>
 
           <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-            <span>🎁 3 Gizemli Sandık</span>
+            <span>{t("game_myst_hdr", "🎁 3 Gizemli Sandık")}</span>
           </h3>
 
           <p className="text-xs sm:text-sm text-slate-300 max-w-sm mx-auto">
-            {openedIndex === null
-              ? "Bir sandık seç ve aç! Kesinlikle tuzak yok, tüm sandıklar pozitif ödül dolu."
-              : "Ödülün açıldı! İster ödülü hemen al, ister şansını diğer sandıkta dene."}
+            {t("game_myst_pick_desc", "3 sandıktan 1 tanesini seç ve içindeki sürpriz ödülü hemen kazan!")}
           </p>
         </div>
 
-        {/* 3 KAPALI / AÇIK SANDIK */}
+        {/* 3 KAPALI / AÇIK SANDIK (TEK SEÇİM KURALI) */}
         <div className="grid grid-cols-3 gap-3 sm:gap-4 py-2">
           {[0, 1, 2].map((idx) => {
-            const isThisOpened = openedIndex === idx;
+            const isThisOpened = selectedChestIndex === idx;
+            const isLockedOut = selectedChestIndex !== null && !isThisOpened;
             const reward = chestRewards[idx];
+            const locReward = reward ? getLocalizedReward(reward) : null;
 
             return (
               <button
                 key={idx}
                 type="button"
-                disabled={isClaimed}
-                onClick={() => handleOpenChest(idx)}
-                className={`relative group p-4 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[140px] sm:min-h-[160px] ${
+                disabled={selectedChestIndex !== null || isClaimed}
+                onClick={selectedChestIndex === null ? () => handleOpenChest(idx) : undefined}
+                className={`relative group p-4 sm:p-5 rounded-2xl border-2 transition-all flex flex-col items-center justify-center min-h-[140px] sm:min-h-[160px] ${
                   isThisOpened
-                    ? "bg-slate-800/90 border-amber-400 shadow-xl shadow-amber-500/20 scale-105"
-                    : openedIndex !== null
-                    ? "bg-slate-950/60 border-slate-800 opacity-60 hover:opacity-90"
-                    : "bg-slate-950/90 hover:bg-slate-850 border-slate-800 hover:border-amber-500/60 hover:scale-105 shadow-md"
+                    ? "bg-slate-800/90 border-amber-400 shadow-xl shadow-amber-500/20 scale-105 cursor-default"
+                    : isLockedOut
+                    ? "bg-slate-950/60 border-slate-800 pointer-events-none opacity-50 cursor-not-allowed"
+                    : "bg-slate-950/90 hover:bg-slate-850 border-slate-800 hover:border-amber-500/60 hover:scale-105 shadow-md cursor-pointer"
                 }`}
               >
-                {isThisOpened && reward ? (
+                {isThisOpened && reward && locReward ? (
                   <div className="space-y-2 animate-in zoom-in-75 duration-300">
                     <span className="text-3xl sm:text-4xl block animate-bounce">
                       {reward.icon}
                     </span>
                     <span className="text-[11px] font-black text-amber-300 block leading-tight">
-                      {reward.title}
+                      {locReward.title}
                     </span>
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 font-bold uppercase block">
-                      {reward.badge}
+                      {locReward.badge}
                     </span>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/30 border border-amber-500/40 flex items-center justify-center text-2xl sm:text-3xl group-hover:scale-110 transition-transform shadow-inner">
+                    <div
+                      className={`w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/30 border border-amber-500/40 flex items-center justify-center text-2xl sm:text-3xl transition-transform shadow-inner ${
+                        selectedChestIndex === null ? "group-hover:scale-110" : ""
+                      }`}
+                    >
                       📦
                     </div>
-                    <span className="text-xs font-bold text-slate-300 group-hover:text-amber-300 transition">
-                      Sandık #{idx + 1}
+                    <span
+                      className={`text-xs font-bold text-slate-300 transition ${
+                        selectedChestIndex === null ? "group-hover:text-amber-300" : ""
+                      }`}
+                    >
+                      {t("game_myst_chest_n", "Sandık #{n}", { n: idx + 1 })}
                     </span>
                   </div>
                 )}
@@ -285,8 +259,10 @@ export default function MysteryChestModal({
           })}
         </div>
 
-        {/* SEÇİLEN ÖDÜL DETAYI VE EYLEMLER */}
-        {currentReward && (
+        {/* SEÇİLEN ÖDÜL DETAYI VE TEK ONAY BUTONU */}
+        {currentReward && (() => {
+          const locCurrent = getLocalizedReward(currentReward);
+          return (
           <div className="space-y-3 pt-2 border-t border-slate-800/80 animate-in fade-in slide-in-from-bottom-2 duration-200">
             <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 border border-amber-500/30 text-left flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl shrink-0">
@@ -294,44 +270,30 @@ export default function MysteryChestModal({
               </div>
               <div className="min-w-0 flex-1">
                 <span className="text-xs sm:text-sm font-black text-amber-200 block">
-                  {currentReward.title}
+                  {locCurrent.title}
                 </span>
                 <span className="text-[11px] text-slate-300 block">
-                  {currentReward.description}
+                  {locCurrent.description}
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-2.5">
-              {/* Ödülü Al Butonu */}
-              <button
-                type="button"
-                onClick={handleClaim}
-                className="w-full sm:flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer"
-              >
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>Ödülü Al</span>
-              </button>
-
-              {/* Değiştir Butonu */}
-              {!hasRerolled && (
-                <button
-                  type="button"
-                  onClick={handleSwitchChest}
-                  className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 transition active:scale-95 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Değiştir ve Diğerini Aç</span>
-                </button>
-              )}
-            </div>
+            <button
+              type="button"
+              disabled={isClaimed}
+              onClick={handleClaim}
+              className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer disabled:opacity-60"
+            >
+              <span>{t("game_myst_claim", "✅ Bu Ödülü Al")}</span>
+            </button>
           </div>
-        )}
+          );
+        })()}
 
         {/* PEDAGOJİK GÜVENCE BİLGİSİ */}
         <div className="text-[10px] text-slate-500 font-mono flex items-center justify-center gap-1">
           <Sparkles className="w-3 h-3 text-emerald-400" />
-          <span>Kayıpsız Ödül Garantisi: Tüm sandıklar pozitif takviye içerir.</span>
+          <span>{t("game_myst_guarantee", "Kayıpsız Ödül Garantisi: Tüm sandıklar pozitif takviye içerir.")}</span>
         </div>
       </div>
     </div>

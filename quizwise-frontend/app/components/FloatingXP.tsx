@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Sparkles, Zap, Award } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 export interface FloatingXPItem {
     id: string;
@@ -21,6 +22,7 @@ export function triggerFloatingXP(amount: number, label?: string) {
 }
 
 export default function FloatingXP() {
+    const { t } = useLanguage();
     const [items, setItems] = useState<FloatingXPItem[]>([]);
 
     useEffect(() => {
@@ -50,7 +52,7 @@ export default function FloatingXP() {
 
     return (
         <aside
-            aria-label="Kazanılan XP Bildirimleri"
+            aria-label={t("aria_earned_xp", "Kazanılan XP Bildirimleri")}
             className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center space-y-2.5"
         >
             <style>{`

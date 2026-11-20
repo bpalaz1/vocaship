@@ -1,7 +1,9 @@
 /**
- * Vocaship Otomatik Tema ve Degrade Belirleyici (Auto-Theme & Gradient Selector)
+ * VocaShip Otomatik Tema ve Degrade Belirleyici (Auto-Theme & Gradient Selector)
  * Tamamen yerel, sıfır harici ağ bağımlılığı ve vektörel degrade motoru.
  */
+
+import { pickUiText } from "./uiLocale";
 
 export interface AutoCoverOptions {
   topic?: string;
@@ -16,7 +18,7 @@ interface TopicTheme {
   categoryLabel: string;
 }
 
-const TOPIC_THEMES: Record<string, TopicTheme> = {
+const TOPIC_THEMES: Record<string, TopicTheme & { labels: Record<string, string> }> = {
   nature: {
     keywords: [
       "nature", "forest", "mountain", "tree", "river", "lake", "park", "garden",
@@ -25,6 +27,7 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-amber-600 via-orange-500 to-yellow-500",
     categoryLabel: "Doğa & Macera",
+    labels: { tr: "Doğa & Macera", en: "Nature & Adventure", de: "Natur & Abenteuer", es: "Naturaleza y Aventura", fr: "Nature & Aventure" },
   },
   mystery: {
     keywords: [
@@ -34,6 +37,7 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-slate-950 via-indigo-950 to-purple-950",
     categoryLabel: "Gizem & Keşif",
+    labels: { tr: "Gizem & Keşif", en: "Mystery & Discovery", de: "Geheimnis & Entdeckung", es: "Misterio y Descubrimiento", fr: "Mystère & Découverte" },
   },
   science: {
     keywords: [
@@ -44,6 +48,7 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-slate-950 via-cyan-950 to-emerald-950",
     categoryLabel: "Bilim & Teknoloji",
+    labels: { tr: "Bilim & Teknoloji", en: "Science & Technology", de: "Wissenschaft & Technik", es: "Ciencia y Tecnología", fr: "Science & Technologie" },
   },
   corporate_project: {
     keywords: [
@@ -53,6 +58,7 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-slate-950 via-slate-900 to-amber-950/70",
     categoryLabel: "Proje & Yönetim",
+    labels: { tr: "Proje & Yönetim", en: "Project & Management", de: "Projekt & Management", es: "Proyectos y Gestión", fr: "Projet & Gestion" },
   },
   legal: {
     keywords: [
@@ -62,6 +68,7 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-stone-950 via-slate-900 to-amber-950/60",
     categoryLabel: "Hukuk & Sözleşme",
+    labels: { tr: "Hukuk & Sözleşme", en: "Law & Contracts", de: "Recht & Verträge", es: "Derecho y Contratos", fr: "Droit & Contrats" },
   },
   finance: {
     keywords: [
@@ -71,6 +78,7 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-slate-950 via-teal-950 to-emerald-950/80",
     categoryLabel: "Finans & Ekonomi",
+    labels: { tr: "Finans & Ekonomi", en: "Finance & Economy", de: "Finanzen & Wirtschaft", es: "Finanzas y Economía", fr: "Finance & Économie" },
   },
   medical: {
     keywords: [
@@ -80,6 +88,7 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-teal-950 via-slate-900 to-rose-950/70",
     categoryLabel: "Tıp & Sağlık",
+    labels: { tr: "Tıp & Sağlık", en: "Medicine & Health", de: "Medizin & Gesundheit", es: "Medicina y Salud", fr: "Médecine & Santé" },
   },
   daily_life: {
     keywords: [
@@ -89,13 +98,14 @@ const TOPIC_THEMES: Record<string, TopicTheme> = {
     ],
     gradientFallback: "from-sky-950 via-blue-900 to-indigo-950",
     categoryLabel: "Günlük Yaşam",
+    labels: { tr: "Günlük Yaşam", en: "Daily Life", de: "Alltag", es: "Vida Diaria", fr: "Vie Quotidienne" },
   },
 };
 
 /**
  * Verilen metin veya konudan temayı belirler.
  */
-function detectTheme(options: AutoCoverOptions): TopicTheme {
+function detectTheme(options: AutoCoverOptions): TopicTheme & { labels?: Record<string, string> } {
   const haystack = [
     options.category || "",
     options.topic || "",
@@ -105,7 +115,7 @@ function detectTheme(options: AutoCoverOptions): TopicTheme {
     .join(" ")
     .toLowerCase();
 
-  let bestTheme: TopicTheme | null = null;
+  let bestTheme: (TopicTheme & { labels?: Record<string, string> }) | null = null;
   let maxScore = 0;
 
   for (const themeKey of Object.keys(TOPIC_THEMES)) {
@@ -124,14 +134,18 @@ function detectTheme(options: AutoCoverOptions): TopicTheme {
 
   // Varsayılan tema
   if (!bestTheme || maxScore === 0) {
+    const fallbackLabel = pickUiText({ tr: "Özel Okuma", en: "Custom Reading", de: "Benutzerdefinierte Lektüre", es: "Lectura personalizada", fr: "Lecture personnalisée" });
     return {
       keywords: [],
       gradientFallback: "from-indigo-950 via-purple-950 to-slate-950",
-      categoryLabel: "Özel Okuma",
+      categoryLabel: fallbackLabel,
     };
   }
 
-  return bestTheme;
+  return {
+    ...bestTheme,
+    categoryLabel: bestTheme.labels ? pickUiText(bestTheme.labels) : bestTheme.categoryLabel,
+  };
 }
 
 /**

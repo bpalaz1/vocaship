@@ -14,6 +14,7 @@ import {
   Clock,
   Flame,
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export type LeagueTier = "Bronz" | "Gümüş" | "Altın" | "Elmas" | "Usta";
 
@@ -59,6 +60,7 @@ export default function WeeklyLeagueBracket({
   currentUser,
   activityFilter = "all",
 }: WeeklyLeagueBracketProps) {
+  const { t } = useLanguage();
   const currentLeague: LeagueTier = currentUser.league || "Altın";
 
   // Çarpan (Filtreye göre puan ölçeklendirme)
@@ -90,7 +92,7 @@ export default function WeeklyLeagueBracket({
     // Kullanıcıyı ekle
     list.push({
       rank: 0,
-      name: `${currentUser.name} (Sen)`,
+      name: `${currentUser.name} (${t("lb_you", "Sen")})`,
       avatar: currentUser.avatar,
       weeklyXp: baseWeekly,
       totalXp: currentUser.totalXp,
@@ -112,31 +114,31 @@ export default function WeeklyLeagueBracket({
 
   const leagueBadges: Record<LeagueTier, { title: string; color: string; border: string; bg: string }> = {
     Bronz: {
-      title: "🥉 Bronz Ligi",
+      title: t("lb_tier_bronz", "🥉 Bronz Ligi"),
       color: "text-amber-600",
       border: "border-amber-700/40",
       bg: "bg-amber-950/20",
     },
     Gümüş: {
-      title: "🥈 Gümüş Ligi",
+      title: t("lb_tier_gumus", "🥈 Gümüş Ligi"),
       color: "text-slate-300",
       border: "border-slate-500/40",
       bg: "bg-slate-800/30",
     },
     Altın: {
-      title: "🥇 Altın Ligi",
+      title: t("lb_tier_altin", "🥇 Altın Ligi"),
       color: "text-amber-300",
       border: "border-amber-500/50",
       bg: "bg-amber-500/15",
     },
     Elmas: {
-      title: "💎 Elmas Ligi",
+      title: t("lb_tier_elmas", "💎 Elmas Ligi"),
       color: "text-cyan-300",
       border: "border-cyan-500/50",
       bg: "bg-cyan-950/30",
     },
     Usta: {
-      title: "👑 Usta Ligi",
+      title: t("lb_tier_usta", "👑 Usta Ligi"),
       color: "text-rose-300",
       border: "border-rose-500/50",
       bg: "bg-rose-950/30",
@@ -157,11 +159,11 @@ export default function WeeklyLeagueBracket({
                 {leagueBadges[currentLeague].title}
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-slate-300 font-bold">
-                30 Kişilik Küme (#14)
+                {t("lb_wlb_cohort_badge", "30 Kişilik Küme (#14)")}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Haftalık lig Pazar 23:59'da sıfırlanır. İlk 5 kişi bir üst lige terfi eder.
+              {t("lb_wlb_reset_desc", "Haftalık lig Pazar 23:59'da sıfırlanır. İlk 5 kişi bir üst lige terfi eder.")}
             </p>
           </div>
         </div>
@@ -171,7 +173,7 @@ export default function WeeklyLeagueBracket({
           {/* Haftalık XP */}
           <div className="px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center">
             <span className="text-[10px] font-bold text-amber-400 uppercase font-mono block">
-              🏆 Bu Hafta
+              🏆 {t("lb_col_this_week", "Bu Hafta")}
             </span>
             <span className="text-sm font-black font-mono text-amber-300">
               {currentUser.weeklyXp} XP
@@ -181,7 +183,7 @@ export default function WeeklyLeagueBracket({
           {/* Kalıcı Toplam XP */}
           <div className="px-3.5 py-2 rounded-2xl bg-indigo-950/60 border border-indigo-500/30 text-center">
             <span className="text-[10px] font-bold text-indigo-400 uppercase font-mono block">
-              ⚡ Kalıcı Toplam
+              ⚡ {t("lb_col_perm_total", "Kalıcı Toplam")}
             </span>
             <span className="text-sm font-black font-mono text-indigo-300">
               {currentUser.totalXp} XP
@@ -307,8 +309,8 @@ export default function WeeklyLeagueBracket({
       {/* 3. 30 KİŞİLİK TÜM SIRALAMA TABLOSU & BÖLGE AYRAÇLARI */}
       <div className="rounded-3xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
         <div className="p-3.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between text-xs font-mono font-bold text-slate-400">
-          <span>SIRA & KULLANICI</span>
-          <span>HAFTALIK PUAN</span>
+          <span>{t("lb_wlb_hdr_user", "SIRA & KULLANICI")}</span>
+          <span>{t("lb_wlb_hdr_score", "HAFTALIK PUAN")}</span>
         </div>
 
         <div className="divide-y divide-slate-800/60">
@@ -323,9 +325,9 @@ export default function WeeklyLeagueBracket({
                   <div className="px-4 py-2 bg-emerald-500/10 border-y border-emerald-500/30 flex items-center justify-between text-[11px] font-bold text-emerald-400">
                     <span className="flex items-center gap-1.5">
                       <ArrowUp className="w-3.5 h-3.5" />
-                      <span>⬆️ İlk 5 Kişi Bir Üst Lige Terfi Eder (Yükselme Hattı)</span>
+                      <span>{t("lb_wlb_promo_line", "⬆️ İlk 5 Kişi Bir Üst Lige Terfi Eder (Yükselme Hattı)")}</span>
                     </span>
-                    <span className="font-mono text-[10px]">Terfi Bölgesi</span>
+                    <span className="font-mono text-[10px]">{t("lb_wlb_promo_zone", "Terfi Bölgesi")}</span>
                   </div>
                 )}
 
@@ -334,9 +336,9 @@ export default function WeeklyLeagueBracket({
                   <div className="px-4 py-2 bg-rose-500/10 border-y border-rose-500/30 flex items-center justify-between text-[11px] font-bold text-rose-400">
                     <span className="flex items-center gap-1.5">
                       <ArrowDown className="w-3.5 h-3.5" />
-                      <span>⬇️ Son 5 Kişi Bir Alt Lige Düşer (Düşme Hattı)</span>
+                      <span>{t("lb_wlb_demo_line", "⬇️ Son 5 Kişi Bir Alt Lige Düşer (Düşme Hattı)")}</span>
                     </span>
-                    <span className="font-mono text-[10px]">Düşme Riski</span>
+                    <span className="font-mono text-[10px]">{t("lb_wlb_demo_risk", "Düşme Riski")}</span>
                   </div>
                 )}
 
@@ -394,13 +396,13 @@ export default function WeeklyLeagueBracket({
                           {member.name}
                         </span>
                         {member.isCurrentUser && (
-                          <span className="px-1.5 py-0.2 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[9px] font-mono font-bold">
-                            SEN
+                          <span className="px-1.5 py-0.2 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[9px] font-mono font-bold uppercase">
+                            {t("lb_you", "Sen")}
                           </span>
                         )}
                       </div>
                       <span className="text-[10px] text-slate-500 font-mono">
-                        Lv.{member.level} Kaşif
+                        Lv.{member.level} {t("game_clb_explorer", "Kaşif")}
                       </span>
                     </div>
                   </div>
@@ -420,10 +422,10 @@ export default function WeeklyLeagueBracket({
                       }`}
                     >
                       {isPromotion
-                        ? "Terfi Bölgesi"
+                        ? t("lb_wlb_promo_zone", "Terfi Bölgesi")
                         : isDemotion
-                        ? "Düşme Riski"
-                        : "Ligde Güvende"}
+                        ? t("lb_wlb_demo_risk", "Düşme Riski")
+                        : t("lb_wlb_safe", "Ligde Güvende")}
                     </span>
                   </div>
                 </div>

@@ -271,7 +271,7 @@ function BossFightContent() {
   const [decks, setDecks] = useState<{ id: string; title: string; card_count?: number }[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string>(initialDeckId || "");
   const [cards, setCards] = useState<FlashcardItem[]>(FALLBACK_CARDS);
-  const [deckTitle, setDeckTitle] = useState<string>("Genel Kelime Destesi");
+  const [deckTitle, setDeckTitle] = useState<string>(() => t("game_default_deck_full", "Genel Kelime Destesi"));
   const [loadingCards, setLoadingCards] = useState(false);
 
   // Boss ve Savaş Durumu
@@ -644,7 +644,7 @@ function BossFightContent() {
           details: { game: "boss-fight", boss: activeBoss.name },
         }),
       });
-      triggerFloatingXP(100, "Boss Yenildi! Efsanevi Zafer! 🏆");
+      triggerFloatingXP(100, t("boss_fight_victory_xp_toast", "Boss Yenildi! Efsanevi Zafer! 🏆"));
       window.dispatchEvent(new CustomEvent("quizwise_profile_update"));
     } catch (e) {
       console.error("XP ödülü kaydedilemedi:", e);
@@ -1002,7 +1002,14 @@ function BossFightContent() {
               {t("boss_fight_victory_title", "BOSS YENİLDİ!")}
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-md mx-auto">
-              {t("boss_fight_victory_desc", "Tebrikler! Sınıfınız ortak güçle {boss} canavarını dize getirdi!", { boss: activeBoss.name })}
+              {t("boss_fight_victory_desc", "Tebrikler! Sınıfınız ortak güçle {boss} canavarını dize getirdi!", {
+                boss:
+                  activeBoss.id === "ignis"
+                    ? t("boss_title_ignis", "Volkanik Alev Ejderhası Ignis")
+                    : activeBoss.id === "colossus"
+                    ? t("boss_title_golem", "Kadim Rünik Golem Colossus")
+                    : t("boss_title_void", "Kozmik Karadelik Devi Void Lord"),
+              })}
             </p>
 
             {/* +100 XP ve Ödül Kutusu */}
@@ -1040,9 +1047,9 @@ function BossFightContent() {
                     <div className="flex items-center space-x-2">
                       <span>{i === 0 ? "🥇 1." : i === 1 ? "🥈 2." : "🥉 3."}</span>
                       <span>{h.avatar}</span>
-                      <span>{h.name}</span>
+                      <span>{h.isUser ? t("boss_fight_hero_you", "Sen (Kahraman)") : h.name}</span>
                     </div>
-                    <span className="font-mono font-black">{h.damage.toLocaleString()} Hasar</span>
+                    <span className="font-mono font-black">{h.damage.toLocaleString()} {t("game_coop_dmg_unit", "Hasar")}</span>
                   </div>
                 ))}
               </div>

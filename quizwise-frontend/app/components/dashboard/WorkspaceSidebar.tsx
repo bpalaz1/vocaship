@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { CareerHubKey, ALL_CAREER_HUBS, CAREER_HUBS_BY_KEY } from "../../data/careerHubs";
 import { useTranslation } from "../../context/LanguageContext";
+import { VocaShipLogo } from "../brand/VocaShipLogo";
 
 export interface FolderItem {
   id: string;
@@ -145,31 +146,31 @@ export default function WorkspaceSidebar({
 
   const navLinks = [
     {
-      name: "Giriş Sayfası",
+      name: t("nav_home", "Giriş Sayfası"),
       href: "/",
       icon: Home,
       isActive: pathname === "/",
     },
     {
-      name: "Okuma Odası",
+      name: t("nav_reading", "Okuma Odası"),
       href: "/reading",
       icon: BookOpen,
       isActive: pathname.startsWith("/reading"),
     },
     {
-      name: "Konuşma Odası",
+      name: t("nav_speaking", "Speaking Lounge"),
       href: "/speaking",
       icon: Mic,
       isActive: pathname.startsWith("/speaking"),
     },
     {
-      name: "Oyun Arenası",
+      name: t("nav_games", "Oyun Arenası"),
       href: "/games",
       icon: Gamepad2,
       isActive: pathname.startsWith("/games"),
     },
     {
-      name: "Sınıf Portalı",
+      name: t("nav_classroom", "Sınıfım"),
       href: "/classroom",
       icon: GraduationCap,
       isActive: pathname.startsWith("/classroom"),
@@ -178,27 +179,20 @@ export default function WorkspaceSidebar({
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-slate-950 text-slate-200 select-none">
-      {/* 1. Üst Alan: Vocaship Logo & Marka */}
+      {/* 1. Üst Alan: VocaShip Logo & Marka */}
       <div className="p-4 border-b border-slate-800/80 flex items-center justify-between shrink-0">
-        <Link href="/" className="flex items-center space-x-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition-transform">
-            <BrainCircuit className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-base font-black tracking-tight text-white group-hover:text-indigo-400 transition-colors">
-              Vocaship
-            </span>
-            <span className="text-[10px] text-slate-400 font-medium">
-              Çalışma Konsolu
-            </span>
-          </div>
+        <Link href="/" className="flex items-center group">
+          <VocaShipLogo
+            variant="horizontal"
+            className="[&>div>span:first-child]:text-white"
+          />
         </Link>
 
         {/* Mobil Kapat Butonu */}
         <button
           onClick={onCloseMobile}
           className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-          aria-label="Menüyü Kapat"
+          aria-label={t("btn_close_menu", "Menüyü Kapat")}
         >
           <X className="w-5 h-5" />
         </button>
@@ -207,7 +201,7 @@ export default function WorkspaceSidebar({
       {/* 2. Temel Gezinme Linkleri */}
       <div className="px-3 pt-3 pb-2 space-y-1 border-b border-slate-800/80 shrink-0">
         <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Gezinme
+          {t("ws_navigation", "Gezinme")}
         </span>
         {navLinks.map((link) => {
           const Icon = link.icon;
@@ -241,7 +235,7 @@ export default function WorkspaceSidebar({
             <span className="flex items-center space-x-1.5">
               <span>📁</span>
               <span className="text-[11px] uppercase tracking-wider text-slate-300 font-bold">
-                Kişisel Klasörlerim
+                {t("tree_personal_folders", "Kişisel Klasörlerim")}
               </span>
             </span>
             <ChevronDown
@@ -268,7 +262,7 @@ export default function WorkspaceSidebar({
               >
                 <div className="flex items-center space-x-2 truncate">
                   <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span className="truncate">Tüm Destelerim</span>
+                  <span className="truncate">{t("all_decks", "Tüm Destelerim")}</span>
                 </div>
                 <span className="text-[10px] font-mono text-slate-400">
                   {deckCount}
@@ -278,7 +272,7 @@ export default function WorkspaceSidebar({
               {/* Kullanıcı Klasörleri */}
               {folders.length === 0 ? (
                 <div className="px-3 py-2 text-[11px] text-slate-400 italic">
-                  Henüz klasör oluşturulmadı.
+                  {t("lib_no_folders_yet", "Henüz klasör oluşturulmadı.")}
                 </div>
               ) : (
                 folders.map((folder) => {
@@ -320,7 +314,7 @@ export default function WorkspaceSidebar({
             <span className="flex items-center space-x-1.5">
               <span>🌳</span>
               <span className="text-[11px] uppercase tracking-wider text-slate-300 font-bold">
-                Mesleki Uzmanlık Dalları
+                {t("tree_career_branches", "Mesleki Uzmanlık Dalları")}
               </span>
             </span>
             <ChevronDown
@@ -355,7 +349,7 @@ export default function WorkspaceSidebar({
                     >
                       <div className="flex items-center space-x-2 truncate">
                         <span>{group.icon}</span>
-                        <span className="truncate">{group.title}</span>
+                        <span className="truncate">{t(`tree_cat_${group.id}`, group.title)}</span>
                       </div>
                       <ChevronRight
                         className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${
@@ -368,6 +362,7 @@ export default function WorkspaceSidebar({
                     {isGroupOpen && (
                       <div className="py-1 px-1.5 space-y-0.5 bg-slate-950/50 border-t border-slate-800/50">
                         {group.subItems.map((sub) => {
+                          const localizedSubTitle = t(`tree_sub_${sub.id}`, sub.title);
                           const isSubSelected =
                             selectedItem.type === "hub" && selectedItem.key === sub.hubKey;
 
@@ -379,7 +374,7 @@ export default function WorkspaceSidebar({
                                 onSelectItem({
                                   type: "hub",
                                   key: sub.hubKey,
-                                  subTitle: sub.title,
+                                  subTitle: localizedSubTitle,
                                 });
                                 onCloseMobile();
                               }}
@@ -391,7 +386,7 @@ export default function WorkspaceSidebar({
                             >
                               <div className="flex items-center space-x-1.5 truncate">
                                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/60 shrink-0" />
-                                <span className="truncate">{sub.title}</span>
+                                <span className="truncate">{localizedSubTitle}</span>
                               </div>
                               {sub.badge && (
                                 <span className="shrink-0 text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/60">
@@ -422,7 +417,7 @@ export default function WorkspaceSidebar({
           className="w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>+ Yeni Deste</span>
+          <span>{t("btn_new_deck", "+ Yeni Deste")}</span>
         </button>
 
         <button
@@ -434,7 +429,7 @@ export default function WorkspaceSidebar({
           className="w-full flex items-center justify-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-semibold active:scale-95 transition cursor-pointer"
         >
           <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
-          <span>+ Yeni Klasör</span>
+          <span>{t("btn_new_folder", "+ Yeni Klasör")}</span>
         </button>
       </div>
     </div>

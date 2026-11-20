@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tv, ArrowRight } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface ActiveClassSession {
   classId: string;
@@ -13,6 +14,7 @@ export interface ActiveClassSession {
 }
 
 export default function ActiveClassBanner() {
+  const { t } = useLanguage();
   const pathname = usePathname();
   const [activeSession, setActiveSession] = useState<ActiveClassSession | null>(null);
 
@@ -72,7 +74,7 @@ export default function ActiveClassBanner() {
       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0 shadow-sm shadow-emerald-400" />
         <span className="text-xs sm:text-sm font-bold text-emerald-300 shrink-0">
-          🟢 Aktif Dersiniz Devam Ediyor:
+          {t("cls_banner_active", "🟢 Aktif Dersiniz Devam Ediyor:")}
         </span>
         <span className="text-xs sm:text-sm font-black text-white truncate font-mono">
           {activeSession.className}
@@ -84,7 +86,7 @@ export default function ActiveClassBanner() {
         className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/30 active:scale-95 cursor-pointer group"
       >
         <Tv className="w-4 h-4 text-slate-950 group-hover:scale-110 transition-transform" />
-        <span>🖥️ Sınıfa Geri Dön</span>
+        <span>{t("cls_banner_return", "🖥️ Sınıfa Geri Dön")}</span>
         <ArrowRight className="w-3.5 h-3.5 text-slate-950 group-hover:translate-x-0.5 transition-transform" />
       </Link>
     </aside>

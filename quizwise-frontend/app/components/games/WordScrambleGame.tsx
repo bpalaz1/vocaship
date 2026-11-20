@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import confetti from "canvas-confetti";
-import { Sparkles, Trophy, X, RotateCcw, Check, HelpCircle, ArrowRight, Volume2 } from "lucide-react";
+import { Sparkles, Trophy, X, RotateCcw, Check, HelpCircle, ArrowRight, Volume2, VolumeX } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
 import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
@@ -11,6 +11,9 @@ import {
   shouldTriggerMysteryChest,
 } from "../../utils/gamificationEngine";
 import { GameMistakeItem } from "./GameOverSummary";
+import StreakMilestoneBar from "./StreakMilestoneBar";
+import { playArenaSound } from "../../utils/soundEffects";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface WordScrambleGameProps {
   cards: Array<{ word: string; meaning: string; phonetic?: string }>;
@@ -22,11 +25,13 @@ export interface WordScrambleGameProps {
 
 export default function WordScrambleGame({
   cards,
-  deckTitle = "Genel Deste",
+  deckTitle,
   onClose,
   onAwardXP,
   onAwardGold,
 }: WordScrambleGameProps) {
+  const { t } = useLanguage();
+  const resolvedDeckTitle = deckTitle || t("game_default_deck", "Genel Deste");
   const [currentRound, setCurrentRound] = useState(0);
   const [score, setScore] = useState(0);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
@@ -35,6 +40,7 @@ export default function WordScrambleGame({
   const [gameOver, setGameOver] = useState(false);
   const [hintRevealed, setHintRevealed] = useState(false);
   const [streak, setStreak] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [isMysteryOpen, setIsMysteryOpen] = useState(false);
   const [mysteryBuff, setMysteryBuff] = useState(1.0);
   const [mysteryBuffCount, setMysteryBuffCount] = useState(0);
@@ -100,6 +106,11 @@ export default function WordScrambleGame({
         setIsAnswered(true);
         const nextStreak = streak + 1;
         setStreak(nextStreak);
+        if (nextStreak % 5 === 0) {
+          playArenaSound("milestone", soundEnabled);
+        } else {
+          playArenaSound("correct", soundEnabled);
+        }
 
         // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
         const reward = calculateWordReward({
@@ -118,8 +129,8 @@ export default function WordScrambleGame({
 
         setScore((prev) => prev + reward.totalXP);
         confetti({ particleCount: 40, spread: 60 });
-        if (onAwardXP) onAwardXP(reward.totalXP, "Harf Avı Doğru Kelime");
-        if (onAwardGold) onAwardGold(reward.totalGold);
+        if (onAwardXP) onAwardXP(reward.totalXP, t("game_scramble_xp_lbl", "Harf Avı Doğru Kelime"));
+        if (reward.totalGold > 0 && onAwardGold) onAwardGold(reward.totalGold);
 
         // Her 3 doğru seride 3 Gizemli Sandık Aç
         if (shouldTriggerMysteryChest(nextStreak)) {
@@ -140,6 +151,7 @@ export default function WordScrambleGame({
         // YANLIŞ
         setIsWrong(true);
         setStreak(0);
+        playArenaSound("wrong", soundEnabled);
 
         if (activeCard) {
           setSessionMistakes((prev) => {
@@ -177,8 +189,8 @@ export default function WordScrambleGame({
   if (gameOver) {
     return (
       <GameOverScreen
-        gameTitle="🔤 Harf Avı (Word Scramble)"
-        deckTitle={deckTitle}
+        gameTitle={t("game_scramble_over_title", "🔤 Harf Avı (Word Scramble)")}
+        deckTitle={resolvedDeckTitle}
         score={score}
         awardedXP={Math.max(50, score)}
         awardedGold={Math.max(20, Math.round(score * 0.4))}
@@ -209,10 +221,10 @@ export default function WordScrambleGame({
           </div>
           <div>
             <h2 className="text-base sm:text-lg font-black text-white">
-              Harf Avı (Word Scramble)
+              {t("game_scramble_title", "Harf Avı (Word Scramble)")}
             </h2>
             <p className="text-xs text-slate-400 font-mono">
-              {deckTitle} • Kelime {currentRound + 1} / {totalRounds}
+              {resolvedDeckTitle} • {t("game_word_of", "Kelime {cur} / {total}", { cur: currentRound + 1, total: totalRounds })}
             </p>
           </div>
         </div>
@@ -220,18 +232,36 @@ export default function WordScrambleGame({
         <div className="flex items-center gap-3">
           <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-amber-300 flex items-center gap-1.5">
             <Trophy className="w-4 h-4 text-amber-400" />
-            <span>{score} Puan</span>
+            <span>{score} {t("game_points_unit", "Puan")}</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+            title={soundEnabled ? t("game_sound_off", "Sesi Kapat") : t("game_sound_on", "Sesi Aç")}
+          >
+            {soundEnabled ? (
+              <Volume2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <VolumeX className="w-4 h-4 text-slate-500" />
+            )}
+          </button>
 
           <button
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            title="Oyundan Çık"
+            title={t("game_exit", "Oyundan Çık")}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+      </div>
+
+      {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
+      <div className="max-w-4xl w-full mx-auto pt-3">
+        <StreakMilestoneBar streak={streak} />
       </div>
 
       {/* Orta Çalışma Sahnesi */}
@@ -239,14 +269,14 @@ export default function WordScrambleGame({
         {/* Anlam / İpucu Kartı */}
         <div className="w-full p-6 rounded-3xl bg-slate-900/90 border border-slate-800 text-center space-y-2 shadow-2xl">
           <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-400">
-            Türkçe Anlamı & Tanım
+            {t("game_meaning_def_hdr", "Anlam & Tanım")}
           </span>
           <h3 className="text-xl sm:text-2xl font-bold text-white">
             "{activeCard.meaning}"
           </h3>
           {hintRevealed && activeCard.phonetic && (
             <p className="text-xs font-mono text-slate-400">
-              Telaffuz: {activeCard.phonetic}
+              {t("game_pronunciation_lbl", "Telaffuz:")} {activeCard.phonetic}
             </p>
           )}
         </div>
@@ -279,7 +309,7 @@ export default function WordScrambleGame({
           </div>
 
           <span className="text-xs text-slate-500">
-            Harfleri tıklayarak veya klavyenizden yazarak dizin
+            {t("game_scramble_hint_keys", "Harfleri tıklayarak veya klavyenizden yazarak dizin")}
           </span>
         </div>
 
@@ -314,7 +344,7 @@ export default function WordScrambleGame({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 transition cursor-pointer"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          <span>Sıfırla</span>
+          <span>{t("btn_reset", "Sıfırla")}</span>
         </button>
 
         <button
@@ -323,7 +353,7 @@ export default function WordScrambleGame({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 transition cursor-pointer"
         >
           <HelpCircle className="w-3.5 h-3.5" />
-          <span>İpucu Göster</span>
+          <span>{t("game_show_hint", "İpucu Göster")}</span>
         </button>
       </div>
 

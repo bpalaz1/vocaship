@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { GraduationCap, Gamepad2, Sparkles, Check, ArrowRight, ShieldCheck, Zap } from "lucide-react";
+import { useLanguage } from "./LanguageContext";
 
 export type ExperienceMode = "academic" | "arcade";
 
@@ -24,6 +25,7 @@ const ExperienceContext = createContext<ExperienceContextType>({
 });
 
 export const ExperienceProvider = ({ children }: { children: ReactNode }) => {
+  const { t } = useLanguage();
   const [mode, setModeState] = useState<ExperienceMode>("academic");
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -92,13 +94,13 @@ export const ExperienceProvider = ({ children }: { children: ReactNode }) => {
             <div className="text-center space-y-2 mb-6">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Vocaship Kişiselleştirme</span>
+                <span>{t("exp_badge", "VocaShip Kişiselleştirme")}</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Vocaship&apos;i nasıl kullanmak istersiniz?
+                {t("exp_title", "VocaShip'i nasıl kullanmak istersiniz?")}
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
-                Vocaship hem ciddi akademik sınavlar ve kariyer hedefleri için hem de sınıf içi etkileşimli oyunlar için özel optimize edilmiştir.
+                {t("exp_desc", "VocaShip hem ciddi akademik sınavlar ve kariyer hedefleri için hem de sınıf içi etkileşimli oyunlar için özel optimize edilmiştir.")}
               </p>
             </div>
 
@@ -114,16 +116,16 @@ export const ExperienceProvider = ({ children }: { children: ReactNode }) => {
                   <GraduationCap className="w-6 h-6" />
                 </div>
                 <div className="space-y-1 mb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Yetişkin & Sınav</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">{t("exp_acad_tag", "Yetişkin & Sınav")}</span>
                   <h3 className="text-base font-bold text-white group-hover:text-indigo-200">
-                    Sınav & Profesyonel Odak
+                    {t("exp_acad_title", "Sınav & Profesyonel Odak")}
                   </h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    YDS, YÖKDİL, IELTS, serbest makale okuyucu ve bilimsel Ebbinghaus SM-2 aralıklı tekrar.
+                    {t("exp_acad_desc", "YDS, YÖKDİL, IELTS, serbest makale okuyucu ve bilimsel Ebbinghaus SM-2 aralıklı tekrar.")}
                   </p>
                 </div>
                 <div className="mt-auto pt-2 flex items-center gap-1.5 text-xs font-semibold text-indigo-300">
-                  <span>Bu Modu Seç</span>
+                  <span>{t("exp_pick_mode", "Bu Modu Seç")}</span>
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                 </div>
               </button>
@@ -138,16 +140,16 @@ export const ExperienceProvider = ({ children }: { children: ReactNode }) => {
                   <Gamepad2 className="w-6 h-6" />
                 </div>
                 <div className="space-y-1 mb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Genç & Sınıf</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-400">{t("exp_arc_tag", "Genç & Sınıf")}</span>
                   <h3 className="text-base font-bold text-white group-hover:text-amber-200">
-                    Oyun & Sınıf Modu
+                    {t("exp_arc_title", "Oyun & Sınıf Modu")}
                   </h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    Hazine Avı, Boss Fight canavar savaşı, sınıf içi canlı yarışma ve gizemli sandıklar.
+                    {t("exp_arc_desc", "Hazine Avı, Boss Fight canavar savaşı, sınıf içi canlı yarışma ve gizemli sandıklar.")}
                   </p>
                 </div>
                 <div className="mt-auto pt-2 flex items-center gap-1.5 text-xs font-semibold text-amber-300">
-                  <span>Bu Modu Seç</span>
+                  <span>{t("exp_pick_mode", "Bu Modu Seç")}</span>
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                 </div>
               </button>
@@ -157,14 +159,14 @@ export const ExperienceProvider = ({ children }: { children: ReactNode }) => {
             <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 pt-3">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                İstediğiniz zaman üst bardan tek tıkla değiştirebilirsiniz.
+                {t("exp_switch_hint", "İstediğiniz zaman üst bardan tek tıkla değiştirebilirsiniz.")}
               </span>
               <button
                 type="button"
                 onClick={() => selectInitialMode("academic")}
                 className="text-slate-400 hover:text-white underline underline-offset-2 cursor-pointer"
               >
-                Atla
+                {t("exp_skip", "Atla")}
               </button>
             </div>
           </div>

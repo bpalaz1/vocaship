@@ -9,6 +9,7 @@ import TargetVocabularyFlashcards from "./TargetVocabularyFlashcards";
 import { useLanguage } from "../../context/LanguageContext";
 import { useUserStories } from "../../context/UserStoriesContext";
 import { usePersona } from "../../context/PersonaContext";
+import { useAppTheme } from "../../context/ThemeContext";
 import { useRouter } from "next/navigation";
 import {
     Sparkles,
@@ -35,7 +36,10 @@ import {
 } from "lucide-react";
 import { API_BASE } from "../../config";
 import { NEURAL_VOICES, setStoredNeuralVoice } from "../../utils/ttsVoices";
-import { addPendingGold } from "../../utils/pendingGold";
+import {
+    rewardReadingStoryComplete,
+    rewardReadingQuestionCorrect,
+} from "../../utils/rewardEngine";
 
 export type ReaderViewMode = "book" | "focus";
 export type ReaderTheme = "dark" | "sepia" | "light";
@@ -263,22 +267,11 @@ export default function StoryReader({
     const typoMenuRef = useRef<HTMLDivElement>(null);
 
     // Küresel Tema Değişimini Dinle ve Reader ile Senkronize Et
+    const { theme: appTheme, isDark } = useAppTheme();
+
     useEffect(() => {
-        const handleThemeChange = () => {
-            if (typeof window !== "undefined") {
-                const saved = (localStorage.getItem("vocaship_reader_theme") || localStorage.getItem("vocaship_app_theme")) as ReaderTheme | null;
-                if (saved === "dark" || saved === "sepia" || saved === "light") {
-                    setReaderTheme(saved);
-                }
-            }
-        };
-        window.addEventListener("vocaship-theme-change", handleThemeChange);
-        window.addEventListener("storage", handleThemeChange);
-        return () => {
-            window.removeEventListener("vocaship-theme-change", handleThemeChange);
-            window.removeEventListener("storage", handleThemeChange);
-        };
-    }, []);
+        setReaderTheme(appTheme);
+    }, [appTheme]);
 
     // 3. Kitap Sayfalama & Cümle Bazlı Ses Takibi (Read-Along) State'leri
     const { selectedCharacter, characterVoice } = usePersona();
@@ -1222,8 +1215,8 @@ export default function StoryReader({
 
     const handleFinishStory = async () => {
         setIsCompleted(true);
-        // Sessiz Altın Köprüsü: Okuma Odası tamamlama ödülü (+50)
-        addPendingGold(50, "reading");
+        // Sessiz Altın Köprüsü: Okuma Odası tamamlama ödülü (+40)
+        rewardReadingStoryComplete(storyKey);
         try {
             const existing = localStorage.getItem(`quizwise_progress_${storyKey}`);
             const data = existing ? JSON.parse(existing) : {};
@@ -1259,8 +1252,8 @@ export default function StoryReader({
         }));
 
         if (isCorrect) {
-            // Sessiz Altın Köprüsü: Doğru soru cevabı (+20)
-            addPendingGold(20, "reading");
+            // Sessiz Altın Köprüsü: Doğru soru cevabı (+10)
+            rewardReadingQuestionCorrect();
         } else {
             try {
                 const curQ = cleanQuestions[qIdx];
@@ -1387,7 +1380,7 @@ export default function StoryReader({
             {showSaveToast && (
                 <div className="fixed top-20 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-emerald-600 text-white shadow-2xl shadow-emerald-950/60 border border-emerald-400/40 animate-in fade-in slide-in-from-top-4 duration-300 font-bold text-xs sm:text-sm">
                     <CheckCircle className="w-5 h-5 text-emerald-100 animate-pulse" />
-                    <span>Hikaye Kütüphanenize Eklendi!</span>
+                    <span>{t("story_added_lib", "Hikaye Kütüphanenize Eklendi!")}</span>
                 </div>
             )}
 
@@ -1477,14 +1470,14 @@ export default function StoryReader({
                         <button
                             type="button"
                             onClick={() => setIsTypoMenuOpen(!isTypoMenuOpen)}
-                            title="Yazı Boyutu ve Okuma Teması"
+                            title={t("read_font_size_title", "Yazı Boyutu ve Okuma Teması")}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition shadow-sm cursor-pointer ${isTypoMenuOpen
                                     ? "bg-indigo-600 text-white border-indigo-500 shadow-indigo-600/30"
                                     : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
                                 }`}
                         >
                             <span>🔤</span>
-                            <span className="font-sans">Yazı Boyutu</span>
+                            <span className="font-sans">{t("read_font_size_btn", "Yazı Boyutu")}</span>
                         </button>
 
                         {isTypoMenuOpen && (
@@ -1602,9 +1595,9 @@ export default function StoryReader({
                                                 }}
                                                 disabled={fontSize === "base"}
                                                 className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-xs font-bold text-slate-200 transition-all flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="Küçült (A-)"
+                                                title={t("read_shrink_a", "Küçült (A-)")}
                                             >
-                                                A- Küçült
+                                                {t("read_shrink_a", "A- Küçült")}
                                             </button>
 
                                             <div className="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700/80 font-mono font-bold text-xs text-indigo-300 min-w-[50px] text-center select-none">
@@ -1621,9 +1614,9 @@ export default function StoryReader({
                                                 }}
                                                 disabled={fontSize === "xl"}
                                                 className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-xs font-bold text-slate-200 transition-all flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="Büyüt (A+)"
+                                                title={t("read_enlarge_a", "Büyüt (A+)")}
                                             >
-                                                A+ Büyüt
+                                                {t("read_enlarge_a", "A+ Büyüt")}
                                             </button>
                                         </div>
                                     </div>
@@ -1637,10 +1630,10 @@ export default function StoryReader({
                         type="button"
                         onClick={handleDebateStory}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-sm shadow-indigo-600/30 transition cursor-pointer"
-                        title="Bu metni Gemini ile sesli tartış"
+                        title={t("read_debate_title", "Bu metni Gemini ile sesli tartış")}
                     >
                         <Mic className="w-3.5 h-3.5 text-violet-200" />
-                        <span className="hidden sm:inline">🎙️ Gemini ile Tartış</span>
+                        <span className="hidden sm:inline">🎙️ {t("read_debate_btn", "Gemini ile Tartış")}</span>
                     </button>
 
                     {/* [ 💾 Kütüphaneme Ekle ] Butonu */}
@@ -1652,10 +1645,10 @@ export default function StoryReader({
                                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default"
                                 : "bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white border border-slate-700 hover:border-emerald-500/50 active:scale-95"
                             }`}
-                        title={isSaved ? "Bu hikaye kütüphanenizde kayıtlı" : "Bu hikayeyi kütüphanenize kaydedin"}
+                        title={isSaved ? t("read_saved_tip", "Bu hikaye kütüphanenizde kayıtlı") : t("read_save_tip", "Bu hikayeyi kütüphanenize kaydedin")}
                     >
                         <BookmarkCheck className={`w-3.5 h-3.5 ${isSaved ? "text-emerald-400" : "text-slate-400"}`} />
-                        <span>{isSaved ? "Kayıtlı ✓" : "💾 Kaydet"}</span>
+                        <span>{isSaved ? t("read_saved_badge", "Kayıtlı ✓") : `💾 ${t("read_save_btn", "Kaydet")}`}</span>
                     </button>
 
                     {/* Paylaş Butonu (Minimalist İkon) */}
@@ -1923,17 +1916,17 @@ export default function StoryReader({
                 const earnedXP = correctCount * 10;
 
                 return (
-                    <div className="pt-8 border-t border-slate-800 space-y-5">
+                    <div className={`pt-8 border-t space-y-5 ${isDark ? "border-slate-800" : "border-slate-300"}`}>
                         <div className="flex items-center justify-between flex-wrap gap-2">
                             <div className="flex items-center gap-2.5">
-                                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                                <div className={`p-2 rounded-xl border ${isDark ? "bg-amber-500/15 text-amber-400 border-amber-500/25" : "bg-amber-100 text-amber-700 border-amber-300"}`}>
                                     <HelpCircle className="w-4 h-4" />
                                 </div>
                                 <div>
-                                    <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                                    <h3 className={`text-sm sm:text-base font-bold flex items-center gap-2 ${isDark ? "text-white" : "text-slate-900"}`}>
                                         <span>{t("comprehension_questions_title", "Okuma Anlama Soruları")}</span>
                                     </h3>
-                                    <p className="text-xs text-slate-400">
+                                    <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
                                         {t(
                                             "questions_instruction_hint",
                                             "Metni ne kadar anladığınızı test edin. Şıklardan birine tıklayarak cevabınızı verin."
@@ -1941,9 +1934,9 @@ export default function StoryReader({
                                     </p>
                                 </div>
                             </div>
-                            <div className="text-xs font-mono px-3 py-1.5 rounded-xl bg-slate-800/80 text-slate-300 border border-slate-700/80 flex items-center gap-1.5">
+                            <div className={`text-xs font-mono px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${isDark ? "bg-slate-800/80 text-slate-300 border-slate-700/80" : "bg-[#f8fafc] text-slate-800 border-slate-300"}`}>
                                 <span
-                                    className={`w-2 h-2 rounded-full ${answeredCount > 0 ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
+                                    className={`w-2 h-2 rounded-full ${answeredCount > 0 ? "bg-emerald-500 animate-pulse" : isDark ? "bg-slate-500" : "bg-slate-400"
                                         }`}
                                 ></span>
                                 <span>
@@ -1971,20 +1964,20 @@ export default function StoryReader({
                                 return (
                                     <div
                                         key={qIdx}
-                                        className="p-4 sm:p-5 rounded-2xl bg-slate-950/60 border border-slate-800/90 space-y-3.5 shadow-inner"
+                                        className={`p-4 sm:p-5 rounded-2xl border space-y-3.5 ${isDark ? "bg-slate-900/90 border-slate-800 shadow-inner" : "bg-[#f8fafc] border-slate-300 shadow-sm"}`}
                                     >
                                         <div className="flex items-start justify-between gap-3">
-                                            <h4 className="text-sm sm:text-base font-semibold text-slate-100 flex items-start gap-2">
-                                                <span className="text-indigo-400 font-bold font-mono shrink-0">
+                                            <h4 className={`text-sm sm:text-base font-semibold flex items-start gap-2 ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                                                <span className={`font-bold font-mono shrink-0 ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>
                                                     {qIdx + 1}.
                                                 </span>
                                                 <span>{q.question}</span>
                                             </h4>
                                             {isAnswered && (
                                                 <span
-                                                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shrink-0 ${isQuestionCorrect
-                                                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shrink-0 border ${isQuestionCorrect
+                                                            ? isDark ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                                            : isDark ? "bg-rose-500/20 text-rose-300 border-rose-500/30" : "bg-rose-100 text-rose-800 border-rose-300"
                                                         }`}
                                                 >
                                                     {isQuestionCorrect ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
@@ -2003,37 +1996,44 @@ export default function StoryReader({
 
                                                 let containerStyle = "";
                                                 if (!isAnswered) {
-                                                    containerStyle =
-                                                        "bg-slate-800/40 border-slate-700/60 text-slate-300 hover:border-blue-500 hover:bg-blue-500/10 hover:text-blue-200 cursor-pointer active:ring-2 active:ring-emerald-400 active:bg-emerald-500/20 transition-colors";
+                                                    containerStyle = isDark
+                                                        ? "bg-slate-800/80 border-slate-700/60 text-slate-100 hover:border-blue-500 hover:bg-blue-500/15 hover:text-white cursor-pointer active:ring-2 active:ring-emerald-400 transition-colors"
+                                                        : "bg-slate-100 border-slate-300 text-slate-900 hover:border-indigo-500 hover:bg-indigo-50 cursor-pointer active:ring-2 active:ring-emerald-400 transition-colors";
                                                 } else {
                                                     if (isCorrectChoice) {
                                                         if (isSelected) {
-                                                            containerStyle =
-                                                                "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-sm shadow-emerald-500/10 pointer-events-none ring-1 ring-emerald-500/40";
+                                                            containerStyle = isDark
+                                                                ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-sm pointer-events-none ring-1 ring-emerald-500/40"
+                                                                : "border-emerald-500 bg-emerald-100 text-emerald-900 shadow-sm pointer-events-none ring-1 ring-emerald-500/40";
                                                         } else {
-                                                            containerStyle =
-                                                                "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 shadow-sm pointer-events-none ring-1 ring-emerald-500/30";
+                                                            containerStyle = isDark
+                                                                ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 shadow-sm pointer-events-none ring-1 ring-emerald-500/30"
+                                                                : "border-emerald-400 bg-emerald-50 text-emerald-800 shadow-sm pointer-events-none ring-1 ring-emerald-500/30";
                                                         }
                                                     } else if (isSelected) {
-                                                        containerStyle =
-                                                            "border-rose-600/60 bg-rose-950/40 text-rose-200 shadow-sm shadow-rose-500/10 pointer-events-none";
+                                                        containerStyle = isDark
+                                                            ? "border-rose-600/60 bg-rose-950/40 text-rose-200 shadow-sm pointer-events-none"
+                                                            : "border-rose-400 bg-rose-100 text-rose-900 shadow-sm pointer-events-none";
                                                     } else {
-                                                        containerStyle =
-                                                            "border-slate-800/60 bg-slate-900/40 text-slate-600 opacity-40 pointer-events-none";
+                                                        containerStyle = isDark
+                                                            ? "border-slate-800/60 bg-slate-900/40 text-slate-500 opacity-60 pointer-events-none"
+                                                            : "border-slate-200 bg-slate-100/60 text-slate-500 opacity-60 pointer-events-none";
                                                     }
                                                 }
 
                                                 const letterBadge = (
                                                     <span
                                                         className={`w-5 h-5 rounded-md text-[11px] font-mono font-bold flex items-center justify-center shrink-0 transition-colors ${!isAnswered
-                                                                ? "bg-slate-800 text-slate-400 group-hover:bg-blue-500/20 group-hover:text-blue-300"
+                                                                ? isDark
+                                                                    ? "bg-slate-800 text-slate-300 border border-slate-700 group-hover:bg-blue-500/20 group-hover:text-blue-300"
+                                                                    : "bg-white text-slate-800 border border-slate-300 group-hover:bg-indigo-100 group-hover:text-indigo-800"
                                                                 : isCorrectChoice && isSelected
                                                                     ? "bg-emerald-500 text-slate-950 font-bold"
                                                                     : isCorrectChoice
-                                                                        ? "bg-emerald-500/30 text-emerald-300 font-bold"
+                                                                        ? isDark ? "bg-emerald-500/30 text-emerald-300 font-bold" : "bg-emerald-200 text-emerald-900 font-bold"
                                                                         : isSelected
                                                                             ? "bg-rose-500 text-white font-bold"
-                                                                            : "bg-slate-800/50 text-slate-600"
+                                                                            : isDark ? "bg-slate-800/50 text-slate-600" : "bg-slate-200 text-slate-500"
                                                             }`}
                                                     >
                                                         {String.fromCharCode(65 + optIdx)}
@@ -2065,7 +2065,7 @@ export default function StoryReader({
                                                         </div>
 
                                                         {isAnswered && isCorrectChoice && (
-                                                            <span className="flex items-center gap-1 text-emerald-300 shrink-0 font-bold text-xs bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                                                            <span className={`flex items-center gap-1 shrink-0 font-bold text-xs px-2 py-0.5 rounded-md border ${isDark ? "text-emerald-300 bg-emerald-500/20 border-emerald-500/30" : "text-emerald-800 bg-emerald-100 border-emerald-300"}`}>
                                                                 <Check className="w-3 h-3" />
                                                                 <span className="hidden sm:inline">
                                                                     {isSelected ? t("badge_correct", "Doğru") : t("badge_correct_answer", "Doğru Cevap")}
@@ -2073,7 +2073,7 @@ export default function StoryReader({
                                                             </span>
                                                         )}
                                                         {isAnswered && isSelected && !isCorrectChoice && (
-                                                            <span className="flex items-center gap-1 text-rose-300 shrink-0 font-bold text-xs bg-rose-500/20 px-2 py-0.5 rounded-md border border-rose-500/30">
+                                                            <span className={`flex items-center gap-1 shrink-0 font-bold text-xs px-2 py-0.5 rounded-md border ${isDark ? "text-rose-300 bg-rose-500/20 border-rose-500/30" : "text-rose-800 bg-rose-100 border-rose-300"}`}>
                                                                 <X className="w-3 h-3" />
                                                                 <span className="hidden sm:inline">{t("badge_incorrect", "Yanlış")}</span>
                                                             </span>
@@ -2085,16 +2085,16 @@ export default function StoryReader({
 
                                         {/* Akıllı Hata Dedektörü (Neden Yanlış Yaptım?) Geri Bildirim Kutusu */}
                                         {isAnswered && !isQuestionCorrect && (
-                                            <div className="mt-3.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm shadow-amber-500/5">
-                                                <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                            <div className={`mt-3.5 p-3.5 rounded-xl border text-xs flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm ${isDark ? "bg-amber-500/10 border-amber-500/30 text-amber-200" : "bg-amber-50 border-amber-300 text-amber-950"}`}>
+                                                <Lightbulb className={`w-4 h-4 shrink-0 mt-0.5 ${isDark ? "text-amber-400" : "text-amber-600"}`} />
                                                 <div className="space-y-0.5 min-w-0">
-                                                    <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                                                    <p className={`font-semibold flex items-center gap-1.5 ${isDark ? "text-amber-300" : "text-amber-900"}`}>
                                                         <span>{t("why_wrong_title", "Neden Yanıldın?")}</span>
-                                                        <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-mono">
+                                                        <span className={`text-[10px] font-normal px-1.5 py-0.5 rounded font-mono ${isDark ? "bg-amber-400/20 text-amber-300" : "bg-amber-200 text-amber-900"}`}>
                                                             {t("smart_error_detector", "Akıllı Hata Dedektörü")}
                                                         </span>
                                                     </p>
-                                                    <p className="text-slate-300 mt-0.5 leading-relaxed">
+                                                    <p className={`mt-0.5 leading-relaxed ${isDark ? "text-slate-300" : "text-slate-800"}`}>
                                                         {q.distractor_reasons?.[selectedOpt] ||
                                                             q.explanation ||
                                                             t(
@@ -2112,7 +2112,10 @@ export default function StoryReader({
 
                         {/* Skor ve Ödül Kartı */}
                         {isQuizComplete && (
-                            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-indigo-950/60 to-slate-900 border-2 border-emerald-500/40 shadow-xl shadow-emerald-500/10 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                            <div
+                                data-theme-preserve="dark"
+                                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-emerald-900 via-indigo-950 to-slate-900 border-2 border-emerald-500/40 shadow-xl shadow-emerald-500/10 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500"
+                            >
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-3.5">
                                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-300 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-400/30 shrink-0">
@@ -2121,13 +2124,13 @@ export default function StoryReader({
                                         <div>
                                             <h4 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                                                 {correctCount === totalQuestions
-                                                    ? `Tebrikler! ${totalQuestions}/${totalQuestions} Doğru (+${earnedXP} XP Kazandınız 🏆)`
-                                                    : `Test Tamamlandı: ${correctCount}/${totalQuestions} Doğru (+${earnedXP} XP Kazandınız 🏆)`}
+                                                    ? t("read_quiz_perfect_title", "Tebrikler! {c}/{t} Doğru (+{xp} XP Kazandınız 🏆)", { c: totalQuestions, t: totalQuestions, xp: earnedXP })
+                                                    : t("read_quiz_done_title", "Test Tamamlandı: {c}/{t} Doğru (+{xp} XP Kazandınız 🏆)", { c: correctCount, t: totalQuestions, xp: earnedXP })}
                                             </h4>
                                             <p className="text-xs sm:text-sm text-slate-300">
                                                 {correctCount === totalQuestions
-                                                    ? "Harika bir okuma performansı! Tüm anlama sorularını doğru yanıtladınız."
-                                                    : `${totalQuestions} anlama sorusundan ${correctCount} tanesini doğru bildiniz.`}
+                                                    ? t("read_quiz_perfect_desc", "Harika bir okuma performansı! Tüm anlama sorularını doğru yanıtladınız.")
+                                                    : t("read_quiz_done_desc", "{t} anlama sorusundan {c} tanesini doğru bildiniz.", { t: totalQuestions, c: correctCount })}
                                             </p>
                                         </div>
                                     </div>
@@ -2137,10 +2140,10 @@ export default function StoryReader({
                                             type="button"
                                             onClick={handleDebateStory}
                                             className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-indigo-600/25 transition active:scale-95 cursor-pointer"
-                                            title="Bu hikayeyi Gemini ile sesli tartış"
+                                            title={t("read_debate_title", "Bu hikayeyi Gemini ile sesli tartış")}
                                         >
                                             <Mic className="w-4 h-4 text-violet-200" />
-                                            <span>🎙️ Bu Hikayeyi Gemini ile Tartış</span>
+                                            <span>🎙️ {t("read_quiz_debate_story", "Bu Hikayeyi Gemini ile Tartış")}</span>
                                         </button>
 
                                         <button
@@ -2152,14 +2155,14 @@ export default function StoryReader({
                                                 }`}
                                         >
                                             <CheckCircle className="w-4 h-4" />
-                                            <span>{isCompleted ? "Okuma Tamamlandı ✓" : "Okumayı Tamamla"}</span>
+                                            <span>{isCompleted ? t("read_quiz_completed_btn", "Okuma Tamamlandı ✓") : t("read_quiz_complete_btn", "Okumayı Tamamla")}</span>
                                         </button>
                                     </div>
                                 </div>
 
                                 <div className="space-y-1.5">
                                     <div className="flex justify-between text-[11px] font-semibold text-slate-400">
-                                        <span>Başarı Oranı: %{Math.round((correctCount / totalQuestions) * 100)}</span>
+                                        <span>{t("read_quiz_success_rate", "Başarı Oranı: %{rate}", { rate: Math.round((correctCount / totalQuestions) * 100) })}</span>
                                         <span className="text-amber-400 font-bold">+{earnedXP} XP</span>
                                     </div>
                                     <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
@@ -2180,7 +2183,7 @@ export default function StoryReader({
                 <div className="text-xs text-slate-400">
                     {isCompleted ? (
                         <span className="text-emerald-400 font-medium flex items-center gap-1.5">
-                            <CheckCircle className="w-4 h-4" /> Bu hikayeyi tamamladınız ve kitaplığınıza kaydedildi.
+                            <CheckCircle className="w-4 h-4" /> {t("read_story_saved_notice", "Bu hikayeyi tamamladınız ve kitaplığınıza kaydedildi.")}
                         </span>
                     ) : (
                         <span>
@@ -2198,10 +2201,10 @@ export default function StoryReader({
                         type="button"
                         onClick={handleDebateStory}
                         className="flex items-center space-x-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition hover:scale-[1.02] active:scale-95 cursor-pointer ring-1 ring-violet-400/40"
-                        title="Bu metni ve temalarını Gemini ile sesli tartış"
+                        title={t("read_debate_title", "Bu metni ve temalarını Gemini ile sesli tartış")}
                     >
                         <Mic className="w-4 h-4 text-violet-200" />
-                        <span>🎙️ Bu Hikayeyi Karakterle Tartış</span>
+                        <span>🎙️ {t("read_debate_with_char", "Bu Hikayeyi Karakterle Tartış")}</span>
                     </button>
 
                     {!isCompleted ? (
@@ -2237,8 +2240,8 @@ export default function StoryReader({
                                 type="button"
                                 onClick={handlePrevSentence}
                                 disabled={activeSentenceIdx <= 0}
-                                title="Geri 5s (Önceki Cümle)"
-                                aria-label="Geri 5s"
+                                title={t("read_back_5s_tip", "Geri 5s (Önceki Cümle)")}
+                                aria-label={t("read_back_5s_tip", "Geri 5s")}
                                 className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
                             >
                                 <SkipBack className="w-4 h-4" />
@@ -2274,8 +2277,8 @@ export default function StoryReader({
                                 type="button"
                                 onClick={handleNextSentence}
                                 disabled={activeSentenceIdx >= allSentences.length - 1}
-                                title="İleri 5s (Sonraki Cümle)"
-                                aria-label="İleri 5s"
+                                title={t("read_fwd_5s_tip", "İleri 5s (Sonraki Cümle)")}
+                                aria-label={t("read_fwd_5s_tip", "İleri 5s")}
                                 className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
                             >
                                 <span className="hidden sm:inline">5s</span>
@@ -2286,18 +2289,18 @@ export default function StoryReader({
                             <button
                                 type="button"
                                 onClick={() => handleOpenShadowing(activeSentenceIdx)}
-                                title="Aktif Cümleyi Gölgele & Sesli Oku (Shadowing)"
+                                title={t("read_shadow_tip", "Aktif Cümleyi Gölgele & Sesli Oku (Shadowing)")}
                                 className="px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
                             >
                                 <Mic className="w-3.5 h-3.5 text-white" />
-                                <span className="hidden sm:inline">Gölgele</span>
+                                <span className="hidden sm:inline">{t("read_shadow_btn", "Gölgele")}</span>
                             </button>
 
                             {/* X-Ray Cümle Röntgeni Butonu */}
                             <button
                                 type="button"
                                 onClick={() => handleOpenXRay(activeSentenceIdx)}
-                                title="Aktif Cümlenin Gramer İskeletini Aç (X-Ray Röntgeni)"
+                                title={t("read_xray_btn_tip", "Aktif Cümlenin Gramer İskeletini Aç (X-Ray Röntgeni)")}
                                 className="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-cyan-600/25 transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
                             >
                                 <span>🔬</span>
@@ -2358,7 +2361,7 @@ export default function StoryReader({
                         <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
                             <span className="hidden md:inline-flex items-center gap-1 text-[11px] text-indigo-400 font-semibold px-1.5 select-none">
                                 <Sparkles className="w-3 h-3 text-indigo-400" />
-                                <span>Nöral Ses</span>
+                                <span>{t("read_neural_voice_label", "Nöral Ses")}</span>
                             </span>
                             <select
                                 value={selectedVoice}
@@ -2371,8 +2374,8 @@ export default function StoryReader({
                                         speakSentence(activeSentenceIdx);
                                     }
                                 }}
-                                title="Edge-TTS Nöral Ses Modeli"
-                                aria-label="Nöral Ses Modeli"
+                                title={t("read_neural_voice_tip", "Edge-TTS Nöral Ses Modeli")}
+                                aria-label={t("read_neural_voice_tip", "Nöral Ses Modeli")}
                                 className="bg-slate-900 text-slate-200 text-xs font-semibold px-2 py-1 rounded-lg border border-slate-700 focus:border-indigo-500 outline-none cursor-pointer"
                             >
                                 {NEURAL_VOICES.map((v) => (

@@ -9,6 +9,7 @@ import LiveReadingRoom from "../../components/classroom/LiveReadingRoom";
 import LiveSpeechToDeckPanel from "../../components/classroom/LiveSpeechToDeckPanel";
 import { useLiveTranscription } from "../../hooks/useLiveTranscription";
 import { API_BASE } from "../../config";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface ScheduledLiveClass {
   id: string;
@@ -70,6 +71,7 @@ const INITIAL_MESSAGES: LiveChatMessage[] = [
 ];
 
 function ClassroomLiveStudioContent() {
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -151,9 +153,9 @@ function ClassroomLiveStudioContent() {
     if (guestParam) {
       const joinMsg: LiveChatMessage = {
         id: `msg-${Date.now()}`,
-        sender: "Sistem",
+        sender: t("brd_live_sys", "Sistem"),
         role: "system",
-        text: `👋 ${guestParam} akıllı tahta QR koduyla derse katıldı!`,
+        text: t("brd_live_qr_joined", "👋 {name} akıllı tahta QR koduyla derse katıldı!").replace("{name}", guestParam),
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, joinMsg]);
@@ -249,14 +251,14 @@ function ClassroomLiveStudioContent() {
         camVideoRef.current.srcObject = null;
       }
       setIsCamOn(false);
-      showNotice("📷 Kamera görüntüsü kapatıldı.", "info");
+      showNotice(t("brd_live_cam_off_msg", "📷 Kamera görüntüsü kapatıldı."), "info");
       return;
     }
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showNotice(
-          "Tarayıcınız kamera erişimini (getUserMedia) desteklemiyor. Lütfen güncel bir tarayıcı kullanın.",
+          t("brd_live_cam_unsup", "Tarayıcınız kamera erişimini (getUserMedia) desteklemiyor. Lütfen güncel bir tarayıcı kullanın."),
           "warning"
         );
         return;
@@ -271,10 +273,10 @@ function ClassroomLiveStudioContent() {
         camVideoRef.current.srcObject = stream;
       }
       setIsCamOn(true);
-      showNotice("📷 Kamera görüntüsü canlı stüdyoya bağlandı.", "info");
+      showNotice(t("brd_live_cam_on_msg", "📷 Kamera görüntüsü canlı stüdyoya bağlandı."), "info");
     } catch {
       showNotice(
-        "Kamera izni reddedildi. Canlı görüntü paylaşmak için tarayıcı adres çubuğundan kamera iznini etkinleştirebilirsiniz.",
+        t("brd_live_cam_denied", "Kamera izni reddedildi. Canlı görüntü paylaşmak için tarayıcı adres çubuğundan kamera iznini etkinleştirebilirsiniz."),
         "warning"
       );
     }
@@ -290,7 +292,7 @@ function ClassroomLiveStudioContent() {
       }
       setIsMicOn(false);
       if (role === "teacher") stopWhisperListening();
-      showNotice("🔇 Mikrofon sessize alındı.", "info");
+      showNotice(t("brd_live_mic_muted", "🔇 Mikrofon sessize alındı."), "info");
       return;
     }
 
@@ -298,7 +300,7 @@ function ClassroomLiveStudioContent() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setIsMicOn(true);
         if (role === "teacher") startWhisperListening();
-        showNotice("🎤 Mikrofon ve Live Whisper aktif edildi.", "info");
+        showNotice(t("brd_live_mic_on_msg", "🎤 Mikrofon ve Live Whisper aktif edildi."), "info");
         return;
       }
       const audioStream = await navigator.mediaDevices.getUserMedia({
@@ -308,12 +310,12 @@ function ClassroomLiveStudioContent() {
       micStreamRef.current = audioStream;
       setIsMicOn(true);
       if (role === "teacher") startWhisperListening();
-      showNotice("🎤 Mikrofon ve Live Whisper aktif edildi.", "info");
+      showNotice(t("brd_live_mic_on_msg", "🎤 Mikrofon ve Live Whisper aktif edildi."), "info");
     } catch {
       setIsMicOn(true);
       if (role === "teacher") startWhisperListening();
       showNotice(
-        "Mikrofon izni bekleniyor veya simülasyon modu hazır. Kelime yakalama paneli aktif.",
+        t("brd_live_mic_sim", "Mikrofon izni bekleniyor veya simülasyon modu hazır. Kelime yakalama paneli aktif."),
         "info"
       );
     }
@@ -331,14 +333,14 @@ function ClassroomLiveStudioContent() {
         screenVideoRef.current.srcObject = null;
       }
       setIsScreenSharing(false);
-      showNotice("🖥️ Ekran paylaşımı durduruldu.", "info");
+      showNotice(t("brd_live_scr_stop", "🖥️ Ekran paylaşımı durduruldu."), "info");
       return;
     }
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         showNotice(
-          "Tarayıcınız ekran paylaşımı özelliğini (getDisplayMedia) desteklemiyor.",
+          t("brd_live_scr_unsup", "Tarayıcınız ekran paylaşımı özelliğini (getDisplayMedia) desteklemiyor."),
           "warning"
         );
         return;
@@ -353,7 +355,7 @@ function ClassroomLiveStudioContent() {
         screenVideoRef.current.srcObject = displayStream;
       }
       setIsScreenSharing(true);
-      showNotice("🖥️ Masaüstü ekran paylaşımı gecikmesiz olarak canlı yayında!", "info");
+      showNotice(t("brd_live_scr_live", "🖥️ Masaüstü ekran paylaşımı gecikmesiz olarak canlı yayında!"), "info");
 
       const videoTrack = displayStream.getVideoTracks()[0];
       if (videoTrack) {
@@ -367,12 +369,12 @@ function ClassroomLiveStudioContent() {
             screenStreamRef.current = null;
           }
           setIsScreenSharing(false);
-          showNotice("🖥️ Ekran paylaşımı sonlandırıldı.", "info");
+          showNotice(t("brd_live_scr_ended", "🖥️ Ekran paylaşımı sonlandırıldı."), "info");
         };
       }
     } catch {
       showNotice(
-        "Ekran paylaşımı izni verilmedi veya pencere seçimi iptal edildi. İstediğiniz zaman tekrar 'Ekran Paylaşımını Başlat/Durdur' butonuna tıklayabilirsiniz.",
+        t("brd_live_scr_denied", "Ekran paylaşımı izni verilmedi veya pencere seçimi iptal edildi."),
         "warning"
       );
     }
@@ -416,7 +418,7 @@ function ClassroomLiveStudioContent() {
 
     const newMsg: LiveChatMessage = {
       id: `msg-${Date.now()}`,
-      sender: role === "teacher" ? "👨‍🏫 Öğretmen (Siz)" : "🎓 Öğrenci (Siz)",
+      sender: role === "teacher" ? t("brd_live_teacher_you", "👨‍🏫 Öğretmen (Siz)") : t("brd_live_student_you", "🎓 Öğrenci (Siz)"),
       role,
       text: trimmed,
       timestamp: timeStr,
@@ -435,27 +437,28 @@ function ClassroomLiveStudioContent() {
     const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
     ).padStart(2, "0")}`;
+    const youStudentName = t("brd_live_student_name_only", "Öğrenci (Siz)");
 
     if (nextState) {
       setRaisedHandsQueue((prev) =>
-        prev.includes("Öğrenci (Siz)") ? prev : [...prev, "Öğrenci (Siz)"]
+        prev.includes(youStudentName) ? prev : [...prev, youStudentName]
       );
       setMessages((prev) => [
         ...prev,
         {
           id: `hand-${Date.now()}`,
-          sender: "🎓 Öğrenci (Siz)",
+          sender: t("brd_live_student_you", "🎓 Öğrenci (Siz)"),
           role: "student",
-          text: "✋ Söz hakkı / soru sormak için el kaldırdı!",
+          text: t("brd_live_raised_hand_msg", "✋ Söz hakkı / soru sormak için el kaldırdı!"),
           timestamp: timeStr,
           isHandRaise: true,
         },
       ]);
-      showNotice("✋ Söz talebiniz iletildi! Öğretmen ekranında el kaldırma bildirimi görünüyor.", "info");
+      showNotice(t("brd_live_hand_sent", "✋ Söz talebiniz iletildi! Öğretmen ekranında el kaldırma bildirimi görünüyor."), "info");
       setIsChatOpen(true);
     } else {
-      setRaisedHandsQueue((prev) => prev.filter((name) => name !== "Öğrenci (Siz)"));
-      showNotice("✋ Söz isteme / el kaldırma talebiniz geri çekildi.", "info");
+      setRaisedHandsQueue((prev) => prev.filter((name) => name !== youStudentName));
+      showNotice(t("brd_live_hand_cancelled", "✋ Söz isteme / el kaldırma talebiniz geri çekildi."), "info");
     }
   };
 
@@ -470,7 +473,7 @@ function ClassroomLiveStudioContent() {
             className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-300 transition flex items-center gap-1.5 shrink-0"
           >
             <span>←</span>
-            <span className="hidden sm:inline">Sınıfa Dön</span>
+            <span className="hidden sm:inline">{t("brd_live_back", "Sınıfa Dön")}</span>
           </Link>
 
           {/* Canlı Yayın Rozeti & Başlık */}
@@ -480,7 +483,7 @@ function ClassroomLiveStudioContent() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
             </span>
             <span className="text-xs sm:text-sm font-black tracking-wide text-rose-200 truncate">
-              🔴 Canlı Yayın: 10-A Sınıfı
+              {t("brd_live_broadcast_hdr", "🔴 Canlı Yayın:")} 10-A
             </span>
             <span className="hidden md:inline-block text-xs text-slate-300 font-semibold truncate border-l border-rose-500/20 pl-2">
               {liveSession.title}
@@ -508,7 +511,7 @@ function ClassroomLiveStudioContent() {
               }`}
             >
               <span>🖥️</span>
-              <span className="hidden md:inline">Canlı Ekran</span>
+              <span className="hidden md:inline">{t("brd_live_screen", "Canlı Ekran")}</span>
             </button>
             <button
               type="button"
@@ -520,7 +523,7 @@ function ClassroomLiveStudioContent() {
               }`}
             >
               <span>📖</span>
-              <span>Canlı Okuma (Synced)</span>
+              <span>{t("brd_live_reading", "Canlı Okuma (Synced)")}</span>
             </button>
           </div>
 
@@ -536,7 +539,7 @@ function ClassroomLiveStudioContent() {
               }`}
             >
               <span>👨‍🏫</span>
-              <span className="hidden sm:inline">Öğretmen Görünümü</span>
+              <span className="hidden sm:inline">{t("brd_live_teacher_view", "Öğretmen Görünümü")}</span>
             </button>
             <button
               type="button"
@@ -548,13 +551,13 @@ function ClassroomLiveStudioContent() {
               }`}
             >
               <span>🎓</span>
-              <span className="hidden sm:inline">Öğrenci Görünümü</span>
+              <span className="hidden sm:inline">{t("brd_live_student_view", "Öğrenci Görünümü")}</span>
             </button>
           </div>
 
           {/* Katılımcı Sayacı */}
           <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold text-emerald-300">
-            <span>👥 {studentCount} Öğrenci Canlıda</span>
+            <span>{t("brd_live_students_online", "👥 {count} Öğrenci Canlıda").replace("{count}", String(studentCount))}</span>
           </div>
         </div>
       </header>
@@ -608,7 +611,7 @@ function ClassroomLiveStudioContent() {
 
             {raisedHandsQueue.length > 0 && (
               <div className="flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs font-bold animate-pulse">
-                <span>✋ El Kaldıran Öğrenciler ({raisedHandsQueue.length}):</span>
+                <span>{t("brd_live_raised_list", "✋ El Kaldıran Öğrenciler ({count}):").replace("{count}", String(raisedHandsQueue.length))}</span>
                 <span>{raisedHandsQueue.join(", ")}</span>
                 {role === "teacher" && (
                   <button
@@ -616,7 +619,7 @@ function ClassroomLiveStudioContent() {
                     onClick={() => setRaisedHandsQueue([])}
                     className="ml-1.5 text-[11px] underline text-amber-300 hover:text-white cursor-pointer"
                   >
-                    Söz Verildi ✓
+                    {t("brd_live_floor_given", "Söz Verildi ✓")}
                   </button>
                 )}
               </div>
@@ -644,16 +647,16 @@ function ClassroomLiveStudioContent() {
                 </div>
                 <span className="px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold uppercase tracking-widest mb-3">
                   {role === "teacher"
-                    ? "Öğretmen Canlı Yayın Stüdyosu"
-                    : "Öğrenci Tam Ekran İzleme Modu"}
+                    ? t("brd_live_teacher_studio_badge", "Öğretmen Canlı Yayın Stüdyosu")
+                    : t("brd_live_student_watch_badge", "Öğrenci Tam Ekran İzleme Modu")}
                 </span>
                 <h2 className="text-xl sm:text-2xl font-black text-white mb-2">
                   {liveSession.title}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-6">
                   {role === "teacher"
-                    ? "Alt stüdyo çubuğundaki [ 🖥️ Ekran Paylaşımını Başlat/Durdur ] butonuna tıklayarak masaüstü ekranınızı veya ders sunumunuzu gecikmesiz olarak sınıfa yansıtabilirsiniz."
-                    : "Öğretmenin paylaştığı masaüstü ekranını ve sağ alt köşedeki kamera yayınını tam ekran izleme modunda gecikmesiz takip ediyorsunuz."}
+                    ? t("brd_live_teacher_studio_desc", "Alt stüdyo çubuğundaki Ekran Paylaşımını Başlat/Durdur butonuna tıklayarak ekranınızı sınıfa yansıtabilirsiniz.")
+                    : t("brd_live_student_watch_desc", "Öğretmenin paylaştığı masaüstü ekranını ve kamera yayınını tam ekran izleme modunda gecikmesiz takip ediyorsunuz.")}
                 </p>
 
                 {role === "teacher" && (
@@ -664,7 +667,7 @@ function ClassroomLiveStudioContent() {
                       className="px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-indigo-950/60 transition cursor-pointer flex items-center gap-2"
                     >
                       <span>🖥️</span>
-                      <span>Ekran Paylaşımını Başlat/Durdur</span>
+                      <span>{t("brd_live_scr_toggle", "Ekran Paylaşımını Başlat/Durdur")}</span>
                     </button>
                     {!isCamOn && (
                       <button
@@ -673,7 +676,7 @@ function ClassroomLiveStudioContent() {
                         className="px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs sm:text-sm transition cursor-pointer flex items-center gap-2"
                       >
                         <span>📷</span>
-                        <span>Kamera Aç/Kapat</span>
+                        <span>{t("brd_live_cam_toggle", "Kamera Aç/Kapat")}</span>
                       </button>
                     )}
                   </div>
@@ -695,7 +698,7 @@ function ClassroomLiveStudioContent() {
                   }`}
                 >
                   <span>✋</span>
-                  <span>{handRaised ? "Söz İsteği Gönderildi (Geri Çek)" : "Söz İste / El Kaldır"}</span>
+                  <span>{handRaised ? t("brd_live_hand_sent_btn", "Söz İsteği Gönderildi (Geri Çek)") : t("brd_live_hand_btn", "Söz İste / El Kaldır")}</span>
                 </button>
               )}
 
@@ -717,23 +720,23 @@ function ClassroomLiveStudioContent() {
                     <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-base mb-1">
                       👨‍🏫
                     </div>
-                    <p className="text-[11px] font-bold text-slate-200">Öğretmen Kamerası</p>
+                    <p className="text-[11px] font-bold text-slate-200">{t("brd_live_teacher_cam", "Öğretmen Kamerası")}</p>
                     <p className="text-[10px] text-emerald-300/80">
-                      {isMicOn ? "🎤 Ses Aktif" : "Kamera Beklemede"}
+                      {isMicOn ? t("brd_live_audio_on", "🎤 Ses Aktif") : t("brd_live_cam_standby", "Kamera Beklemede")}
                     </p>
                   </div>
                 )}
 
                 {/* PiP Alt Etiket */}
                 <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between px-2 py-0.5 rounded-lg bg-black/65 backdrop-blur-sm text-[10px] font-semibold text-white pointer-events-none">
-                  <span className="truncate">👨‍🏫 Eğitmen</span>
+                  <span className="truncate">{t("brd_live_instructor_badge", "👨‍🏫 Eğitmen")}</span>
                   <span className="flex items-center gap-1">
                     <span
                       className={`w-1.5 h-1.5 rounded-full ${
                         isMicOn ? "bg-emerald-400 animate-pulse" : "bg-rose-500"
                       }`}
                     />
-                    {isMicOn ? "Canlı" : "Sessiz"}
+                    {isMicOn ? t("cls_pin_live", "Canlı") : t("brd_live_muted_lbl", "Sessiz")}
                   </span>
                 </div>
               </div>
@@ -745,7 +748,7 @@ function ClassroomLiveStudioContent() {
             <div className="mt-4 px-4 py-3 rounded-2xl bg-slate-900/95 border border-slate-800/90 flex flex-wrap items-center justify-between gap-3 shadow-xl">
               {/* Katılımcı Sayacı */}
               <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs sm:text-sm font-black text-emerald-300">
-                <span>👥 {studentCount} Öğrenci Canlıda</span>
+                <span>{t("brd_live_students_online", "👥 {count} Öğrenci Canlıda").replace("{count}", String(studentCount))}</span>
               </div>
 
               {/* Orta Medya Kontrolleri */}
@@ -761,7 +764,7 @@ function ClassroomLiveStudioContent() {
                   }`}
                 >
                   <span>🎤</span>
-                  <span>Mikrofon Aç/Kapat</span>
+                  <span>{t("brd_live_mic_toggle", "Mikrofon Aç/Kapat")}</span>
                 </button>
 
                 {/* [ 📷 Kamera Aç/Kapat ] */}
@@ -775,7 +778,7 @@ function ClassroomLiveStudioContent() {
                   }`}
                 >
                   <span>📷</span>
-                  <span>Kamera Aç/Kapat</span>
+                  <span>{t("brd_live_cam_toggle", "Kamera Aç/Kapat")}</span>
                 </button>
 
                 {/* [ 🖥️ Ekran Paylaşımını Başlat/Durdur ] */}
@@ -789,7 +792,7 @@ function ClassroomLiveStudioContent() {
                   }`}
                 >
                   <span>🖥️</span>
-                  <span>Ekran Paylaşımını Başlat/Durdur</span>
+                  <span>{t("brd_live_scr_toggle", "Ekran Paylaşımını Başlat/Durdur")}</span>
                 </button>
               </div>
 
@@ -801,7 +804,7 @@ function ClassroomLiveStudioContent() {
                   className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shadow-md transition cursor-pointer flex items-center gap-1.5"
                 >
                   <span>📖</span>
-                  <span>Canlı Okuma (Synced)</span>
+                  <span>{t("brd_live_reading", "Canlı Okuma (Synced)")}</span>
                 </button>
                 <button
                   type="button"
@@ -809,7 +812,7 @@ function ClassroomLiveStudioContent() {
                   className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-950/50 transition cursor-pointer flex items-center gap-1.5"
                 >
                   <Trophy className="w-4 h-4 fill-current" />
-                  <span>🏆 Podyumu Aç</span>
+                  <span>{t("brd_live_open_podium", "🏆 Podyumu Aç")}</span>
                 </button>
 
                 <button
@@ -818,7 +821,7 @@ function ClassroomLiveStudioContent() {
                   className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-rose-950/50 transition cursor-pointer flex items-center gap-1.5"
                 >
                   <span>🔴</span>
-                  <span>Yayını Bitir</span>
+                  <span>{t("brd_live_end_bcast", "Yayını Bitir")}</span>
                 </button>
               </div>
             </div>
@@ -827,10 +830,10 @@ function ClassroomLiveStudioContent() {
             <div className="mt-4 px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-800/90 flex flex-wrap items-center justify-between gap-3 shadow-xl">
               <div className="flex items-center gap-2.5 text-xs text-slate-300">
                 <span className="px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
-                  👥 {studentCount} Öğrenci Canlıda
+                  {t("brd_live_students_online", "👥 {count} Öğrenci Canlıda").replace("{count}", String(studentCount))}
                 </span>
                 <span className="hidden sm:inline text-slate-400">
-                  Tam ekran izleme modu aktif • Öğretmenin ekranı ve kamerası gecikmesiz aktarılıyor.
+                  {t("brd_live_watch_bar_desc", "Tam ekran izleme modu aktif • Öğretmenin ekranı ve kamerası gecikmesiz aktarılıyor.")}
                 </span>
               </div>
 
@@ -841,7 +844,7 @@ function ClassroomLiveStudioContent() {
                   className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shadow-md transition cursor-pointer flex items-center gap-1.5"
                 >
                   <Trophy className="w-4 h-4 fill-current" />
-                  <span>🏆 Canlı Podyum</span>
+                  <span>{t("brd_live_podium_btn", "🏆 Canlı Podyum")}</span>
                 </button>
 
                 <button
@@ -854,7 +857,7 @@ function ClassroomLiveStudioContent() {
                   }`}
                 >
                   <span>✋</span>
-                  <span>Söz İste / El Kaldır</span>
+                  <span>{t("brd_live_hand_btn", "Söz İste / El Kaldır")}</span>
                 </button>
               </div>
             </div>
@@ -926,10 +929,10 @@ function ClassroomLiveStudioContent() {
                   <div>
                     <h3 className="text-sm font-black text-white flex items-center gap-2">
                       <span>💬</span>
-                      <span>Canlı Soru & El Kaldırma</span>
+                      <span>{t("brd_live_qa_hdr", "Canlı Soru & El Kaldırma")}</span>
                     </h3>
                     <p className="text-[11px] text-slate-400">
-                      Öğrencilerin el kaldırma talepleri ve canlı Q&A
+                      {t("brd_live_qa_sub", "Öğrencilerin el kaldırma talepleri ve canlı Q&A")}
                     </p>
                   </div>
                   {role === "student" && (
@@ -942,7 +945,7 @@ function ClassroomLiveStudioContent() {
                           : "bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25"
                       }`}
                     >
-                      ✋ El Kaldır
+                      {t("brd_live_raise_hand", "✋ El Kaldır")}
                     </button>
                   )}
                 </div>
@@ -951,14 +954,14 @@ function ClassroomLiveStudioContent() {
                 {raisedHandsQueue.length > 0 && (
                   <div className="mx-3 mt-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 shrink-0">
                     <div className="flex items-center justify-between text-xs font-bold text-amber-300">
-                      <span>✋ Söz İsteyenler ({raisedHandsQueue.length})</span>
+                      <span>{t("brd_live_hands_queue", "✋ Söz İsteyenler")} ({raisedHandsQueue.length})</span>
                       {role === "teacher" && (
                         <button
                           type="button"
                           onClick={() => setRaisedHandsQueue([])}
                           className="text-[10px] underline hover:text-white cursor-pointer"
                         >
-                          Tümünü Temizle
+                          {t("brd_live_clear_all", "Tümünü Temizle")}
                         </button>
                       )}
                     </div>
@@ -1011,8 +1014,8 @@ function ClassroomLiveStudioContent() {
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder={
                       role === "teacher"
-                        ? "Sınıfa duyuru veya yanıt yazın..."
-                        : "Canlı derste soru sorun..."
+                        ? t("brd_live_ph_teacher", "Sınıfa duyuru veya yanıt yazın...")
+                        : t("brd_live_ph_student", "Canlı derste soru sorun...")
                     }
                     className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
                   />
@@ -1020,7 +1023,7 @@ function ClassroomLiveStudioContent() {
                     type="submit"
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer shrink-0"
                   >
-                    Gönder
+                    {t("send", "Gönder")}
                   </button>
                 </form>
               </div>
@@ -1035,20 +1038,21 @@ function ClassroomLiveStudioContent() {
         isOpen={isPodiumOpen}
         onClose={() => setIsPodiumOpen(false)}
         sessionId={liveSession.id || "live-session-1"}
-        gameTitle={liveSession.title || "Canlı Sınıf Arenası"}
+        gameTitle={liveSession.title || t("brd_live_arena_title", "Canlı Sınıf Arenası")}
         currentUserRank={role === "teacher" ? 1 : 2}
-        currentUserName={role === "teacher" ? "👨‍🏫 Öğretmen (Moderatör)" : "🎓 Sen (Öğrenci)"}
+        currentUserName={role === "teacher" ? t("brd_live_mod_name", "👨‍🏫 Öğretmen (Moderatör)") : t("brd_live_you_student", "🎓 Sen (Öğrenci)")}
       />
     </div>
   );
 }
 
 export default function ClassroomLivePage() {
+  const { t } = useLanguage();
   return (
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#050811] text-slate-200 flex items-center justify-center text-sm font-bold">
-          🔴 Canlı Sınıf Stüdyosu Yükleniyor...
+          {t("brd_live_loading", "🔴 Canlı Sınıf Stüdyosu Yükleniyor...")}
         </div>
       }
     >

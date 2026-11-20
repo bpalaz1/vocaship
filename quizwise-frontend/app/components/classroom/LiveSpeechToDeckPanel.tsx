@@ -23,6 +23,7 @@ import {
   CreateLiveAssignmentResult,
 } from "../../actions/assignments";
 import { API_BASE } from "../../config";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface LiveSpeechToDeckPanelProps {
   capturedWords: LiveCapturedWord[];
@@ -47,12 +48,13 @@ export default function LiveSpeechToDeckPanel({
   role = "student",
   classId = "cls-1",
   classCode = "VRG-2535",
-  className = "10-A Sınıfı • C1 Project Controls",
+  className = "10-A • C1 Project Controls",
   onRemoveWord,
   onClearWords,
   onSimulatePhrase,
   onToggleListening,
 }: LiveSpeechToDeckPanelProps) {
+  const { t } = useLanguage();
   // Öğrencinin eklediği kelimelerin ID'lerini tutan state
   const [addedWordIds, setAddedWordIds] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
@@ -87,8 +89,8 @@ export default function LiveSpeechToDeckPanel({
         phonetic: item.phonetic || null,
         meanings: [
           {
-            part_of_speech: "terim",
-            translation: item.turkish_meaning || "Canlı ders terimi",
+            part_of_speech: "term",
+            translation: item.turkish_meaning || t("brd_s2d_live_term", "Canlı ders terimi"),
             definition: item.contextSentence || "",
           },
         ],
@@ -151,7 +153,7 @@ export default function LiveSpeechToDeckPanel({
     } catch (err: any) {
       setAssignResult({
         success: false,
-        message: err.message || "Ödev atanırken beklenmedik bir hata oluştu.",
+        message: err.message || t("brd_s2d_assign_err", "Ödev atanırken beklenmedik bir hata oluştu."),
       });
     } finally {
       setIsAssigning(false);
@@ -187,8 +189,8 @@ export default function LiveSpeechToDeckPanel({
               </div>
               <p className="text-[11px] text-slate-400">
                 {role === "teacher"
-                  ? "Konuştuğunuz kritik kelimeler anında sınıfa akar"
-                  : "Öğretmenin bahsettiği kelimeleri destene kaydet"}
+                  ? t("brd_s2d_teacher_sub", "Konuştuğunuz kritik kelimeler anında sınıfa akar")
+                  : t("brd_s2d_student_sub", "Öğretmenin bahsettiği kelimeleri destene kaydet")}
               </p>
             </div>
           </div>
@@ -198,12 +200,12 @@ export default function LiveSpeechToDeckPanel({
             {isListening ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-300 text-[11px] font-extrabold animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                <span>Canlı Dinliyor</span>
+                <span>{t("brd_s2d_listening", "Canlı Dinliyor")}</span>
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 text-[11px] font-semibold">
                 <MicOff className="w-3 h-3 text-slate-500" />
-                <span>Beklemede</span>
+                <span>{t("brd_s2d_standby", "Beklemede")}</span>
               </span>
             )}
           </div>
@@ -214,7 +216,7 @@ export default function LiveSpeechToDeckPanel({
           <div className="mt-2.5 p-2.5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
             <span>
-              Web Speech API desteği bulunamadı. Aşağıdaki test butonlarıyla kelime akışını deneyebilirsiniz.
+              {t("brd_s2d_no_speech", "Web Speech API desteği bulunamadı. Aşağıdaki test butonlarıyla kelime akışını deneyebilirsiniz.")}
             </span>
           </div>
         )}
@@ -229,28 +231,28 @@ export default function LiveSpeechToDeckPanel({
         <div className="mt-3 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
             <Layers className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Hedef Deste:</span>
+            <span>{t("brd_s2d_target_deck", "Hedef Deste:")}</span>
             <select
               value={targetDeck}
               onChange={(e) => setTargetDeck(e.target.value)}
               className="bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-0.5 text-xs text-indigo-300 font-bold focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
-              <option value="live-deck">🎙️ Canlı Ders Destem</option>
+              <option value="live-deck">{t("brd_s2d_deck_live", "🎙️ Canlı Ders Destem")}</option>
               <option value="c1-business">💼 C1 Business & FIDIC</option>
-              <option value="daily-vocab">📚 Günlük Kelimelerim</option>
+              <option value="daily-vocab">{t("brd_s2d_deck_daily", "📚 Günlük Kelimelerim")}</option>
             </select>
           </div>
 
           <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
             <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700/70 text-slate-300 font-bold">
-              {capturedWords.length} Kelime
+              {capturedWords.length} {t("lib_words_unit", "Kelime")}
             </span>
             {role === "teacher" && capturedWords.length > 0 && onClearWords && (
               <button
                 type="button"
                 onClick={onClearWords}
                 className="text-slate-500 hover:text-rose-400 transition cursor-pointer"
-                title="Tüm Listeyi Temizle"
+                title={t("brd_s2d_clear_tip", "Tüm Listeyi Temizle")}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -269,19 +271,19 @@ export default function LiveSpeechToDeckPanel({
               <Mic className="w-7 h-7" />
             </div>
             <h4 className="text-sm font-bold text-white mb-1">
-              Henüz Canlı Kelime Yakalanmadı
+              {t("brd_s2d_empty_t", "Henüz Canlı Kelime Yakalanmadı")}
             </h4>
             <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
               {role === "teacher"
-                ? "Mikrofonunuz açıkken konuştuğunuzda FIDIC, mühendislik ve kritik seviye kelimeleri yapay zekâ tarafından anında sağ panele dökülür."
-                : "Öğretmeniniz konuştukça vaka kelimeleri ve terimler buraya akacak. Tek tıkla destenize ekleyebilirsiniz."}
+                ? t("brd_s2d_empty_t_desc", "Mikrofonunuz açıkken konuştuğunuzda FIDIC, mühendislik ve kritik seviye kelimeleri yapay zekâ tarafından anında sağ panele dökülür.")
+                : t("brd_s2d_empty_s_desc", "Öğretmeniniz konuştukça vaka kelimeleri ve terimler buraya akacak. Tek tıkla destenize ekleyebilirsiniz.")}
             </p>
 
             {/* Simülasyon / Test Cümleleri Butonları */}
             {onSimulatePhrase && (
               <div className="mt-5 w-full max-w-xs space-y-2">
                 <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 block">
-                  Hızlı Simülasyon Dene
+                  {t("brd_s2d_sim_hdr", "Hızlı Simülasyon Dene")}
                 </span>
                 <div className="flex flex-col gap-1.5">
                   {testPhrases.map((phrase, idx) => (
@@ -345,7 +347,7 @@ export default function LiveSpeechToDeckPanel({
                     <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500 font-mono">
                       <span>{item.timestamp}</span>
                       {item.senderRole === "teacher" && (
-                        <span className="text-indigo-400 font-bold">👨‍🏫 Eğitmenin Cümlesi</span>
+                        <span className="text-indigo-400 font-bold">{t("brd_s2d_teacher_sent", "👨‍🏫 Eğitmenin Cümlesi")}</span>
                       )}
                     </div>
                   </div>
@@ -366,14 +368,14 @@ export default function LiveSpeechToDeckPanel({
                         {isAdded ? (
                           <>
                             <Check className="w-3.5 h-3.5 text-emerald-300" />
-                            <span>Eklendi</span>
+                            <span>{t("brd_s2d_added", "Eklendi")}</span>
                           </>
                         ) : isThisAdding ? (
-                          <span>Kaydediliyor...</span>
+                          <span>{t("saving", "Kaydediliyor...")}</span>
                         ) : (
                           <>
                             <Plus className="w-3.5 h-3.5" />
-                            <span>Desteye Ekle</span>
+                            <span>{t("brd_s2d_add_deck", "Desteye Ekle")}</span>
                           </>
                         )}
                       </button>
@@ -383,7 +385,7 @@ export default function LiveSpeechToDeckPanel({
                           type="button"
                           onClick={() => onRemoveWord(item.id)}
                           className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                          title="Kelimeyi Listeden Kaldır"
+                          title={t("brd_s2d_remove_tip", "Kelimeyi Listeden Kaldır")}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -434,12 +436,12 @@ export default function LiveSpeechToDeckPanel({
             <Send className="w-4 h-4" />
             <span>
               {isAssigning
-                ? "Ödev Sınıfa Atanıyor..."
-                : `📌 Yakalanan Kelimeleri Sınıfa Ödev Ata (${capturedWords.length})`}
+                ? t("brd_s2d_assigning", "Ödev Sınıfa Atanıyor...")
+                : t("brd_s2d_assign_btn", "📌 Yakalanan Kelimeleri Sınıfa Ödev Ata ({count})").replace("{count}", String(capturedWords.length))}
             </span>
           </button>
           <p className="text-[10px] text-slate-400 text-center mt-1.5">
-            Hedef Sınıf: <strong>{classCode}</strong> ({className}) • Otomatik Kelime Tekrar Ödevi
+            {t("brd_s2d_target_class", "Hedef Sınıf:")} <strong>{classCode}</strong> ({className}) • {t("brd_s2d_auto_hw", "Otomatik Kelime Tekrar Ödevi")}
           </p>
         </div>
       )}

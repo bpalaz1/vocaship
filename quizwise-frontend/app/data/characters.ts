@@ -21,6 +21,8 @@ export interface StoreCharacter {
     tr: StoreCharacterLocale;
     en: StoreCharacterLocale;
     de: StoreCharacterLocale;
+    es?: StoreCharacterLocale;
+    fr?: StoreCharacterLocale;
   };
   avatarSvg: string; // Vektörel hafif SVG illüstrasyon
 }
@@ -40,7 +42,8 @@ export const CEFR_LEVEL_RANK: Record<string, number> = {
 export function checkCharacterMilestone(
   char: StoreCharacter,
   userLevel: string = "A1",
-  completedStoriesCount: number = 0
+  completedStoriesCount: number = 0,
+  lang: string = "tr"
 ): { isUnlocked: boolean; missingReason: string } {
   const userRank = CEFR_LEVEL_RANK[userLevel.toUpperCase()] || 1;
   const reqRank = char.requiredLevel ? CEFR_LEVEL_RANK[char.requiredLevel.toUpperCase()] || 1 : 1;
@@ -55,10 +58,19 @@ export function checkCharacterMilestone(
 
   const reqLevelStr = char.requiredLevel || "A1";
   const reqStories = char.requiredStoriesCount || 0;
+  const l = (lang || "tr").toLowerCase();
+
+  const reasonByLang: Record<string, string> = {
+    tr: `${reqLevelStr} Seviyesi veya ${reqStories} Hikaye Tamamla (Mevcut: ${completedStoriesCount}/${reqStories})`,
+    en: `Reach ${reqLevelStr} or Complete ${reqStories} Stories (Current: ${completedStoriesCount}/${reqStories})`,
+    de: `Stufe ${reqLevelStr} oder ${reqStories} Geschichten abschließen (Aktuell: ${completedStoriesCount}/${reqStories})`,
+    es: `Nivel ${reqLevelStr} o completar ${reqStories} historias (Actual: ${completedStoriesCount}/${reqStories})`,
+    fr: `Niveau ${reqLevelStr} ou terminer ${reqStories} histoires (Actuel : ${completedStoriesCount}/${reqStories})`,
+  };
 
   return {
     isUnlocked: false,
-    missingReason: `${reqLevelStr} Seviyesi veya ${reqStories} Hikaye Tamamla (Mevcut: ${completedStoriesCount}/${reqStories})`,
+    missingReason: reasonByLang[l] || reasonByLang.en,
   };
 }
 
@@ -69,7 +81,7 @@ export function getCharacterLocale(
   char: StoreCharacter,
   lang: string = "tr"
 ): StoreCharacterLocale {
-  const normalizedLang = (lang || "tr").toLowerCase() as "tr" | "en" | "de";
+  const normalizedLang = (lang || "tr").toLowerCase() as "tr" | "en" | "de" | "es" | "fr";
   return char.locales[normalizedLang] || char.locales.en || char.locales.tr;
 }
 
@@ -99,6 +111,18 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
         title: "Königlicher Wachanwärter",
         bio: "Ein enthusiastischer Schwertkämpfer, der seine ersten Schritte in die Welt der Wörter wagt.",
         unlockQuote: "Meine Klinge wird so scharf sein wie mein Wortschatz! Auf geht's!",
+      },
+      es: {
+        name: "Escudero Novato",
+        title: "Aspirante a Guardia Real",
+        bio: "Espadachín entusiasta que da sus primeros pasos en el mundo de las palabras.",
+        unlockQuote: "¡Mi espada será tan afilada como mi vocabulario! ¡Empecemos!",
+      },
+      fr: {
+        name: "Écuyer Novice",
+        title: "Aspirant Garde Royal",
+        bio: "Un jeune épéiste enthousiaste qui fait ses premiers pas dans l'univers des mots.",
+        unlockQuote: "Ma lame sera aussi affûtée que mon vocabulaire ! C'est parti !",
       },
     },
     avatarSvg: `<svg viewBox="0 0 100 100" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -134,6 +158,18 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
         bio: "Ein scharfsinniger Fährtenleser, der weder sein Ziel noch das richtige Wort verfehlt.",
         unlockQuote: "Mein Pfeil trifft immer ins Schwarze, genau wie das treffende Wort!",
       },
+      es: {
+        name: "Arquero de la Aldea",
+        title: "Explorador del Bosque",
+        bio: "Rastreador certero que nunca falla un blanco ni la palabra exacta.",
+        unlockQuote: "¡Mi flecha siempre da en el blanco, igual que la palabra justa!",
+      },
+      fr: {
+        name: "Archer du Village",
+        title: "Éclaireur de la Forêt",
+        bio: "Un pisteur vif qui ne manque jamais sa cible ni le mot exact.",
+        unlockQuote: "Ma flèche vise toujours juste, tout comme ma prononciation !",
+      },
     },
     avatarSvg: `<svg viewBox="0 0 100 100" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="44" fill="#064E3B" stroke="#10B981" stroke-width="4"/>
@@ -167,6 +203,18 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
         title: "Sternenflotten-Forscher",
         bio: "Ein junger Astronom, der fremdartige Frequenzen und interplanetare Sprachen im All entschlüsselt.",
         unlockQuote: "Frequenzen kalibriert! Der interstellare Kommunikationskanal steht!",
+      },
+      es: {
+        name: "Cadete Cósmico",
+        title: "Explorador Estelar",
+        bio: "Joven astrónomo que descifra frecuencias e idiomas interplanetarios.",
+        unlockQuote: "¡Frecuencias alineadas! ¡Canal de transmisión universal abierto!",
+      },
+      fr: {
+        name: "Cadet Cosmique",
+        title: "Explorateur Stellaire",
+        bio: "Jeune astronome décodant les fréquences et langues interplanétaires.",
+        unlockQuote: "Fréquences alignées ! Canal de transmission universel ouvert !",
       },
     },
     avatarSvg: `<svg viewBox="0 0 100 100" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -202,6 +250,18 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
         bio: "Ein weiser Gelehrter, der seltene Redewendungen in magische Gedächtnistränke verwandelt.",
         unlockQuote: "Wenn sich die richtigen Worte verbinden, wird Wissen zu reinem Gold!",
       },
+      es: {
+        name: "Alquimista Místico",
+        title: "Maestro de Elixires Verbales",
+        bio: "Sabio antiguo que transforma modismos raros en pociones de memoria.",
+        unlockQuote: "¡Al combinar las palabras justas, la mente se vuelve oro puro!",
+      },
+      fr: {
+        name: "Alchimiste Mystique",
+        title: "Maître des Élixirs Verbaux",
+        bio: "Sage ancien transformant les expressions rares en élixirs de mémoire.",
+        unlockQuote: "Quand les bons mots s'unissent, l'esprit devient or pur !",
+      },
     },
     avatarSvg: `<svg viewBox="0 0 100 100" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="44" fill="#311042" stroke="#A855F7" stroke-width="4"/>
@@ -235,6 +295,18 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
         title: "Wächter des Lichts",
         bio: "Ein ritterlicher Redner, der Eloquenz und Grammatik wie einen unüberwindbaren Schild trägt.",
         unlockQuote: "Wissen ist mein Schild, Klarheit mein Schwert. Keine Debatte wird mich brechen!",
+      },
+      es: {
+        name: "Paladín de Plata",
+        title: "Guardián del Resplandor",
+        bio: "Orador disciplinado que porta la gramática como un escudo impenetrable.",
+        unlockQuote: "¡El conocimiento es mi escudo y la elocuencia mi guía!",
+      },
+      fr: {
+        name: "Paladin d'Argent",
+        title: "Gardien de l'Éclat",
+        bio: "Orateur discipliné portant la grammaire comme un bouclier impénétrable.",
+        unlockQuote: "Le savoir est mon bouclier, l'éloquence ma lumière !",
       },
     },
     avatarSvg: `<svg viewBox="0 0 100 100" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -270,6 +342,18 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
         bio: "Ein Meister der digitalen Tarnung, der im Sekundentakt treffsichere Argumente liefert.",
         unlockQuote: "Ich lerne in der Stille und spreche ohne Latenz. Der Cyberspace folgt meinem Code!",
       },
+      es: {
+        name: "Ninja Cibernético",
+        title: "Maestro de la Red Neón",
+        bio: "Experto en sigilo digital que responde con precisión en milisegundos.",
+        unlockQuote: "¡Aprendo en silencio y hablo sin latencia. Las sombras siguen mi código!",
+      },
+      fr: {
+        name: "Cyber-Ninja",
+        title: "Maître du Réseau Néon",
+        bio: "Expert furtif répondant avec une précision éclair en millisecondes.",
+        unlockQuote: "J'apprends en silence et je parle sans latence !",
+      },
     },
     avatarSvg: `<svg viewBox="0 0 100 100" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="44" fill="#050505" stroke="#06B6D4" stroke-width="4"/>
@@ -303,6 +387,18 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
         title: "C1-Gipfellegende",
         bio: "Herrscher der Lüfte, der selbst komplexeste akademische und berufliche Debatten meisterhaft beherrscht.",
         unlockQuote: "Ich spreche mit dem Feuer des Drachen und erobere den Himmel mit Worten!",
+      },
+      es: {
+        name: "Jinete de Dragones",
+        title: "Leyenda Cumbre C1",
+        bio: "Soberano de los cielos que domina debates complejos con fluidez ejecutiva.",
+        unlockQuote: "¡Hablo con fuego de dragón y conquisto los cielos con mis palabras!",
+      },
+      fr: {
+        name: "Chevalier Dragon",
+        title: "Légende Sommet C1",
+        bio: "Souverain des cieux maîtrisant les débats complexes avec aisance.",
+        unlockQuote: "Je parle avec le feu du dragon et je conquiers les cieux par les mots !",
       },
     },
     avatarSvg: `<svg viewBox="0 0 100 100" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">

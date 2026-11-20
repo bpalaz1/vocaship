@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { X, Upload, Camera, Sparkles, CheckCircle2, Volume2, RefreshCw, Box } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export const VOCASHIP_CUSTOM_3D_AVATAR_KEY = "vocaship_custom_3d_avatar";
 export const VOCASHIP_CUSTOM_AVATAR_KEY = "vocaship_custom_avatar";
@@ -143,14 +144,16 @@ export default function Transform3DModal({
   isOpen,
   onClose,
   initialUrl,
-  initialName = "3D Avatarım",
+  initialName,
   initialGender = "male",
   onAvatarCreated,
 }: Transform3DModalProps) {
+  const { t } = useLanguage();
+  const defaultAvatarLabel = t("av_3d_default_name", "3D Avatarım");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [sourcePreview, setSourcePreview] = useState<string | null>(null);
   const [transformedUrl, setTransformedUrl] = useState<string | null>(initialUrl || null);
-  const [avatarName, setAvatarName] = useState<string>(initialName || "3D Avatarım");
+  const [avatarName, setAvatarName] = useState<string>(initialName || defaultAvatarLabel);
   const [voiceGender, setVoiceGender] = useState<VoiceGenderOption>(initialGender || "male");
   const [isTransforming, setIsTransforming] = useState<boolean>(false);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
@@ -164,7 +167,7 @@ export default function Transform3DModal({
   useEffect(() => {
     if (isOpen) {
       setTransformedUrl(initialUrl || null);
-      setAvatarName(initialName || "3D Avatarım");
+      setAvatarName(initialName || defaultAvatarLabel);
       setVoiceGender(initialGender || "male");
       setErrorMsg(null);
     } else {
@@ -199,7 +202,7 @@ export default function Transform3DModal({
         }
       }, 60);
     } catch {
-      setErrorMsg("Kameraya erişilemedi. Lütfen bir fotoğraf dosyası seçin.");
+      setErrorMsg(t("av_cam_access_err", "Kameraya erişilemedi. Lütfen bir fotoğraf dosyası seçin."));
     }
   };
 
@@ -225,7 +228,7 @@ export default function Transform3DModal({
 
   const handleFilePicked = (file: File) => {
     if (!file.type.startsWith("image/")) {
-      setErrorMsg("Lütfen geçerli bir resim dosyası (PNG, JPG, WEBP) seçin.");
+      setErrorMsg(t("av_invalid_img_err", "Lütfen geçerli bir resim dosyası (PNG, JPG, WEBP) seçin."));
       return;
     }
     setErrorMsg(null);
@@ -242,7 +245,7 @@ export default function Transform3DModal({
 
   const handleTransformTo3D = async () => {
     if (!selectedFile && !sourcePreview) {
-      setErrorMsg("Lütfen önce bir portre fotoğrafı yükleyin veya kamerayla çekin.");
+      setErrorMsg(t("av_need_portrait_err", "Lütfen önce bir portre fotoğrafı yükleyin veya kamerayla çekin."));
       return;
     }
 
@@ -287,7 +290,7 @@ export default function Transform3DModal({
         const local3D = await renderClientSideLowPoly3D(sourcePreview);
         setTransformedUrl(local3D);
       } else {
-        setErrorMsg("3D dönüşüm sırasında bir hata oluştu.");
+        setErrorMsg(t("av_3d_transform_err", "3D dönüşüm sırasında bir hata oluştu."));
       }
     } finally {
       setIsTransforming(false);
@@ -300,7 +303,7 @@ export default function Transform3DModal({
 
     const meta: Transform3DAvatarMeta = {
       url: finalAvatarUrl,
-      name: avatarName.trim() || "3D Avatarım",
+      name: avatarName.trim() || defaultAvatarLabel,
       gender: voiceGender,
       createdAt: new Date().toISOString(),
     };
@@ -340,10 +343,10 @@ export default function Transform3DModal({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-black tracking-wide text-white">
-                🧊 3D Poligon Avatar Stüdyosu (Fotoğraftan 3D&apos;ye)
+                {t("av_3d_studio_title", "🧊 3D Poligon Avatar Stüdyosu (Fotoğraftan 3D'ye)")}
               </h2>
               <p className="text-[11px] text-slate-400">
-                Portre fotoğrafınızı hacimsel stüdyo ışıklı 3D Low-Poly Faceted Origami heykelsi avatara dönüştürün.
+                {t("av_3d_studio_desc", "Portre fotoğrafınızı hacimsel stüdyo ışıklı 3D Low-Poly Faceted Origami heykelsi avatara dönüştürün.")}
               </p>
             </div>
           </div>
@@ -351,7 +354,7 @@ export default function Transform3DModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
-            title="Kapat"
+            title={t("close", "Kapat")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -363,13 +366,13 @@ export default function Transform3DModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                Avatar İsmi
+                {t("av_name_lbl", "Avatar İsmi")}
               </label>
               <input
                 type="text"
                 value={avatarName}
                 onChange={(e) => setAvatarName(e.target.value)}
-                placeholder="Örn: 3D Mentorüm"
+                placeholder={t("av_3d_name_ph", "Örn: 3D Mentorüm")}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-cyan-400 text-xs text-white outline-none"
               />
             </div>
@@ -377,7 +380,7 @@ export default function Transform3DModal({
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Ses Tonu</span>
+                <span>{t("av_voice_tone", "Ses Tonu")}</span>
               </label>
               <div className="grid grid-cols-3 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
                 <button
@@ -389,7 +392,7 @@ export default function Transform3DModal({
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  👩 Kadın
+                  👩 {t("av_female", "Kadın")}
                 </button>
                 <button
                   type="button"
@@ -400,7 +403,7 @@ export default function Transform3DModal({
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  👨 Erkek
+                  👨 {t("av_male", "Erkek")}
                 </button>
                 <button
                   type="button"
@@ -411,7 +414,7 @@ export default function Transform3DModal({
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  🧒 Çocuk
+                  🧒 {t("av_child", "Çocuk")}
                 </button>
               </div>
             </div>
@@ -465,14 +468,14 @@ export default function Transform3DModal({
                     onClick={captureFromCamera}
                     className="absolute bottom-2 px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg cursor-pointer"
                   >
-                    📸 Fotoğrafı Çek
+                    📸 {t("av_take_photo", "Fotoğrafı Çek")}
                   </button>
                 </div>
               ) : sourcePreview ? (
                 <div className="relative w-full h-full flex flex-col items-center justify-center">
                   <img
                     src={sourcePreview}
-                    alt="Yüklenen Portre"
+                    alt={t("av_uploaded_portrait_alt", "Yüklenen Portre")}
                     className="w-full h-full object-cover rounded-xl"
                   />
                   <div className="absolute bottom-2 flex items-center gap-2">
@@ -481,14 +484,14 @@ export default function Transform3DModal({
                       onClick={() => fileInputRef.current?.click()}
                       className="px-3 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 text-[11px] font-bold cursor-pointer"
                     >
-                      Değiştir
+                      {t("av_change", "Değiştir")}
                     </button>
                     <button
                       type="button"
                       onClick={startCamera}
                       className="px-3 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold cursor-pointer"
                     >
-                      Kamera
+                      {t("av_camera", "Kamera")}
                     </button>
                   </div>
                 </div>
@@ -499,10 +502,10 @@ export default function Transform3DModal({
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-slate-200">
-                      Selfie / Portre Fotoğrafınızı Sürükleyin
+                      {t("av_3d_drag_portrait", "Selfie / Portre Fotoğrafınızı Sürükleyin")}
                     </p>
                     <p className="text-[11px] text-slate-500">
-                      veya bilgisayarınızdan / kameranızdan seçin
+                      {t("av_3d_or_pick", "veya bilgisayarınızdan / kameranızdan seçin")}
                     </p>
                   </div>
                   <div className="flex items-center justify-center gap-2 pt-1">
@@ -511,7 +514,7 @@ export default function Transform3DModal({
                       onClick={() => fileInputRef.current?.click()}
                       className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 transition cursor-pointer"
                     >
-                      Dosya Seç
+                      {t("av_pick_file", "Dosya Seç")}
                     </button>
                     <button
                       type="button"
@@ -519,7 +522,7 @@ export default function Transform3DModal({
                       className="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold border border-cyan-500/40 flex items-center gap-1.5 transition cursor-pointer"
                     >
                       <Camera className="w-3.5 h-3.5" />
-                      <span>Kamera</span>
+                      <span>{t("av_camera", "Kamera")}</span>
                     </button>
                   </div>
                 </div>
@@ -534,10 +537,10 @@ export default function Transform3DModal({
                     <Box className="w-7 h-7 text-cyan-300" />
                   </div>
                   <p className="text-xs font-bold text-cyan-300 animate-pulse">
-                    3D Poligon Yüzeyler Hesaplanıyor...
+                    {t("av_3d_calc", "3D Poligon Yüzeyler Hesaplanıyor...")}
                   </p>
                   <p className="text-[10px] text-slate-500 max-w-[200px]">
-                    Hacimsel stüdyo ışığı ve keskin origami poligon fasetleri uygulanıyor
+                    {t("av_3d_calc_desc", "Hacimsel stüdyo ışığı ve keskin origami poligon fasetleri uygulanıyor")}
                   </p>
                 </div>
               ) : transformedUrl ? (
@@ -545,11 +548,11 @@ export default function Transform3DModal({
                   <img
                     data-testid="transformed-3d-avatar-preview"
                     src={transformedUrl}
-                    alt="3D Poligon Avatar Önizleme"
+                    alt={t("av_3d_preview_alt", "3D Poligon Avatar Önizleme")}
                     className="w-full h-full object-cover rounded-xl border border-cyan-400/50 shadow-[0_0_25px_rgba(34,211,238,0.25)]"
                   />
                   <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full bg-slate-950/90 border border-cyan-400/50 text-cyan-300 text-[10px] font-black">
-                    🧊 3D Low-Poly Hazır
+                    {t("av_3d_ready_badge", "🧊 3D Low-Poly Hazır")}
                   </span>
                 </div>
               ) : (
@@ -558,10 +561,10 @@ export default function Transform3DModal({
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <p className="text-xs font-bold text-slate-400">
-                    3D Poligon Önizleme Sahnesi
+                    {t("av_3d_scene_title", "3D Poligon Önizleme Sahnesi")}
                   </p>
                   <p className="text-[11px] text-slate-500">
-                    Fotoğraf seçtikten sonra <strong className="text-cyan-300">&ldquo;✨ 3D Poligon Avatara Dönüştür&rdquo;</strong> butonuna basın.
+                    {t("av_3d_scene_hint", "Fotoğraf seçtikten sonra \"✨ 3D Poligon Avatara Dönüştür\" butonuna basın.")}
                   </p>
                 </div>
               )}
@@ -588,7 +591,7 @@ export default function Transform3DModal({
               ) : (
                 <Sparkles className="w-4 h-4" />
               )}
-              <span>✨ 3D Poligon Avatara Dönüştür</span>
+              <span>{t("av_3d_convert_btn", "✨ 3D Poligon Avatara Dönüştür")}</span>
             </button>
 
             <button
@@ -599,7 +602,7 @@ export default function Transform3DModal({
               className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Bu Avatarı Kullan</span>
+              <span>{t("av_use_avatar_btn", "Bu Avatarı Kullan")}</span>
             </button>
           </div>
         </div>

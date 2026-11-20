@@ -22,6 +22,7 @@ import RespawnModal from "./RespawnModal";
 import PostGameWeakWords from "./PostGameWeakWords";
 import ClassroomPodiumModal from "./ClassroomPodiumModal";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface CoopBossArenaProps {
   cards: Array<{ word: string; meaning: string; phonetic?: string }>;
@@ -131,14 +132,16 @@ const playSoundEffect = (type: "hit" | "crit" | "boss_attack" | "victory") => {
 
 export default function CoopBossArena({
   cards,
-  deckTitle = "10-A Ortak Kelime Havuzu",
-  className = "10-A İngilizce",
+  deckTitle,
+  className = "10-A",
   isHost = false,
   isPaused = false,
   onClose,
   onAwardXP,
   onAwardGold,
 }: CoopBossArenaProps) {
+  const { t } = useLanguage();
+  const resolvedDeckTitle = deckTitle || t("game_coop_default_deck", "10-A Ortak Kelime Havuzu");
   // Canavar Durumu
   const [bossHp, setBossHp] = useState<number>(MAX_BOSS_HP);
   const [bossState, setBossState] = useState<"idle" | "hit" | "attack">("idle");
@@ -272,7 +275,9 @@ export default function CoopBossArena({
       setTimeout(() => setBossState("idle"), 400);
 
       triggerDamage(
-        isCrit ? `Sen: -${damage} KRİTİK! 💥` : `Sen: -${damage} HASAR! 🗡️`,
+        isCrit
+          ? `${t("lb_you", "Sen")}: -${damage} ${t("game_coop_crit", "KRİTİK! 💥")}`
+          : `${t("lb_you", "Sen")}: -${damage} ${t("game_coop_dmg", "HASAR! 🗡️")}`,
         isCrit
       );
 
@@ -303,7 +308,7 @@ export default function CoopBossArena({
       setBossState("attack");
       setTimeout(() => setBossState("idle"), 500);
 
-      triggerDamage("ISKALANDI! 🔥", false);
+      triggerDamage(t("game_boss_missed", "ISKALANDI! 🔥"), false);
 
       // Can Kaybı ve Yeniden Canlanma (Respawn)
       setPlayerLives((prevLives) => {
@@ -343,7 +348,7 @@ export default function CoopBossArena({
     } catch {}
 
     if (onAwardXP) {
-      onAwardXP(400, "Sınıfça Boss Baskını Zaferi");
+      onAwardXP(400, t("game_coop_win_xp", "Sınıfça Boss Baskını Zaferi"));
     }
     if (onAwardGold) {
       onAwardGold(250);
@@ -361,12 +366,12 @@ export default function CoopBossArena({
           <div className="p-6 rounded-3xl bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-purple-500/20 border-2 border-amber-400 text-center space-y-2 shadow-2xl relative overflow-hidden">
             <span className="text-4xl sm:text-5xl block animate-bounce">🏆 🐉</span>
             <h2 className="text-2xl sm:text-4xl font-black text-amber-300 tracking-tight">
-              SINIFÇA ZAFER! ANTİK IGNIS DEVRİLDİ!
+              {t("game_coop_victory_hdr", "SINIFÇA ZAFER! ANTİK IGNIS DEVRİLDİ!")}
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
-              Tüm sınıf tek bir yürek olarak 10.000 HP ejderhayı dize getirdi. Senin katkın:{" "}
+              {t("game_coop_victory_desc", "Tüm sınıf tek bir yürek olarak 10.000 HP ejderhayı dize getirdi. Senin katkın:")}{" "}
               <strong className="text-amber-400 font-mono">
-                {playerDamageDealt.toLocaleString()} Hasar
+                {playerDamageDealt.toLocaleString()} {t("game_coop_dmg_unit", "Hasar")}
               </strong>
               !
             </p>
@@ -378,7 +383,7 @@ export default function CoopBossArena({
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer"
               >
                 <Trophy className="w-4 h-4" />
-                <span>🥇 Sınıf Podyumunu Aç</span>
+                <span>{t("game_coop_open_podium", "🥇 Sınıf Podyumunu Aç")}</span>
               </button>
 
               <button
@@ -386,7 +391,7 @@ export default function CoopBossArena({
                 onClick={onClose}
                 className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition cursor-pointer"
               >
-                Arenaya Dön
+                {t("game_back_arena", "Arenaya Dön")}
               </button>
             </div>
           </div>
@@ -400,9 +405,9 @@ export default function CoopBossArena({
               isOpen={showPodium}
               onClose={() => setShowPodium(false)}
               sessionId={`coop-boss-${Date.now()}`}
-              gameTitle="🐉 Sınıfça Ortak Boss Baskını"
+              gameTitle={t("game_coop_podium_title", "🐉 Sınıfça Ortak Boss Baskını")}
               currentUserRank={2}
-              currentUserName="Sen"
+              currentUserName={t("lb_you", "Sen")}
             />
           )}
         </div>
@@ -422,14 +427,14 @@ export default function CoopBossArena({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-sm sm:text-base font-black text-white">
-                  🐉 Sınıfça Ortak Boss Baskını (Co-op Raid)
+                  {t("game_coop_title", "🐉 Sınıfça Ortak Boss Baskını (Co-op Raid)")}
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   {className}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Tüm sınıf tek hedefe saldırıyor • Ortak Bar: {bossHp.toLocaleString()} / 10.000 HP
+                {t("game_coop_shared_bar", "Tüm sınıf tek hedefe saldırıyor • Ortak Bar:")} {bossHp.toLocaleString()} / 10.000 HP
               </p>
             </div>
           </div>
@@ -438,7 +443,7 @@ export default function CoopBossArena({
           <div className="flex items-center gap-3">
             {/* Oyuncunun Canları */}
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-              <span className="text-[10px] text-slate-400 font-bold mr-1">Canın:</span>
+              <span className="text-[10px] text-slate-400 font-bold mr-1">{t("game_coop_lives", "Canın:")}</span>
               {[1, 2, 3].map((heart) => (
                 <Heart
                   key={heart}
@@ -455,7 +460,7 @@ export default function CoopBossArena({
             <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hidden sm:flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-xs font-mono font-black text-amber-300">
-                {playerDamageDealt.toLocaleString()} Hasar
+                {playerDamageDealt.toLocaleString()} {t("game_coop_dmg_unit", "Hasar")}
               </span>
             </div>
 
@@ -484,7 +489,7 @@ export default function CoopBossArena({
       {isPaused && (
         <div className="w-full bg-amber-500/90 text-slate-950 px-4 py-2 text-center text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg animate-pulse">
           <Pause className="w-4 h-4" />
-          <span>⏸️ DERS MOLASI: Öğretmen kelimeyi tahtada açıklıyor. Ekran kilitlendi!</span>
+          <span>{t("game_coop_paused_banner", "⏸️ DERS MOLASI: Öğretmen kelimeyi tahtada açıklıyor. Ekran kilitlendi!")}</span>
         </div>
       )}
 
@@ -499,7 +504,7 @@ export default function CoopBossArena({
               <div className="flex items-center justify-between text-xs font-bold font-mono">
                 <span className="text-rose-400 flex items-center gap-1.5">
                   <Flame className="w-4 h-4 text-rose-500 animate-pulse" />
-                  <span>Antik Lav Ejderhası Ignis</span>
+                  <span>{t("game_coop_dragon_name", "Antik Lav Ejderhası Ignis")}</span>
                 </span>
                 <span className="text-white font-black">
                   {bossHp.toLocaleString()} / {MAX_BOSS_HP.toLocaleString()} HP (%{hpPercent})
@@ -559,12 +564,12 @@ export default function CoopBossArena({
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Doğru Cevapla ve Ejderhaya Hasar Vur!</span>
+                <span>{t("game_coop_answer_prompt", "Doğru Cevapla ve Ejderhaya Hasar Vur!")}</span>
               </span>
 
               {combo > 1 && (
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 animate-pulse">
-                  🔥 {combo}x Kombo
+                  🔥 {combo}x {t("game_combo_word", "Kombo")}
                 </span>
               )}
             </div>
@@ -618,7 +623,7 @@ export default function CoopBossArena({
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-indigo-400" />
               <h4 className="text-xs sm:text-sm font-black text-white">
-                Canlı Sınıf Saldırı Akışı
+                {t("game_coop_live_feed", "Canlı Sınıf Saldırı Akışı")}
               </h4>
             </div>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -645,22 +650,22 @@ export default function CoopBossArena({
                     hit.isCrit ? "text-amber-300" : "text-rose-400"
                   }`}
                 >
-                  -{hit.damage} {hit.isCrit ? "💥 Kritik!" : "🗡️"}
+                  -{hit.damage} {hit.isCrit ? t("game_coop_crit_short", "💥 Kritik!") : "🗡️"}
                 </span>
               </div>
             ))}
 
             {liveHits.length === 0 && (
               <p className="text-xs text-slate-500 text-center py-6">
-                Sınıf arkadaşların hazırlanıyor...
+                {t("game_coop_mates_ready", "Sınıf arkadaşların hazırlanıyor...")}
               </p>
             )}
           </div>
 
           <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <span className="font-bold text-white block">🤝 Sınıf Dayanışması</span>
+            <span className="font-bold text-white block">{t("game_coop_solidarity_t", "🤝 Sınıf Dayanışması")}</span>
             <p className="leading-snug">
-              Zayıf öğrenci dahi vurduğu 50-100 hasarla takıma katkı sağlar; kimse oyun dışı kalmaz.
+              {t("game_coop_solidarity_d", "Zayıf öğrenci dahi vurduğu 50-100 hasarla takıma katkı sağlar; kimse oyun dışı kalmaz.")}
             </p>
           </div>
         </aside>

@@ -24,8 +24,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vocaship | Akıllı Kelime ve Okuma Platformu",
+  title: "VocaShip | Çok Dilli Akıllı Kelime ve Okuma Platformu",
   description: "Bilimsel SM-2 aralıklı tekrar algoritması, çok dilli interaktif okuma odası ve sınıf içi etkileşimli kelime arenası.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/apple-touch-icon.svg",
+  },
+  openGraph: {
+    title: "VocaShip | Çok Dilli Akıllı Kelime ve Okuma Platformu",
+    description: "Bilimsel SM-2 aralıklı tekrar algoritması, çok dilli interaktif okuma odası ve sınıf içi etkileşimli kelime arenası.",
+    siteName: "VocaShip",
+  },
 };
 
 export default function RootLayout({
@@ -45,20 +57,17 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var theme = localStorage.getItem('vocaship_app_theme') || localStorage.getItem('vocaship_reader_theme') || 'dark';
-                  document.documentElement.setAttribute('data-theme', theme);
-                  if (theme === 'dark') {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
+                  var savedTheme = localStorage.getItem('vocaship_app_theme') || localStorage.getItem('vocaship_reader_theme') || 'dark';
+                  if (savedTheme !== 'light' && savedTheme !== 'dark') savedTheme = 'dark';
+                  document.documentElement.setAttribute('data-theme', savedTheme);
+                  document.documentElement.classList.toggle('dark', savedTheme === 'dark');
                 } catch (e) {}
               })();
             `,
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 selection:bg-indigo-500 selection:text-white overflow-x-hidden w-full max-w-[100vw] transition-colors duration-150">
+      <body className="min-h-full flex flex-col bg-[#dce3ec] text-slate-900 dark:bg-[#0B0F19] dark:text-slate-100 selection:bg-indigo-500 selection:text-white overflow-x-hidden w-full max-w-[100vw] transition-colors duration-150">
         <ThemeProvider>
           <AuthProvider>
             <ProfileProvider>

@@ -16,6 +16,7 @@ import {
   Wand2
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface BoardStoryWeaveModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export default function BoardStoryWeaveModal({
   activeBranch = "science",
   onStoryComplete,
 }: BoardStoryWeaveModalProps) {
+  const { t } = useLanguage();
   // Varsayılan hedef kelimeler (eğer tahtadan hiç terim gelmediyse)
   const effectiveWords = targetWords.length > 0
     ? Array.from(new Set(targetWords))
@@ -92,7 +94,7 @@ export default function BoardStoryWeaveModal({
       });
 
       if (!response.ok) {
-        throw new Error(`Sunucu yanıtı: ${response.status}`);
+        throw new Error(`${t("brd_sw_server_err", "Sunucu yanıtı:")} ${response.status}`);
       }
 
       const data = await response.json();
@@ -245,14 +247,14 @@ export default function BoardStoryWeaveModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
-                  Sınıfça Kolektif Hikaye Sahnesi
+                  {t("brd_sw_title", "Sınıfça Kolektif Hikaye Sahnesi")}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-bold">
                   Crowdsourced Story Engine
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
-                Hedef kelimeler sınıfın ortak oylarıyla canlı bir maceraya dokunuyor
+                {t("brd_sw_sub", "Hedef kelimeler sınıfın ortak oylarıyla canlı bir maceraya dokunuyor")}
               </p>
             </div>
           </div>
@@ -261,7 +263,7 @@ export default function BoardStoryWeaveModal({
             {/* Tur Rozeti */}
             <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono font-bold flex items-center gap-1.5 text-amber-300">
               <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span>Tur {Math.min(turnCount, maxTurns)} / {maxTurns}</span>
+              <span>{t("brd_sw_turn", "Tur")} {Math.min(turnCount, maxTurns)} / {maxTurns}</span>
             </div>
 
             {/* Kapat Butonu */}
@@ -323,7 +325,7 @@ export default function BoardStoryWeaveModal({
               <div className="flex items-center justify-between text-xs font-sans pb-2 border-b border-slate-800/80 text-slate-400">
                 <span className="font-bold text-indigo-400 flex items-center gap-1.5">
                   <BookOpen className="w-3.5 h-3.5" />
-                  <span>Bölüm #{idx + 1}</span>
+                  <span>{t("brd_sw_chapter", "Bölüm #{num}").replace("{num}", String(idx + 1))}</span>
                   {segment.selectedChoiceTitle && (
                     <span className="text-slate-400 font-normal italic truncate max-w-md">
                       — &ldquo;{segment.selectedChoiceTitle}&rdquo;
@@ -335,10 +337,10 @@ export default function BoardStoryWeaveModal({
                   type="button"
                   onClick={() => speakText(segment.text)}
                   className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-indigo-600 text-slate-300 hover:text-white text-[11px] font-sans font-bold flex items-center gap-1 transition cursor-pointer"
-                  title="Bu Paragrafı Seslendir"
+                  title={t("brd_sw_speak_tip", "Bu Paragrafı Seslendir")}
                 >
                   <Volume2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Dinlet</span>
+                  <span className="hidden sm:inline">{t("listen", "Dinlet")}</span>
                 </button>
               </div>
 
@@ -353,7 +355,7 @@ export default function BoardStoryWeaveModal({
           {isLoading && (
             <div className="p-5 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 flex items-center justify-center gap-3 text-indigo-300 text-sm font-sans font-bold animate-pulse">
               <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-              <span>✨ Gemini 2.5 Flash yeni olay örgüsünü ve seçimleri dokuyor...</span>
+              <span>{t("brd_sw_loading", "✨ Gemini 2.5 Flash yeni olay örgüsünü ve seçimleri dokuyor...")}</span>
             </div>
           )}
 
@@ -369,10 +371,10 @@ export default function BoardStoryWeaveModal({
               <div className="flex items-center justify-between text-xs font-sans text-slate-300 font-bold px-1">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>Sıradaki Olay Ne Olsun? (Sınıfça Seçin):</span>
+                  <span>{t("brd_sw_next_prompt", "Sıradaki Olay Ne Olsun? (Sınıfça Seçin):")}</span>
                 </span>
                 <span className="text-slate-400 font-mono text-[11px]">
-                  Bir seçeneğe dokunarak hikayeyi yönlendirin
+                  {t("brd_sw_pick_hint", "Bir seçeneğe dokunarak hikayeyi yönlendirin")}
                 </span>
               </div>
 
@@ -402,10 +404,12 @@ export default function BoardStoryWeaveModal({
               <div className="space-y-1">
                 <div className="flex items-center justify-center sm:justify-start gap-2 text-emerald-400 font-black text-base">
                   <Award className="w-5 h-5 text-amber-400" />
-                  <span>Kolektif Hikaye Başarıyla Dokundu!</span>
+                  <span>{t("brd_sw_done_title", "Kolektif Hikaye Başarıyla Dokundu!")}</span>
                 </div>
                 <p className="text-xs text-slate-300 font-sans">
-                  Tüm hedef kelimeler kullanıldı ({usedWordsPool.length}/{effectiveWords.length}). Metin kaydedildi ve ödev havuzuna aktarılmaya hazır.
+                  {t("brd_sw_done_desc", "Tüm hedef kelimeler kullanıldı ({u}/{t}). Metin kaydedildi ve ödev havuzuna aktarılmaya hazır.")
+                    .replace("{u}", String(usedWordsPool.length))
+                    .replace("{t}", String(effectiveWords.length))}
                 </p>
               </div>
 
@@ -416,7 +420,7 @@ export default function BoardStoryWeaveModal({
                   className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-sans text-xs font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95"
                 >
                   <Copy className="w-3.5 h-3.5" />
-                  <span>{copied ? "Kopyalandı!" : "Metni Kopyala"}</span>
+                  <span>{copied ? t("cls_cm_copied", "Kopyalandı!") : t("brd_sw_copy_txt", "Metni Kopyala")}</span>
                 </button>
 
                 <button
@@ -425,7 +429,7 @@ export default function BoardStoryWeaveModal({
                   className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-sans text-xs font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Yeniden Başlat</span>
+                  <span>{t("brd_sw_restart", "Yeniden Başlat")}</span>
                 </button>
 
                 <button
@@ -433,7 +437,7 @@ export default function BoardStoryWeaveModal({
                   onClick={onClose}
                   className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-sans text-xs font-bold transition cursor-pointer active:scale-95 shadow-md shadow-indigo-600/30"
                 >
-                  Tamamla & Tahtaya Dön ➔
+                  {t("brd_sw_finish", "Tamamla & Tahtaya Dön ➔")}
                 </button>
               </div>
             </div>

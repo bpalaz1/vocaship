@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Mic, Sparkles, Radio } from "lucide-react";
 import { usePersona, PersonaId, PERSONAS } from "../../context/PersonaContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 export type AvatarAnimationState = "idle" | "listening" | "speaking" | "thinking";
 
@@ -60,6 +61,7 @@ export default function AvatarDisplay({
   className = "",
   onClick,
 }: AvatarDisplayProps) {
+  const { t } = useLanguage();
   const { persona: contextPersona, customAvatar } = usePersona();
 
   const currentState: AvatarAnimationState = avatarState || state || "idle";
@@ -285,7 +287,7 @@ export default function AvatarDisplay({
               className="px-4 py-1.5 rounded-full bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/25 animate-pulse"
             >
               <Radio className="w-3.5 h-3.5 text-emerald-300 animate-spin" />
-              <span>[ 🟢 AI Mentor: Aktif &amp; Konuşuyor ]</span>
+              <span>{t("av_disp_speaking", "[ 🟢 AI Mentor: Aktif & Konuşuyor ]")}</span>
             </div>
           )}
 
@@ -295,7 +297,7 @@ export default function AvatarDisplay({
               className="px-4 py-1.5 rounded-full bg-emerald-950/90 text-emerald-300 border border-emerald-400/70 text-xs font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(52,211,153,0.35)] animate-pulse"
             >
               <Mic className="w-3.5 h-3.5 text-emerald-300 animate-bounce" />
-              <span>[ 🎙️ Sizi Dinliyor... ]</span>
+              <span>{t("av_disp_listening", "[ 🎙️ Sizi Dinliyor... ]")}</span>
             </div>
           )}
 
@@ -305,7 +307,7 @@ export default function AvatarDisplay({
               className="px-4 py-1.5 rounded-full bg-indigo-950/90 text-indigo-300 border border-indigo-500/50 text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 animate-pulse"
             >
               <Sparkles className="w-3.5 h-3.5 text-indigo-300 animate-spin" />
-              <span>[ ✨ AI Mentor: Düşünüyor... ]</span>
+              <span>{t("av_disp_thinking", "[ ✨ AI Mentor: Düşünüyor... ]")}</span>
             </div>
           )}
 
@@ -314,7 +316,7 @@ export default function AvatarDisplay({
               data-testid="avatar-status-badge"
               className="px-4 py-1 rounded-full bg-slate-950/90 text-slate-200 border border-slate-700/80 text-xs font-semibold flex items-center gap-1.5 shadow-sm"
             >
-              <span>[ ⚪ Hazır ]</span>
+              <span>{t("av_disp_idle", "[ ⚪ Hazır ]")}</span>
             </div>
           )}
 

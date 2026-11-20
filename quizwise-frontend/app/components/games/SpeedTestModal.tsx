@@ -44,7 +44,7 @@ export default function SpeedTestModal({
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">{t("card_speed_title", "SM-2 Bilişsel Hız Testi")}</h3>
-              <p className="text-xs text-slate-400">5 saniyede anlamı zihninizde çağırın</p>
+              <p className="text-xs text-slate-400">{t("game_speed_test_sub", "5 saniyede anlamı zihninizde çağırın")}</p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -68,9 +68,9 @@ export default function SpeedTestModal({
             <div className="w-16 h-16 rounded-full bg-purple-500/20 text-purple-400 mx-auto flex items-center justify-center border border-purple-500/30">
               <BrainCircuit className="w-8 h-8" />
             </div>
-            <h4 className="text-2xl font-black text-white">Hız Testi Tamamlandı</h4>
+            <h4 className="text-2xl font-black text-white">{t("game_speed_test_done", "Hız Testi Tamamlandı")}</h4>
             <p className="text-sm text-slate-300">
-              Hatırlanan: <strong className="text-emerald-400">{speedScore.known}</strong> • Tekrar Gereken: <strong className="text-rose-400">{speedScore.forgotten}</strong>
+              {t("game_remembered_lbl", "Hatırlanan:")} <strong className="text-emerald-400">{speedScore.known}</strong> • {t("game_review_needed_lbl", "Tekrar Gereken:")} <strong className="text-rose-400">{speedScore.forgotten}</strong>
             </p>
             <div className="pt-2 flex justify-center gap-3">
               <button
@@ -78,14 +78,14 @@ export default function SpeedTestModal({
                 onClick={startSpeedTest}
                 className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer"
               >
-                Tekrar Dene
+                {t("btn_try_again", "Tekrar Dene")}
               </button>
               <button
                 type="button"
                 onClick={onClose}
                 className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
               >
-                Kapat
+                {t("close", "Kapat")}
               </button>
             </div>
           </div>
@@ -94,7 +94,7 @@ export default function SpeedTestModal({
             {/* Kelime Kartı */}
             <div className="min-h-[160px] p-6 rounded-3xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center text-center space-y-3 shadow-inner">
               <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20">
-                Kart {speedIndex + 1} / {words.length}
+                {t("game_card_n", "Kart")} {speedIndex + 1} / {words.length}
               </span>
               <h4 className="text-2xl font-black text-white font-mono">
                 {words[speedIndex]?.word}
@@ -111,7 +111,7 @@ export default function SpeedTestModal({
                 </div>
               ) : (
                 <p className="text-xs text-slate-500">
-                  Zihninde Türkçe anlamını hatırla... (Kart açılacak)
+                  {t("game_think_meaning", "Zihninde anlamını hatırla... (Kart açılacak)")}
                 </p>
               )}
             </div>
@@ -123,14 +123,14 @@ export default function SpeedTestModal({
                 onClick={() => handleSpeedAnswer(false)}
                 className="py-3 px-4 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition active:scale-95 cursor-pointer"
               >
-                ❌ Unuttum / Hatırlayamadım
+                ❌ {t("game_forgot_btn", "Unuttum / Hatırlayamadım")}
               </button>
               <button
                 type="button"
                 onClick={() => handleSpeedAnswer(true)}
                 className="py-3 px-4 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition active:scale-95 cursor-pointer"
               >
-                ✅ Hatırladım (Hızlı)
+                ✅ {t("game_remembered_btn", "Hatırladım (Hızlı)")}
               </button>
             </div>
           </div>

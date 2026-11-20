@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Eye, EyeOff, Flashlight, Sparkles, BookOpen } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface ReaderToolbarProps {
   bionicMode: boolean;
@@ -18,10 +19,11 @@ export default function ReaderToolbar({
   onToggleGhost,
   className = "",
 }: ReaderToolbarProps) {
+  const { t } = useLanguage();
   return (
     <div
       role="toolbar"
-      aria-label="Okuma Odası Bilişsel Araç Çubuğu"
+      aria-label={t("read_bionic_label", "Okuma Odası Bilişsel Araç Çubuğu")}
       className={`flex items-center gap-1.5 p-1 rounded-2xl bg-slate-800/90 border border-slate-700/80 shadow-inner backdrop-blur-md ${className}`}
     >
       {/* 1. BİYONİK ODAK BUTONU */}
@@ -31,8 +33,8 @@ export default function ReaderToolbar({
         aria-pressed={bionicMode}
         title={
           bionicMode
-            ? "Biyonik Odak Açık: Kelime başları kalınlaştırılarak okuma hızı artırıldı."
-            : "Biyonik Odak Kapalı: Kelimelerin ilk harflerini kalınlaştırarak hızlı okumayı açın."
+            ? t("read_bionic_on", "Biyonik Odak Açık: Kelime başları kalınlaştırılarak okuma hızı artırıldı.")
+            : t("read_bionic_off", "Biyonik Odak Kapalı: Kelimelerin ilk harflerini kalınlaştırarak hızlı okumayı açın.")
         }
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none active:scale-95 ${
           bionicMode
@@ -41,7 +43,7 @@ export default function ReaderToolbar({
         }`}
       >
         <span className="text-sm leading-none">👁️</span>
-        <span className="font-mono">Biyonik Odak</span>
+        <span className="font-mono">{t("read_bionic_label", "Biyonik Odak")}</span>
         {bionicMode && (
           <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-ping"></span>
         )}
@@ -54,8 +56,8 @@ export default function ReaderToolbar({
         aria-pressed={ghostMode}
         title={
           ghostMode
-            ? "Ghost Reader Açık: Aktif satır hariç diğer cümleler karartıldı."
-            : "Ghost Reader Kapalı: Dikkat dağılmasını önlemek için aktif satır haricini karartın."
+            ? t("read_ghost_on", "Ghost Reader Açık: Aktif satır hariç diğer cümleler karartıldı.")
+            : t("read_ghost_off", "Ghost Reader Kapalı: Dikkat dağılmasını önlemek için aktif satır haricini karartın.")
         }
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none active:scale-95 ${
           ghostMode

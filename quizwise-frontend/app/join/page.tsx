@@ -16,12 +16,15 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { API_BASE } from "../config";
+import { VocaShipLogo } from "../components/brand/VocaShipLogo";
 
 function JoinContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, token } = useAuth();
+  const { t } = useLanguage();
 
   const codeParam = searchParams.get("code") || "";
   const sessionParam = searchParams.get("session") || "live-session-1";
@@ -43,15 +46,15 @@ function JoinContent() {
         if (res.ok) {
           const data = await res.json();
           setClassInfo({
-            name: data.class_name || "Vocaship Canlı Sınıfı",
+            name: data.class_name || t("join_default_cls_name", "VocaShip Canlı Sınıfı"),
             grade_level: data.grade_level || "B2-C1",
           });
         }
       } catch {
         // Fallback
         setClassInfo({
-          name: "Vocaship Canlı Sınıfı",
-          grade_level: "Genel",
+          name: t("join_default_cls_name", "VocaShip Canlı Sınıfı"),
+          grade_level: t("join_grade_general", "Genel"),
         });
       }
     };
@@ -73,7 +76,7 @@ function JoinContent() {
   // 3. Geçici Öğrenci / Takma Ad ile Hızlı Katılım
   const handleGuestJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanName = nickname.trim() || "Öğrenci";
+    const cleanName = nickname.trim() || t("lb_cls_student_unit", "Öğrenci");
     setIsSubmitting(true);
 
     try {
@@ -98,10 +101,10 @@ function JoinContent() {
 
           <div className="space-y-1.5">
             <h2 className="text-xl font-black text-white">
-              Oturum Açık: Hoş Geldin {user?.fullName || user?.username || "Öğrenci"}!
+              {t("join_signed_welcome", "Oturum Açık: Hoş Geldin {name}!", { name: user?.fullName || user?.username || t("lb_cls_student_unit", "Öğrenci") })}
             </h2>
             <p className="text-xs text-slate-400">
-              Kayıtlı hesabın tespit edildi. Canlı ders stüdyosuna aktarılıyorsun...
+              {t("join_account_detected", "Kayıtlı hesabın tespit edildi. Canlı ders stüdyosuna aktarılıyorsun...")}
             </p>
           </div>
 
@@ -121,18 +124,13 @@ function JoinContent() {
 
       {/* Üst Logo ve Durum */}
       <header className="max-w-md mx-auto w-full flex items-center justify-between pb-6">
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
-            <GraduationCap className="w-5 h-5" />
-          </div>
-          <span className="font-black text-lg text-white group-hover:text-indigo-400 transition">
-            Vocaship
-          </span>
+        <Link href="/" className="group hover:opacity-90 transition">
+          <VocaShipLogo variant="horizontal" className="[&>span]:text-white" />
         </Link>
 
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-          <span>Canlı Ders Yayında</span>
+          <span>{t("join_live_on_air", "Canlı Ders Yayında")}</span>
         </span>
       </header>
 
@@ -143,15 +141,15 @@ function JoinContent() {
           <div className="text-center space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-mono font-bold text-xs">
               <Tv className="w-3.5 h-3.5" />
-              <span>Sınıf Kodu: {codeParam || "VRG-2535"}</span>
+              <span>{t("join_cls_code_lbl", "Sınıf Kodu:")} {codeParam || "VRG-2535"}</span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              {classInfo?.name || "Canlı Derse Katıl"}
+              {classInfo?.name || t("join_live_class_hdr", "Canlı Derse Katıl")}
             </h1>
 
             <p className="text-xs text-slate-400">
-              Kameranızı tahtaya okuttunuz. Şifresiz giriş yapmak için adınızı yazın ve derse bağlanın.
+              {t("join_qr_scanned_sub", "Kameranızı tahtaya okuttunuz. Şifresiz giriş yapmak için adınızı yazın ve derse bağlanın.")}
             </p>
           </div>
 
@@ -160,7 +158,7 @@ function JoinContent() {
             <div className="space-y-1.5 text-left">
               <label htmlFor="student-nickname" className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Adınız Soyadınız veya Takma Adınız:</span>
+                <span>{t("join_name_label", "Adınız Soyadınız veya Takma Adınız:")}</span>
               </label>
 
               <input
@@ -168,7 +166,7 @@ function JoinContent() {
                 type="text"
                 required
                 autoFocus
-                placeholder="Örn: Mehmet Yılmaz veya Memo"
+                placeholder={t("join_name_ph", "Örn: Mehmet Yılmaz veya Memo")}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 className="w-full bg-slate-950 border-2 border-indigo-500/40 focus:border-indigo-400 rounded-2xl px-4 py-3.5 text-white font-bold placeholder-slate-600 focus:outline-none transition shadow-inner"
@@ -180,7 +178,7 @@ function JoinContent() {
               disabled={isSubmitting || !nickname.trim()}
               className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm shadow-xl shadow-indigo-600/30 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>{isSubmitting ? "Bağlanılıyor..." : "🚀 Şifresiz Derse Katıl"}</span>
+              <span>{isSubmitting ? t("join_connecting", "Bağlanılıyor...") : t("join_no_pass_btn", "🚀 Şifresiz Derse Katıl")}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -188,16 +186,16 @@ function JoinContent() {
           {/* Özellik Rozetleri */}
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
             <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
-              <span className="text-[10px] font-bold text-slate-300 block">⚡ Şifre Yok</span>
-              <span className="text-[9px] text-slate-500">Doğrudan giriş</span>
+              <span className="text-[10px] font-bold text-slate-300 block">{t("join_b1_t", "⚡ Şifre Yok")}</span>
+              <span className="text-[9px] text-slate-500">{t("join_b1_d", "Doğrudan giriş")}</span>
             </div>
             <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
-              <span className="text-[10px] font-bold text-slate-300 block">🏆 Canlı Podyum</span>
-              <span className="text-[9px] text-slate-500">Yarış & XP</span>
+              <span className="text-[10px] font-bold text-slate-300 block">{t("join_b2_t", "🏆 Canlı Podyum")}</span>
+              <span className="text-[9px] text-slate-500">{t("join_b2_d", "Yarış & XP")}</span>
             </div>
             <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
-              <span className="text-[10px] font-bold text-slate-300 block">🔒 Güvenli</span>
-              <span className="text-[9px] text-slate-500">İzole oturum</span>
+              <span className="text-[10px] font-bold text-slate-300 block">{t("join_b3_t", "🔒 Güvenli")}</span>
+              <span className="text-[9px] text-slate-500">{t("join_b3_d", "İzole oturum")}</span>
             </div>
           </div>
         </div>
@@ -205,24 +203,27 @@ function JoinContent() {
 
       {/* Alt Bilgi */}
       <footer className="max-w-md mx-auto w-full text-center text-xs text-slate-500 pt-6">
-        <span>Zaten bir Vocaship hesabınız var mı? </span>
+        <span>{t("join_have_account", "Zaten bir VocaShip hesabınız var mı?")} </span>
         <Link href="/classroom" className="text-indigo-400 hover:underline font-bold">
-          Öğrenci Girişi Yap
+          {t("join_student_login", "Öğrenci Girişi Yap")}
         </Link>
       </footer>
     </div>
   );
 }
 
+function JoinLoadingFallback() {
+  const { t } = useLanguage();
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-mono text-sm">
+      {t("join_loading", "Katılım ekranı yükleniyor...")}
+    </div>
+  );
+}
+
 export default function JoinPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-mono text-sm">
-          Katılım ekranı yükleniyor...
-        </div>
-      }
-    >
+    <Suspense fallback={<JoinLoadingFallback />}>
       <JoinContent />
     </Suspense>
   );

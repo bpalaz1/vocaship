@@ -6,6 +6,7 @@ from supabase import Client
 from app.core.database import get_db
 from app.schemas.deck import DeckCreate, DeckResponse
 from app.schemas.flashcard import FlashcardCreate
+from app.api.v1.endpoints.ai import save_word_to_cache
 
 router = APIRouter()
 
@@ -92,12 +93,26 @@ async def get_all_cards_in_deck(deck_id: str, db: Client = Depends(get_db)):
 @router.post("/cards", status_code=status.HTTP_201_CREATED)
 async def add_card_to_deck(card_in: FlashcardCreate, db: Client = Depends(get_db)):
     data = card_in.model_dump()
+    target_lang = (data.get("target_lang") or "").strip().lower()
+    native_lang = (data.get("native_lang") or "").strip().lower()
+
+    meanings = list(data.get("meanings") or [])
+    if meanings and isinstance(meanings[0], dict):
+        m0 = dict(meanings[0])
+        if target_lang:
+            m0["target_lang"] = target_lang
+        if native_lang:
+            m0["native_lang"] = native_lang
+        meanings[0] = m0
+
+    example_sentences = list(data.get("example_sentences") or [])
+
     db_payload = {
         "deck_id": data["deck_id"],
         "word": data["word"],
         "phonetic": data.get("phonetic") or "",
-        "meanings": data.get("meanings") or [],
-        "example_sentences": data.get("example_sentences") or [],
+        "meanings": meanings,
+        "example_sentences": example_sentences,
         "collocations": data.get("collocations") or [],
         "grammar_notes": data.get("notes") or "",
         "ease_factor": 2.5,
@@ -108,6 +123,31 @@ async def add_card_to_deck(card_in: FlashcardCreate, db: Client = Depends(get_db
     res = db.table("flashcards").insert(db_payload).execute()
     if not res.data:
         raise HTTPException(status_code=400, detail="Kart kaydedilemedi")
+
+    # Kaydedilen kartı anında hafıza önbelleğine de yaz (bir sonraki aramada 0ms & 0 AI)
+    if target_lang and native_lang and meanings and isinstance(meanings[0], dict):
+        trans = (meanings[0].get("translation") or meanings[0].get("definition") or "").strip()
+        ex_t = ""
+        ex_n = ""
+        if example_sentences and isinstance(example_sentences[0], dict):
+            ex_t = (example_sentences[0].get("target") or example_sentences[0].get("en") or "").strip()
+            ex_n = (example_sentences[0].get("native") or example_sentences[0].get("tr") or "").strip()
+        if trans:
+            save_word_to_cache(
+                db,
+                word=data["word"],
+                target_lang=target_lang,
+                native_lang=native_lang,
+                translation=trans,
+                phonetic=data.get("phonetic") or "",
+                definition=(meanings[0].get("definition") or "").strip(),
+                part_of_speech=(meanings[0].get("part_of_speech") or "").strip(),
+                example_target=ex_t,
+                example_native=ex_n,
+                notes=data.get("notes") or "",
+                source="database",
+            )
+
     return res.data[0]
 
 

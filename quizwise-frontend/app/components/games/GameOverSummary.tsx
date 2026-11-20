@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { awardGamificationReward } from "../../utils/gamificationEngine";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
+import { recordArenaSessionResult } from "../../utils/rewardEngine";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface GameMistakeItem {
   word: string;
@@ -52,12 +54,13 @@ export default function GameOverSummary({
   onBackToArena,
   onViewPodium,
 }: GameOverSummaryProps) {
+  const { t } = useLanguage();
   // Telafi edilmiş kelimeler (kelime -> boolean)
   const [compensatedWords, setCompensatedWords] = useState<Record<string, boolean>>({});
   const [activeSpeakingWord, setActiveSpeakingWord] = useState<string | null>(null);
 
-  // Oyun sonu yanlışları (en fazla 3 kelime)
-  const reviewMistakes = mistakes.slice(0, 3);
+  // Oyun sonu yanlışları (en fazla 5 kelime)
+  const reviewMistakes = mistakes.slice(0, 5);
 
   useEffect(() => {
     // 1. Kutlama Konfetisi
@@ -71,6 +74,7 @@ export default function GameOverSummary({
 
     // 2. XP & Altın Ödülünü Kaydet
     awardGamificationReward(awardedXP, awardedGold, `🎮 ${gameTitle}`);
+    recordArenaSessionResult(streakCount, true);
 
     // 3. Hataları otomatik olarak "🎯 Oyun Hatalarım" destesine ekle
     if (mistakes.length > 0) {
@@ -110,7 +114,7 @@ export default function GameOverSummary({
     // Henüz telafi edilmediyse +15 Telafi Altını ver
     if (!compensatedWords[wordKey]) {
       setCompensatedWords((prev) => ({ ...prev, [wordKey]: true }));
-      awardGamificationReward(0, 15, `🎯 Telafi: ${item.word}`);
+      awardGamificationReward(0, 15, `🎯 ${t("game_comp_reward_lbl", "Telafi")}: ${item.word}`);
       saveArenaMistake({
         word: item.word,
         meaning: item.meaning,
@@ -123,7 +127,7 @@ export default function GameOverSummary({
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const rem = secs % 60;
-    return `${mins > 0 ? `${mins}dk ` : ""}${rem}s`;
+    return `${mins > 0 ? `${mins}${t("unit_min_short", "dk")} ` : ""}${rem}${t("unit_sec_short", "s")}`;
   };
 
   return (
@@ -144,7 +148,7 @@ export default function GameOverSummary({
         {/* Başlık & Tebrik */}
         <div className="space-y-1">
           <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-            Harika Performans!
+            {t("game_great_perf", "Harika Performans!")}
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 font-medium truncate">
             {gameTitle} {deckTitle ? `• ${deckTitle}` : ""}
@@ -154,22 +158,22 @@ export default function GameOverSummary({
         {/* İstatistikler Izgarası */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
           <div className="p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-slate-500 uppercase font-bold block">Toplam Skor</span>
+            <span className="text-[10px] text-slate-500 uppercase font-bold block">{t("game_total_score", "Toplam Skor")}</span>
             <span className="text-base sm:text-lg font-black text-white font-mono">{score}</span>
           </div>
 
           <div className="p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-slate-500 uppercase font-bold block">Kazanılan XP</span>
+            <span className="text-[10px] text-slate-500 uppercase font-bold block">{t("game_earned_xp", "Kazanılan XP")}</span>
             <span className="text-base sm:text-lg font-black text-indigo-400 font-mono">+{awardedXP}</span>
           </div>
 
           <div className="p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-slate-500 uppercase font-bold block">Altın</span>
+            <span className="text-[10px] text-slate-500 uppercase font-bold block">{t("game_gold", "Altın")}</span>
             <span className="text-base sm:text-lg font-black text-amber-400 font-mono">+{awardedGold} 🪙</span>
           </div>
 
           <div className="p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-slate-500 uppercase font-bold block">Süre / Başarı</span>
+            <span className="text-[10px] text-slate-500 uppercase font-bold block">{t("game_time_accuracy", "Süre / Başarı")}</span>
             <span className="text-xs sm:text-sm font-bold text-emerald-400 font-mono">
               {timeSeconds > 0 ? formatTime(timeSeconds) : `%${accuracyPercent}`}
             </span>
@@ -180,7 +184,7 @@ export default function GameOverSummary({
         {streakCount > 0 && (
           <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center gap-2 text-xs font-bold text-amber-300">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
-            <span>{streakCount}x Seri Çarpanı Uygulandı!</span>
+            <span>{t("game_streak_applied", "{n}x Seri Çarpanı Uygulandı!", { n: streakCount })}</span>
           </div>
         )}
 
@@ -192,15 +196,15 @@ export default function GameOverSummary({
             <div className="flex items-center justify-between flex-wrap gap-1">
               <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
                 <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>🎯 5 Saniyelik Hata Telafisi</span>
+                <span>{t("game_5s_recovery", "🎯 5 Saniyelik Hata Telafisi")}</span>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
-                Her Dinlemede +15 🪙
+                {t("game_per_listen_15", "Her Dinlemede +15 🪙")}
               </span>
             </div>
 
             <p className="text-[11px] text-slate-400 leading-snug">
-              Bu turda takıldığın kelimeleri dinle; hem telaffuzunu pekiştir hem de anında telafi altını kazan!
+              {t("game_mistakes_saved_desc_pre", "Yanlış yaptığın kelimeler")} <strong className="text-amber-300">&quot;{t("deck_arena_mistakes_name", "🎯 Oyun Hatalarım")}&quot;</strong> {t("game_mistakes_saved_desc_post", "destesine kaydedildi. Sesli dinleyerek anında +15 Telafi Altını kazan!")}
             </p>
 
             <div className="space-y-1.5 pt-1">
@@ -242,12 +246,12 @@ export default function GameOverSummary({
                       {isCompensated ? (
                         <>
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>+15 🪙 Alındı</span>
+                          <span>{t("game_15_claimed", "+15 🪙 Alındı")}</span>
                         </>
                       ) : (
                         <>
                           <Volume2 className={`w-3.5 h-3.5 ${isSpeaking ? "animate-pulse text-amber-300" : ""}`} />
-                          <span>Dinle & +15 🪙</span>
+                          <span>{t("game_listen_15", "Dinle & +15 🪙")}</span>
                         </>
                       )}
                     </button>
@@ -259,7 +263,7 @@ export default function GameOverSummary({
             <div className="pt-1 flex items-center justify-between text-[10px] text-slate-500 font-mono">
               <span className="flex items-center gap-1">
                 <BookmarkCheck className="w-3 h-3 text-indigo-400" />
-                <span>"🎯 Oyun Hatalarım" destesine kaydedildi</span>
+                <span>&quot;{t("deck_arena_mistakes_name", "🎯 Oyun Hatalarım")}&quot; {t("game_saved_to_deck_short", "destesine kaydedildi")}</span>
               </span>
             </div>
           </div>
@@ -274,7 +278,7 @@ export default function GameOverSummary({
               className="w-full py-2.5 sm:py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition active:scale-95 cursor-pointer"
             >
               <Trophy className="w-4 h-4 fill-current" />
-              <span>🏆 Sınıf Podyumunu & Ödülleri Gör</span>
+              <span>{t("game_view_podium", "🏆 Sınıf Podyumunu & Ödülleri Gör")}</span>
             </button>
           )}
 
@@ -285,7 +289,7 @@ export default function GameOverSummary({
               className="w-full sm:w-auto flex-1 py-2.5 sm:py-3 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Tekrar Oyna</span>
+              <span>{t("game_play_again", "Tekrar Oyna")}</span>
             </button>
 
             <button
@@ -294,7 +298,7 @@ export default function GameOverSummary({
               className="w-full sm:w-auto flex-1 py-2.5 sm:py-3 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 transition active:scale-95 cursor-pointer"
             >
               <Home className="w-4 h-4" />
-              <span>Arenaya Dön</span>
+              <span>{t("game_back_arena", "Arenaya Dön")}</span>
             </button>
           </div>
         </div>

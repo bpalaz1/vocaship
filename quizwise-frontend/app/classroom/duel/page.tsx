@@ -17,6 +17,7 @@ import {
   Crown,
   Sparkles,
 } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 interface DuelQuestion {
   word: string;
@@ -139,6 +140,7 @@ const DEFAULT_DUEL_QUESTIONS: DuelQuestion[] = [
 ];
 
 export default function SplitScreenDuelPage() {
+  const { t } = useLanguage();
   const [currentRound, setCurrentRound] = useState(0);
   const [blueScore, setBlueScore] = useState(0);
   const [redScore, setRedScore] = useState(0);
@@ -290,14 +292,14 @@ export default function SplitScreenDuelPage() {
 
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight">
               {isTie
-                ? "DOSTLUK KAZANDI! BERABERE!"
+                ? t("brd_duel_tie", "DOSTLUK KAZANDI! BERABERE!")
                 : isBlueWin
-                ? "👑 TAHTA ŞAMPİYONU: MAVİ GLADYATÖR!"
-                : "👑 TAHTA ŞAMPİYONU: KIRMIZI ŞÖVALYE!"}
+                ? t("brd_duel_blue_win", "👑 TAHTA ŞAMPİYONU: MAVİ GLADYATÖR!")
+                : t("brd_duel_red_win", "👑 TAHTA ŞAMPİYONU: KIRMIZI ŞÖVALYE!")}
             </h1>
 
             <p className="text-sm sm:text-base text-slate-400">
-              10 soruluk hızlı parmak düellosu tamamlandı.
+              {t("brd_duel_done_sub", "10 soruluk hızlı parmak düellosu tamamlandı.")}
             </p>
           </div>
 
@@ -312,12 +314,12 @@ export default function SplitScreenDuelPage() {
               }`}
             >
               <span className="text-xs font-bold text-blue-400 uppercase">
-                Mavi Oyuncu
+                {t("brd_duel_blue_player", "Mavi Oyuncu")}
               </span>
               <span className="text-3xl sm:text-4xl font-black font-mono block text-white">
                 {blueScore}
               </span>
-              <span className="text-[10px] text-slate-400">Puan</span>
+              <span className="text-[10px] text-slate-400">{t("brd_duel_pts", "Puan")}</span>
             </div>
 
             {/* Kırmızı Oyuncu */}
@@ -329,12 +331,12 @@ export default function SplitScreenDuelPage() {
               }`}
             >
               <span className="text-xs font-bold text-rose-400 uppercase">
-                Kırmızı Oyuncu
+                {t("brd_duel_red_player", "Kırmızı Oyuncu")}
               </span>
               <span className="text-3xl sm:text-4xl font-black font-mono block text-white">
                 {redScore}
               </span>
-              <span className="text-[10px] text-slate-400">Puan</span>
+              <span className="text-[10px] text-slate-400">{t("brd_duel_pts", "Puan")}</span>
             </div>
           </div>
 
@@ -346,7 +348,7 @@ export default function SplitScreenDuelPage() {
               className="h-14 px-8 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-sm sm:text-base flex items-center gap-2 shadow-lg shadow-amber-500/20 transition active:scale-95 cursor-pointer"
             >
               <RotateCcw className="w-5 h-5" />
-              <span>🔄 Yeni Rövanş Maçı Başlat</span>
+              <span>{t("brd_duel_rematch", "🔄 Yeni Rövanş Maçı Başlat")}</span>
             </button>
 
             <Link
@@ -354,7 +356,7 @@ export default function SplitScreenDuelPage() {
               className="h-14 px-6 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm flex items-center gap-2 transition"
             >
               <School className="w-4 h-4" />
-              <span>🎓 Lobi Konsoluna Dön</span>
+              <span>{t("brd_duel_lobby", "🎓 Lobi Konsoluna Dön")}</span>
             </Link>
 
             <Link
@@ -362,7 +364,7 @@ export default function SplitScreenDuelPage() {
               className="h-14 px-6 rounded-2xl bg-slate-900 hover:bg-slate-850 text-slate-300 font-bold text-sm flex items-center gap-2 border border-slate-800 transition"
             >
               <Gamepad2 className="w-4 h-4" />
-              <span>🎮 Oyun Arenası</span>
+              <span>{t("brd_duel_arena", "🎮 Oyun Arenası")}</span>
             </Link>
           </div>
         </div>
@@ -381,12 +383,12 @@ export default function SplitScreenDuelPage() {
           <Link
             href="/classroom/host"
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-            title="Lobiye Dön"
+            title={t("brd_duel_back_lobby", "Lobiye Dön")}
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <span className="text-xs font-black text-slate-300 hidden sm:inline">
-            Akıllı Tahta 1v1 Düello
+            {t("brd_duel_title", "Akıllı Tahta 1v1 Düello")}
           </span>
         </div>
 
@@ -394,21 +396,21 @@ export default function SplitScreenDuelPage() {
         <div className="flex items-center gap-4 sm:gap-8">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-xs font-bold text-blue-400">MAVİ:</span>
+            <span className="text-xs font-bold text-blue-400">{t("brd_duel_blue", "MAVİ:")}</span>
             <span className="text-xl sm:text-2xl font-black font-mono text-white">
               {blueScore}
             </span>
           </div>
 
           <div className="px-3 py-1 rounded-full bg-slate-950 border border-slate-800 text-xs font-mono font-bold text-amber-400">
-            Soru {currentRound + 1} / {totalRounds}
+            {t("brd_duel_q", "Soru")} {currentRound + 1} / {totalRounds}
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-xl sm:text-2xl font-black font-mono text-white">
               {redScore}
             </span>
-            <span className="text-xs font-bold text-rose-400">:KIRMIZI</span>
+            <span className="text-xs font-bold text-rose-400">{t("brd_duel_red", ":KIRMIZI")}</span>
             <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
           </div>
         </div>
@@ -425,7 +427,7 @@ export default function SplitScreenDuelPage() {
       {/* ORTAK SORU BİLGİ ŞERİDİ (EKRANIN EN ÜST MERKEZİ) */}
       <div className="bg-slate-900/90 border-b border-slate-800 py-3 px-4 text-center shrink-0 z-10 shadow-md">
         <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest block">
-          Doğru Şıkka İlk Dokunan Puanı Alır (+100)
+          {t("brd_duel_first_tap", "Doğru Şıkka İlk Dokunan Puanı Alır (+100)")}
         </span>
         <h2 className="text-3xl sm:text-4xl font-black font-mono text-white tracking-wide">
           {activeQuestion.word}
@@ -450,10 +452,10 @@ export default function SplitScreenDuelPage() {
               : "bg-rose-500/80 text-white"
           }`}
         >
-          {roundWinner === "blue" && "⚡ Mavi Oyuncu İlk Dokundu! (+100 Puan)"}
-          {roundWinner === "red" && "⚡ Kırmızı Oyuncu İlk Dokundu! (+100 Puan)"}
-          {roundWinner === "wrong_blue" && "❌ Mavi Oyuncu Yanlış Bastı!"}
-          {roundWinner === "wrong_red" && "❌ Kırmızı Oyuncu Yanlış Bastı!"}
+          {roundWinner === "blue" && t("brd_duel_blue_hit", "⚡ Mavi Oyuncu İlk Dokundu! (+100 Puan)")}
+          {roundWinner === "red" && t("brd_duel_red_hit", "⚡ Kırmızı Oyuncu İlk Dokundu! (+100 Puan)")}
+          {roundWinner === "wrong_blue" && t("brd_duel_blue_miss", "❌ Mavi Oyuncu Yanlış Bastı!")}
+          {roundWinner === "wrong_red" && t("brd_duel_red_miss", "❌ Kırmızı Oyuncu Yanlış Bastı!")}
         </div>
       )}
 
@@ -465,10 +467,10 @@ export default function SplitScreenDuelPage() {
         <div className="flex flex-col justify-between p-2 sm:p-6 bg-gradient-to-br from-blue-950/40 via-slate-950 to-slate-950 h-full">
           <div className="flex items-center justify-between pb-2">
             <span className="px-3 py-1 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 font-black text-xs sm:text-sm">
-              🔵 MAVİ BÖLGE
+              {t("brd_duel_blue_zone", "🔵 MAVİ BÖLGE")}
             </span>
             <span className="text-xs font-mono font-bold text-slate-400">
-              Dokun ve Kap!
+              {t("brd_duel_tap_grab", "Dokun ve Kap!")}
             </span>
           </div>
 
@@ -488,7 +490,7 @@ export default function SplitScreenDuelPage() {
           </div>
 
           <div className="text-center text-[11px] text-blue-400/80 font-bold">
-            1. Oyuncu Sahası
+            {t("brd_duel_p1", "1. Oyuncu Sahası")}
           </div>
         </div>
 
@@ -496,10 +498,10 @@ export default function SplitScreenDuelPage() {
         <div className="flex flex-col justify-between p-2 sm:p-6 bg-gradient-to-bl from-rose-950/40 via-slate-950 to-slate-950 h-full">
           <div className="flex items-center justify-between pb-2">
             <span className="text-xs font-mono font-bold text-slate-400">
-              Dokun ve Kap!
+              {t("brd_duel_tap_grab", "Dokun ve Kap!")}
             </span>
             <span className="px-3 py-1 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 font-black text-xs sm:text-sm">
-              🔴 KIRMIZI BÖLGE
+              {t("brd_duel_red_zone", "🔴 KIRMIZI BÖLGE")}
             </span>
           </div>
 
@@ -519,7 +521,7 @@ export default function SplitScreenDuelPage() {
           </div>
 
           <div className="text-center text-[11px] text-rose-400/80 font-bold">
-            2. Oyuncu Sahası
+            {t("brd_duel_p2", "2. Oyuncu Sahası")}
           </div>
         </div>
       </div>

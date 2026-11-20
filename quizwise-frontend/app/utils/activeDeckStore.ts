@@ -1,14 +1,39 @@
 import { API_BASE } from "../config";
+import { pickUiText } from "./uiLocale";
 
 export const ACTIVE_DECK_STORAGE_KEY = "vocaship_selected_deck_id";
 export const DECKS_CACHE_STORAGE_KEY = "vocaship_decks_cache";
+export const FOLDERS_CACHE_STORAGE_KEY = "vocaship_folders_cache";
+export const FOLDER_ORDER_STORAGE_KEY = "vorego_folder_order";
+export const FOLDER_HIERARCHY_STORAGE_KEY = "vorego_folder_hierarchy";
+export const LIBRARY_VIEW_STORAGE_KEY = "vorego_library_view";
 export const ACTIVE_DECK_EVENT = "vocaship_active_deck_changed";
+
+export interface FolderItem {
+  id: string;
+  name: string;
+  color?: string;
+  parent_id?: string | null;
+  deck_count?: number;
+}
 
 export interface DeckItem {
   id: string;
   title: string;
   description?: string;
   card_count?: number;
+  folder_id?: string | null;
+  target_lang?: string;
+  native_lang?: string;
+}
+
+export function normalizeFolderId(folderId: unknown): string | null {
+  if (folderId === null || folderId === undefined) return null;
+  const trimmed = String(folderId).trim();
+  if (!trimmed || trimmed === "null" || trimmed === "none" || trimmed === "undefined") {
+    return null;
+  }
+  return trimmed;
 }
 
 export interface GameWordPair {
@@ -30,27 +55,95 @@ export interface FlashcardItem {
 export const PRESET_DECKS: DeckItem[] = [
   {
     id: "preset_core3000",
-    title: "🌐 En Sık Çıkan 3000 Temel Kelime",
-    description: "A1-A2 Başlangıç ve günlük yaşam için en kritik temel kelimeler",
-    card_count: 50,
+    get title() {
+      return pickUiText({
+        tr: "🌐 En Sık Çıkan 3000 Temel Kelime",
+        en: "🌐 Top 3000 Core Vocabulary",
+        de: "🌐 Top 3000 Grundwortschatz",
+        es: "🌐 Top 3000 Vocabulario Esencial",
+        fr: "🌐 Top 3000 Vocabulaire Essentiel",
+      });
+    },
+    get description() {
+      return pickUiText({
+        tr: "A1-A2 Başlangıç ve günlük yaşam için en kritik temel kelimeler",
+        en: "Most essential core words for A1-A2 beginners and everyday life",
+        de: "Die wichtigsten Grundwörter für A1-A2 Einsteiger und Alltag",
+        es: "Palabras esenciales para nivel inicial A1-A2 y vida diaria",
+        fr: "Mots essentiels pour débutants A1-A2 et la vie quotidienne",
+      });
+    },
+    card_count: 12,
+    folder_id: null,
   },
   {
     id: "preset_adv5000",
-    title: "📚 İleri Düzey 5000 Kelime Dağarcığı",
-    description: "C1-C2 Akademik ve profesyonel yetkinlik için ileri düzey 5000 kelime seçkisi",
-    card_count: 50,
+    get title() {
+      return pickUiText({
+        tr: "📚 İleri Düzey 5000 Kelime Dağarcığı",
+        en: "📚 Advanced 5000 Vocabulary",
+        de: "📚 Fortgeschrittener 5000er Wortschatz",
+        es: "📚 Vocabulario Avanzado 5000",
+        fr: "📚 Vocabulaire Avancé 5000",
+      });
+    },
+    get description() {
+      return pickUiText({
+        tr: "C1-C2 Akademik ve profesyonel yetkinlik için ileri düzey 5000 kelime seçkisi",
+        en: "Curated advanced 5000-word selection for C1-C2 academic and professional fluency",
+        de: "Ausgewählter 5000er Wortschatz für C1-C2 akademische und berufliche Kompetenz",
+        es: "Selección avanzada de 5000 palabras para dominio académico y profesional C1-C2",
+        fr: "Sélection avancée de 5000 mots pour maîtrise académique et professionnelle C1-C2",
+      });
+    },
+    card_count: 10,
+    folder_id: null,
   },
   {
     id: "preset_c1_pro",
-    title: "💼 C1 Profesyonel İş & Kariyer",
-    description: "Proje Kontrol ve Yönetim terminolojisi içeren 50 ileri seviye terim",
-    card_count: 50,
+    get title() {
+      return pickUiText({
+        tr: "💼 C1 Profesyonel İş & Kariyer",
+        en: "💼 C1 Professional Business & Career",
+        de: "💼 C1 Professionell Business & Karriere",
+        es: "💼 C1 Negocios y Carrera Profesional",
+        fr: "💼 C1 Affaires & Carrière Professionnelle",
+      });
+    },
+    get description() {
+      return pickUiText({
+        tr: "Proje Kontrol ve Yönetim terminolojisi içeren ileri seviye iş terimleri",
+        en: "Advanced business terminology covering Project Controls and Management",
+        de: "Fortgeschrittene Geschäftsterminologie für Projektsteuerung und Management",
+        es: "Terminología empresarial avanzada en Control de Proyectos y Gestión",
+        fr: "Terminologie professionnelle avancée en gestion et contrôle de projets",
+      });
+    },
+    card_count: 10,
+    folder_id: null,
   },
   {
     id: "preset_academic",
-    title: "🎓 Akademik Sınav Paketi (YDS & IELTS)",
-    description: "Akademik makalelerde ve sınavlarda en sık çıkan kritik fiiller ve bağlaçlar",
-    card_count: 45,
+    get title() {
+      return pickUiText({
+        tr: "🎓 Akademik Sınav Paketi (YDS & IELTS)",
+        en: "🎓 Academic Exam Pack (IELTS & TOEFL)",
+        de: "🎓 Akademisches Prüfungspaket (IELTS & TOEFL)",
+        es: "🎓 Paquete de Examen Académico (IELTS & TOEFL)",
+        fr: "🎓 Pack Examen Académique (IELTS & TOEFL)",
+      });
+    },
+    get description() {
+      return pickUiText({
+        tr: "Akademik makalelerde ve sınavlarda en sık çıkan kritik fiiller ve bağlaçlar",
+        en: "Critical verbs and connectors frequently tested in academic papers and exams",
+        de: "Wichtige Verben und Konnektoren aus wissenschaftlichen Artikeln und Prüfungen",
+        es: "Verbos clave y conectores frecuentes en artículos académicos y exámenes",
+        fr: "Verbes clés et connecteurs fréquents dans les articles académiques et examens",
+      });
+    },
+    card_count: 8,
+    folder_id: null,
   },
 ];
 
@@ -163,25 +256,233 @@ export function subscribeToActiveDeck(callback: (deckId: string) => void): () =>
   };
 }
 
+export function sortFoldersBySavedOrder(folders: FolderItem[]): FolderItem[] {
+  if (typeof window === "undefined" || folders.length === 0) return folders;
+  try {
+    const rawOrder = localStorage.getItem(FOLDER_ORDER_STORAGE_KEY);
+    if (!rawOrder) return folders;
+    const savedOrder: string[] = JSON.parse(rawOrder);
+    if (!Array.isArray(savedOrder) || savedOrder.length === 0) return folders;
+    const orderMap = new Map(savedOrder.map((id, idx) => [String(id).trim(), idx]));
+    return [...folders].sort((a, b) => {
+      const posA = orderMap.has(String(a.id).trim())
+        ? orderMap.get(String(a.id).trim())!
+        : 999999;
+      const posB = orderMap.has(String(b.id).trim())
+        ? orderMap.get(String(b.id).trim())!
+        : 999999;
+      return posA - posB;
+    });
+  } catch {
+    return folders;
+  }
+}
+
+export function getFolderHierarchyMap(): Record<string, string | null> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(FOLDER_HIERARCHY_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setFolderParentInHierarchy(
+  folderId: string,
+  parentId: string | null
+): void {
+  if (typeof window === "undefined" || !folderId) return;
+  try {
+    const map = getFolderHierarchyMap();
+    const cleanId = String(folderId).trim();
+    const cleanParent = normalizeFolderId(parentId);
+    if (cleanParent) {
+      map[cleanId] = cleanParent;
+    } else {
+      delete map[cleanId];
+    }
+    localStorage.setItem(FOLDER_HIERARCHY_STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+export function removeFolderFromHierarchy(folderId: string): void {
+  if (typeof window === "undefined" || !folderId) return;
+  try {
+    const map = getFolderHierarchyMap();
+    const cleanId = String(folderId).trim();
+    const formerParent = map[cleanId] || null;
+    delete map[cleanId];
+    for (const key of Object.keys(map)) {
+      if (map[key] === cleanId) {
+        if (formerParent) map[key] = formerParent;
+        else delete map[key];
+      }
+    }
+    localStorage.setItem(FOLDER_HIERARCHY_STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+export function wouldCreateFolderCycle(
+  folders: FolderItem[],
+  movingFolderId: string,
+  candidateParentId: string | null
+): boolean {
+  const cleanMoving = String(movingFolderId || "").trim();
+  let cur = normalizeFolderId(candidateParentId);
+  if (!cur) return false;
+  const parentLookup = new Map<string, string | null>();
+  for (const f of folders) {
+    parentLookup.set(String(f.id || "").trim(), normalizeFolderId(f.parent_id));
+  }
+  const visited = new Set<string>();
+  while (cur) {
+    if (cur === cleanMoving) return true;
+    if (visited.has(cur)) return true;
+    visited.add(cur);
+    cur = parentLookup.get(cur) || null;
+  }
+  return false;
+}
+
+/**
+ * Kullanıcının klasörlerini backend'den çeker, localStorage'a önbelleğe alır
+ */
+export async function fetchFoldersList(): Promise<FolderItem[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const hierarchy = getFolderHierarchyMap();
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/folders`, {
+      signal: controller.signal,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const mapped: FolderItem[] = data.map((f: any) => {
+          const id = String(f.id || "").trim();
+          const parentId =
+            normalizeFolderId(f.parent_id) ?? normalizeFolderId(hierarchy[id]);
+          return {
+            id,
+            name: String(
+              f.name ||
+                pickUiText({
+                  tr: "Klasör",
+                  en: "Folder",
+                  de: "Ordner",
+                  es: "Carpeta",
+                  fr: "Dossier",
+                })
+            ),
+            color: f.color || "#f59e0b",
+            parent_id: parentId === id ? null : parentId,
+            deck_count:
+              typeof f.deck_count === "number" ? f.deck_count : undefined,
+          };
+        });
+        const normalized = sortFoldersBySavedOrder(mapped);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              FOLDERS_CACHE_STORAGE_KEY,
+              JSON.stringify(normalized)
+            );
+          } catch {}
+        }
+        return normalized;
+      }
+    }
+  } catch (err) {
+    console.warn("fetchFoldersList network/timeout fallback:", err);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem(FOLDERS_CACHE_STORAGE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          return sortFoldersBySavedOrder(
+            parsed.map((f: any) => {
+              const id = String(f.id || "").trim();
+              const parentId =
+                normalizeFolderId(f.parent_id) ??
+                normalizeFolderId(hierarchy[id]);
+              return {
+                ...f,
+                id,
+                parent_id: parentId === id ? null : parentId,
+              };
+            })
+          );
+        }
+      }
+    } catch {}
+  }
+
+  return [];
+}
+
 /**
  * Kullanıcının destelerini backend'den çeker, localStorage'a önbelleğe alır
  */
 export async function fetchDecksList(): Promise<DeckItem[]> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   try {
-    const res = await fetch(`${API_BASE}/api/v1/decks`, {
+    let url = `${API_BASE}/api/v1/decks`;
+    if (typeof window !== "undefined") {
+      try {
+        const rawUser = localStorage.getItem("vorego_auth_user");
+        if (rawUser) {
+          const parsedUser = JSON.parse(rawUser);
+          if (parsedUser?.id) {
+            url = `${API_BASE}/api/v1/decks?user_id=${encodeURIComponent(parsedUser.id)}`;
+          }
+        }
+      } catch {}
+    }
+
+    const res = await fetch(url, {
       signal: controller.signal,
     });
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
+        const normalizedBackend: DeckItem[] = data
+          .filter((d: any) => !String(d.id || "").startsWith("preset_"))
+          .map((d: any) => ({
+            ...d,
+            id: String(d.id || "").trim(),
+            title: String(
+              d.title ||
+                pickUiText({
+                  tr: "İsimsiz Deste",
+                  en: "Untitled Deck",
+                  de: "Unbenanntes Deck",
+                  es: "Mazo sin título",
+                  fr: "Paquet sans titre",
+                })
+            ),
+            description: d.description || "",
+            card_count: typeof d.card_count === "number" ? d.card_count : 0,
+            folder_id: normalizeFolderId(d.folder_id),
+          }));
         if (typeof window !== "undefined") {
           try {
-            localStorage.setItem(DECKS_CACHE_STORAGE_KEY, JSON.stringify(data));
+            localStorage.setItem(
+              DECKS_CACHE_STORAGE_KEY,
+              JSON.stringify(normalizedBackend)
+            );
           } catch {}
         }
-        return data;
+        return normalizedBackend;
       }
     }
   } catch (err) {
@@ -190,27 +491,67 @@ export async function fetchDecksList(): Promise<DeckItem[]> {
     clearTimeout(timeoutId);
   }
 
-  // Önbelleği dene
+  // Önbelleği dene (otomatik preset seed devre dışı)
   if (typeof window !== "undefined") {
     try {
       const cached = localStorage.getItem(DECKS_CACHE_STORAGE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((d: any) => !String(d.id || "").startsWith("preset_"))
+            .map((d: any) => ({
+              ...d,
+              folder_id: normalizeFolderId(d.folder_id),
+            }));
         }
       }
     } catch {}
   }
 
-  // Hazır desteler ile dön
-  return PRESET_DECKS;
+  return [];
 }
 
 /**
- * Verilen deste ID'sine (veya aktif desteye) ait kartları döndürür
+ * Ham kart dizisini standart GameWordPair[] dizisine dönüştürür
  */
-export async function getActiveDeckCards(deckId?: string): Promise<GameWordPair[]> {
+function normalizeRawCards(cards: any[]): GameWordPair[] {
+  return cards
+    .map((c: any) => {
+      let meaning = "";
+      if (c.meanings && Array.isArray(c.meanings) && c.meanings.length > 0) {
+        const first = c.meanings[0];
+        meaning =
+          typeof first === "string"
+            ? first
+            : first.meaning || first.translation || first.definition || "";
+      } else if (c.turkish_meaning) {
+        meaning = c.turkish_meaning;
+      } else if (c.meaning) {
+        meaning = c.meaning;
+      } else if (c.definition) {
+        meaning = c.definition;
+      }
+
+      return {
+        id: c.id ? String(c.id) : undefined,
+        word: String(c.word || "").trim(),
+        meaning: String(meaning || "").trim(),
+        phonetic: c.phonetic,
+        clue: c.clue || c.hint || (c.example_sentences && c.example_sentences[0]?.en),
+      };
+    })
+    .filter((item) => item.word && item.meaning);
+}
+
+/**
+ * Verilen deste ID'sine (veya aktif desteye) ait gerçek kartları döndürür.
+ * allowFallback === false iken sabit DEFAULT_GAME_WORDS (mitigate, contingency...) listesine ASLA düşmez.
+ */
+export async function getActiveDeckCards(
+  deckId?: string,
+  allowFallback: boolean = false
+): Promise<GameWordPair[]> {
   const targetId = deckId || getActiveDeckId() || PRESET_DECKS[0].id;
 
   // Preset deste kontrolü
@@ -218,50 +559,48 @@ export async function getActiveDeckCards(deckId?: string): Promise<GameWordPair[
     return PRESET_CARDS[targetId];
   }
 
-  // Backend'den kartları çek (3sn timeout korumalı)
+  // Backend'den kartları çek (15sn timeout korumalı)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   try {
-    const res = await fetch(`${API_BASE}/api/v1/decks/${targetId}/cards`, {
+    const res = await fetch(`${API_BASE}/api/v1/decks/${encodeURIComponent(targetId)}/cards`, {
       signal: controller.signal,
     });
     if (res.ok) {
       const cards = await res.json();
-      if (Array.isArray(cards) && cards.length > 0) {
-        return cards.map((c: any) => {
-          let meaning = "Tanım";
-          if (c.meanings && Array.isArray(c.meanings) && c.meanings.length > 0) {
-            const first = c.meanings[0];
-            meaning =
-              typeof first === "string"
-                ? first
-                : first.meaning || first.translation || first.definition || "Tanım";
-          } else if (c.turkish_meaning) {
-            meaning = c.turkish_meaning;
-          } else if (c.meaning) {
-            meaning = c.meaning;
-          } else if (c.definition) {
-            meaning = c.definition;
-          }
-
-          return {
-            id: c.id ? String(c.id) : undefined,
-            word: String(c.word || "").trim(),
-            meaning: meaning.trim(),
-            phonetic: c.phonetic,
-            clue: c.clue || c.hint || (c.example_sentences && c.example_sentences[0]?.en),
-          };
-        }).filter((item) => item.word && item.meaning);
+      if (Array.isArray(cards)) {
+        const normalized = normalizeRawCards(cards);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              `vocaship_deck_cards_${targetId}`,
+              JSON.stringify(normalized)
+            );
+          } catch {}
+        }
+        return normalized;
       }
     }
   } catch (err) {
-    console.warn(`Deck ${targetId} kartları backend'den alınamadı, yerel yedek kullanılıyor:`, err);
+    console.warn(`Deck ${targetId} kartları backend'den alınamadı:`, err);
   } finally {
     clearTimeout(timeoutId);
   }
 
-  // Fallback: Eğer bulunamazsa varsayılan kelimeler
-  return DEFAULT_GAME_WORDS;
+  // Yerel önbellekte bu destenin kartları varsa onu döndür
+  if (typeof window !== "undefined") {
+    try {
+      const cachedCards = localStorage.getItem(`vocaship_deck_cards_${targetId}`);
+      if (cachedCards) {
+        const parsed = JSON.parse(cachedCards);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+
+  return allowFallback ? DEFAULT_GAME_WORDS : [];
 }
 
 /**

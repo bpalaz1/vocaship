@@ -14,6 +14,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { API_BASE } from "../../config";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface CollectedWordItem {
   id: string;
@@ -48,6 +49,7 @@ export default function SpeakingWordCollector({
   onPlayWordSpeech,
   onSaveToDeckSuccess,
 }: SpeakingWordCollectorProps) {
+  const { t } = useLanguage();
   const [decks, setDecks] = useState<DeckOption[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string>("");
   const [newWordInput, setNewWordInput] = useState("");
@@ -147,7 +149,7 @@ export default function SpeakingWordCollector({
     }
 
     setIsSaving(false);
-    const msg = `🎉 ${savedCount} kelime başarıyla "${deckTitle}" destesine eklendi!`;
+    const msg = t("speak_wc_saved_msg", "🎉 {count} kelime başarıyla \"{title}\" destesine eklendi!", { count: savedCount, title: deckTitle });
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
 
@@ -170,14 +172,14 @@ export default function SpeakingWordCollector({
             <div className="flex items-center gap-2">
               <span className="text-amber-400">💡</span>
               <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                Bu Oturumda Karşılaşılan Kelimeler
+                {t("speak_wc_title", "Bu Oturumda Karşılaşılan Kelimeler")}
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                {words.length} Kelime
+                {t("speak_wc_words_cnt", "{count} Kelime", { count: words.length })}
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Konuşurken durakladığın veya AI yanıtında geçen kelimeleri seçip dilediğin destene ekleyebilirsin.
+              {t("speak_wc_desc", "Konuşurken durakladığın veya AI yanıtında geçen kelimeleri seçip dilediğin destene ekleyebilirsin.")}
             </p>
           </div>
 
@@ -188,7 +190,7 @@ export default function SpeakingWordCollector({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 hover:border-indigo-500 text-xs font-semibold text-indigo-300 hover:text-white transition cursor-pointer self-start sm:self-auto shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>{isAddingCustom ? "Vazgeç" : "Zorlandığın Kelime Ekle"}</span>
+            <span>{isAddingCustom ? t("speak_wc_cancel_add", "Vazgeç") : t("speak_wc_add_hard", "Zorlandığın Kelime Ekle")}</span>
           </button>
         </div>
 
@@ -202,7 +204,7 @@ export default function SpeakingWordCollector({
               type="text"
               value={newWordInput}
               onChange={(e) => setNewWordInput(e.target.value)}
-              placeholder="İngilizce kelime (örn: articulate)"
+              placeholder={t("speak_wc_en_ph", "İngilizce kelime (örn: articulate)")}
               className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:border-indigo-500 outline-none w-full"
               autoFocus
             />
@@ -210,7 +212,7 @@ export default function SpeakingWordCollector({
               type="text"
               value={newWordTrInput}
               onChange={(e) => setNewWordTrInput(e.target.value)}
-              placeholder="Türkçe anlamı (isteğe bağlı)"
+              placeholder={t("speak_wc_tr_ph", "Türkçe anlamı (isteğe bağlı)")}
               className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:border-indigo-500 outline-none w-full"
             />
             <button
@@ -218,7 +220,7 @@ export default function SpeakingWordCollector({
               disabled={!newWordInput.trim()}
               className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs shrink-0 cursor-pointer w-full sm:w-auto"
             >
-              Listeye Ekle
+              {t("speak_wc_add_list", "Listeye Ekle")}
             </button>
           </form>
         )}
@@ -234,7 +236,7 @@ export default function SpeakingWordCollector({
         {/* Kelime Listesi (Onay Kutuları & Anlamlar) */}
         {words.length === 0 ? (
           <div className="text-center py-6 text-xs text-slate-500 italic bg-slate-950/40 rounded-2xl border border-slate-800/60">
-            Sohbet ettikçe karşılaştığın ve zorlandığın kelimeler buraya otomatik olarak düşecektir.
+            {t("speak_wc_empty", "Sohbet ettikçe karşılaştığın ve zorlandığın kelimeler buraya otomatik olarak düşecektir.")}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
@@ -270,7 +272,7 @@ export default function SpeakingWordCollector({
                       )}
                     </div>
                     <p className="text-[11px] text-emerald-400/90 truncate max-w-[200px] mt-0.5">
-                      {item.translation || "Anlam yükleniyor..."}
+                      {item.translation || t("speak_wc_loading_def", "Anlam yükleniyor...")}
                     </p>
                   </div>
                 </div>
@@ -281,7 +283,7 @@ export default function SpeakingWordCollector({
                     type="button"
                     onClick={() => onPlayWordSpeech(item.word)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-                    title="Telaffuzu Dinle"
+                    title={t("speak_wc_listen_tip", "Telaffuzu Dinle")}
                   >
                     <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
                   </button>
@@ -289,7 +291,7 @@ export default function SpeakingWordCollector({
                     type="button"
                     onClick={() => onRemoveWord(item.id)}
                     className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
-                    title="Listeden Kaldır"
+                    title={t("speak_wc_remove_tip", "Listeden Kaldır")}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -305,7 +307,7 @@ export default function SpeakingWordCollector({
             {/* Deste Seçici Dropdown */}
             <div className="flex items-center gap-2">
               <FolderPlus className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span className="text-xs font-semibold text-slate-300 shrink-0">Hedef Deste:</span>
+              <span className="text-xs font-semibold text-slate-300 shrink-0">{t("speak_wc_target_deck", "Hedef Deste:")}</span>
               <div className="relative flex-1 sm:w-60">
                 <select
                   value={selectedDeckId}
@@ -332,13 +334,13 @@ export default function SpeakingWordCollector({
               {isSaving ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Kaydediliyor...</span>
+                  <span>{t("speak_wc_saving", "Kaydediliyor...")}</span>
                 </>
               ) : (
                 <>
                   <BookmarkPlus className="w-3.5 h-3.5" />
                   <span>
-                    Seçilenleri Desteme Kaydet {selectedCount > 0 ? `(${selectedCount})` : ""}
+                    {t("speak_wc_save_selected", "Seçilenleri Desteme Kaydet")} {selectedCount > 0 ? `(${selectedCount})` : ""}
                   </span>
                 </>
               )}

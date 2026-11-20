@@ -144,7 +144,7 @@ class SpeakingRespondResponse(BaseModel):
     )
     feedback: Optional[Any] = Field(
         default=None,
-        description="Vocaship Live Speaking Engine standardında gramer düzeltmesi, alternatif cümle veya övgü/geri bildirim",
+        description="VocaShip Live Speaking Engine standardında gramer düzeltmesi, alternatif cümle veya övgü/geri bildirim",
     )
     # Geriye dönük uyumluluk alanları (mevcut arayüz bileşenlerinin sorunsuz çalışması için)
     grammar_feedback: Optional[str] = Field(

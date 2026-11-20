@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import confetti from "canvas-confetti";
-import { Zap, Clock, X, Trophy, Flame, Check, AlertCircle } from "lucide-react";
+import { Zap, Clock, X, Trophy, Flame, Check, AlertCircle, Volume2, VolumeX } from "lucide-react";
 import GameOverScreen from "./GameOverScreen";
 import MysteryChestModal, { MysteryReward } from "./MysteryChestModal";
 import { saveArenaMistake } from "../../utils/arenaMistakes";
@@ -11,6 +11,10 @@ import {
   shouldTriggerMysteryChest,
 } from "../../utils/gamificationEngine";
 import { GameMistakeItem } from "./GameOverSummary";
+import StreakMilestoneBar from "./StreakMilestoneBar";
+import { getEquippedMuseumBuff } from "../../data/museumItems";
+import { playArenaSound } from "../../utils/soundEffects";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SpeedRecallGameProps {
   cards: Array<{ word: string; meaning: string }>;
@@ -22,12 +26,16 @@ export interface SpeedRecallGameProps {
 
 export default function SpeedRecallGame({
   cards,
-  deckTitle = "Genel Deste",
+  deckTitle,
   onClose,
   onAwardXP,
   timeLimit = 6,
 }: SpeedRecallGameProps) {
-  const roundTimeLimit = Math.max(3, timeLimit);
+  const { t } = useLanguage();
+  const resolvedDeckTitle = deckTitle || t("game_default_deck", "Genel Deste");
+  const equippedBuff = useMemo(() => getEquippedMuseumBuff(), []);
+  const roundTimeLimit = Math.max(3, timeLimit) + (equippedBuff?.type === "extra_time" ? 2 : 0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [currentRound, setCurrentRound] = useState(0);
   const [timer, setTimer] = useState(roundTimeLimit);
   const [score, setScore] = useState(0);
@@ -109,6 +117,20 @@ export default function SpeedRecallGame({
     }, 900);
   };
 
+  // Klavye Kısayolları (1-2-3-4)
+  useEffect(() => {
+    if (isAnswered || gameOver || isMysteryOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const idx = ["1", "2", "3", "4"].indexOf(e.key);
+      if (idx !== -1 && options[idx]) {
+        e.preventDefault();
+        handleSelectOption(options[idx]);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAnswered, gameOver, isMysteryOpen, options]);
+
   const handleSelectOption = (opt: string) => {
     if (isAnswered) return;
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -122,6 +144,12 @@ export default function SpeedRecallGame({
       setCombo(nextCombo);
       setMaxCombo((prev) => Math.max(prev, nextCombo));
       setCorrectCount((c) => c + 1);
+
+      if (nextCombo > 0 && nextCombo % 5 === 0) {
+        playArenaSound("milestone", soundEnabled);
+      } else {
+        playArenaSound("correct", soundEnabled);
+      }
 
       // Ortak Oyunlaştırma Motoru: Azalan verim, CEFR & Kombo Çarpanı
       const reward = calculateWordReward({
@@ -150,6 +178,7 @@ export default function SpeedRecallGame({
       }
     } else {
       setCombo(0);
+      playArenaSound("wrong", soundEnabled);
       if (activeCard) {
         setSessionMistakes((prev) => {
           if (prev.some((m) => m.word.toLowerCase() === activeCard.word.toLowerCase())) return prev;
@@ -168,6 +197,20 @@ export default function SpeedRecallGame({
       advanceRound();
     }, 900);
   };
+
+  // Klavye Kısayolları (1-2-3-4)
+  useEffect(() => {
+    if (isAnswered || gameOver || isMysteryOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const idx = ["1", "2", "3", "4"].indexOf(e.key);
+      if (idx !== -1 && options[idx]) {
+        e.preventDefault();
+        handleSelectOption(options[idx]);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAnswered, gameOver, isMysteryOpen, options]);
 
   const advanceRound = () => {
     setSelectedOption(null);
@@ -201,8 +244,8 @@ export default function SpeedRecallGame({
             <Zap className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-white">{roundTimeLimit}s Hızlı Kombo (Speed Recall)</h2>
-            <p className="text-xs text-slate-400 font-medium">{deckTitle}</p>
+            <h2 className="text-base font-black text-white">{t("game_speed_recall_hdr", "{s}s Hızlı Kombo (Speed Recall)", { s: roundTimeLimit })}</h2>
+            <p className="text-xs text-slate-400 font-medium">{resolvedDeckTitle}</p>
           </div>
         </div>
 
@@ -211,14 +254,27 @@ export default function SpeedRecallGame({
           {combo > 1 && (
             <div className="flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-xl text-amber-300 font-bold text-xs animate-bounce">
               <Flame className="w-3.5 h-3.5 text-amber-400" />
-              <span>{combo}x Kombo!</span>
+              <span>{t("game_combo_x", "{n}x Kombo!", { n: combo })}</span>
             </div>
           )}
 
           {/* Skor */}
           <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-yellow-400">
-            {score} Puan
+            {score} {t("game_points_unit", "Puan")}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+            title={soundEnabled ? t("game_sound_off", "Sesi Kapat") : t("game_sound_on", "Sesi Aç")}
+          >
+            {soundEnabled ? (
+              <Volume2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <VolumeX className="w-4 h-4 text-slate-500" />
+            )}
+          </button>
 
           <button
             type="button"
@@ -230,12 +286,17 @@ export default function SpeedRecallGame({
         </div>
       </div>
 
+      {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
+      <div className="max-w-2xl mx-auto w-full pt-3">
+        <StreakMilestoneBar streak={combo} />
+      </div>
+
       {/* 2. Merkez Oyun Kartı */}
       <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col justify-center py-6 space-y-6">
         {/* 5 Saniyelik Nabız Çemberi */}
         <div className="flex items-center justify-between px-2">
           <span className="text-xs font-mono text-slate-400">
-            Tur {currentRound + 1} / {totalRounds}
+            {t("game_round_of", "Tur {cur} / {total}", { cur: currentRound + 1, total: totalRounds })}
           </span>
 
           <div
@@ -252,7 +313,7 @@ export default function SpeedRecallGame({
         {/* Hedef Kelime Kartı */}
         <div className="p-8 rounded-3xl bg-slate-900 border-2 border-indigo-500/30 shadow-2xl text-center space-y-2">
           <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">
-            Hedef Kelime:
+            {t("game_target_word_lbl", "Hedef Kelime:")}
           </span>
           <h3 className="text-3xl sm:text-4xl font-black text-white font-mono tracking-wide">
             {activeCard.word}
@@ -285,7 +346,12 @@ export default function SpeedRecallGame({
                 onClick={() => handleSelectOption(opt)}
                 className={`p-4 rounded-2xl border text-xs sm:text-sm font-bold text-left transition-all duration-200 cursor-pointer shadow-md flex items-center justify-between gap-2 ${btnStyle}`}
               >
-                <span>{opt}</span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-950/90 text-indigo-300 border border-slate-700 shrink-0 font-bold">
+                    [{i + 1}]
+                  </span>
+                  <span className="truncate">{opt}</span>
+                </div>
                 {isAnswered && isCorrect && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
               </button>
             );
@@ -296,8 +362,8 @@ export default function SpeedRecallGame({
       {/* 3. Oyun Sonu Ekranı (5 Saniyelik Hata Telafisi ile) */}
       {gameOver && (
         <GameOverScreen
-          gameTitle="⚡ Hızlı Kombo"
-          deckTitle={deckTitle}
+          gameTitle={t("game_speed_over_title", "⚡ Hızlı Kombo")}
+          deckTitle={resolvedDeckTitle}
           score={score}
           accuracyPercent={Math.round((correctCount / totalRounds) * 100)}
           awardedXP={Math.max(40, score)}

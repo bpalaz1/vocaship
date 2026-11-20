@@ -20,7 +20,12 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { usePersona } from "../context/PersonaContext";
 import { useProfile } from "../context/ProfileContext";
-import { addPendingGold } from "../utils/pendingGold";
+import { useAppTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import {
+  rewardSpeakingSessionComplete,
+  rewardSpeakingTargetWord,
+} from "../utils/rewardEngine";
 import {
   getActiveDeckId,
   getActiveDeckCards,
@@ -108,6 +113,8 @@ function SpeakingContent() {
   const { user } = useAuth();
   const { selectedCharacter } = usePersona();
   const { userProfile } = useProfile();
+  const { isDark } = useAppTheme();
+  const { t, language } = useLanguage();
 
   const isAlex = selectedCharacter === "alex_adult";
 
@@ -116,7 +123,7 @@ function SpeakingContent() {
     displayName: string;
     avatarUrl: string;
   }>({
-    displayName: userProfile?.username || user?.username || "Konuşmacı",
+    displayName: userProfile?.username || user?.username || t("speak_speaker_fallback", "Konuşmacı"),
     avatarUrl: userProfile?.avatar_url || "🦊",
   });
 
@@ -137,11 +144,11 @@ function SpeakingContent() {
         userProfile?.username ||
         user?.username ||
         localProfile?.username ||
-        "Konuşmacı",
+        t("speak_speaker_fallback", "Konuşmacı"),
       avatarUrl:
         userProfile?.avatar_url || localProfile?.avatar_url || "🦊",
     });
-  }, [userProfile, user]);
+  }, [userProfile, user, t]);
 
   // Tam Ekran, Geçmiş Çekmecesi ve Akıllı İpucu Durumları
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -421,6 +428,17 @@ function SpeakingContent() {
     return matched;
   }, [targetWordsList, dialogue, userTranscript]);
 
+  const rewardedSpeakingWordsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    huntedTargetWords.forEach((w) => {
+      const key = w.toLowerCase().trim();
+      if (key && !rewardedSpeakingWordsRef.current.has(key)) {
+        rewardedSpeakingWordsRef.current.add(key);
+        rewardSpeakingTargetWord(w);
+      }
+    });
+  }, [huntedTargetWords]);
+
   useEffect(() => {
     const activeAiText = aiMessage || openingGreeting;
     if (activeAiText && activeAiText !== latestAiMessageRef.current) {
@@ -580,7 +598,7 @@ function SpeakingContent() {
 
     if (!SpeechRecognition) {
       setMicError(
-        "Tarayıcınız ses tanıma özelliğini desteklemiyor. Lütfen Chrome veya Edge kullanın."
+        t("speak_browser_unsupported", "Tarayıcınız ses tanıma özelliğini desteklemiyor. Lütfen Chrome veya Edge kullanın.")
       );
       return;
     }
@@ -705,7 +723,7 @@ function SpeakingContent() {
           e.error === "service-not-allowed" ||
           e.error === "audio-capture"
         ) {
-          setMicError("Mikrofon erişimi engellendi, lütfen tarayıcı iznini açın.");
+          setMicError(t("speak_mic_denied", "Mikrofon erişimi engellendi, lütfen tarayıcı iznini açın."));
           setIsListening(false);
           return;
         }
@@ -1263,11 +1281,11 @@ function SpeakingContent() {
           rawErr.toLowerCase().includes("err_connection_refused");
 
         if (isLocalBackend && (isAbortOrTimeout || isUnreachable)) {
-          setMicError("Yerel backend (Port 8000) yanıt vermiyor");
+          setMicError(t("speak_backend_down", "Yerel backend (Port 8000) yanıt vermiyor"));
         } else if (isAbortOrTimeout) {
-          setMicError("Sunucu uyanıyor, tekrar deneyebilirsin...");
+          setMicError(t("speak_server_waking", "Sunucu uyanıyor, tekrar deneyebilirsin..."));
         } else {
-          const cleanErr = err instanceof Error ? err.message : "Sunucu bağlantı hatası";
+          const cleanErr = err instanceof Error ? err.message : t("speak_backend_down", "Sunucu bağlantı hatası");
           setMicError(cleanErr);
         }
 
@@ -1315,7 +1333,7 @@ function SpeakingContent() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop());
     } catch {
-      setMicError("Mikrofon erişimi engellendi, lütfen tarayıcı iznini açın.");
+      setMicError(t("speak_mic_denied", "Mikrofon erişimi engellendi, lütfen tarayıcı iznini açın."));
       return;
     }
 
@@ -1363,8 +1381,9 @@ function SpeakingContent() {
     setIsAiSpeaking(false);
     setIsThinking(false);
 
-    if (dialogueRef.current.filter((d) => d.role === "user").length >= 2) {
-      addPendingGold(45, "speaking");
+    const userTurnCount = dialogueRef.current.filter((d) => d.role === "user").length;
+    if (userTurnCount >= 3) {
+      rewardSpeakingSessionComplete(userTurnCount);
     }
 
     const turnsToSave =
@@ -1383,8 +1402,8 @@ function SpeakingContent() {
         const newEntry = {
           id: Date.now().toString(),
           title: activeStoryTitle
-            ? `Hikaye Tartışması: ${activeStoryTitle}`
-            : "Gemini Speaking Oturumu",
+            ? t("speak_story_discussion_title", "Hikaye Tartışması: {title}", { title: activeStoryTitle })
+            : "Gemini Speaking",
           created_at: new Date().toISOString(),
           turns: turnsToSave,
         };
@@ -1398,8 +1417,8 @@ function SpeakingContent() {
     saveSpeakingArchiveSession({
       user_id: user?.id,
       session_title: activeStoryTitle
-        ? `Hikaye Tartışması: ${activeStoryTitle}`
-        : "Gemini Speaking Oturumu",
+        ? t("speak_story_discussion_title", "Hikaye Tartışması: {title}", { title: activeStoryTitle })
+        : "Gemini Speaking",
       transcript: dialogueRef.current.map((d) => ({
         sender: d.role === "assistant" ? ("ai" as const) : ("user" as const),
         text: d.message,
@@ -1429,13 +1448,17 @@ function SpeakingContent() {
         ? `Discussing ${activeStoryTitle.slice(0, 24)}`
         : "Everyday English Chat",
       fluency_score: Math.min(94, Math.max(74, 75 + userLines.length * 4)),
-      coach_feedback:
-        "Konuşma pratiğine aktif olarak katılman harika! Her oturumda cümlelerin daha akıcı ve doğal hale geliyor.",
+      coach_feedback: t(
+        "speak_coach_fallback",
+        "Konuşma pratiğine aktif olarak katılman harika! Her oturumda cümlelerin daha akıcı ve doğal hale geliyor."
+      ),
       golden_sentence: {
         original: longestUser,
         improved: `Honestly, ${longestUser.charAt(0).toLowerCase() + longestUser.slice(1)}`,
-        reason_tr:
-          "Cümleye 'Honestly' gibi doğal bir konuşma bağlacı eklemek akıcılığı artırır.",
+        reason_tr: t(
+          "speak_golden_reason_fallback",
+          "Cümleye 'Honestly' gibi doğal bir konuşma bağlacı eklemek akıcılığı artırır."
+        ),
       },
       extracted_words: [
         {
@@ -1522,7 +1545,7 @@ function SpeakingContent() {
       (w) => selectedSummaryWords[w.word]
     );
     if (chosenWords.length === 0) {
-      setWordsSavedMessage("Lütfen en az bir kelime seçin.");
+      setWordsSavedMessage(t("speak_pick_at_least_one", "Lütfen en az bir kelime seçin."));
       return;
     }
 
@@ -1541,13 +1564,13 @@ function SpeakingContent() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              title: "Speaking Pratikleri",
-              description: "Speaking Lounge oturumlarından kaydedilen kelimeler",
+              title: t("speak_practice_deck_name", "Speaking Pratikleri"),
+              description: t("speak_practice_deck_desc", "Speaking Lounge oturumlarından kaydedilen kelimeler"),
               user_id: user?.id || null,
             }),
           });
           if (!createRes.ok) {
-            throw new Error("Deste oluşturulamadı.");
+            throw new Error(t("speak_deck_create_failed", "Deste oluşturulamadı."));
           }
           const createdDeck = await createRes.json();
           targetDeckId = createdDeck.id;
@@ -1584,12 +1607,12 @@ function SpeakingContent() {
       }
 
       if (savedCount > 0) {
-        setWordsSavedMessage(`${savedCount} kelime desteye başarıyla eklendi!`);
+        setWordsSavedMessage(t("speak_words_saved_count", "{count} kelime desteye başarıyla eklendi!", { count: savedCount }));
       } else {
-        setWordsSavedMessage("Kelimeler kaydedilemedi, lütfen tekrar deneyin.");
+        setWordsSavedMessage(t("speak_words_save_failed", "Kelimeler kaydedilemedi, lütfen tekrar deneyin."));
       }
     } catch {
-      setWordsSavedMessage("Desteye bağlanırken bir hata oluştu.");
+      setWordsSavedMessage(t("speak_deck_connect_error", "Desteye bağlanırken bir hata oluştu."));
     } finally {
       setIsSavingWords(false);
     }
@@ -1657,132 +1680,181 @@ function SpeakingContent() {
     syncedProfile.avatarUrl.startsWith("/");
 
   return (
-    <div className="h-screen w-full bg-slate-950 text-slate-100 flex flex-col justify-between relative overflow-hidden select-none">
+    <div
+      className={`h-[calc(100vh-76px)] max-h-[calc(100vh-76px)] w-full overflow-hidden flex flex-col justify-between relative px-4 py-3 select-none transition-colors duration-200 ${
+        isDark ? "bg-[#0B0F19] text-slate-100" : "bg-[#dce3ec] text-slate-900"
+      }`}
+    >
       {/* 🌟 Arka Plan Ambient Radyal Işık Parıltısı */}
       <div
-        className={`absolute inset-0 pointer-events-none transition-all duration-700 blur-[130px] opacity-40 ${
+        className={`absolute inset-0 pointer-events-none transition-all duration-700 blur-[130px] ${
+          isDark ? "opacity-40" : "opacity-25"
+        } ${
           isAiSpeaking
             ? "bg-gradient-to-b from-blue-600/40 via-indigo-800/30 to-transparent"
             : isListening
             ? "bg-gradient-to-b from-emerald-700/40 via-teal-900/30 to-transparent"
             : isThinking
             ? "bg-gradient-to-b from-amber-700/30 via-indigo-900/30 to-transparent"
-            : "bg-gradient-to-b from-slate-900/30 via-slate-950 to-transparent"
+            : isDark
+            ? "bg-gradient-to-b from-slate-900/30 via-slate-950 to-transparent"
+            : "bg-gradient-to-b from-indigo-300/40 to-transparent"
         }`}
       />
 
       {/* ========================================================================= */}
-      {/* SOL ÜST: EVRENSEL PROFİL ROZETİ (SEVİYEDEN BAĞIMSIZ GÖRSEL KİMLİK)       */}
+      {/* ÜST YÜZEN KONTROLLER: SOL (@PROFİL) & SAĞ (TAM EKRAN + GEÇMİŞ)            */}
       {/* ========================================================================= */}
-      <div className="absolute top-4 left-4 z-30 flex items-center gap-2.5">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800/90 backdrop-blur-md shadow-sm">
-          {isAvatarImageUrl ? (
-            <img
-              src={syncedProfile.avatarUrl}
-              alt={syncedProfile.displayName}
-              className="w-6 h-6 rounded-full object-cover border border-indigo-400/40"
-            />
-          ) : (
-            <span className="text-base leading-none">{syncedProfile.avatarUrl}</span>
+      <div className="relative z-30 w-full flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md shadow-sm ${
+              isDark
+                ? "bg-slate-900/80 border-slate-800/90 text-slate-200"
+                : "bg-[#f8fafc] border-slate-300 text-slate-900"
+            }`}
+          >
+            {isAvatarImageUrl ? (
+              <img
+                src={syncedProfile.avatarUrl}
+                alt={syncedProfile.displayName}
+                className="w-6 h-6 rounded-full object-cover border border-indigo-400/40"
+              />
+            ) : (
+              <span className="text-base leading-none">{syncedProfile.avatarUrl}</span>
+            )}
+            <span className={`text-xs font-semibold max-w-[120px] truncate ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+              @{syncedProfile.displayName}
+            </span>
+          </div>
+
+          {activeStoryTitle && (
+            <div
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium backdrop-blur-md shadow-sm ${
+                isDark
+                  ? "bg-slate-900/80 border-violet-500/30 text-violet-300"
+                  : "bg-[#f8fafc] border-violet-300 text-violet-900"
+              }`}
+            >
+              <BookOpen className={`w-3.5 h-3.5 shrink-0 ${isDark ? "text-violet-400" : "text-violet-700"}`} />
+              <span className="truncate max-w-[140px]">{activeStoryTitle}</span>
+              {isStoryLevelLocked && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${
+                    isDark
+                      ? "bg-violet-500/20 border-violet-400/40 text-violet-200"
+                      : "bg-violet-100 border-violet-300 text-violet-800"
+                  }`}
+                >
+                  🔒 {activeLevel}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleExitStoryMode}
+                className={`ml-1 text-[10px] font-bold cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-300" : "text-slate-500 hover:text-rose-700"}`}
+              >
+                ✕
+              </button>
+            </div>
           )}
-          <span className="text-xs font-semibold text-slate-200 max-w-[120px] truncate">
-            @{syncedProfile.displayName}
-          </span>
         </div>
 
-        {activeStoryTitle && (
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 border border-violet-500/30 text-violet-300 text-xs font-medium backdrop-blur-md">
-            <BookOpen className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-            <span className="truncate max-w-[140px]">{activeStoryTitle}</span>
-            {isStoryLevelLocked && (
-              <span className="px-1.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-400/40 text-[10px] font-bold text-violet-200">
-                🔒 {activeLevel}
-              </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm ${
+              isDark
+                ? "bg-slate-900/85 hover:bg-slate-800 text-slate-200 border-slate-800"
+                : "bg-[#f8fafc] hover:bg-white text-slate-900 border-slate-300"
+            }`}
+          >
+            {isFullscreen ? (
+              <>
+                <Minimize2 className={`w-3.5 h-3.5 ${isDark ? "text-cyan-400" : "text-cyan-700"}`} />
+                <span>{t("speak_exit_fullscreen", "🗗 Küçült")}</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className={`w-3.5 h-3.5 ${isDark ? "text-cyan-400" : "text-cyan-700"}`} />
+                <span>{t("speak_fullscreen", "⛶ Tam Ekran")}</span>
+              </>
             )}
-            <button
-              type="button"
-              onClick={handleExitStoryMode}
-              className="ml-1 text-slate-400 hover:text-rose-300 text-[10px] font-bold cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-      </div>
+          </button>
 
-      {/* ========================================================================= */}
-      {/* SAĞ ÜST: YALNIZCA [ ⛶ Tam Ekran ] VE [ 📜 Geçmiş ] YÜZEN BUTONLARI        */}
-      {/* ========================================================================= */}
-      <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={toggleFullscreen}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/85 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm"
-        >
-          {isFullscreen ? (
-            <>
-              <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
-              <span>🗗 Küçült</span>
-            </>
-          ) : (
-            <>
-              <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
-              <span>⛶ Tam Ekran</span>
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            loadSavedArchives();
-            setIsHistoryOpen(true);
-          }}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/85 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm"
-        >
-          <History className="w-3.5 h-3.5 text-indigo-400" />
-          <span>📜 Geçmiş</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              loadSavedArchives();
+              setIsHistoryOpen(true);
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm ${
+              isDark
+                ? "bg-slate-900/85 hover:bg-slate-800 text-slate-200 border-slate-800"
+                : "bg-[#f8fafc] hover:bg-white text-slate-900 border-slate-300"
+            }`}
+          >
+            <History className={`w-3.5 h-3.5 ${isDark ? "text-indigo-400" : "text-indigo-700"}`} />
+            <span>{t("speak_history", "📜 Geçmiş")}</span>
+          </button>
+        </div>
       </div>
 
       {/* ========================================================================= */}
       {/* SADE 3 KATMANLI MERKEZ SAHNE                                              */}
       {/* ========================================================================= */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pt-16 pb-4 max-w-3xl mx-auto w-full text-center overflow-hidden">
+      <main className="relative z-10 my-auto flex flex-col items-center justify-center gap-5 max-w-3xl mx-auto w-full text-center min-h-0">
         {micError && (
-          <div className="mb-3 px-4 py-2.5 rounded-2xl bg-rose-950/70 border border-rose-800 text-rose-200 text-xs font-medium shadow-xl max-w-md">
+          <div className={`px-4 py-2 rounded-2xl border text-xs font-medium shadow-xl max-w-md ${isDark ? "bg-rose-950/70 border-rose-800 text-rose-200" : "bg-rose-100 border-rose-300 text-rose-900"}`}>
             ⚠️ {micError}
           </div>
         )}
 
         {/* KATMAN 1: ÜST-ORTA AKTİF DİYALOG */}
-        <div className="w-full flex flex-col items-center justify-center space-y-2.5 mb-5">
+        <div className="w-full flex flex-col items-center justify-center gap-2">
           <div className="flex flex-col items-center gap-2 max-w-2xl">
-            <p className="text-xl md:text-2xl font-semibold text-slate-100 text-center max-w-2xl leading-relaxed tracking-tight drop-shadow-md">
+            <p
+              className={`max-w-2xl px-6 py-4 text-lg md:text-xl font-semibold text-center leading-relaxed tracking-tight rounded-3xl border ${
+                isDark
+                  ? "bg-slate-900/90 border-slate-800 text-white shadow-lg"
+                  : "bg-[#f8fafc] border-slate-300 text-slate-900 shadow-md"
+              }`}
+            >
               &ldquo;{aiMessage || openingGreeting}&rdquo;
             </p>
             {sessionState === "active" && (
               <button
                 type="button"
                 onClick={() => speakAiResponse(aiMessage || openingGreeting)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-indigo-300 text-xs font-semibold transition active:scale-95 cursor-pointer"
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold transition active:scale-95 cursor-pointer shadow-sm ${
+                  isDark
+                    ? "bg-slate-900/80 hover:bg-slate-800 border-slate-700/80 text-indigo-300"
+                    : "bg-[#f8fafc] hover:bg-indigo-50 border-slate-300 text-indigo-700"
+                }`}
               >
                 <Volume2 className="w-3.5 h-3.5" />
-                <span>Tekrar Dinle</span>
+                <span>{t("speak_listen_again", "Tekrar Dinle")}</span>
               </button>
             )}
           </div>
 
           {sessionState === "active" && (
-            <div className="w-full max-w-xl px-4 py-2.5 rounded-2xl bg-slate-900/65 border border-indigo-500/25 backdrop-blur-md">
+            <div
+              className={`w-full max-w-xl px-4 py-2 rounded-2xl border backdrop-blur-md shadow-sm ${
+                isDark
+                  ? "bg-slate-900/90 border-indigo-500/25"
+                  : "bg-[#f8fafc] border-slate-300"
+              }`}
+            >
               {userTranscript ? (
-                <p className="text-sm text-indigo-200 font-medium">
-                  <span className="text-emerald-400 font-semibold mr-1.5">🎙️ Sen:</span>
-                  <span className="text-slate-100">{userTranscript}</span>
+                <p className={`text-sm font-medium ${isDark ? "text-indigo-200" : "text-slate-800"}`}>
+                  <span className={`font-semibold mr-1.5 ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>{t("speak_you_prefix", "🎙️ Sen:")}</span>
+                  <span className={isDark ? "text-slate-100" : "text-slate-900"}>{userTranscript}</span>
                 </p>
               ) : (
-                <p className="text-xs text-slate-400 italic">
-                  🎙️ Seni dinliyorum, İngilizce konuşmaya başlayabilirsin...
+                <p className={`text-xs italic ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                  {t("speak_listening_prompt", "🎙️ Seni dinliyorum, İngilizce konuşmaya başlayabilirsin...")}
                 </p>
               )}
             </div>
@@ -1790,16 +1862,16 @@ function SpeakingContent() {
         </div>
 
         {/* KATMAN 2: MERKEZ MİKROFON & AKILLI İPUCU KÖPRÜSÜ */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-5 my-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
           {sessionState === "idle" ? (
             <button
               type="button"
               onClick={handleStartChat}
-              className="w-44 h-44 sm:w-48 sm:h-48 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative cursor-pointer shadow-2xl active:scale-95 bg-gradient-to-tr from-indigo-900 via-indigo-600 to-violet-500 hover:scale-105 shadow-indigo-600/40 ring-4 ring-indigo-400/30"
+              className="w-32 h-32 md:w-36 md:h-36 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative cursor-pointer shadow-2xl active:scale-95 bg-gradient-to-tr from-indigo-900 via-indigo-600 to-violet-500 hover:scale-105 shadow-indigo-600/40 ring-4 ring-indigo-400/30"
             >
-              <Mic className="w-10 h-10 mb-2 text-white animate-bounce" />
-              <span className="text-sm sm:text-base font-bold text-white tracking-wide">
-                🎙️ Sohbete Başla
+              <Mic className="w-8 h-8 mb-1.5 text-white animate-bounce" />
+              <span className="text-xs sm:text-sm font-bold text-white tracking-wide px-2 leading-tight">
+                {t("speak_start_chat", "🎙️ Sohbete Başla")}
               </span>
             </button>
           ) : (
@@ -1808,8 +1880,8 @@ function SpeakingContent() {
                 <div
                   className="absolute rounded-full border border-emerald-400/40 transition-transform duration-75 pointer-events-none"
                   style={{
-                    width: "210px",
-                    height: "210px",
+                    width: "168px",
+                    height: "168px",
                     transform: `scale(${1 + micVolume * 0.005})`,
                     boxShadow: `0 0 ${22 + micVolume * 0.5}px rgba(16, 185, 129, 0.35)`,
                   }}
@@ -1820,8 +1892,8 @@ function SpeakingContent() {
                 <div
                   className="absolute rounded-full border border-indigo-400/35 pointer-events-none animate-ping"
                   style={{
-                    width: "200px",
-                    height: "200px",
+                    width: "160px",
+                    height: "160px",
                     animationDuration: "2.3s",
                   }}
                 />
@@ -1835,7 +1907,7 @@ function SpeakingContent() {
                   }
                 }}
                 disabled={!isAiSpeaking}
-                className={`w-40 h-40 sm:w-44 sm:h-44 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative shadow-2xl select-none ${
+                className={`w-32 h-32 md:w-36 md:h-36 rounded-full transition-all duration-500 flex flex-col items-center justify-center relative shadow-2xl select-none ${
                   isAiSpeaking
                     ? "cursor-pointer active:scale-95 bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 shadow-indigo-500/60 ring-4 ring-indigo-400/50 animate-pulse"
                     : isThinking
@@ -1845,26 +1917,26 @@ function SpeakingContent() {
               >
                 {isAiSpeaking ? (
                   <div className="flex flex-col items-center justify-center p-2">
-                    <Volume2 className="w-9 h-9 mb-1.5 text-white animate-pulse" />
-                    <span className="whitespace-normal text-center leading-tight px-3 text-xs sm:text-sm font-semibold text-white">
-                      🔊 Konuşuyor...
+                    <Volume2 className="w-7 h-7 mb-1 text-white animate-pulse" />
+                    <span className="whitespace-normal text-center leading-tight px-2 text-xs font-semibold text-white">
+                      {t("speak_ai_speaking", "🔊 Konuşuyor...")}
                     </span>
-                    <span className="text-[10px] text-indigo-200 mt-1">
-                      (Söz kesmek için dokun)
+                    <span className="text-[10px] text-indigo-200 mt-0.5">
+                      {t("speak_tap_interrupt", "(Söz kesmek için dokun)")}
                     </span>
                   </div>
                 ) : isThinking ? (
                   <div className="flex flex-col items-center justify-center p-2">
-                    <Loader2 className="w-8 h-8 mb-1.5 text-white animate-spin" />
-                    <span className="whitespace-normal text-center leading-tight px-3 text-xs sm:text-sm font-semibold text-white">
-                      Düşünüyor...
+                    <Loader2 className="w-7 h-7 mb-1 text-white animate-spin" />
+                    <span className="whitespace-normal text-center leading-tight px-2 text-xs font-semibold text-white">
+                      {t("speak_thinking", "Düşünüyor...")}
                     </span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center p-2">
-                    <Mic className="w-9 h-9 mb-1.5 text-white" />
-                    <span className="whitespace-normal text-center leading-tight px-3 text-xs sm:text-sm font-semibold text-white">
-                      🟢 Seni Dinliyorum...
+                    <Mic className="w-7 h-7 mb-1 text-white" />
+                    <span className="whitespace-normal text-center leading-tight px-2 text-xs font-semibold text-white">
+                      {t("speak_listening", "🟢 Seni Dinliyorum...")}
                     </span>
                   </div>
                 )}
@@ -1883,20 +1955,24 @@ function SpeakingContent() {
             }`}
           >
             <Lightbulb className="w-4 h-4 text-amber-900" />
-            <span>Ne Diyebilirim?</span>
+            <span>{t("speak_what_to_say", "Ne Diyebilirim?")}</span>
           </button>
         </div>
 
         {/* Açılır Fısıltı İpucu Kutusu (2 Hazır Cümle Başlatıcı Kalıp) */}
         {isHintBoxOpen && (
-          <div className="w-full max-w-xl mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+          <div className="w-full max-w-xl grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
             {activeStarterPhrases.map((phrase, idx) => (
               <div
                 key={idx}
-                className="px-3.5 py-2.5 rounded-2xl bg-slate-900/90 border border-amber-500/35 text-xs text-amber-100 shadow-md"
+                className={`px-3.5 py-2 rounded-2xl border text-xs shadow-md ${
+                  isDark
+                    ? "bg-slate-900/90 border-amber-500/35 text-amber-100"
+                    : "bg-[#f8fafc] border-amber-300 text-slate-900"
+                }`}
               >
-                <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-0.5">
-                  İpucu {idx + 1}
+                <span className={`block text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isDark ? "text-amber-400" : "text-amber-700"}`}>
+                  {idx === 0 ? t("speak_tip_1", "İpucu 1") : t("speak_tip_2", "İpucu 2")}
                 </span>
                 <span className="font-medium leading-snug">&ldquo;{phrase}&rdquo;</span>
               </div>
@@ -1906,8 +1982,14 @@ function SpeakingContent() {
 
         {/* 🎯 Hedef Kelime Avcısı (Kompakt Takip Şeridi) */}
         {targetWordsList.length > 0 && (
-          <div className="w-full max-w-xl mt-3 px-3 py-2 rounded-2xl bg-slate-900/55 border border-slate-800/80 flex items-center justify-center flex-wrap gap-1.5">
-            <span className="text-[11px] font-bold text-amber-300 mr-1">
+          <div
+            className={`w-full max-w-xl px-3 py-1.5 rounded-2xl border flex items-center justify-center flex-wrap gap-1.5 shadow-sm ${
+              isDark
+                ? "bg-slate-900/90 border-slate-800"
+                : "bg-[#f8fafc] border-slate-300"
+            }`}
+          >
+            <span className={`text-[11px] font-bold mr-1 ${isDark ? "text-amber-300" : "text-amber-800"}`}>
               🎯 {huntedTargetWords.size}/{targetWordsList.length}
             </span>
             {targetWordsList.map((word) => {
@@ -1917,8 +1999,12 @@ function SpeakingContent() {
                   key={word}
                   className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
                     isHunted
-                      ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-200"
-                      : "bg-slate-900/80 border-slate-700/70 text-slate-300"
+                      ? isDark
+                        ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-200"
+                        : "bg-emerald-100 border-emerald-400 text-emerald-900"
+                      : isDark
+                      ? "bg-slate-950/80 border-slate-700/70 text-slate-300"
+                      : "bg-slate-100 border-slate-300 text-slate-800"
                   }`}
                 >
                   {isHunted ? `✓ ${word}` : word}
@@ -1930,12 +2016,20 @@ function SpeakingContent() {
 
         {/* KATMAN 3: ALT KOMPAKT KONUŞMA AKIŞI (text-xs) */}
         {dialogue.length > 0 && (
-          <div className="w-full max-w-xl mt-4 px-3.5 py-2.5 rounded-2xl bg-slate-900/45 border border-slate-800/70 text-xs text-slate-400 max-h-28 overflow-y-auto text-left space-y-1.5 backdrop-blur-sm">
+          <div
+            className={`w-full max-w-xl px-3.5 py-2 rounded-2xl border text-xs max-h-20 overflow-y-auto text-left space-y-1 backdrop-blur-sm shadow-sm ${
+              isDark
+                ? "bg-slate-900/90 border-slate-800 text-slate-200"
+                : "bg-[#f8fafc] border-slate-300 text-slate-900"
+            }`}
+          >
             {dialogue.slice(-6).map((turn, idx) => (
               <div key={idx} className="leading-relaxed">
                 <span
                   className={`font-bold mr-1.5 ${
-                    turn.role === "assistant" ? "text-indigo-400" : "text-emerald-400"
+                    turn.role === "assistant"
+                      ? isDark ? "text-indigo-400" : "text-indigo-700"
+                      : isDark ? "text-emerald-400" : "text-emerald-700"
                   }`}
                 >
                   {turn.role === "assistant" ? "AI:" : "Sen:"}
@@ -1951,20 +2045,28 @@ function SpeakingContent() {
       {/* EN ALT BAR: YALNIZCA AKTİFKEN [ 🔴 Sohbeti Bitir ] BUTONU                 */}
       {/* ========================================================================= */}
       {sessionState === "active" && (
-        <footer className="relative z-20 w-full px-6 py-4 flex items-center justify-center border-t border-slate-900/70 backdrop-blur-md">
+        <footer
+          className={`relative z-20 w-full px-4 pt-2 pb-1 flex items-center justify-center border-t shrink-0 backdrop-blur-md ${
+            isDark ? "border-slate-900/70" : "border-slate-300/80"
+          }`}
+        >
           <button
             type="button"
             onClick={handleEndChat}
             disabled={isGeneratingSummary}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-bold text-sm transition active:scale-95 cursor-pointer shadow-lg shadow-rose-950/40 disabled:opacity-70"
+            className={`inline-flex items-center gap-2 px-5 py-2 rounded-full border font-bold text-sm transition active:scale-95 cursor-pointer shadow-md disabled:opacity-70 ${
+              isDark
+                ? "bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border-rose-500/40 shadow-rose-950/40"
+                : "bg-rose-600 hover:bg-rose-700 text-white border-rose-700"
+            }`}
           >
             {isGeneratingSummary ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Karne Hazırlanıyor...</span>
+                <span>{t("speak_preparing_card", "Karne Hazırlanıyor...")}</span>
               </>
             ) : (
-              <span>🔴 Sohbeti Bitir</span>
+              <span>{t("speak_end_chat", "🔴 Sohbeti Bitir")}</span>
             )}
           </button>
         </footer>
@@ -1979,7 +2081,7 @@ function SpeakingContent() {
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-indigo-400" />
-                <h2 className="text-sm font-bold text-white">Konuşma Geçmişi</h2>
+                <h2 className="text-sm font-bold text-white">{t("speak_history_title", "Konuşma Geçmişi")}</h2>
               </div>
               <button
                 type="button"
@@ -1993,7 +2095,7 @@ function SpeakingContent() {
             <div className="flex-1 overflow-y-auto py-4 space-y-3 text-left">
               {savedArchives.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-10">
-                  Henüz kaydedilmiş bir konuşma oturumu bulunmuyor.
+                  {t("speak_history_empty", "Henüz kaydedilmiş bir konuşma oturumu bulunmuyor.")}
                 </p>
               ) : (
                 savedArchives.map((item) => (
@@ -2006,20 +2108,20 @@ function SpeakingContent() {
                         {item.title}
                       </span>
                       <span className="text-[10px] text-slate-500 shrink-0">
-                        {new Date(item.created_at).toLocaleDateString("tr-TR")}
+                        {new Date(item.created_at).toLocaleDateString(language === "tr" ? "tr-TR" : language)}
                       </span>
                     </div>
                     <div className="space-y-1 max-h-32 overflow-y-auto text-xs text-slate-300">
-                      {(item.turns || []).map((t, tIdx) => (
+                      {(item.turns || []).map((turn, tIdx) => (
                         <p key={tIdx} className="leading-snug">
                           <span
                             className={`font-semibold mr-1 ${
-                              t.speaker === "AI" ? "text-indigo-400" : "text-emerald-400"
+                              turn.speaker === "AI" ? "text-indigo-400" : "text-emerald-400"
                             }`}
                           >
-                            {t.speaker}:
+                            {turn.speaker === "AI" ? t("speak_ai_prefix", "AI:") : t("speak_user_prefix", "Sen:")}
                           </span>
-                          <span>{t.text}</span>
+                          <span>{turn.text}</span>
                         </p>
                       ))}
                     </div>
@@ -2041,7 +2143,7 @@ function SpeakingContent() {
             <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
-                  Oturum Sonu Karnesi
+                  {t("speak_scorecard_title", "Oturum Sonu Karnesi")}
                 </span>
                 <h2 className="text-xl font-bold text-white mt-0.5">
                   {summaryModalData.session_title}
@@ -2051,7 +2153,7 @@ function SpeakingContent() {
               <div className="flex items-center gap-3 shrink-0">
                 <div className="px-3.5 py-1.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/40 text-center">
                   <span className="block text-[10px] font-semibold text-emerald-300">
-                    Akıcılık ({activeLevel})
+                    {t("speak_fluency_label", "Akıcılık")} ({activeLevel})
                   </span>
                   <span className="text-lg font-extrabold text-emerald-200">
                     {summaryModalData.fluency_score}/100
@@ -2061,7 +2163,7 @@ function SpeakingContent() {
                   type="button"
                   onClick={handleResetFromSummaryModal}
                   className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                  aria-label="Kapat"
+                  aria-label={t("close", "Kapat")}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -2070,7 +2172,7 @@ function SpeakingContent() {
 
             {/* Koç Yorumu */}
             <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-              <span className="text-xs font-bold text-indigo-300">Koç Yorumu</span>
+              <span className="text-xs font-bold text-indigo-300">{t("speak_coach_feedback", "Koç Yorumu")}</span>
               <p className="text-sm text-slate-200 leading-relaxed">
                 {summaryModalData.coach_feedback}
               </p>
@@ -2081,7 +2183,7 @@ function SpeakingContent() {
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-300">
                   <Sparkles className="w-4 h-4" />
-                  <span>Altın Cümle Önerisi</span>
+                  <span>{t("speak_golden_sentence", "Altın Cümle Önerisi")}</span>
                 </span>
                 <button
                   type="button"
@@ -2091,7 +2193,7 @@ function SpeakingContent() {
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs font-semibold transition cursor-pointer"
                 >
                   <Volume2 className="w-3.5 h-3.5" />
-                  <span>Dinle</span>
+                  <span>{t("speak_listen_btn", "Dinle")}</span>
                 </button>
               </div>
 
@@ -2110,10 +2212,10 @@ function SpeakingContent() {
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-slate-200">
-                  📚 Oturum Kelimeleri
+                  📚 {t("speak_session_words", "Oturum Kelimeleri")}
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  Desteye eklemek istediklerini seç
+                  {t("speak_select_words_hint", "Desteye eklemek istediklerini seç")}
                 </span>
               </div>
 
@@ -2166,7 +2268,7 @@ function SpeakingContent() {
                   onChange={(e) => setSelectedTargetDeckId(e.target.value)}
                   className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="__new__">Yeni Deste: Speaking Pratikleri</option>
+                  <option value="__new__">{t("speak_new_deck_opt", "Yeni Deste: Speaking Pratikleri")}</option>
                   {userDecks.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.title}
@@ -2185,7 +2287,7 @@ function SpeakingContent() {
                   ) : (
                     <BookPlus className="w-4 h-4" />
                   )}
-                  <span>Seçilen Kelimeleri Desteye Ekle</span>
+                  <span>{t("speak_add_words_btn", "Seçilen Kelimeleri Desteye Ekle")}</span>
                 </button>
               </div>
 
@@ -2205,7 +2307,7 @@ function SpeakingContent() {
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Yeni Sohbet Başlat</span>
+                <span>{t("speak_new_chat_btn", "Yeni Sohbet Başlat")}</span>
               </button>
             </div>
           </div>
@@ -2219,7 +2321,7 @@ export default function SpeakingPage() {
   return (
     <Suspense
       fallback={
-        <div className="h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="h-[calc(100vh-76px)] bg-[#0B0F19] text-white flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
         </div>
       }

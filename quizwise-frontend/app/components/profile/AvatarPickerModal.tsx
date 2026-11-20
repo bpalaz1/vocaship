@@ -13,6 +13,7 @@ import {
   Crop,
 } from "lucide-react";
 import { useProfile } from "../../context/ProfileContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface AvatarPickerModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export default function AvatarPickerModal({
   onClose,
 }: AvatarPickerModalProps) {
   const { userProfile, updateAvatar } = useProfile();
+  const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<"standard" | "upload" | "camera">("standard");
   const [selectedAvatar, setSelectedAvatar] = useState<string>("/avatars/presets/avatar_01.svg");
@@ -99,7 +101,7 @@ export default function AvatarPickerModal({
     setCapturedPhoto(null);
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Tarayıcınız kamera erişimini desteklemiyor.");
+        throw new Error(t("av_cam_unsup", "Tarayıcınız kamera erişimini desteklemiyor."));
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -118,11 +120,11 @@ export default function AvatarPickerModal({
     } catch (err: any) {
       console.warn("Kamera başlatma hatası:", err);
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        setCameraError("Kamera izni reddedildi. Lütfen tarayıcı izinlerinden kameraya izin verin.");
+        setCameraError(t("av_cam_denied", "Kamera izni reddedildi. Lütfen tarayıcı izinlerinden kameraya izin verin."));
       } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-        setCameraError("Cihazınızda kullanılabilir kamera bulunamadı.");
+        setCameraError(t("av_cam_not_found", "Cihazınızda kullanılabilir kamera bulunamadı."));
       } else {
-        setCameraError(err.message || "Kamera başlatılamadı. Lütfen tekrar deneyin.");
+        setCameraError(err.message || t("av_cam_fail", "Kamera başlatılamadı. Lütfen tekrar deneyin."));
       }
       setIsCameraActive(false);
     }
@@ -166,7 +168,7 @@ export default function AvatarPickerModal({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Lütfen geçerli bir görsel dosyası seçin (PNG, JPG, WebP).");
+      alert(t("av_invalid_img", "Lütfen geçerli bir görsel dosyası seçin (PNG, JPG, WebP)."));
       return;
     }
 
@@ -222,10 +224,10 @@ export default function AvatarPickerModal({
             </div>
             <div>
               <h2 className="text-base font-black text-white tracking-tight">
-                Avatar Stüdyosu
+                {t("av_studio_title", "Avatar Stüdyosu")}
               </h2>
               <p className="text-[11px] text-slate-400">
-                10 standart portreden birini seçin veya kendi fotoğrafınızı yükleyin
+                {t("av_studio_sub", "10 standart portreden birini seçin veya kendi fotoğrafınızı yükleyin")}
               </p>
             </div>
           </div>
@@ -234,7 +236,7 @@ export default function AvatarPickerModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            aria-label="Kapat"
+            aria-label={t("close", "Kapat")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -248,7 +250,7 @@ export default function AvatarPickerModal({
               {selectedAvatar && (selectedAvatar.startsWith("http") || selectedAvatar.startsWith("/") || selectedAvatar.startsWith("data:")) ? (
                 <img
                   src={selectedAvatar}
-                  alt="Seçili Avatar"
+                  alt={t("badge_active_avatar", "Seçili Avatar")}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -259,13 +261,13 @@ export default function AvatarPickerModal({
             {/* Kullanıcı Bilgi Etiketi (Profil adı daima kendi username değeri kalır) */}
             <div className="flex flex-col">
               <span className="text-xs font-bold text-white tracking-tight">
-                {userProfile.full_name || "Kullanıcı"}
+                {userProfile.full_name || t("av_user_default", "Kullanıcı")}
               </span>
               <span className="text-[11px] font-mono text-indigo-400 font-semibold">
-                @{userProfile.username || "kullanici"}
+                @{userProfile.username || "user"}
               </span>
               <span className="text-[10px] text-slate-400">
-                Profil adınız seçtiğiniz avatardan etkilenmez
+                {t("av_name_unaffected", "Profil adınız seçtiğiniz avatardan etkilenmez")}
               </span>
             </div>
           </div>
@@ -281,7 +283,7 @@ export default function AvatarPickerModal({
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              10 Standart
+              {t("av_tab_std", "10 Standart")}
             </button>
             <button
               type="button"
@@ -293,7 +295,7 @@ export default function AvatarPickerModal({
               }`}
             >
               <Upload className="w-3.5 h-3.5" />
-              <span>Yükle</span>
+              <span>{t("av_tab_upload", "Yükle")}</span>
             </button>
             <button
               type="button"
@@ -322,9 +324,9 @@ export default function AvatarPickerModal({
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="font-semibold text-slate-300">
-                  Modern 2D Portreler (5 Kadın • 5 Erkek)
+                  {t("av_std_portraits", "Modern 2D Portreler (5 Kadın • 5 Erkek)")}
                 </span>
-                <span className="text-[11px] text-slate-500 font-mono">10 Seçenek</span>
+                <span className="text-[11px] text-slate-500 font-mono">{t("av_10_opts", "10 Seçenek")}</span>
               </div>
 
               {/* 10 İsimsiz Şık Kutu Grid'i (Yalnızca 1-10 numara, ASLA isim yazmaz) */}
@@ -341,7 +343,7 @@ export default function AvatarPickerModal({
                           ? "bg-indigo-600/20 border-indigo-400 ring-2 ring-indigo-400/50 shadow-lg shadow-indigo-500/20 scale-105"
                           : "bg-slate-950/70 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700"
                       }`}
-                      title={`Standart Avatar #${avatar.id}`}
+                      title={`#${avatar.id}`}
                     >
                       {/* Numara Rozeti (1 - 10) */}
                       <span className="absolute top-1.5 left-1.5 px-1.5 py-0.2 rounded-md bg-slate-900/80 border border-slate-800 text-[9px] font-mono font-bold text-slate-400">
@@ -388,7 +390,7 @@ export default function AvatarPickerModal({
                   <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-indigo-500/60 shadow-2xl relative">
                     <img
                       src={uploadedPhoto}
-                      alt="Yüklenen Fotoğraf"
+                      alt="Uploaded avatar"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -399,7 +401,7 @@ export default function AvatarPickerModal({
                       className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Farklı Fotoğraf Seç</span>
+                      <span>{t("av_choose_other", "Farklı Fotoğraf Seç")}</span>
                     </button>
                   </div>
                 </div>
@@ -413,10 +415,10 @@ export default function AvatarPickerModal({
                   </div>
                   <div>
                     <p className="text-sm font-bold text-white">
-                      Fotoğraf Yüklemek İçin Dokunun
+                      {t("av_tap_upload", "Fotoğraf Yüklemek İçin Dokunun")}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
-                      PNG, JPG veya WebP • Otomatik dairesel ortalanır
+                      {t("av_upload_hint", "PNG, JPG veya WebP • Otomatik dairesel ortalanır")}
                     </p>
                   </div>
                 </div>
@@ -443,7 +445,7 @@ export default function AvatarPickerModal({
                   <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-emerald-500/60 shadow-2xl relative">
                     <img
                       src={capturedPhoto}
-                      alt="Çekilen Selfie"
+                      alt="Captured selfie"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -457,7 +459,7 @@ export default function AvatarPickerModal({
                       className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Tekrar Çek</span>
+                      <span>{t("av_retake", "Tekrar Çek")}</span>
                     </button>
                   </div>
                 </div>
@@ -482,7 +484,7 @@ export default function AvatarPickerModal({
                     className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 text-xs font-black shadow-lg shadow-emerald-500/30 transition cursor-pointer flex items-center gap-2 active:scale-95"
                   >
                     <Camera className="w-4 h-4" />
-                    <span>Fotoğrafı Yakala (Snap)</span>
+                    <span>{t("av_snap_photo", "Fotoğrafı Yakala (Snap)")}</span>
                   </button>
                 </div>
               ) : (
@@ -493,10 +495,10 @@ export default function AvatarPickerModal({
                     className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-indigo-600/30 cursor-pointer"
                   >
                     <Camera className="w-4 h-4" />
-                    <span>Kamerayı Başlat</span>
+                    <span>{t("av_start_cam", "Kamerayı Başlat")}</span>
                   </button>
                   <p className="text-xs text-slate-400">
-                    Selfie çekmek için tarayıcınızın kamera iznini onaylayın
+                    {t("av_selfie_perm", "Selfie çekmek için tarayıcınızın kamera iznini onaylayın")}
                   </p>
                 </div>
               )}
@@ -512,10 +514,10 @@ export default function AvatarPickerModal({
           <span className="text-[11px] text-slate-400">
             {saveSuccess ? (
               <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" /> Avatar başarıyla kaydedildi!
+                <Check className="w-3.5 h-3.5" /> {t("av_saved_ok", "Avatar başarıyla kaydedildi!")}
               </span>
             ) : (
-              "Seçtiğiniz avatar anında tüm platforma yansır"
+              t("av_sync_hint", "Seçtiğiniz avatar anında tüm platforma yansır")
             )}
           </span>
 
@@ -525,7 +527,7 @@ export default function AvatarPickerModal({
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold transition cursor-pointer"
             >
-              Vazgeç
+              {t("cancel", "Vazgeç")}
             </button>
             <button
               type="button"
@@ -536,12 +538,12 @@ export default function AvatarPickerModal({
               {isSaving ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Kaydediliyor...</span>
+                  <span>{t("saving", "Kaydediliyor...")}</span>
                 </>
               ) : (
                 <>
                   <Check className="w-3.5 h-3.5" />
-                  <span>Avatarı Kaydet</span>
+                  <span>{t("av_save_btn", "Avatarı Kaydet")}</span>
                 </>
               )}
             </button>

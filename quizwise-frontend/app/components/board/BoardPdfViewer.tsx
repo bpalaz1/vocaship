@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { BoardTerm } from "../../classroom/board/page";
+import { useLanguage } from "../../context/LanguageContext";
+import { pickLang } from "../../context/translationsExtra";
 
 export interface BoardPdfViewerProps {
   onTermCovered?: (term: BoardTerm) => void;
@@ -95,6 +97,7 @@ export default function BoardPdfViewer({
   onTermCovered,
   activeBranch = "science",
 }: BoardPdfViewerProps) {
+  const { currentLang, t } = useLanguage();
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string>("Biyoloji_Hucre_Fizyolojisi.pdf");
@@ -489,7 +492,7 @@ export default function BoardPdfViewer({
             }`}
           >
             <Hand className="w-4 h-4" />
-            <span>🖐️ Gezin & İncele</span>
+            <span>{t("brd_pdf_pan", "🖐️ Gezin & İncele")}</span>
           </button>
 
           <button
@@ -502,7 +505,7 @@ export default function BoardPdfViewer({
             }`}
           >
             <PenTool className="w-4 h-4" />
-            <span>✏️ Çizim Modu</span>
+            <span>{t("brd_pdf_draw", "✏️ Çizim Modu")}</span>
           </button>
         </div>
 
@@ -517,10 +520,10 @@ export default function BoardPdfViewer({
                   ? "bg-yellow-400/20 text-yellow-300 border-yellow-400/50 shadow-sm"
                   : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
               }`}
-              title="Fosforlu Sarı Vurgulayıcı"
+              title={t("brd_pdf_hl_tip", "Fosforlu Sarı Vurgulayıcı")}
             >
               <Highlighter className="w-4 h-4 text-yellow-400" />
-              <span className="hidden sm:inline">Vurgula</span>
+              <span className="hidden sm:inline">{t("brd_pdf_hl_lbl", "Vurgula")}</span>
             </button>
 
             <button
@@ -531,10 +534,10 @@ export default function BoardPdfViewer({
                   ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm"
                   : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
               }`}
-              title="Kırmızı Kalem"
+              title={t("brd_pdf_pen_tip", "Kırmızı Kalem")}
             >
               <PenTool className="w-4 h-4 text-rose-400" />
-              <span className="hidden sm:inline">Kalem</span>
+              <span className="hidden sm:inline">{t("brd_pdf_pen_lbl", "Kalem")}</span>
             </button>
 
             <button
@@ -545,10 +548,10 @@ export default function BoardPdfViewer({
                   ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm ring-1 ring-indigo-400/40"
                   : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
               }`}
-              title="Düz Çizgi"
+              title={t("brd_tool_line_lbl", "Düz Çizgi")}
             >
               <Ruler className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">Çizgi</span>
+              <span className="hidden sm:inline">{t("brd_tool_line_lbl", "Çizgi")}</span>
             </button>
 
             <button
@@ -559,10 +562,10 @@ export default function BoardPdfViewer({
                   ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm ring-1 ring-indigo-400/40"
                   : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
               }`}
-              title="Daire / Elips"
+              title={t("brd_tool_circle_lbl", "Daire / Elips")}
             >
               <Circle className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">Daire</span>
+              <span className="hidden sm:inline">{t("brd_tool_circle_lbl", "Daire")}</span>
             </button>
 
             <button
@@ -573,17 +576,17 @@ export default function BoardPdfViewer({
                   ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm ring-1 ring-indigo-400/40"
                   : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
               }`}
-              title="Kare / Dikdörtgen Çerçeve"
+              title={t("brd_tool_rect_tip", "Kare / Dikdörtgen Çerçeve")}
             >
               <Square className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">Kare</span>
+              <span className="hidden sm:inline">{t("brd_tool_rect_lbl", "Kare")}</span>
             </button>
 
             <button
               type="button"
               onClick={handleUndo}
               className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-              title="Geri Al"
+              title={t("brd_undo_tip", "Geri Al")}
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -592,7 +595,7 @@ export default function BoardPdfViewer({
               type="button"
               onClick={clearCanvas}
               className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-rose-400 hover:text-rose-300 transition cursor-pointer"
-              title="Tüm Çizimleri Temizle"
+              title={t("brd_clear_draw_tip", "Tüm Çizimleri Temizle")}
             >
               <Eraser className="w-4 h-4" />
             </button>
@@ -642,7 +645,7 @@ export default function BoardPdfViewer({
               type="button"
               onClick={() => setZoom(Math.max(0.75, zoom - 0.15))}
               className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-              title="Uzaklaştır"
+              title={t("brd_zoom_out_tip", "Uzaklaştır")}
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
@@ -651,7 +654,7 @@ export default function BoardPdfViewer({
               type="button"
               onClick={() => setZoom(Math.min(1.5, zoom + 0.15))}
               className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-              title="Yakınlaştır"
+              title={t("brd_zoom_in_tip", "Yakınlaştır")}
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
@@ -660,7 +663,7 @@ export default function BoardPdfViewer({
           {/* Yeni PDF Seç / Değiştir */}
           <label className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
             <FolderOpen className="w-4 h-4 text-indigo-400" />
-            <span className="hidden md:inline">Yeni PDF</span>
+            <span className="hidden md:inline">{t("brd_pdf_new", "Yeni PDF")}</span>
             <input
               type="file"
               accept="application/pdf"
@@ -687,17 +690,17 @@ export default function BoardPdfViewer({
 
             <div className="space-y-2">
               <h3 className="text-xl font-black text-white">
-                Sınıf PDF&apos;ini Yükleyin veya Seçin
+                {t("brd_pdf_empty_t", "Sınıf PDF'ini Yükleyin veya Seçin")}
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-                Ders slaytlarınızı, test fasiküllerinizi veya ders kitaplarınızı akıllı tahtaya tam ekran yansıtın ve üzerlerine fosforlu kalemle not alın.
+                {t("brd_pdf_empty_d", "Ders slaytlarınızı, test fasiküllerinizi veya ders kitaplarınızı akıllı tahtaya tam ekran yansıtın ve üzerlerine fosforlu kalemle not alın.")}
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <label className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
                 <Upload className="w-4 h-4" />
-                <span>PDF Dosyası Seç</span>
+                <span>{t("brd_pdf_pick", "PDF Dosyası Seç")}</span>
                 <input
                   type="file"
                   accept="application/pdf"
@@ -712,7 +715,7 @@ export default function BoardPdfViewer({
                 className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>Örnek Biyoloji Dersiyle Başla</span>
+                <span>{t("brd_pdf_demo", "Örnek Biyoloji Dersiyle Başla")}</span>
               </button>
             </div>
           </div>
@@ -745,7 +748,13 @@ export default function BoardPdfViewer({
                   <span className="font-mono text-slate-400 pl-2 font-bold">{pdfFileName}</span>
                 </div>
                 <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono text-[11px] font-bold">
-                  BÖLÜM {currentPage}: HÜCRESEL ENERJİ SİSTEMLERİ
+                  {pickLang(currentLang, {
+                    tr: `BÖLÜM ${currentPage}: HÜCRESEL ENERJİ SİSTEMLERİ`,
+                    en: `SECTION ${currentPage}: CELLULAR ENERGY SYSTEMS`,
+                    de: `ABSCHNITT ${currentPage}: ZELLULÄRE ENERGIESYSTEME`,
+                    es: `SECCIÓN ${currentPage}: SISTEMAS DE ENERGÍA CELULAR`,
+                    fr: `SECTION ${currentPage} : SYSTÈMES ÉNERGÉTIQUES CELLULAIRES`,
+                  })}
                 </span>
               </div>
 
@@ -766,8 +775,8 @@ export default function BoardPdfViewer({
                     <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400/60 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/20 mx-auto">
                       ⚡
                     </div>
-                    <span className="text-xs font-black text-amber-300 font-mono block">ATP Üretimi</span>
-                    <span className="text-[10px] text-slate-400 block">32 ATP / Glukoz</span>
+                    <span className="text-xs font-black text-amber-300 font-mono block">{pickLang(currentLang, { tr: "ATP Üretimi", en: "ATP Synthesis", de: "ATP-Synthese", es: "Síntesis de ATP", fr: "Synthèse d'ATP" })}</span>
+                    <span className="text-[10px] text-slate-400 block">{pickLang(currentLang, { tr: "32 ATP / Glukoz", en: "32 ATP / Glucose", de: "32 ATP / Glukose", es: "32 ATP / Glucosa", fr: "32 ATP / Glucose" })}</span>
                   </div>
 
                   <div className="h-0.5 w-16 bg-gradient-to-r from-amber-400 to-indigo-400 z-10" />
@@ -776,8 +785,8 @@ export default function BoardPdfViewer({
                     <div className="w-20 h-20 rounded-2xl bg-indigo-600/25 border-2 border-indigo-400/60 flex items-center justify-center text-3xl shadow-lg shadow-indigo-600/30 mx-auto">
                       🔬
                     </div>
-                    <span className="text-xs font-black text-indigo-300 font-mono block">Mitokondri Kristası</span>
-                    <span className="text-[10px] text-slate-400 block">Proton Gradyanı</span>
+                    <span className="text-xs font-black text-indigo-300 font-mono block">{pickLang(currentLang, { tr: "Mitokondri Kristası", en: "Mitochondrial Cristae", de: "Mitochondrien-Cristae", es: "Crestas Mitocondriales", fr: "Crêtes Mitochondriales" })}</span>
+                    <span className="text-[10px] text-slate-400 block">{pickLang(currentLang, { tr: "Proton Gradyanı", en: "Proton Gradient", de: "Protonengradient", es: "Gradiente de Protones", fr: "Gradient de Protons" })}</span>
                   </div>
 
                   <div className="h-0.5 w-16 bg-gradient-to-r from-indigo-400 to-emerald-400 z-10" />
@@ -786,8 +795,8 @@ export default function BoardPdfViewer({
                     <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400/60 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/20 mx-auto">
                       🌿
                     </div>
-                    <span className="text-xs font-black text-emerald-300 font-mono block">Hücre Zarı</span>
-                    <span className="text-[10px] text-slate-400 block">Seçici Geçirgenlik</span>
+                    <span className="text-xs font-black text-emerald-300 font-mono block">{pickLang(currentLang, { tr: "Hücre Zarı", en: "Cell Membrane", de: "Zellmembran", es: "Membrana Celular", fr: "Membrane Cellulaire" })}</span>
+                    <span className="text-[10px] text-slate-400 block">{pickLang(currentLang, { tr: "Seçici Geçirgenlik", en: "Selective Permeability", de: "Selektive Permeabilität", es: "Permeabilidad Selectiva", fr: "Perméabilité Sélective" })}</span>
                   </div>
                 </div>
 
@@ -795,15 +804,21 @@ export default function BoardPdfViewer({
                 <div className="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 text-xs text-slate-300 flex items-start gap-2.5">
                   <span className="text-amber-400 text-sm">💡</span>
                   <p className="leading-relaxed">
-                    <strong>Öğretmen Notu:</strong> Tahtadaki fosforlu kalemle <em>mitochondria</em> veya <em>ATP synthesis</em> terimlerinin altını çizebilir, alttaki terim barına dokunarak sağ panele anında işleyebilirsiniz.
+                    {pickLang(currentLang, {
+                      tr: "Öğretmen Notu: Tahtadaki fosforlu kalemle mitochondria veya ATP synthesis terimlerinin altını çizebilir, alttaki terim barına dokunarak sağ panele anında işleyebilirsiniz.",
+                      en: "Teacher Note: Underline terms like mitochondria or ATP synthesis on the board with the highlighter, or tap the term bar below to send them to the panel.",
+                      de: "Hinweis: Unterstreichen Sie Begriffe wie Mitochondria oder ATP-Synthese mit dem Textmarker oder tippen Sie unten auf die Begriffsleiste.",
+                      es: "Nota docente: Subraya términos como mitochondria o ATP synthesis con el resaltador o toca la barra inferior para añadirlos al panel.",
+                      fr: "Note enseignant : Surlignez des termes comme mitochondria ou ATP synthesis au tableau ou touchez la barre ci-dessous pour les ajouter au panneau.",
+                    })}
                   </p>
                 </div>
               </div>
 
               {/* Alt Sayfa Footer */}
               <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                <span>Vocaship Interactive PDF Engine</span>
-                <span>Sayfa {currentPage} / {totalPages}</span>
+                <span>VocaShip Interactive PDF Engine</span>
+                <span>{t("brd_pdf_page", "Sayfa")} {currentPage} / {totalPages}</span>
               </div>
             </div>
 
@@ -848,10 +863,10 @@ export default function BoardPdfViewer({
       <div className="mt-3 p-3 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-xs font-black text-amber-400 uppercase font-mono tracking-wider flex items-center gap-1.5 shrink-0">
-            <span>⚡ Terim Barı:</span>
+            <span>{t("brd_pdf_term_bar", "⚡ Terim Barı:")}</span>
           </span>
           <span className="text-[11px] text-slate-400 hidden lg:inline">
-            (Dokunarak seslendir &amp; sağ listeye işle)
+            {t("brd_pdf_term_hint", "(Dokunarak seslendir & sağ listeye işle)")}
           </span>
         </div>
 
@@ -880,7 +895,7 @@ export default function BoardPdfViewer({
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Terim Canlı Listeye İşlendi</span>
+                <span>{t("brd_pdf_term_added", "Terim Canlı Listeye İşlendi")}</span>
               </span>
 
               <button
@@ -919,7 +934,7 @@ export default function BoardPdfViewer({
               onClick={() => setSelectedTerm(null)}
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
             >
-              Tahtaya Dön ➔
+              {t("brd_pdf_back_board", "Tahtaya Dön ➔")}
             </button>
           </div>
         </div>

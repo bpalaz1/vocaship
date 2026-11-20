@@ -35,8 +35,8 @@ export interface ProfileContextType {
   refreshProfile: () => Promise<void>;
   isSettingsModalOpen: boolean;
   setIsSettingsModalOpen: (open: boolean) => void;
-  settingsInitialTab?: "profile" | "learning" | "audio_theme" | "payout";
-  setSettingsInitialTab: (tab: "profile" | "learning" | "audio_theme" | "payout") => void;
+  settingsInitialTab?: "profile" | "learning" | "audio_theme";
+  setSettingsInitialTab: (tab: "profile" | "learning" | "audio_theme") => void;
 }
 
 const STORAGE_KEY = "vocaship_profile";
@@ -63,25 +63,57 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<
-    "profile" | "learning" | "audio_theme" | "payout"
+    "profile" | "learning" | "audio_theme"
   >("profile");
 
-  // 1. Sayfa yüklendiğinde localStorage'dan profili geri yükle
+  // 1. Sayfa yüklendiğinde localStorage'dan profili geri yükle ve CustomEvent senkronizasyonunu dinle
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === "object") {
-          setUserProfile((prev) => ({
-            ...prev,
-            ...parsed,
-          }));
+    const loadFromStorage = () => {
+      try {
+        // Eski karakter unvanı kaydını temizle (yalnızca @username + avatar görseli kullanılır)
+        localStorage.removeItem("vocaship_equipped_title");
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === "object") {
+            const { equipped_title: _removed, ...cleanProfile } = parsed;
+            if (_removed !== undefined) {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanProfile));
+            }
+            setUserProfile((prev) => ({
+              ...prev,
+              ...cleanProfile,
+            }));
+          }
         }
+      } catch (err) {
+        console.warn("[ProfileContext] localStorage profil okuma hatası:", err);
       }
-    } catch (err) {
-      console.warn("[ProfileContext] localStorage profil okuma hatası:", err);
-    }
+    };
+
+    loadFromStorage();
+
+    const handleProfileCustomEvent = (e: Event) => {
+      const ce = e as CustomEvent<Partial<UserProfile>>;
+      if (ce.detail && typeof ce.detail === "object") {
+        setUserProfile((prev) => ({ ...prev, ...ce.detail }));
+      } else {
+        loadFromStorage();
+      }
+    };
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) {
+        loadFromStorage();
+      }
+    };
+
+    window.addEventListener("vocaship_profile_updated", handleProfileCustomEvent);
+    window.addEventListener("storage", handleStorageEvent);
+    return () => {
+      window.removeEventListener("vocaship_profile_updated", handleProfileCustomEvent);
+      window.removeEventListener("storage", handleStorageEvent);
+    };
   }, []);
 
   // 2. AuthContext'teki kullanıcı değiştiğinde profili güncelle
@@ -120,17 +152,35 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (data && data.username) {
           const tier = (data.plan_tier as "basic" | "plus" | "pro") || (data.is_pro ? "pro" : "basic");
-          const synced: UserProfile = {
-            full_name: data.full_name || "Öğrenci",
-            username: data.username,
-            email: data.email || "",
-            avatar_url: data.avatar_url || "🦊",
-            is_pro: Boolean(data.is_pro),
-            plan_tier: tier,
-            planTier: tier,
-          };
-          setUserProfile(synced);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(synced));
+          let localStored: Partial<UserProfile> = {};
+          try {
+            const rawLocal = localStorage.getItem(STORAGE_KEY);
+            if (rawLocal) localStored = JSON.parse(rawLocal) || {};
+          } catch {}
+
+          const incomingEmail = String(data.email || "");
+          const preservedEmail =
+            localStored.email && (!incomingEmail || incomingEmail.endsWith("@vocaship.local"))
+              ? localStored.email
+              : incomingEmail || localStored.email || "";
+
+          setUserProfile((prev) => {
+            const synced: UserProfile = {
+              ...prev,
+              ...localStored,
+              full_name: localStored.full_name || data.full_name || prev.full_name || "Öğrenci",
+              username: (localStored.username || data.username || prev.username).replace(/^@+/, ""),
+              email: preservedEmail,
+              avatar_url: localStored.avatar_url || data.avatar_url || prev.avatar_url || "🦊",
+              is_pro: Boolean(data.is_pro),
+              plan_tier: tier,
+              planTier: tier,
+            };
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(synced));
+            } catch {}
+            return synced;
+          });
         }
       }
     } catch (err) {
@@ -144,7 +194,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, refreshProfile]);
 
-  // 4. Genel Profil Güncelleme (Local + Backend sync)
+  // 4. Genel Profil Güncelleme (Local + CustomEvent + Backend sync)
   const updateProfile = async (updates: Partial<UserProfile>) => {
     const updated: UserProfile = {
       ...userProfile,
@@ -153,6 +203,11 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     setUserProfile(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("vocaship_profile_updated", { detail: updated })
+        );
+      }
     } catch (err) {
       console.warn("[ProfileContext] localStorage kayıt hatası:", err);
     }
@@ -163,6 +218,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         const payload: Record<string, any> = {};
         if (updates.full_name !== undefined) payload.full_name = updates.full_name;
         if (updates.username !== undefined) payload.username = updates.username;
+        if (updates.email !== undefined) payload.email = updates.email;
         if (updates.avatar_url !== undefined) payload.avatar_url = updates.avatar_url;
 
         await fetch(`${API_BASE}/api/v1/auth/profile`, {

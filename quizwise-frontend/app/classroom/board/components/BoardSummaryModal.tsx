@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { API_BASE } from "../../../config";
+import { useLanguage } from "../../../context/LanguageContext";
+import { pickLang } from "../../../context/translationsExtra";
 
 export interface BoardKeyTerm {
   word: string;
@@ -61,7 +63,7 @@ export interface BoardSummaryModalProps {
 export default function BoardSummaryModal({
   isOpen,
   onClose,
-  className = "10-A İngilizce",
+  className = "10-A",
   classId = "cls-1",
   pdfFileName,
   pdfTextContext = "",
@@ -69,6 +71,7 @@ export default function BoardSummaryModal({
   highlightedWords = [],
   onSavedToArchive,
 }: BoardSummaryModalProps) {
+  const { currentLang, t } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -106,7 +109,7 @@ export default function BoardSummaryModal({
         if (res.ok) {
           const data = await res.json();
           if (isMounted) {
-            setLessonTitle(data.title || "Akıllı Tahta İnteraktif Ders Özeti");
+            setLessonTitle(data.title || t("brd_sum_default_title", "Akıllı Tahta İnteraktif Ders Özeti"));
             setSummaryPoints(data.summary_points || []);
             setKeyTerms(data.key_terms || []);
             setQuizQuestions(data.quiz_questions || []);
@@ -124,17 +127,35 @@ export default function BoardSummaryModal({
         const title = cleanPdf
           ? cleanPdf.charAt(0).toUpperCase() + cleanPdf.slice(1)
           : highlightedWords.length > 0
-          ? `${highlightedWords[0].toUpperCase()} ve Temel Kavramlar`
-          : "İnteraktif Sınıf Dersi & Kavram Analizi";
+          ? `${highlightedWords[0].toUpperCase()} — ${t("brd_sum_key_concepts", "Temel Kavramlar")}`
+          : t("brd_sum_fallback_title", "İnteraktif Sınıf Dersi & Kavram Analizi");
 
         setLessonTitle(title);
         setSummaryPoints([
-          `'${title}' konusunda ders materyali ve öğretmen anlatımı interaktif tahtada işlendi.`,
-          "Kritik terminoloji, soru-cevap ve rastgele söz hakkı turlarıyla öğrenciler tarafından pekiştirildi.",
-          "Dersin kilit çıkarımları ve pratik uygulama alanları netleştirilerek kazanımlar tamamlandı.",
+          pickLang(currentLang, {
+            tr: `'${title}' konusunda ders materyali ve öğretmen anlatımı interaktif tahtada işlendi.`,
+            en: `The lesson material and instructor explanation on '${title}' were covered on the smart board.`,
+            de: `Das Unterrichtsmaterial und die Erklärung zu '${title}' wurden am Smartboard behandelt.`,
+            es: `El material de clase y la explicación sobre '${title}' se trabajaron en la pizarra inteligente.`,
+            fr: `Le support de cours et les explications sur '${title}' ont été étudiés sur le tableau interactif.`,
+          }),
+          pickLang(currentLang, {
+            tr: "Kritik terminoloji, soru-cevap ve rastgele söz hakkı turlarıyla öğrenciler tarafından pekiştirildi.",
+            en: "Key terminology was reinforced by students through Q&A and live participation rounds.",
+            de: "Schlüsselbegriffe wurden durch Frage-Antwort-Runden und aktive Teilnahme gefestigt.",
+            es: "La terminología clave se reforzó mediante preguntas, respuestas y rondas de participación.",
+            fr: "La terminologie clé a été consolidée grâce aux échanges questions-réponses en classe.",
+          }),
+          pickLang(currentLang, {
+            tr: "Dersin kilit çıkarımları ve pratik uygulama alanları netleştirilerek kazanımlar tamamlandı.",
+            en: "Core takeaways and practical use cases were clarified to complete the learning objectives.",
+            de: "Zentrale Erkenntnisse und praktische Anwendungen wurden zur Erreichung der Lernziele geklärt.",
+            es: "Se aclararon las conclusiones clave y aplicaciones prácticas para completar los objetivos.",
+            fr: "Les points essentiels et les applications pratiques ont été clarifiés pour valider les acquis.",
+          }),
         ]);
 
-        // Dinamik kelime çıkarımı (Mitochondria veya sabit biyoloji mock'u içermez)
+        // Dinamik kelime çıkarımı
         const extractedWords = [
           ...highlightedWords,
           ...cleanPdf.split(/\s+/).filter((w) => w.length >= 4),
@@ -142,53 +163,179 @@ export default function BoardSummaryModal({
         ];
         const uniqueWords = Array.from(new Set(extractedWords.map((w) => w.trim()))).filter(Boolean);
         const dynamicTerms: BoardKeyTerm[] = [];
-        const fallbackConcepts = ["Kavram Analizi", "Temel İlke", "Uygulama Metodu", "Problem Çözümü", "Kritik Çıkarım"];
+        const fallbackConcepts = pickLang(currentLang, {
+          tr: ["Kavram Analizi", "Temel İlke", "Uygulama Metodu", "Problem Çözümü", "Kritik Çıkarım"],
+          en: ["Concept Analysis", "Core Principle", "Application Method", "Problem Solving", "Critical Insight"],
+          de: ["Begriffsanalyse", "Grundprinzip", "Anwendungsmethode", "Problemlösung", "Schlüsselerkenntnis"],
+          es: ["Análisis Conceptual", "Principio Básico", "Método de Aplicación", "Resolución", "Conclusión Clave"],
+          fr: ["Analyse Conceptuelle", "Principe Clé", "Méthode d'Application", "Résolution", "Point Critique"],
+        });
 
         for (let i = 0; i < 5; i++) {
           const w = uniqueWords[i] || fallbackConcepts[i];
           const capWord = w.charAt(0).toUpperCase() + w.slice(1);
           dynamicTerms.push({
             word: capWord,
-            turkish: `${capWord} (Dersin anahtar kavramı)`,
+            turkish: `${capWord} (${t("brd_sum_term_note", "Dersin anahtar kavramı")})`,
             phonetic: "",
-            example: `Öğretmen ve öğrenciler bu derste ${capWord} konusunu inceledi.`,
+            example: pickLang(currentLang, {
+              tr: `Öğretmen ve öğrenciler bu derste ${capWord} konusunu inceledi.`,
+              en: `The instructor and students explored ${capWord} during this session.`,
+              de: `Lehrkraft und Lernende behandelten in dieser Stunde ${capWord}.`,
+              es: `El docente y los estudiantes analizaron ${capWord} en esta sesión.`,
+              fr: `L'enseignant et les élèves ont étudié ${capWord} durant ce cours.`,
+            }),
           });
         }
         setKeyTerms(dynamicTerms);
 
         setQuizQuestions([
           {
-            question: `Bugünkü '${title}' dersinin en temel amacı nedir?`,
-            options: [
-              "Kilit kavramları pratik bağlamda içselleştirmek",
-              "Sadece teorik tanımları ezberlemek",
-              "Ders içi tartışmaları en aza indirmek",
-              "Materyal dışına çıkmamak",
-            ],
+            question: pickLang(currentLang, {
+              tr: `Bugünkü '${title}' dersinin en temel amacı nedir?`,
+              en: `What is the primary objective of today's '${title}' lesson?`,
+              de: `Was ist das Hauptziel der heutigen Lektion '${title}'?`,
+              es: `¿Cuál es el objetivo principal de la lección de hoy '${title}'?`,
+              fr: `Quel est l'objectif principal du cours d'aujourd'hui '${title}' ?`,
+            }),
+            options: pickLang(currentLang, {
+              tr: [
+                "Kilit kavramları pratik bağlamda içselleştirmek",
+                "Sadece teorik tanımları ezberlemek",
+                "Ders içi tartışmaları en aza indirmek",
+                "Materyal dışına çıkmamak",
+              ],
+              en: [
+                "Internalizing key concepts in a practical context",
+                "Memorizing only theoretical definitions",
+                "Minimizing in-class discussion",
+                "Avoiding examples beyond the sheet",
+              ],
+              de: [
+                "Schlüsselbegriffe im praktischen Kontext verinnerlichen",
+                "Nur theoretische Definitionen auswendig lernen",
+                "Klassendiskussionen minimieren",
+                "Nicht über das Blatt hinausgehen",
+              ],
+              es: [
+                "Interiorizar conceptos clave en un contexto práctico",
+                "Memorizar solo definiciones teóricas",
+                "Minimizar el debate en clase",
+                "No salir del material escrito",
+              ],
+              fr: [
+                "Assimiler les concepts clés dans un contexte pratique",
+                "Mémoriser uniquement des définitions théoriques",
+                "Réduire au minimum les échanges en classe",
+                "Ne pas sortir de la fiche",
+              ],
+            }),
             correct_index: 0,
-            explanation: "Kavramların pratik bağlamda kullanımı kalıcı öğrenmeyi sağlar.",
+            explanation: pickLang(currentLang, {
+              tr: "Kavramların pratik bağlamda kullanımı kalıcı öğrenmeyi sağlar.",
+              en: "Using concepts in practical contexts ensures lasting retention.",
+              de: "Die praktische Anwendung von Konzepten sorgt für nachhaltiges Lernen.",
+              es: "Usar conceptos en contextos prácticos garantiza un aprendizaje duradero.",
+              fr: "L'utilisation pratique des concepts assure une mémorisation durable.",
+            }),
           },
           {
-            question: "İşlenen kilit terimlerin uzun süreli hafızaya aktarılması için önerilen yöntem nedir?",
-            options: [
-              "SM-2 aralıklı tekrar sistemiyle periyodik pekiştirme",
-              "Ders sonrası bir daha hiç tekrar etmemek",
-              "Yalnızca sınav sabahı hızlıca göz gezdirmek",
-              "Kelimeleri bağlamsız yazarak ezberlemek",
-            ],
+            question: pickLang(currentLang, {
+              tr: "İşlenen kilit terimlerin uzun süreli hafızaya aktarılması için önerilen yöntem nedir?",
+              en: "What method is recommended to transfer covered key terms into long-term memory?",
+              de: "Welche Methode wird empfohlen, um Schlüsselbegriffe ins Langzeitgedächtnis zu übertragen?",
+              es: "¿Qué método se recomienda para llevar los términos clave a la memoria a largo plazo?",
+              fr: "Quelle méthode est recommandée pour ancrer les termes clés dans la mémoire à long terme ?",
+            }),
+            options: pickLang(currentLang, {
+              tr: [
+                "SM-2 aralıklı tekrar sistemiyle periyodik pekiştirme",
+                "Ders sonrası bir daha hiç tekrar etmemek",
+                "Yalnızca sınav sabahı hızlıca göz gezdirmek",
+                "Kelimeleri bağlamsız yazarak ezberlemek",
+              ],
+              en: [
+                "Periodic reinforcement with the SM-2 spaced repetition system",
+                "Never reviewing after class",
+                "Skimming quickly only on exam morning",
+                "Writing words without context",
+              ],
+              de: [
+                "Regelmäßige Wiederholung mit dem SM-2 Spaced-Repetition-System",
+                "Nach dem Unterricht nie wiederholen",
+                "Nur am Prüfungsmorgen kurz überfliegen",
+                "Wörter ohne Kontext abschreiben",
+              ],
+              es: [
+                "Refuerzo periódico con el sistema de repetición espaciada SM-2",
+                "No repasar nunca después de clase",
+                "Leer por encima solo la mañana del examen",
+                "Escribir palabras sin contexto",
+              ],
+              fr: [
+                "Consolidation périodique avec la répétition espacée SM-2",
+                "Ne jamais réviser après le cours",
+                "Relire rapidement le matin de l'examen",
+                "Copier des mots sans contexte",
+              ],
+            }),
             correct_index: 0,
-            explanation: "SM-2 algoritması unutma eğrisini kırarak bilgiyi pekiştirir.",
+            explanation: pickLang(currentLang, {
+              tr: "SM-2 algoritması unutma eğrisini kırarak bilgiyi pekiştirir.",
+              en: "The SM-2 algorithm breaks the forgetting curve and strengthens recall.",
+              de: "Der SM-2-Algorithmus durchbricht die Vergessenskurve und stärkt den Abruf.",
+              es: "El algoritmo SM-2 rompe la curva del olvido y consolida la memoria.",
+              fr: "L'algorithme SM-2 brise la courbe de l'oubli et renforce la mémorisation.",
+            }),
           },
           {
-            question: "Derste işlenen ana fikir günlük hayatta nerede uygulanabilir?",
-            options: [
-              "Problem çözme ve analitik karar alma süreçlerinde",
-              "Yalnızca kapalı laboratuvar ortamında",
-              "Herhangi bir günlük karşılığı yoktur",
-              "Sadece sınav kağıtlarında",
-            ],
+            question: pickLang(currentLang, {
+              tr: "Derste işlenen ana fikir günlük hayatta nerede uygulanabilir?",
+              en: "Where can the main idea covered in class be applied in daily life?",
+              de: "Wo lässt sich der Hauptgedanke des Unterrichts im Alltag anwenden?",
+              es: "¿Dónde puede aplicarse la idea principal tratada en clase en la vida diaria?",
+              fr: "Où l'idée principale abordée en cours peut-elle s'appliquer au quotidien ?",
+            }),
+            options: pickLang(currentLang, {
+              tr: [
+                "Problem çözme ve analitik karar alma süreçlerinde",
+                "Yalnızca kapalı laboratuvar ortamında",
+                "Herhangi bir günlük karşılığı yoktur",
+                "Sadece sınav kağıtlarında",
+              ],
+              en: [
+                "In problem-solving and analytical decision-making",
+                "Only inside a closed laboratory",
+                "It has no everyday application",
+                "Only on exam papers",
+              ],
+              de: [
+                "Bei Problemlösung und analytischer Entscheidungsfindung",
+                "Nur in einem geschlossenen Labor",
+                "Es hat keinen Alltagsbezug",
+                "Nur auf Prüfungsbögen",
+              ],
+              es: [
+                "En la resolución de problemas y toma de decisiones analíticas",
+                "Solo en un laboratorio cerrado",
+                "No tiene aplicación cotidiana",
+                "Solo en hojas de examen",
+              ],
+              fr: [
+                "Dans la résolution de problèmes et la prise de décision analytique",
+                "Uniquement en laboratoire fermé",
+                "Aucune application quotidienne",
+                "Uniquement sur les copies d'examen",
+              ],
+            }),
             correct_index: 0,
-            explanation: "Ders kazanımları analitik düşünme yetisini güçlendirir.",
+            explanation: pickLang(currentLang, {
+              tr: "Ders kazanımları analitik düşünme yetisini güçlendirir.",
+              en: "Lesson outcomes strengthen analytical thinking skills.",
+              de: "Unterrichtsergebnisse stärken das analytische Denken.",
+              es: "Los objetivos de la clase fortalecen el pensamiento analítico.",
+              fr: "Les acquis du cours renforcent la pensée analytique.",
+            }),
           },
         ]);
         setIsLoading(false);
@@ -231,11 +378,11 @@ export default function BoardSummaryModal({
           id: `as_board_${Date.now()}`,
           class_id: classId,
           class_name: className,
-          title: `⚡ Tahta Dersi Ödevi: ${lessonTitle}`,
+          title: `${t("brd_sum_assign_prefix", "⚡ Tahta Dersi Ödevi:")} ${lessonTitle}`,
           summary_points: summaryPoints,
           target_words: keyTerms,
           questions: quizQuestions,
-          due_date: "Bu Hafta Sonu, 23:59",
+          due_date: t("brd_sum_due_weekend", "Bu Hafta Sonu, 23:59"),
           created_at: new Date().toISOString(),
         };
         existingAssignments.unshift(newAssignment);
@@ -285,12 +432,9 @@ export default function BoardSummaryModal({
   const handleSaveToArchive = () => {
     setIsSaving(true);
     const now = new Date();
-    const formattedDate = `${now.getDate()} ${
-      [
-        "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-        "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
-      ][now.getMonth()]
-    } ${now.getFullYear()} • ${String(now.getHours()).padStart(2, "0")}:${String(
+    const localeCode =
+      currentLang === "tr" ? "tr-TR" : currentLang === "de" ? "de-DE" : currentLang === "es" ? "es-ES" : currentLang === "fr" ? "fr-FR" : "en-US";
+    const formattedDate = `${now.toLocaleDateString(localeCode, { day: "numeric", month: "long", year: "numeric" })} • ${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
     ).padStart(2, "0")}`;
 
@@ -349,15 +493,15 @@ export default function BoardSummaryModal({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-base sm:text-lg font-black text-white">
-                    Ders Sonu AI Özeti & Çıkarımları
+                    {t("brd_sum_modal_title", "Ders Sonu AI Özeti & Çıkarımları")}
                   </h3>
                   <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-400 text-[10px] font-bold">
                     <Lock className="w-3 h-3" />
-                    <span>KVKK Sıfır Ses Kaydı</span>
+                    <span>{t("brd_sum_zero_audio", "KVKK Sıfır Ses Kaydı")}</span>
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
-                  {className} • Gemini 2.5 Flash Pedagojik Analiz ve SM-2 Dağıtım Motoru
+                  {className} • {t("brd_sum_engine_sub", "Gemini 2.5 Flash Pedagojik Analiz ve SM-2 Dağıtım Motoru")}
                 </p>
               </div>
             </div>
@@ -380,10 +524,10 @@ export default function BoardSummaryModal({
                   <Sparkles className="w-5 h-5 text-emerald-400 absolute inset-0 m-auto animate-pulse" />
                 </div>
                 <p className="text-sm font-bold text-slate-200">
-                  Gemini 2.5 Flash dersi analiz ediyor...
+                  {t("brd_sum_analyzing", "Gemini 2.5 Flash dersi analiz ediyor...")}
                 </p>
                 <p className="text-xs text-slate-400 max-w-sm">
-                  Transkript ve tahta notlarından hap özet, 5 kritik kavram ve anlama soruları çıkarılıyor.
+                  {t("brd_sum_analyzing_sub", "Transkript ve tahta notlarından hap özet, 5 kritik kavram ve anlama soruları çıkarılıyor.")}
                 </p>
               </div>
             ) : (
@@ -392,7 +536,7 @@ export default function BoardSummaryModal({
                 <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between gap-3">
                   <div className="space-y-0.5">
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 block">
-                      Analiz Edilen Ders Başlığı
+                      {t("brd_sum_analyzed_title", "Analiz Edilen Ders Başlığı")}
                     </span>
                     <h4 className="text-base font-bold text-white">{lessonTitle}</h4>
                   </div>
@@ -405,7 +549,7 @@ export default function BoardSummaryModal({
                 <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
                   <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <BookOpen className="w-4 h-4 text-emerald-400" />
-                    <span>📌 3-4 Maddelik Hap Yönetici Özeti</span>
+                    <span>{t("brd_sum_exec_hdr", "📌 3-4 Maddelik Hap Yönetici Özeti")}</span>
                   </span>
                   <ul className="space-y-1.5 text-xs text-slate-300">
                     {summaryPoints.map((pt, i) => (
@@ -422,10 +566,10 @@ export default function BoardSummaryModal({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <Layers className="w-4 h-4 text-indigo-400" />
-                      <span>🏷️ Vurgulanan 5 Kritik Terim & Türkçe Anlamları</span>
+                      <span>{t("brd_sum_terms_hdr", "🏷️ Vurgulanan 5 Kritik Terim & Anlamları")}</span>
                     </span>
                     <span className="text-[10px] font-mono text-indigo-400 font-bold">
-                      SM-2 Tekrar Hazır
+                      {t("brd_sum_sm2_ready", "SM-2 Tekrar Hazır")}
                     </span>
                   </div>
 
@@ -460,7 +604,7 @@ export default function BoardSummaryModal({
                 <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
                   <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <HelpCircle className="w-4 h-4 text-amber-400" />
-                    <span>🎯 3 Hızlı Anlama ve Pekiştirme Sorusu</span>
+                    <span>{t("brd_sum_quiz_hdr", "🎯 3 Hızlı Anlama ve Pekiştirme Sorusu")}</span>
                   </span>
                   <div className="space-y-2 text-xs">
                     {quizQuestions.map((q, i) => (
@@ -513,10 +657,10 @@ export default function BoardSummaryModal({
                 onClick={handlePrintCheatSheet}
                 disabled={isLoading}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 disabled:opacity-50"
-                title="A4 Çalışma Kağıdı Olarak Yazdır / PDF İndir"
+                title={t("brd_sum_print_tip", "A4 Çalışma Kağıdı Olarak Yazdır / PDF İndir")}
               >
                 <Printer className="w-4 h-4 text-indigo-400" />
-                <span>🖨️ Tek Sayfa Yazdır / PDF</span>
+                <span>{t("brd_sum_print_btn", "🖨️ Tek Sayfa Yazdır / PDF")}</span>
               </button>
 
               <button
@@ -524,7 +668,7 @@ export default function BoardSummaryModal({
                 onClick={onClose}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-medium transition cursor-pointer"
               >
-                Kapat
+                {t("close", "Kapat")}
               </button>
             </div>
 
@@ -539,17 +683,17 @@ export default function BoardSummaryModal({
                 {assignSuccess ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                    <span>SM-2 Kuyruğuna Fırlatıldı! 🚀</span>
+                    <span>{t("brd_sum_assigned", "SM-2 Kuyruğuna Fırlatıldı! 🚀")}</span>
                   </>
                 ) : isAssigning ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Ödev Aktarılıyor...</span>
+                    <span>{t("brd_sum_assigning", "Ödev Aktarılıyor...")}</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>🚀 Sınıfa Ödev Olarak Fırlat</span>
+                    <span>{t("brd_sum_assign_btn", "🚀 Sınıfa Ödev Olarak Fırlat")}</span>
                   </>
                 )}
               </button>
@@ -563,14 +707,14 @@ export default function BoardSummaryModal({
                 {savedSuccess ? (
                   <>
                     <Check className="w-4 h-4 text-emerald-200" />
-                    <span>Kaydedildi!</span>
+                    <span>{t("brd_sum_saved", "Kaydedildi!")}</span>
                   </>
                 ) : isSaving ? (
-                  <span>Kaydediliyor...</span>
+                  <span>{t("saving", "Kaydediliyor...")}</span>
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    <span>💾 Arşive Kaydet & Çık</span>
+                    <span>{t("brd_sum_save_btn", "💾 Arşive Kaydet & Çık")}</span>
                   </>
                 )}
               </button>
@@ -587,16 +731,19 @@ export default function BoardSummaryModal({
         <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between">
           <div>
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 block">
-              Vocaship Akıllı Tahta • Ders Sonu Çalışma Kağıdı (Cheat Sheet)
+              {t("brd_sum_sheet_hdr", "VocaShip Akıllı Tahta • Ders Sonu Çalışma Kağıdı (Cheat Sheet)")}
             </span>
             <h1 className="text-xl font-black text-slate-950 mt-0.5">{lessonTitle}</h1>
             <p className="text-xs text-slate-600 font-medium">
-              Sınıf: <strong>{className}</strong> • Tarih: {new Date().toLocaleDateString("tr-TR")}
+              {t("cls_mat_class_lbl", "Sınıf:")} <strong>{className}</strong> • {t("cls_cm_date_lbl", "Tarih")}:{" "}
+              {new Date().toLocaleDateString(
+                currentLang === "tr" ? "tr-TR" : currentLang === "de" ? "de-DE" : currentLang === "es" ? "es-ES" : currentLang === "fr" ? "fr-FR" : "en-US"
+              )}
             </p>
           </div>
           <div className="text-right text-xs text-slate-500">
             <span className="inline-block px-2.5 py-1 rounded bg-slate-100 border border-slate-300 font-bold text-[10px]">
-              🔒 KVKK Korumalı Asistan
+              {t("brd_sum_kvkk_badge", "🔒 KVKK Korumalı Asistan")}
             </span>
           </div>
         </div>
@@ -604,7 +751,7 @@ export default function BoardSummaryModal({
         {/* 1. Hap Yönetici Özeti */}
         <section className="mb-4 p-3 rounded-lg border border-slate-300 bg-slate-50">
           <h2 className="text-xs font-black uppercase tracking-wide text-slate-900 mb-2 flex items-center gap-1.5">
-            <span>📌 3-4 Maddelik Hap Yönetici Özeti</span>
+            <span>{t("brd_sum_exec_hdr", "📌 3-4 Maddelik Hap Yönetici Özeti")}</span>
           </h2>
           <ul className="space-y-1.5 text-xs text-slate-800">
             {summaryPoints.map((pt, idx) => (
@@ -619,15 +766,15 @@ export default function BoardSummaryModal({
         {/* 2. 5 Kritik Terim Tablosu */}
         <section className="mb-4">
           <h2 className="text-xs font-black uppercase tracking-wide text-slate-900 mb-2">
-            🏷️ Vurgulanan 5 Kritik Terim & Türkçe Anlamları
+            {t("brd_sum_terms_hdr", "🏷️ Vurgulanan 5 Kritik Terim & Anlamları")}
           </h2>
           <table className="w-full text-xs border border-slate-300 border-collapse">
             <thead>
               <tr className="bg-slate-100 text-slate-900">
-                <th className="border border-slate-300 p-2 text-left font-bold w-1/5">Kelime</th>
-                <th className="border border-slate-300 p-2 text-left font-bold w-1/5">Okunuş (IPA)</th>
-                <th className="border border-slate-300 p-2 text-left font-bold w-1/4">Türkçe Anlamı</th>
-                <th className="border border-slate-300 p-2 text-left font-bold">Örnek Cümle</th>
+                <th className="border border-slate-300 p-2 text-left font-bold w-1/5">{t("brd_sum_col_word", "Kelime")}</th>
+                <th className="border border-slate-300 p-2 text-left font-bold w-1/5">{t("brd_sum_col_ipa", "Okunuş (IPA)")}</th>
+                <th className="border border-slate-300 p-2 text-left font-bold w-1/4">{t("brd_sum_col_meaning", "Anlamı")}</th>
+                <th className="border border-slate-300 p-2 text-left font-bold">{t("brd_sum_col_example", "Örnek Cümle")}</th>
               </tr>
             </thead>
             <tbody>
@@ -646,7 +793,7 @@ export default function BoardSummaryModal({
         {/* 3. 3 Hızlı Anlama Sorusu */}
         <section className="mb-4">
           <h2 className="text-xs font-black uppercase tracking-wide text-slate-900 mb-2">
-            🎯 3 Hızlı Anlama & Pekiştirme Sorusu
+            {t("brd_sum_quiz_hdr", "🎯 3 Hızlı Anlama & Pekiştirme Sorusu")}
           </h2>
           <div className="space-y-3">
             {quizQuestions.map((q, idx) => (
@@ -672,13 +819,13 @@ export default function BoardSummaryModal({
         {/* Alt İmza & Öğrenci Alanı */}
         <div className="border-t border-slate-300 pt-3 mt-4 flex items-center justify-between text-[11px] text-slate-600">
           <div>
-            <span>Öğrenci Adı Soyadı: ___________________________</span>
+            <span>{t("brd_sum_student_name", "Öğrenci Adı Soyadı: ___________________________")}</span>
           </div>
           <div>
-            <span>Not / Değerlendirme: ________ / 100</span>
+            <span>{t("brd_sum_grade_line", "Not / Değerlendirme: ________ / 100")}</span>
           </div>
           <div>
-            <span>İmza: _______________</span>
+            <span>{t("brd_sum_sign_line", "İmza: _______________")}</span>
           </div>
         </div>
       </div>

@@ -79,7 +79,7 @@ export default function CareerHubShowcase({ onStartStudy, speakText }: CareerHub
               {t("career_hub_heading", "Mesleki & Akademik Kariyer Vitrini")}
             </h2>
             <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              11 Dikey Hub
+              {t("career_11_hubs", "11 Dikey Hub")}
             </span>
           </div>
           <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
@@ -196,7 +196,7 @@ export default function CareerHubShowcase({ onStartStudy, speakText }: CareerHub
                   {t("hub_section_vocab", "Sektörel Terimler & SM-2")}
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono">
-                  {activeHub.cards.length} Önizleme
+                  {activeHub.cards.length} {t("career_preview_cnt", "Önizleme")}
                 </span>
               </div>
 
@@ -291,13 +291,13 @@ export default function CareerHubShowcase({ onStartStudy, speakText }: CareerHub
 
               <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800/80 space-y-1.5">
                 <span className="text-[10px] font-black uppercase text-indigo-400 block tracking-wider">
-                  Partner Rolü:
+                  {t("career_partner_role", "Partner Rolü:")}
                 </span>
                 <p className="text-xs font-bold text-white">
                   {activeHub.titleDefault}
                 </p>
                 <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-3">
-                  Gerçekçi sektör mülakatı: AI uzman rol partnerinizle konuşun, anında gramer ve C1 alternatif geri bildirimi alın.
+                  {t("career_partner_desc", "Gerçekçi sektör mülakatı: AI uzman rol partnerinizle konuşun, anında gramer ve C1 alternatif geri bildirimi alın.")}
                 </p>
               </div>
             </div>

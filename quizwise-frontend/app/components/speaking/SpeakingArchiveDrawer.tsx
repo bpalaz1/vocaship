@@ -12,6 +12,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { SpeakingArchiveItem } from "../../actions/speakingArchive";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SpeakingArchiveDrawerProps {
   archives: SpeakingArchiveItem[];
@@ -24,13 +25,14 @@ export default function SpeakingArchiveDrawer({
   isLoading = false,
   onRefresh,
 }: SpeakingArchiveDrawerProps) {
+  const { t, language } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const formatDate = (isoString: string) => {
     try {
       const d = new Date(isoString);
-      return d.toLocaleDateString("tr-TR", {
+      return d.toLocaleDateString(language === "tr" ? "tr-TR" : language, {
         day: "numeric",
         month: "short",
         hour: "2-digit",
@@ -54,16 +56,16 @@ export default function SpeakingArchiveDrawer({
             <Archive className="w-3.5 h-3.5" />
           </div>
           <span className="text-xs font-bold tracking-wide">
-            📁 Geçmiş Konuşmalarım
+            📁 {t("speak_archive_drawer_title", "Geçmiş Konuşmalarım")}
           </span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
-            {archives.length} Oturum
+            {t("speak_archive_sessions_count", "{count} Oturum", { count: archives.length })}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium text-slate-500 group-hover:text-slate-300 transition">
-            {isOpen ? "Gizle" : "Görüntüle"}
+            {isOpen ? t("speak_hide", "Gizle") : t("speak_view", "Görüntüle")}
           </span>
           {isOpen ? (
             <ChevronUp className="w-4 h-4 text-indigo-400" />
@@ -78,16 +80,16 @@ export default function SpeakingArchiveDrawer({
         <div className="mt-3 p-4 rounded-3xl bg-slate-900/95 border border-slate-800 shadow-2xl backdrop-blur-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200 max-h-[460px] overflow-y-auto">
           {isLoading ? (
             <div className="text-center py-8 text-xs text-slate-400">
-              Konuşma geçmişi yükleniyor...
+              {t("speak_archive_loading", "Konuşma geçmişi yükleniyor...")}
             </div>
           ) : archives.length === 0 ? (
             <div className="text-center py-8 space-y-2">
               <Archive className="w-8 h-8 text-slate-600 mx-auto" />
               <p className="text-xs text-slate-400 font-medium">
-                Henüz arşivlenmiş konuşma oturumunuz bulunmuyor.
+                {t("speak_archive_empty_title", "Henüz arşivlenmiş konuşma oturumunuz bulunmuyor.")}
               </p>
               <p className="text-[11px] text-slate-500">
-                Mikrofona dokunup konuştuktan sonra "Sohbeti Bitir" butonuna bastığınızda seansınız buraya kaydedilir.
+                {t("speak_archive_empty_hint", "Mikrofona dokunup konuştuktan sonra \"Sohbeti Bitir\" butonuna bastığınızda seansınız buraya kaydedilir.")}
               </p>
             </div>
           ) : (
@@ -163,7 +165,7 @@ export default function SpeakingArchiveDrawer({
                   {isExpanded && item.transcript && (
                     <div className="border-t border-slate-850 p-3 sm:p-4 bg-slate-900/60 space-y-2.5 text-xs">
                       <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider pb-1">
-                        Diyalog Dökümü
+                        {t("speak_dialogue_transcript", "Diyalog Dökümü")}
                       </div>
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {item.transcript.map((turn, tIdx) => (
@@ -176,7 +178,7 @@ export default function SpeakingArchiveDrawer({
                             }`}
                           >
                             <span className="text-[10px] font-bold uppercase tracking-wider block opacity-70 mb-0.5">
-                              {turn.sender === "user" ? "👤 Sen" : "🤖 AI Mentor"}
+                              {turn.sender === "user" ? `👤 ${t("speak_user_prefix", "Sen:")}` : `🤖 ${t("speak_ai_prefix", "AI:")}`}
                             </span>
                             <p className="leading-relaxed">{turn.text}</p>
                           </div>

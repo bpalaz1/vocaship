@@ -37,12 +37,22 @@ export default function CreateDeckModal({
 
   if (!isOpen) return null;
 
+  const targetFolder = newDeckFolderId
+    ? folders.find((f) => String(f.id) === String(newDeckFolderId))
+    : null;
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl">
-        <h3 className="text-lg font-bold text-white mb-4">
+        <h3 className="text-lg font-bold text-white mb-3">
           {t("modal_create_deck_title", "Yeni Deste Oluştur")}
         </h3>
+        {targetFolder && (
+          <div className="mb-4 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold inline-flex items-center gap-1.5">
+            <span>📁 {t("label_target_folder", "Hedef Klasör:")}</span>
+            <span className="font-bold text-amber-200">{targetFolder.name}</span>
+          </div>
+        )}
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
@@ -71,19 +81,23 @@ export default function CreateDeckModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              {t("label_folder_optional", "Klasör (İsteğe Bağlı)")}
+              {t("label_folder_required", "Hedef Klasör *")}
             </label>
             <select
               value={newDeckFolderId}
               onChange={(e) => setNewDeckFolderId(e.target.value)}
+              required={folders.length > 0}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:border-indigo-500 outline-none"
             >
-              <option value="">{t("option_no_folder", "Klasörsüz (Genel)")}</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  📁 {f.name}
-                </option>
-              ))}
+              {folders.length === 0 ? (
+                <option value="">{t("err_create_folder_first", "Önce sol menüden bir klasör oluşturun")}</option>
+              ) : (
+                folders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    📁 {f.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
           <div className="flex justify-end space-x-2 pt-2">

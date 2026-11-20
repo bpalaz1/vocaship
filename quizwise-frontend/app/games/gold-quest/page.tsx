@@ -67,7 +67,7 @@ function GoldQuestContent() {
     fetchCards();
   }, [selectedDeckId]);
 
-  const activeDeckTitle = decks.find((d) => d.id === selectedDeckId)?.title || "Kelime Destesi";
+  const activeDeckTitle = decks.find((d) => d.id === selectedDeckId)?.title || t("game_default_deck", "Kelime Destesi");
 
   const handleAwardXP = async (amount: number, label: string) => {
     try {
@@ -90,7 +90,7 @@ function GoldQuestContent() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-24 text-slate-400 space-y-3">
         <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
-        <p className="text-sm font-semibold">Hazine Avı yükleniyor...</p>
+        <p className="text-sm font-semibold">{t("game_gq_loading", "Hazine Avı yükleniyor...")}</p>
       </div>
     );
   }
@@ -117,7 +117,7 @@ function GoldQuestContent() {
           >
             {decks.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.title} ({d.card_count || 0} kart)
+                {d.title} ({d.card_count || 0} {t("card_unit", "kart")})
               </option>
             ))}
           </select>
@@ -127,7 +127,7 @@ function GoldQuestContent() {
       {loadingCards ? (
         <div className="py-24 flex flex-col items-center justify-center text-slate-400 space-y-3">
           <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
-          <p className="text-sm">Destenin kelimeleri hazırlanıyor...</p>
+          <p className="text-sm">{t("game_loading_cards", "Destenin kelimeleri hazırlanıyor...")}</p>
         </div>
       ) : (
         <GoldQuestGame

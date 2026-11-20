@@ -94,7 +94,7 @@ _WMO_WEATHER_CODES: Dict[int, str] = {
 
 def _fetch_open_meteo_sync() -> str:
     url = "https://api.open-meteo.com/v1/forecast?latitude=38.42&longitude=27.14&current_weather=true"
-    req = urllib.request.Request(url, headers={"User-Agent": "VocashipSpeakingEngine/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "VocaShipSpeakingEngine/1.0"})
     with urllib.request.urlopen(req, timeout=1.5) as resp:
         data = json.loads(resp.read().decode("utf-8"))
         cw = data.get("current_weather", {})
@@ -1318,7 +1318,7 @@ async def generate_deck_questions(payload: GenerateDeckQuestionsRequest):
     level = payload.target_level or "B2"
     deck_name = payload.deck_title or "Aktif Destem"
 
-    prompt = f"""You are the Vocaship Speaking Curriculum AI.
+    prompt = f"""You are the VocaShip Speaking Curriculum AI.
 Target CEFR Level: {level}
 Deck Name: {deck_name}
 Target Vocabulary Words: {words_str}
@@ -1442,7 +1442,7 @@ async def generate_story_questions(payload: GenerateStoryQuestionsRequest):
 
     try:
         client = get_client()
-        prompt = f"""You are the Vocaship Literature & Debate Coach.
+        prompt = f"""You are the VocaShip Literature & Debate Coach.
 Story Title: {story_title}
 CEFR Level: {level}
 Story Context / Snippet: {snippet}

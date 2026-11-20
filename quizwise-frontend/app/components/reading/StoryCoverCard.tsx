@@ -96,7 +96,7 @@ export default function StoryCoverCard({
         {isInProgress && !isCompleted && (
           <div className="absolute bottom-2 right-2 z-10">
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/90 text-slate-950 flex items-center gap-1 shadow-md shadow-amber-500/20">
-              <span>⏳ {progressPercent ? `%${progressPercent}` : "Devam Ediyor"}</span>
+              <span>⏳ {progressPercent ? `%${progressPercent}` : t("read_in_progress_short", "Devam Ediyor")}</span>
             </span>
           </div>
         )}
@@ -107,7 +107,7 @@ export default function StoryCoverCard({
         <div className="space-y-1.5">
           <div className="flex items-center gap-1 text-[11px] font-mono text-slate-400">
             <BookOpen className="w-3 h-3 text-indigo-400 shrink-0" />
-            <span className="truncate">{story.topic || story.categoryName || "İngilizce Okuma"}</span>
+            <span className="truncate">{story.topic || story.categoryName || t("read_english_reading", "İngilizce Okuma")}</span>
           </div>
 
           <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">

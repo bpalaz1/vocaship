@@ -1,5 +1,5 @@
 """
-Vocaship Backend Entrypoint.
+VocaShip Backend Entrypoint.
 Allows running with `python main.py` or `uvicorn main:app`.
 """
 

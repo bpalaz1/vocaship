@@ -22,6 +22,7 @@ import {
   calculateKidsMetrics,
   KidsMetricsResult,
 } from "../../utils/speakingMetrics";
+import { useLanguage } from "../../context/LanguageContext";
 
 export interface SpeakingScorecardProps {
   userName?: string;
@@ -55,7 +56,7 @@ export interface SpeakingScorecardProps {
 }
 
 export default function SpeakingScorecard({
-  userName = "Öğrenci",
+  userName,
   mascotImage = "/avatars/sparky.png",
   mascotName = "Sparky",
   isKidsMode = false,
@@ -68,9 +69,13 @@ export default function SpeakingScorecard({
   onAnalyze,
   copiedAlt = false,
   onCopyAlt,
-  t = (_key, fallback) => fallback,
+  t: tProp,
   metrics,
 }: SpeakingScorecardProps) {
+  const { t: tHook } = useLanguage();
+  const t = (key: string, fallback: string, vars?: Record<string, string | number>) =>
+    vars ? tHook(key, fallback, vars) : tProp ? tProp(key, fallback) : tHook(key, fallback);
+  const resolvedUserName = userName || t("speak_sc_student", "Öğrenci");
   // 1. Dinamik Seviyeleme ve Metrik Hesaplamaları (Sıfır ek API maliyeti)
   const relativeScore = calculateRelativeCEFRScore(
     scorecard.fluency_score || 0,
@@ -97,8 +102,8 @@ export default function SpeakingScorecard({
   const dynamicTitle =
     scorecardTitle ||
     (isKidsMode
-      ? "🌟 YILDIZLI GÖREV KARNESİ"
-      : `${targetLevel.toUpperCase()} DEĞERLENDİRME KARNESİ`);
+      ? t("speak_sc_kids_title", "🌟 YILDIZLI GÖREV KARNESİ")
+      : t("speak_sc_adult_title", "{level} DEĞERLENDİRME KARNESİ", { level: targetLevel.toUpperCase() }));
 
   const isLevelSuccess = relativeScore >= 70;
 
@@ -137,7 +142,7 @@ export default function SpeakingScorecard({
           <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-1.5">
               <h3 className="text-sm font-extrabold text-white truncate">
-                {userName}
+                {resolvedUserName}
               </h3>
               <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
                 ({mascotName})
@@ -147,8 +152,8 @@ export default function SpeakingScorecard({
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-bold text-indigo-300">
                 {isKidsMode
-                  ? "🌟 3 Yıldızlı Kaşif"
-                  : `Seviye: ${targetLevel} • Akıcı İletişim`}
+                  ? t("speak_sc_explorer_badge", "🌟 3 Yıldızlı Kaşif")
+                  : t("speak_sc_level_fluent", "Seviye: {level} • Akıcı İletişim", { level: targetLevel })}
               </span>
             </div>
           </div>
@@ -175,10 +180,10 @@ export default function SpeakingScorecard({
           />
           <span>
             {avatarState === "speaking"
-              ? "Konuşuyor"
+              ? t("speak_sc_status_speaking", "Konuşuyor")
               : avatarState === "listening"
-              ? "Dinliyor"
-              : "Çevrim içi"}
+              ? t("speak_sc_status_listening", "Dinliyor")
+              : t("speak_sc_status_online", "Çevrim içi")}
           </span>
         </span>
       </div>
@@ -293,15 +298,15 @@ export default function SpeakingScorecard({
               <div className="mt-2 text-center">
                 <span className="text-xs font-black text-amber-300 uppercase tracking-wide">
                   {kidsMetrics.starsCount === 3
-                    ? "🏆 3/3 Tam Puan! Muhteşem Başarı!"
+                    ? t("speak_sc_kids_all_done", "🏆 3/3 Tam Puan! Muhteşem Başarı!")
                     : kidsMetrics.starsCount > 0
-                    ? `🎉 ${kidsMetrics.starsCount}/3 Yıldız Toplandı!`
-                    : "Konuş ve Yıldızları Topla!"}
+                    ? t("speak_sc_kids_progress", "🎉 {count}/3 Yıldız Toplandı!", { count: kidsMetrics.starsCount })
+                    : t("speak_sc_kids_idle", "Konuş ve Yıldızları Topla!")}
                 </span>
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   {kidsMetrics.starsCount > 0
-                    ? "Harika gidiyorsun, sesini duyurmaya devam et!"
-                    : "Mikrofona dokun ve ilk yıldızını hemen kap!"}
+                    ? t("speak_sc_kids_good", "Harika gidiyorsun, sesini duyurmaya devam et!")
+                    : t("speak_sc_kids_tap", "Mikrofona dokun ve ilk yıldızını hemen kap!")}
                 </p>
               </div>
             </div>
@@ -310,7 +315,7 @@ export default function SpeakingScorecard({
             <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-2.5">
               <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
-                <span>Yıldız Görevleri</span>
+                <span>{t("speak_sc_star_missions", "Yıldız Görevleri")}</span>
               </h4>
 
               <div className="space-y-2 text-xs">
@@ -328,7 +333,7 @@ export default function SpeakingScorecard({
                     ) : (
                       <Circle className="w-4 h-4 text-slate-600 shrink-0" />
                     )}
-                    <span className="font-semibold">⭐ Yıldız 1: Sesini Duyduk!</span>
+                    <span className="font-semibold">{t("speak_sc_star1", "⭐ Yıldız 1: Sesini Duyduk!")}</span>
                   </div>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -337,7 +342,7 @@ export default function SpeakingScorecard({
                         : "bg-slate-800 text-slate-500"
                     }`}
                   >
-                    {kidsMetrics.spoken ? "Tamamlandı" : "Bekleniyor"}
+                    {kidsMetrics.spoken ? t("speak_sc_done", "Tamamlandı") : t("speak_sc_waiting", "Bekleniyor")}
                   </span>
                 </div>
 
@@ -355,7 +360,7 @@ export default function SpeakingScorecard({
                     ) : (
                       <Circle className="w-4 h-4 text-slate-600 shrink-0" />
                     )}
-                    <span className="font-semibold">⭐⭐ Yıldız 2: Hedef Kelime</span>
+                    <span className="font-semibold">{t("speak_sc_star2", "⭐⭐ Yıldız 2: Hedef Kelime")}</span>
                   </div>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -364,7 +369,7 @@ export default function SpeakingScorecard({
                         : "bg-slate-800 text-slate-500"
                     }`}
                   >
-                    {kidsMetrics.usedTargetWord ? "Harika!" : "Kullan"}
+                    {kidsMetrics.usedTargetWord ? t("speak_sc_great", "Harika!") : t("speak_sc_use", "Kullan")}
                   </span>
                 </div>
 
@@ -382,7 +387,7 @@ export default function SpeakingScorecard({
                     ) : (
                       <Circle className="w-4 h-4 text-slate-600 shrink-0" />
                     )}
-                    <span className="font-semibold">⭐⭐⭐ Yıldız 3: Harika Cümle</span>
+                    <span className="font-semibold">{t("speak_sc_star3", "⭐⭐⭐ Yıldız 3: Harika Cümle")}</span>
                   </div>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -391,7 +396,7 @@ export default function SpeakingScorecard({
                         : "bg-slate-800 text-slate-500"
                     }`}
                   >
-                    {kidsMetrics.sentenceComplete ? "Başarıldı" : "Devam"}
+                    {kidsMetrics.sentenceComplete ? t("speak_sc_achieved", "Başarıldı") : t("speak_sc_keep_going", "Devam")}
                   </span>
                 </div>
               </div>
@@ -405,12 +410,12 @@ export default function SpeakingScorecard({
               >
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 font-extrabold text-xs">
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>🌟 Süper Kahraman Rozeti Kazandın! (+40 XP)</span>
+                  <span>{t("speak_sc_superhero_badge", "🌟 Süper Kahraman Rozeti Kazandın! (+40 XP)")}</span>
                 </div>
                 <p className="text-[11px] text-slate-300 font-medium">
                   {kidsMetrics.starsCount === 3
-                    ? "Bütün görevleri tamamladın! Sen gerçek bir İngilizce kahramanısın!"
-                    : "Mükemmel başlangıç! Kalan yıldızları da alarak macerayı tamamla!"}
+                    ? t("speak_sc_hero_all", "Bütün görevleri tamamladın! Sen gerçek bir İngilizce kahramanısın!")
+                    : t("speak_sc_hero_more", "Mükemmel başlangıç! Kalan yıldızları da alarak macerayı tamamla!")}
                 </p>
               </div>
             )}
@@ -421,7 +426,7 @@ export default function SpeakingScorecard({
                 <div className="flex items-center gap-1.5 text-indigo-300">
                   <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                   <h4 className="text-[11px] font-bold uppercase tracking-wider">
-                    {mascotName}&apos;nin Sihirli İpucu
+                    {t("speak_sc_magic_tip", "{name}'nin Sihirli İpucu", { name: mascotName })}
                   </h4>
                 </div>
                 <p className="text-xs text-indigo-100 font-semibold bg-slate-950/70 p-2.5 rounded-xl border border-indigo-500/20">
@@ -439,7 +444,7 @@ export default function SpeakingScorecard({
             <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
                 <Target className="w-4 h-4 text-indigo-400" />
-                <span>Hedef Seviye:</span>
+                <span>{t("speak_sc_target_level", "Hedef Seviye:")}</span>
                 <span className="font-mono text-indigo-300 uppercase">
                   {targetLevel}
                 </span>
@@ -456,9 +461,9 @@ export default function SpeakingScorecard({
               >
                 {hasAnalyzed
                   ? isLevelSuccess
-                    ? `🎯 ${targetLevel} Hedefinde Başarılı`
-                    : `🎯 ${targetLevel} Yolunda İlerliyor`
-                  : `🎯 ${targetLevel} Hedefli`}
+                    ? t("speak_sc_level_pass", "🎯 {level} Hedefinde Başarılı", { level: targetLevel })
+                    : t("speak_sc_level_progress", "🎯 {level} Yolunda İlerliyor", { level: targetLevel })
+                  : t("speak_sc_level_goal", "🎯 {level} Hedefli", { level: targetLevel })}
               </span>
             </div>
 
@@ -526,13 +531,13 @@ export default function SpeakingScorecard({
                       }`}
                     >
                       {relativeScore >= 80
-                        ? `Mükemmel ${targetLevel} Hakimiyeti`
+                        ? t("speak_sc_mastery", "Mükemmel {level} Hakimiyeti", { level: targetLevel })
                         : relativeScore >= 60
-                        ? `${targetLevel} Seviyesine Yüksek Uyum`
-                        : `${targetLevel} Gelişim Aşamasında`}
+                        ? t("speak_sc_high_fit", "{level} Seviyesine Yüksek Uyum", { level: targetLevel })
+                        : t("speak_sc_developing", "{level} Gelişim Aşamasında", { level: targetLevel })}
                     </span>
                     <p className="text-[10px] text-slate-500 font-mono">
-                      Hedef katsayısına göre normalize edilmiştir
+                      {t("speak_sc_norm_note", "Hedef katsayısına göre normalize edilmiştir")}
                     </p>
                   </>
                 ) : (
@@ -540,7 +545,7 @@ export default function SpeakingScorecard({
                     data-testid="scorecard-waiting-hint"
                     className="text-[11px] text-slate-400 leading-snug font-medium px-2"
                   >
-                    Değerlendirme Bekleniyor • Konuşmayı bitirince &apos;Analyze&apos; butonuna basın
+                    {t("speak_sc_wait_analyze", "Değerlendirme Bekleniyor • Konuşmayı bitirince 'Analyze' butonuna basın")}
                   </p>
                 )}
               </div>
@@ -554,17 +559,17 @@ export default function SpeakingScorecard({
               <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Seviye & Akıcılık Metrikleri</span>
+                  <span>{t("speak_sc_metrics_hdr", "Seviye & Akıcılık Metrikleri")}</span>
                 </span>
                 <span className="text-[10px] font-mono text-slate-500">
-                  {targetLevel} Normu
+                  {targetLevel} {t("speak_sc_norm_suffix", "Normu")}
                 </span>
               </h4>
 
               {/* Bar 1: Hedef Seviye Uyumu */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-300">Hedef Seviye Uyumu</span>
+                  <span className="text-slate-300">{t("speak_sc_level_fit", "Hedef Seviye Uyumu")}</span>
                   <span className="text-indigo-300 font-mono font-bold">
                     %{hasAnalyzed ? relativeScore : 0}
                   </span>
@@ -580,7 +585,7 @@ export default function SpeakingScorecard({
               {/* Bar 2: Akıcılık */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-300">Akıcılık</span>
+                  <span className="text-slate-300">{t("speak_sc_fluency", "Akıcılık")}</span>
                   <span className="text-emerald-300 font-mono font-bold">
                     %{hasAnalyzed ? rawFluency : 0}
                   </span>
@@ -596,7 +601,7 @@ export default function SpeakingScorecard({
               {/* Bar 3: Kelime Çeşitliliği */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-300">Kelime Çeşitliliği</span>
+                  <span className="text-slate-300">{t("speak_sc_vocab_div", "Kelime Çeşitliliği")}</span>
                   <span className="text-amber-300 font-mono font-bold">
                     %{hasAnalyzed ? vocabDiversity : 0}
                   </span>
@@ -621,16 +626,16 @@ export default function SpeakingScorecard({
                   />
                   <span>
                     {activeMode === "casual"
-                      ? "Günlük Kalıplar & İfadeler"
+                      ? t("speak_sc_daily_phrases", "Günlük Kalıplar & İfadeler")
                       : activeMode === "problem_solving"
-                      ? "Kriz & Müdahale Terimleri"
+                      ? t("speak_sc_crisis_terms", "Kriz & Müdahale Terimleri")
                       : activeMode === "story_debate"
-                      ? "Münazara ve Analiz Terimleri"
+                      ? t("speak_sc_debate_terms", "Münazara ve Analiz Terimleri")
                       : t("speaking_jargon_precision", "Jargon Precision / Hedef Kelimeler")}
                   </span>
                 </h4>
                 <span className="text-[10px] font-mono font-bold text-slate-400">
-                  {hasAnalyzed ? scorecard.vocabulary_highlight.length : 0} Tespit
+                  {t("speak_sc_detected", "{count} Tespit", { count: hasAnalyzed ? scorecard.vocabulary_highlight.length : 0 })}
                 </span>
               </div>
               {hasAnalyzed && scorecard.vocabulary_highlight.length > 0 ? (
@@ -646,7 +651,7 @@ export default function SpeakingScorecard({
                 </div>
               ) : (
                 <p className="text-[11px] text-slate-500 italic">
-                  Konuşma analiz edildiğinde öneriler burada listelenecektir
+                  {t("speak_sc_pending_suggestions", "Konuşma analiz edildiğinde öneriler burada listelenecektir")}
                 </p>
               )}
             </div>
@@ -659,14 +664,14 @@ export default function SpeakingScorecard({
               <div className="flex items-center justify-between gap-2">
                 <h4 className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 text-indigo-300">
                   <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span>How to say it better (Daha Doğal Alternatif)</span>
+                  <span>{t("speak_sc_better_alt_hdr", "How to say it better (Daha Doğal Alternatif)")}</span>
                 </h4>
                 {hasAnalyzed && scorecard.better_alternative && onCopyAlt && (
                   <button
                     type="button"
                     onClick={onCopyAlt}
                     className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-semibold text-slate-300 hover:text-white transition cursor-pointer shrink-0"
-                    title="Alternatif Cümleyi Kopyala"
+                    title={t("speak_sc_copy_alt_tip", "Alternatif Cümleyi Kopyala")}
                   >
                     {copiedAlt ? (
                       <Check className="w-3 h-3 text-emerald-400" />
@@ -675,8 +680,8 @@ export default function SpeakingScorecard({
                     )}
                     <span>
                       {copiedAlt
-                        ? t("speaking_copied", "Kopyalandı!")
-                        : t("speaking_copy", "Kopyala")}
+                        ? t("speak_sc_copied", "Kopyalandı!")
+                        : t("speak_sc_copy", "Kopyala")}
                     </span>
                   </button>
                 )}
@@ -688,7 +693,7 @@ export default function SpeakingScorecard({
                 </p>
               ) : (
                 <p className="text-[11px] text-slate-500 italic bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80">
-                  Konuşma analiz edildiğinde öneriler burada listelenecektir
+                  {t("speak_sc_pending_suggestions", "Konuşma analiz edildiğinde öneriler burada listelenecektir")}
                 </p>
               )}
             </div>
@@ -706,7 +711,7 @@ export default function SpeakingScorecard({
                   </h4>
                 </div>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                  Vocaship AI
+                  VocaShip AI
                 </span>
               </div>
 
@@ -731,7 +736,7 @@ export default function SpeakingScorecard({
                 </div>
               ) : (
                 <p className="text-[11px] text-slate-500 italic">
-                  Konuşma analiz edildiğinde öneriler burada listelenecektir
+                  {t("speak_sc_pending_suggestions", "Konuşma analiz edildiğinde öneriler burada listelenecektir")}
                 </p>
               )}
             </div>

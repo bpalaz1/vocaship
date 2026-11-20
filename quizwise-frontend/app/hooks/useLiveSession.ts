@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { API_BASE } from "../config";
+import { pickUiText } from "../utils/uiLocale";
 
 export interface LiveSessionData {
   id: string;
@@ -52,13 +53,13 @@ export function useLiveSession(classCode: string = "VRG-2535") {
           const s: LiveSessionData = {
             id: data.session.id || `live-${Date.now()}`,
             classId: data.session.classId || "cls-1",
-            className: data.session.className || "10-A Sınıfı",
+            className: data.session.className || pickUiText({ tr: "10-A Sınıfı", en: "Grade 10-A", de: "Klasse 10-A", es: "Clase 10-A", fr: "Classe 10-A" }),
             classCode: data.session.classCode || classCode,
-            title: data.session.title || "Canlı Ders Yayını",
+            title: data.session.title || pickUiText({ tr: "Canlı Ders Yayını", en: "Live Lesson Broadcast", de: "Live-Unterrichtsübertragung", es: "Transmisión de clase en vivo", fr: "Diffusion de cours en direct" }),
             date: new Date().toISOString().split("T")[0],
             time: "08:00",
             isLive: true,
-            teacherName: data.session.teacherName || "Eğitmen Stüdyosu",
+            teacherName: data.session.teacherName || pickUiText({ tr: "Eğitmen Stüdyosu", en: "Instructor Studio", de: "Lehrkraft-Studio", es: "Estudio del instructor", fr: "Studio de l'enseignant" }),
           };
           setLiveSession(s);
           setIsLiveActive(true);
@@ -94,13 +95,13 @@ export function useLiveSession(classCode: string = "VRG-2535") {
       const fullSession: LiveSessionData = {
         id: sessionData.id || `live-${Date.now()}`,
         classId: sessionData.classId || "cls-1",
-        className: sessionData.className || "10-A Sınıfı • C1 Project Controls",
+        className: sessionData.className || pickUiText({ tr: "10-A Sınıfı • C1 Project Controls", en: "Grade 10-A • C1 Project Controls", de: "Klasse 10-A • C1 Projektkontrolle", es: "Clase 10-A • C1 Control de proyectos", fr: "Classe 10-A • C1 Contrôle de projet" }),
         classCode: sessionData.classCode || classCode,
-        title: sessionData.title || "Canlı Proje Vaka Analizi",
+        title: sessionData.title || pickUiText({ tr: "Canlı Proje Vaka Analizi", en: "Live Project Case Analysis", de: "Live-Projektfallanalyse", es: "Análisis de caso en vivo", fr: "Analyse de cas en direct" }),
         date: sessionData.date || new Date().toISOString().split("T")[0],
         time: sessionData.time || "08:00",
         isLive: true,
-        teacherName: sessionData.teacherName || "Eğitmen Stüdyosu",
+        teacherName: sessionData.teacherName || pickUiText({ tr: "Eğitmen Stüdyosu", en: "Instructor Studio", de: "Lehrkraft-Studio", es: "Estudio del instructor", fr: "Studio de l'enseignant" }),
       };
 
       setLiveSession(fullSession);

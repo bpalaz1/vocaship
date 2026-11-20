@@ -272,6 +272,12 @@ class LocalDatabaseClient:
                 cursor.execute("ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1;")
             if "streak_days" not in existing_user_cols:
                 cursor.execute("ALTER TABLE users ADD COLUMN streak_days INTEGER DEFAULT 1;")
+            if "subscription_status" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN subscription_status TEXT;")
+            if "pro_expires_at" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN pro_expires_at TEXT;")
+            if "plan_tier" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'basic';")
             if "last_active_date" not in existing_user_cols:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_active_date TEXT;")
             if "coins" not in existing_user_cols:
@@ -488,6 +494,8 @@ class LocalDatabaseClient:
                 session_date_utc TEXT NOT NULL,
                 duration_minutes INTEGER DEFAULT 60,
                 status TEXT DEFAULT 'scheduled',
+                join_code TEXT,
+                notes TEXT,
                 started_at TEXT,
                 ended_at TEXT,
                 created_at TEXT
@@ -514,12 +522,40 @@ class LocalDatabaseClient:
                 status TEXT DEFAULT 'delivered',
                 created_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS word_cache (
+                id TEXT PRIMARY KEY,
+                cache_key TEXT UNIQUE NOT NULL,
+                word TEXT NOT NULL,
+                target_lang TEXT NOT NULL,
+                native_lang TEXT NOT NULL,
+                phonetic TEXT DEFAULT '',
+                translation TEXT NOT NULL,
+                definition TEXT DEFAULT '',
+                part_of_speech TEXT DEFAULT '',
+                example_target TEXT DEFAULT '',
+                example_native TEXT DEFAULT '',
+                notes TEXT DEFAULT '',
+                source TEXT DEFAULT 'memory_cache',
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_word_cache_lookup
+                ON word_cache (word, target_lang, native_lang);
             """)
 
             cursor.execute("PRAGMA table_info(unlocked_characters);")
             existing_uc_cols = {col[1] for col in cursor.fetchall()}
             if "created_at" not in existing_uc_cols:
                 cursor.execute("ALTER TABLE unlocked_characters ADD COLUMN created_at TEXT;")
+
+            cursor.execute("PRAGMA table_info(class_sessions);")
+            existing_cs_cols = {col[1] for col in cursor.fetchall()}
+            if "join_code" not in existing_cs_cols:
+                cursor.execute("ALTER TABLE class_sessions ADD COLUMN join_code TEXT;")
+            if "notes" not in existing_cs_cols:
+                cursor.execute("ALTER TABLE class_sessions ADD COLUMN notes TEXT;")
 
             # Ensure default user exists
             cursor.execute("SELECT id FROM users LIMIT 1;")
@@ -602,3 +638,91 @@ class LocalDatabaseClient:
             else:
                 result[k] = v
         return result
+
+    def get_word_cache(
+        self, word: str, target_lang: str, native_lang: str
+    ) -> Optional[Dict[str, Any]]:
+        norm_word = " ".join((word or "").strip().lower().split())
+        t_lang = (target_lang or "en").strip().lower()
+        n_lang = (native_lang or "tr").strip().lower()
+        if not norm_word:
+            return None
+        cache_key = f"{t_lang}:{n_lang}:{norm_word}"
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM word_cache WHERE cache_key = ? LIMIT 1",
+                    (cache_key,),
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except Exception:
+            return None
+
+    def upsert_word_cache(
+        self,
+        word: str,
+        target_lang: str,
+        native_lang: str,
+        translation: str,
+        phonetic: str = "",
+        definition: str = "",
+        part_of_speech: str = "",
+        example_target: str = "",
+        example_native: str = "",
+        notes: str = "",
+        source: str = "memory_cache",
+    ) -> None:
+        norm_word = " ".join((word or "").strip().lower().split())
+        t_lang = (target_lang or "en").strip().lower()
+        n_lang = (native_lang or "tr").strip().lower()
+        clean_trans = (translation or "").strip()
+        if not norm_word or not clean_trans:
+            return
+        cache_key = f"{t_lang}:{n_lang}:{norm_word}"
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO word_cache (
+                        id, cache_key, word, target_lang, native_lang,
+                        phonetic, translation, definition, part_of_speech,
+                        example_target, example_native, notes, source,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(cache_key) DO UPDATE SET
+                        phonetic = CASE WHEN excluded.phonetic != '' THEN excluded.phonetic ELSE word_cache.phonetic END,
+                        translation = excluded.translation,
+                        definition = CASE WHEN excluded.definition != '' THEN excluded.definition ELSE word_cache.definition END,
+                        part_of_speech = CASE WHEN excluded.part_of_speech != '' THEN excluded.part_of_speech ELSE word_cache.part_of_speech END,
+                        example_target = CASE WHEN excluded.example_target != '' THEN excluded.example_target ELSE word_cache.example_target END,
+                        example_native = CASE WHEN excluded.example_target != '' THEN excluded.example_native ELSE word_cache.example_native END,
+                        notes = CASE WHEN excluded.notes != '' THEN excluded.notes ELSE word_cache.notes END,
+                        source = excluded.source,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        cache_key,
+                        norm_word,
+                        t_lang,
+                        n_lang,
+                        (phonetic or "").strip(),
+                        clean_trans,
+                        (definition or "").strip(),
+                        (part_of_speech or "").strip(),
+                        (example_target or "").strip(),
+                        (example_native or "").strip(),
+                        (notes or "").strip(),
+                        (source or "memory_cache").strip(),
+                        now_iso,
+                        now_iso,
+                    ),
+                )
+                conn.commit()
+        except Exception:
+            pass

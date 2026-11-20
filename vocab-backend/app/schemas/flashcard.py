@@ -86,3 +86,5 @@ class FlashcardCreate(BaseModel):
     collocations: Optional[List[str]] = None
     notes: Optional[str] = None
     image_url: Optional[str] = None
+    target_lang: Optional[str] = None
+    native_lang: Optional[str] = None

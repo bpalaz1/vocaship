@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { API_BASE } from "../../config";
+import { useLanguage } from "../../context/LanguageContext";
 
 interface TranscriptPair {
   id: string;
@@ -21,6 +22,7 @@ interface TranscriptPair {
 }
 
 export default function LiveMeetingTranslatorPage() {
+  const { t } = useLanguage();
   const [isListening, setIsListening] = useState(false);
   const [liveEn, setLiveEn] = useState("");
   const [liveTr, setLiveTr] = useState("");
@@ -109,7 +111,7 @@ export default function LiveMeetingTranslatorPage() {
       id,
       time,
       en: clean,
-      tr: cachedTr || "Çevriliyor...",
+      tr: cachedTr || t("lt_translating", "Çevriliyor..."),
     };
 
     setTranscripts((prev) => [...prev, newPair]);
@@ -148,7 +150,7 @@ export default function LiveMeetingTranslatorPage() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Tarayıcınız Konuşma Tanıma (SpeechRecognition) API'sini desteklemiyor. Lütfen Google Chrome veya Edge kullanın.");
+      alert(t("lt_speech_unsupported", "Tarayıcınız Konuşma Tanıma (SpeechRecognition) API'sini desteklemiyor. Lütfen Google Chrome veya Edge kullanın."));
       return;
     }
 
@@ -376,7 +378,7 @@ export default function LiveMeetingTranslatorPage() {
   // Dökümü Temizle
   const handleClear = () => {
     if (transcripts.length === 0) return;
-    if (window.confirm("Tüm dökümü temizlemek istiyor musunuz?")) {
+    if (window.confirm(t("lt_confirm_clear", "Tüm dökümü temizlemek istiyor musunuz?"))) {
       setTranscripts([]);
       setLiveEn("");
       setLiveTr("");
@@ -408,7 +410,7 @@ export default function LiveMeetingTranslatorPage() {
                 className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold shadow-lg shadow-indigo-600/30 active:scale-95 transition-all cursor-pointer text-sm sm:text-base"
               >
                 <Mic className="w-5 h-5 text-emerald-300 animate-pulse" />
-                <span>🎙️ Dış Sesi Dinle ve Çevir</span>
+                <span>{t("lt_start_btn", "🎙️ Dış Sesi Dinle ve Çevir")}</span>
               </button>
             ) : (
               <button
@@ -416,7 +418,7 @@ export default function LiveMeetingTranslatorPage() {
                 className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-lg shadow-rose-600/30 active:scale-95 transition-all cursor-pointer text-sm sm:text-base animate-pulse"
               >
                 <Square className="w-5 h-5 fill-current" />
-                <span>⏹️ Dinlemeyi Durdur</span>
+                <span>{t("lt_stop_btn", "⏹️ Dinlemeyi Durdur")}</span>
               </button>
             )}
 
@@ -425,7 +427,7 @@ export default function LiveMeetingTranslatorPage() {
               <div className="flex items-center gap-2 bg-slate-950 px-3.5 py-2 rounded-xl border border-emerald-500/30">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                  Kesintisiz Canlı Döngü
+                  {t("lt_live_loop", "Kesintisiz Canlı Döngü")}
                 </span>
                 <div className="flex items-end gap-1 h-4 ml-1">
                   <span
@@ -452,17 +454,17 @@ export default function LiveMeetingTranslatorPage() {
                 <button
                   onClick={handleCopyAll}
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer"
-                  title="Tümünü Kopyala"
+                  title={t("lt_copy_all_tip", "Tümünü Kopyala")}
                 >
                   {copied ? (
                     <>
                       <Check className="w-4 h-4 text-emerald-400" />
-                      <span className="text-emerald-400">Kopyalandı</span>
+                      <span className="text-emerald-400">{t("copied", "Kopyalandı")}</span>
                     </>
                   ) : (
                     <>
                       <Copy className="w-4 h-4 text-slate-300" />
-                      <span>Metni Kopyala</span>
+                      <span>{t("lt_copy_text", "Metni Kopyala")}</span>
                     </>
                   )}
                 </button>
@@ -470,10 +472,10 @@ export default function LiveMeetingTranslatorPage() {
                 <button
                   onClick={handleClear}
                   className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-800 text-xs font-semibold transition-all cursor-pointer"
-                  title="Tüm Dökümü Temizle"
+                  title={t("lt_clear_all_tip", "Tüm Dökümü Temizle")}
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Temizle</span>
+                  <span>{t("clear", "Temizle")}</span>
                 </button>
               </>
             )}
@@ -489,11 +491,11 @@ export default function LiveMeetingTranslatorPage() {
               <div className="flex items-center gap-2">
                 <span className="text-xl">🇬🇧</span>
                 <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">
-                  Konuşulan İngilizce Metin
+                  {t("lt_en_col_title", "Konuşulan İngilizce Metin")}
                 </h2>
               </div>
               <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-800/40">
-                {transcripts.length} Cümle
+                {transcripts.length} {t("lt_sentence_unit", "Cümle")}
               </span>
             </div>
 
@@ -505,15 +507,15 @@ export default function LiveMeetingTranslatorPage() {
                     <Radio className="w-6 h-6" />
                   </div>
                   <p className="text-xs sm:text-sm max-w-xs leading-relaxed">
-                    Yukarıdaki <strong className="text-indigo-300">[ 🎙️ Dış Sesi Dinle ve Çevir ]</strong> butonuna tıklayın. Hoparlörden gelen İngilizce konuşmalar satır satır buraya dökülecektir.
+                    {t("lt_en_empty_desc", "Yukarıdaki [ 🎙️ Dış Sesi Dinle ve Çevir ] butonuna tıklayın. Hoparlörden gelen konuşmalar satır satır buraya dökülecektir.")}
                   </p>
                 </div>
               )}
 
               {/* KALICI İNGİLİZCE SATIRLARI */}
-              {transcripts.map((t, idx) => (
+              {transcripts.map((pair, idx) => (
                 <div
-                  key={t.id}
+                  key={pair.id}
                   className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/90 hover:border-slate-700 transition-all space-y-1.5 group"
                 >
                   <div className="flex items-center justify-between text-xs text-slate-500">
@@ -521,18 +523,18 @@ export default function LiveMeetingTranslatorPage() {
                       <span className="font-mono text-[11px] text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-900/40">
                         #{idx + 1}
                       </span>
-                      <span className="text-[11px] text-slate-400">{t.time}</span>
+                      <span className="text-[11px] text-slate-400">{pair.time}</span>
                     </div>
                     <button
-                      onClick={() => speak(t.en, "en-US")}
+                      onClick={() => speak(pair.en, "en-US")}
                       className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer opacity-80 group-hover:opacity-100"
-                      title="Seslendir"
+                      title={t("listen", "Seslendir")}
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
-                    {t.en}
+                    {pair.en}
                   </p>
                 </div>
               ))}
@@ -543,9 +545,9 @@ export default function LiveMeetingTranslatorPage() {
                   <div className="flex items-center justify-between text-[10px] text-indigo-400 font-semibold uppercase tracking-wider">
                     <span className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
-                      <span>Canlı Algılanıyor...</span>
+                      <span>{t("lt_detecting_live", "Canlı Algılanıyor...")}</span>
                     </span>
-                    <span className="text-slate-400 font-mono lowercase">1.0s veya 8 kelimede eklenir</span>
+                    <span className="text-slate-400 font-mono lowercase">{t("lt_flush_hint", "1.0s veya 8 kelimede eklenir")}</span>
                   </div>
                   <p className="text-base sm:text-lg text-indigo-200 italic font-medium leading-relaxed">
                     {liveEn}
@@ -557,18 +559,18 @@ export default function LiveMeetingTranslatorPage() {
             </div>
           </div>
 
-          {/* SAĞ SÜTUN: EŞZAMANLI TÜRKÇE ÇEVİRİ */}
+          {/* SAĞ SÜTUN: EŞZAMANLI ÇEVİRİ */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col h-full shadow-2xl overflow-hidden backdrop-blur-sm">
             {/* SÜTUN BAŞLIĞI */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🇹🇷</span>
                 <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">
-                  Eşzamanlı Türkçe Çeviri
+                  {t("lt_tr_col_title", "Eşzamanlı Türkçe Çeviri")}
                 </h2>
               </div>
               <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
-                {transcripts.length} Çeviri
+                {transcripts.length} {t("lt_trans_unit", "Çeviri")}
               </span>
             </div>
 
@@ -580,15 +582,15 @@ export default function LiveMeetingTranslatorPage() {
                     <Sparkles className="w-6 h-6" />
                   </div>
                   <p className="text-xs sm:text-sm max-w-xs leading-relaxed">
-                    Sol sütundaki İngilizce konuşmaların Türkçe karşılığı anında ve kalıcı şekilde buraya yansıyacaktır.
+                    {t("lt_tr_empty_desc", "Sol sütundaki konuşmaların anında ve kalıcı çevirisi buraya yansıyacaktır.")}
                   </p>
                 </div>
               )}
 
-              {/* KALICI TÜRKÇE ÇEVİRİ SATIRLARI */}
-              {transcripts.map((t, idx) => (
+              {/* KALICI ÇEVİRİ SATIRLARI */}
+              {transcripts.map((pair, idx) => (
                 <div
-                  key={t.id}
+                  key={pair.id}
                   className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/90 hover:border-slate-700 transition-all space-y-1.5 group"
                 >
                   <div className="flex items-center justify-between text-xs text-slate-500">
@@ -596,18 +598,18 @@ export default function LiveMeetingTranslatorPage() {
                       <span className="font-mono text-[11px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-900/40">
                         #{idx + 1}
                       </span>
-                      <span className="text-[11px] text-slate-400">{t.time}</span>
+                      <span className="text-[11px] text-slate-400">{pair.time}</span>
                     </div>
                     <button
-                      onClick={() => speak(t.tr, "tr-TR")}
+                      onClick={() => speak(pair.tr, "tr-TR")}
                       className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer opacity-80 group-hover:opacity-100"
-                      title="Türkçe Seslendir"
+                      title={t("lt_speak_tr_tip", "Türkçe Seslendir")}
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <p className="text-base sm:text-lg font-medium text-emerald-300 leading-relaxed">
-                    {t.tr}
+                    {pair.tr}
                   </p>
                 </div>
               ))}
@@ -617,7 +619,7 @@ export default function LiveMeetingTranslatorPage() {
                 <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-1 animate-pulse">
                   <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span>Canlı Çeviri...</span>
+                    <span>{t("lt_translating_live", "Canlı Çeviri...")}</span>
                   </div>
                   <p className="text-base sm:text-lg text-emerald-300 italic font-medium leading-relaxed">
                     {liveTr}

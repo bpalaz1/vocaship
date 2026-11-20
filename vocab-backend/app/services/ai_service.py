@@ -12,25 +12,37 @@ from app.core.config import settings
 # .env dosyasından ortam değişkenlerini yükle
 load_dotenv()
 
-# Hızlı ve düşük gecikmeli (low latency) model önceliği
+# Hızlı ve düşük gecikmeli (low latency) gerçek Gemini Flash model önceliği
 FALLBACK_MODELS = [
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
+    "gemini-2.5-flash-lite",
     "gemini-flash-lite-latest",
-    "gemini-flash-latest",
-    "gemini-3.8-flash",
     "gemini-2.5-flash",
+    "gemini-flash-latest",
+    "gemini-3.5-flash-lite",
 ]
 
 LANG_MAP = {
-    "en": "İngilizce",
-    "tr": "Türkçe",
-    "de": "Almanca",
-    "es": "İspanyolca",
-    "fr": "Fransızca",
-    "it": "İtalyanca",
-    "ru": "Rusça",
+    "en": "English",
+    "tr": "Turkish",
+    "de": "German",
+    "es": "Spanish",
+    "fr": "French",
+    "it": "Italian",
+    "ru": "Russian",
 }
+
+
+def _build_json_config(model_name: str, temperature: float) -> types.GenerateContentConfig:
+    cfg_kwargs: Dict[str, Any] = {
+        "temperature": temperature,
+        "response_mime_type": "application/json",
+    }
+    if "2.5" in model_name and hasattr(types, "ThinkingConfig"):
+        try:
+            cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            pass
+    return types.GenerateContentConfig(**cfg_kwargs)
 
 def get_client() -> genai.Client:
     """Ortam değişkeninden API anahtarını çeker ve Google GenAI istemcisini başlatır."""
@@ -54,10 +66,12 @@ def clean_json_response(raw_text: str) -> dict:
             return json.loads(match.group(1))
         raise
 
-async def async_call_gemini_with_fallback(prompt: str, temperature: float = 0.2) -> dict:
+async def async_call_gemini_with_fallback(
+    prompt: str, temperature: float = 0.2, timeout_per_model: float = 7.5
+) -> dict:
     """
     Modelleri asenkron olarak sırayla dener.
-    429 (Kota) veya 503 (Yoğunluk) durumunda asyncio.sleep(0.3) ile kısa bir bekleme yapar ve sıradaki modele geçer.
+    429 (Kota) veya 503 (Yoğunluk) durumunda asyncio.sleep(0.25) ile kısa bir bekleme yapar ve sıradaki modele geçer.
     Senkron iş parçacığını asla bloklamaz.
     """
     client = get_client()
@@ -65,22 +79,21 @@ async def async_call_gemini_with_fallback(prompt: str, temperature: float = 0.2)
 
     for model_name in FALLBACK_MODELS:
         try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=temperature,
-                    response_mime_type="application/json"
-                )
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=_build_json_config(model_name, temperature),
+                ),
+                timeout=timeout_per_model,
             )
             return clean_json_response(response.text)
         except Exception as e:
             last_error = e
             err_str = str(e)
             print(f"[Async Model Fallback] {model_name} başarısız: {err_str[:120]}... Sıradaki deneniyor.")
-            # Kota veya yoğunluk durumunda kısa bekleme (0.3s)
             if "429" in err_str or "503" in err_str:
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.25)
             continue
 
     raise last_error
@@ -97,10 +110,7 @@ def call_gemini_with_fallback(prompt: str, temperature: float = 0.2) -> dict:
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=temperature,
-                    response_mime_type="application/json"
-                )
+                config=_build_json_config(model_name, temperature),
             )
             return clean_json_response(response.text)
         except Exception as e:
@@ -113,68 +123,79 @@ def call_gemini_with_fallback(prompt: str, temperature: float = 0.2) -> dict:
 
     raise last_error
 
-async def async_generate_single_card(word: str, target_lang: str = "en", native_lang: str = "tr", level: str = "B2") -> dict:
-    """Tekil kelime için çok dilli çeviri anlamı, IPA telaffuz ve örnek cümle üretir (Asenkron)."""
-    clean_word = word.strip()
-    target_name = LANG_MAP.get(target_lang, "İngilizce")
-    native_name = LANG_MAP.get(native_lang, "Türkçe")
+def _build_single_card_prompt(
+    clean_word: str,
+    target_lang: str,
+    native_lang: str,
+    context_hint: Optional[str] = None,
+) -> str:
+    target_name = LANG_MAP.get(target_lang.lower(), "English")
+    native_name = LANG_MAP.get(native_lang.lower(), "Turkish")
+    hint_line = ""
+    if context_hint and context_hint.strip():
+        hint_line = f"\nContext / Domain hint from user: {context_hint.strip()}"
 
-    prompt = f"""
-    Translate '{clean_word}' from {target_name} to {native_name}.
-    Provide one natural example sentence in {target_name} and its exact matching translation in {native_name}.
-    Return ONLY a compact JSON:
+    if target_lang.lower() == native_lang.lower():
+        task_line = (
+            f"Define the {target_name} word/phrase '{clean_word}' clearly and concisely in {native_name}."
+            f"\nProvide ONE natural example sentence in {target_name} using '{clean_word}', "
+            f"and a clear paraphrase/explanation of that exact sentence in {native_name}."
+        )
+    else:
+        task_line = (
+            f"Translate the {target_name} word/phrase '{clean_word}' into {native_name} (code: {native_lang})."
+            f"\nCRITICAL RULES:"
+            f"\n1. 'translation' MUST be written strictly in {native_name} (concise dictionary equivalents, e.g. 1-3 words separated by comma)."
+            f"\n2. Provide ONE natural example sentence in {target_name} in 'example_sentences[0].target' containing '{clean_word}'."
+            f"\n3. 'example_sentences[0].native' MUST be the EXACT, faithful translation of THAT SAME 'target' sentence into {native_name}. Never translate a different sentence."
+            f"\n4. 'phonetic' must be the IPA pronunciation of '{clean_word}' in {target_name}."
+        )
+
+    return f"""{task_line}{hint_line}
+
+Return ONLY valid compact JSON with this exact schema:
+{{
+  "is_valid": true,
+  "word": "{clean_word}",
+  "phonetic": "/IPA/",
+  "grammar_notes": "noun/verb/adj/adv",
+  "meanings": [
     {{
-      "is_valid": true,
-      "word": "{clean_word}",
-      "phonetic": "/fonetik/",
-      "grammar_notes": "noun/verb/adj",
-      "meanings": [
-        {{
-          "part_of_speech": "pos",
-          "translation": "{native_name} translation",
-          "definition": "{native_name} definition"
-        }}
-      ],
-      "example_sentences": [
-        {{
-          "target": "sentence in {target_name}",
-          "native": "translation in {native_name}"
-        }}
-      ]
+      "part_of_speech": "noun/verb/adj/adv",
+      "translation": "concise {native_name} translation",
+      "definition": "short definition in {native_name}"
     }}
-    """
+  ],
+  "example_sentences": [
+    {{
+      "target": "natural sentence in {target_name}",
+      "native": "exact translation of the target sentence in {native_name}"
+    }}
+  ]
+}}"""
+
+async def async_generate_single_card(
+    word: str,
+    target_lang: str = "en",
+    native_lang: str = "tr",
+    level: str = "B2",
+    context_hint: Optional[str] = None,
+) -> dict:
+    """Tekil kelime için çok dilli çeviri anlamı, IPA telaffuz ve eşleşen örnek cümle üretir (Asenkron)."""
+    clean_word = word.strip()
+    prompt = _build_single_card_prompt(clean_word, target_lang, native_lang, context_hint=context_hint)
     return await async_call_gemini_with_fallback(prompt, temperature=0.1)
 
-def generate_single_card(word: str, target_lang: str = "en", native_lang: str = "tr", level: str = "B2") -> dict:
+def generate_single_card(
+    word: str,
+    target_lang: str = "en",
+    native_lang: str = "tr",
+    level: str = "B2",
+    context_hint: Optional[str] = None,
+) -> dict:
     """Senkron tekil kart üretici."""
     clean_word = word.strip()
-    target_name = LANG_MAP.get(target_lang, "İngilizce")
-    native_name = LANG_MAP.get(native_lang, "Türkçe")
-
-    prompt = f"""
-    Translate '{clean_word}' from {target_name} to {native_name}.
-    Provide one natural example sentence in {target_name} and its exact matching translation in {native_name}.
-    Return ONLY a compact JSON:
-    {{
-      "is_valid": true,
-      "word": "{clean_word}",
-      "phonetic": "/fonetik/",
-      "grammar_notes": "noun/verb/adj",
-      "meanings": [
-        {{
-          "part_of_speech": "pos",
-          "translation": "{native_name} translation",
-          "definition": "{native_name} definition"
-        }}
-      ],
-      "example_sentences": [
-        {{
-          "target": "sentence in {target_name}",
-          "native": "translation in {native_name}"
-        }}
-      ]
-    }}
-    """
+    prompt = _build_single_card_prompt(clean_word, target_lang, native_lang, context_hint=context_hint)
     return call_gemini_with_fallback(prompt, temperature=0.1)
 
 async def batch_enrich_words(words: List[str], target_lang: str = "en", native_lang: str = "tr") -> List[dict]:

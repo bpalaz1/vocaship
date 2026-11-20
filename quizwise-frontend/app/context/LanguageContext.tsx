@@ -1,6 +1,13 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
+import { EXTRA_TRANSLATIONS } from "./translationsExtra";
+import { MODULE_TRANSLATIONS } from "./translationsModules";
+import { SPEAKING_CLASS_TRANSLATIONS } from "./translationsSpeakingClassroom";
+import { CLASSROOM_TRANSLATIONS } from "./translationsClassroom";
+import { REMAINING_TRANSLATIONS_A } from "./translationsRemainingA";
+import { REMAINING_TRANSLATIONS_B } from "./translationsRemainingB";
+import { REMAINING_TRANSLATIONS_C, REMAINING_ES_FR_PATCH } from "./translationsRemainingC";
 
 export type Language = "tr" | "en" | "de" | "es" | "fr";
 
@@ -214,7 +221,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Arcade & Oyun Arenası
     hero_game_badge: "SINIF OYUN ARENASI",
     hero_game_subtitle: "Canlı Rekabet & Turnuva",
-    hero_game_title: "Vocaship Oyun Arenası: Altın Yarışı & Canavar Savaşları",
+    hero_game_title: "VocaShip Oyun Arenası: Altın Yarışı & Canavar Savaşları",
     hero_game_desc: "Öğrendiğin kelimelerle hazine sandıklarını yağmala, 25.000 HP sınıf Boss'una kritik hasar ver ve gizemli sandıklardan efsanevi karakter koleksiyonunu tamamla!",
     hero_btn_boss: "Boss Savaşına Katıl!",
     hero_btn_treasure: "Hazine Avını Başlat",
@@ -247,7 +254,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
 
     // Oyun Arenası Kartları & Detayları (app/games/page.tsx)
     boss_fight_title: "Boss Fight: Sınıf Canavarı Arenası",
-    treasure_raid_title: "Vocaship Hazine Avı: Altın Baskını",
+    treasure_raid_title: "VocaShip Hazine Avı: Altın Baskını",
     badge_shared_hp: "Ortak Can Barı",
     badge_chest_steal: "Sandık & Çalma",
     feat_shared_hp: "20.000 Ortak HP Barı",
@@ -515,7 +522,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_stats_counter: "{count} Kelime • ~{min} dk",
     default_custom_title: "Özel Makale & Notlar",
     label_playback_speed: "Okuma Hızı:",
-    interactive_mode_banner_tip: "Vocaship İnteraktif Mod: Metindeki bilmediğiniz herhangi bir kelimenin üzerine tıklayın. Anında fonetik telaffuzu, çevirisi ve kelime kartı açılacaktır.",
+    interactive_mode_banner_tip: "VocaShip İnteraktif Mod: Metindeki bilmediğiniz herhangi bir kelimenin üzerine tıklayın. Anında fonetik telaffuzu, çevirisi ve kelime kartı açılacaktır.",
     btn_stop: "Durdur",
     btn_clear: "Temizle",
 
@@ -1018,7 +1025,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Arcade & Game Arena
     hero_game_badge: "CLASSROOM GAME ARENA",
     hero_game_subtitle: "Live Competition & Tournament",
-    hero_game_title: "Vocaship Game Arena: Gold Rush & Monster Battles",
+    hero_game_title: "VocaShip Game Arena: Gold Rush & Monster Battles",
     hero_game_desc: "Loot treasure chests with learned words, deal critical damage to the 25,000 HP class Boss, and complete your legendary character collection from mystery chests!",
     hero_btn_boss: "Join Boss Battle!",
     hero_btn_treasure: "Start Treasure Hunt",
@@ -1051,7 +1058,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
 
     // Game Arena Cards & Details (app/games/page.tsx)
     boss_fight_title: "Boss Fight: Class Monster Arena",
-    treasure_raid_title: "Vocaship Treasure Raid: Gold Rush",
+    treasure_raid_title: "VocaShip Treasure Raid: Gold Rush",
     badge_shared_hp: "Shared HP Bar",
     badge_chest_steal: "Chests & Steal",
     feat_shared_hp: "20,000 Shared HP Bar",
@@ -1319,7 +1326,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_stats_counter: "{count} Words • ~{min} min",
     default_custom_title: "Custom Article & Notes",
     label_playback_speed: "Reading Speed:",
-    interactive_mode_banner_tip: "Vocaship Interactive Mode: Click on any unfamiliar word in the text to instantly reveal phonetics, translation, and flashcard options.",
+    interactive_mode_banner_tip: "VocaShip Interactive Mode: Click on any unfamiliar word in the text to instantly reveal phonetics, translation, and flashcard options.",
     btn_stop: "Stop",
     btn_clear: "Clear",
 
@@ -1797,7 +1804,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Arcade & Spielarena
     hero_game_badge: "KLASSEN-SPIELARENA",
     hero_game_subtitle: "Live-Wettbewerb & Turnier",
-    hero_game_title: "Vocaship Spielarena: Goldrausch & Monsterkämpfe",
+    hero_game_title: "VocaShip Spielarena: Goldrausch & Monsterkämpfe",
     hero_game_desc: "Plündere Schatztruhen mit gelernten Wörtern, füge dem 25.000 HP Klassen-Boss kritischen Schaden zu und vervollständige deine legendäre Charaktersammlung!",
     hero_btn_boss: "Dem Boss-Kampf beitreten!",
     hero_btn_treasure: "Schatzjagd starten",
@@ -1830,7 +1837,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
 
     // Spielarena-Karten & Details (app/games/page.tsx)
     boss_fight_title: "Boss-Kampf: Klassen-Monster-Arena",
-    treasure_raid_title: "Vocaship Schatzsuche: Goldrausch",
+    treasure_raid_title: "VocaShip Schatzsuche: Goldrausch",
     badge_shared_hp: "Gemeinsame Lebensleiste",
     badge_chest_steal: "Truhen & Stehlen",
     feat_shared_hp: "20.000 Gemeinsame HP",
@@ -2098,7 +2105,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_stats_counter: "{count} Wörter • ~{min} Min.",
     default_custom_title: "Eigener Artikel & Notizen",
     label_playback_speed: "Lesetempo:",
-    interactive_mode_banner_tip: "Vocaship Interaktiver Modus: Klicke auf ein unbekanntes Wort für Aussprache, Übersetzung und Karteikarte.",
+    interactive_mode_banner_tip: "VocaShip Interaktiver Modus: Klicke auf ein unbekanntes Wort für Aussprache, Übersetzung und Karteikarte.",
     btn_stop: "Stopp",
     btn_clear: "Löschen",
 
@@ -2598,7 +2605,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Arcade y Arena de Juegos
     hero_game_badge: "ESTADIO DE JUEGOS DE CLASE",
     hero_game_subtitle: "Competencia en Vivo y Torneo",
-    hero_game_title: "Estadio de Juegos Vocaship: Fiebre del Oro y Batallas de Monstruos",
+    hero_game_title: "Estadio de Juegos VocaShip: Fiebre del Oro y Batallas de Monstruos",
     hero_game_desc: "¡Saquea cofres del tesoro con las palabras aprendidas, causa daño crítico al Jefe de clase de 25.000 HP y completa tu colección de personajes legendarios de los cofres misteriosos!",
     hero_btn_boss: "¡Unirse a la Batalla del Jefe!",
     hero_btn_treasure: "Iniciar Búsqueda del Tesoro",
@@ -2631,7 +2638,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
 
     // Tarjetas de Arena de Juegos & Detalles (app/games/page.tsx)
     boss_fight_title: "Boss Fight: Arena de Monstruos de Clase",
-    treasure_raid_title: "Vocaship Caza del Tesoro: Asalto Dorado",
+    treasure_raid_title: "VocaShip Caza del Tesoro: Asalto Dorado",
     badge_shared_hp: "Barra de Vida Compartida",
     badge_chest_steal: "Cofres y Robo",
     feat_shared_hp: "20.000 HP Compartidos",
@@ -2899,7 +2906,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_stats_counter: "{count} Palabras • ~{min} min",
     default_custom_title: "Artículo y Notas Personalizadas",
     label_playback_speed: "Velocidad de Lectura:",
-    interactive_mode_banner_tip: "Modo Interactivo Vocaship: Haz clic en cualquier palabra para ver su fonética, traducción y tarjeta de vocabulario.",
+    interactive_mode_banner_tip: "Modo Interactivo VocaShip: Haz clic en cualquier palabra para ver su fonética, traducción y tarjeta de vocabulario.",
     btn_stop: "Detener",
     btn_clear: "Limpiar",
 
@@ -3389,7 +3396,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Arcade & Arène de Jeux
     hero_game_badge: "ARÈNE DE JEUX DE CLASSE",
     hero_game_subtitle: "Compétition en Direct & Tournoi",
-    hero_game_title: "Arène de Jeux Vocaship : Ruée vers l'Or & Combats de Monstres",
+    hero_game_title: "Arène de Jeux VocaShip : Ruée vers l'Or & Combats de Monstres",
     hero_game_desc: "Pillez des coffres au trésor avec les mots appris, infligez des dégâts critiques au Boss de classe de 25 000 PV et complétez votre collection de personnages légendaires !",
     hero_btn_boss: "Rejoindre le Combat de Boss !",
     hero_btn_treasure: "Lancer la Chasse au Trésor",
@@ -3422,7 +3429,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
 
     // Cartes d'Arène de Jeux & Détails (app/games/page.tsx)
     boss_fight_title: "Combat de Boss : Arène de Monstre de Classe",
-    treasure_raid_title: "Vocaship Chasse au Trésor : Ruée vers l'Or",
+    treasure_raid_title: "VocaShip Chasse au Trésor : Ruée vers l'Or",
     badge_shared_hp: "Barre de Vie Partagée",
     badge_chest_steal: "Coffres et Vol",
     feat_shared_hp: "20 000 PV Partagés",
@@ -3690,7 +3697,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_stats_counter: "{count} Mots • ~{min} min",
     default_custom_title: "Article & Notes Personnalisés",
     label_playback_speed: "Vitesse de Lecture:",
-    interactive_mode_banner_tip: "Mode Interactif Vocaship: Cliquez sur un mot inconnu pour afficher la phonétique, la traduction et la carte mémoire.",
+    interactive_mode_banner_tip: "Mode Interactif VocaShip: Cliquez sur un mot inconnu pour afficher la phonétique, la traduction et la carte mémoire.",
     btn_stop: "Arrêter",
     btn_clear: "Effacer",
 
@@ -4089,6 +4096,20 @@ export const KEY_ALIASES: Record<string, string> = {
   flashcard_interactive_hint: "flashcard_interactive_hint",
 };
 
+(["tr", "en", "de", "es", "fr"] as Language[]).forEach((lang) => {
+  Object.assign(
+    UI_TRANSLATIONS[lang],
+    EXTRA_TRANSLATIONS[lang],
+    MODULE_TRANSLATIONS[lang],
+    SPEAKING_CLASS_TRANSLATIONS[lang],
+    CLASSROOM_TRANSLATIONS[lang],
+    REMAINING_TRANSLATIONS_A[lang],
+    REMAINING_TRANSLATIONS_B[lang],
+    REMAINING_TRANSLATIONS_C[lang],
+    lang === "es" || lang === "fr" ? REMAINING_ES_FR_PATCH[lang] : {}
+  );
+});
+
 export type TranslationKey = keyof typeof UI_TRANSLATIONS.tr | keyof typeof KEY_ALIASES | (string & {});
 
 export interface LanguageContextType {
@@ -4107,18 +4128,35 @@ export const LanguageContext = createContext<LanguageContextType>({
   availableLanguages: AVAILABLE_LANGUAGES,
 });
 
+const VALID_LANGS: Language[] = ["tr", "en", "de", "es", "fr"];
+
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguageState] = useState<Language>("tr");
 
   useEffect(() => {
-    try {
-      const saved = (localStorage.getItem("vocaship_ui_lang") || localStorage.getItem("quizwise_ui_lang")) as Language | null;
-      if (saved && (saved === "tr" || saved === "en" || saved === "de" || saved === "es" || saved === "fr")) {
-        setLanguageState(saved);
+    const syncLangFromStorage = () => {
+      try {
+        const saved = (localStorage.getItem("vocaship_ui_lang") || localStorage.getItem("quizwise_ui_lang")) as Language | null;
+        if (saved && VALID_LANGS.includes(saved)) {
+          setLanguageState(saved);
+          if (typeof document !== "undefined") {
+            document.documentElement.lang = saved;
+          }
+        }
+      } catch {
+        // localStorage erişilemezse varsayılan 'tr' kalır
       }
-    } catch (e) {
-      // localStorage erişilemezse varsayılan 'tr' kalır
-    }
+    };
+
+    syncLangFromStorage();
+
+    const onLangEvent = () => syncLangFromStorage();
+    window.addEventListener("vocaship-lang-change", onLangEvent);
+    window.addEventListener("storage", onLangEvent);
+    return () => {
+      window.removeEventListener("vocaship-lang-change", onLangEvent);
+      window.removeEventListener("storage", onLangEvent);
+    };
   }, []);
 
   const setLanguage = useCallback((lang: Language) => {
@@ -4126,7 +4164,13 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     try {
       localStorage.setItem("quizwise_ui_lang", lang);
       localStorage.setItem("vocaship_ui_lang", lang);
-    } catch (e) {
+      if (typeof document !== "undefined") {
+        document.documentElement.lang = lang;
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("vocaship-lang-change"));
+      }
+    } catch {
       // sessizce geç
     }
   }, []);

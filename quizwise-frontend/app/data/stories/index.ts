@@ -30,7 +30,7 @@ export { medicalStories, MEDICAL_CLINICAL_STORIES } from "./medicalStories";
 export { corporateFinanceStories, FINANCE_ACCOUNTING_STORIES } from "./corporateFinanceStories";
 
 /**
- * Vocaship 180 Hikayelik Modüler Katalog
+ * VocaShip 180 Hikayelik Modüler Katalog
  * 12 Kategori x 15 Hikaye Modüler Mimarisi
  */
 export const ALL_STORIES: Story[] = [

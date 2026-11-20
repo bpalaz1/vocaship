@@ -19,6 +19,7 @@ import {
 import confetti from "canvas-confetti";
 import { useAuth } from "../context/AuthContext";
 import { usePersona } from "../context/PersonaContext";
+import { useLanguage } from "../context/LanguageContext";
 import WeeklyLeagueBracket, {
   LeagueTier,
 } from "../components/leaderboard/WeeklyLeagueBracket";
@@ -51,6 +52,7 @@ const DEFAULT_CLASSES: ClassroomInfo[] = [
 export default function LeaderboardPage() {
   const { user } = useAuth();
   const { persona } = usePersona();
+  const { t } = useLanguage();
 
   // Ana Sekme Şalteri: "league" (30 Kişilik Lig Kümesi) vs "classroom" (Sınıf İçi Sıralamam)
   const [mainTab, setMainTab] = useState<"league" | "classroom">("league");
@@ -138,7 +140,7 @@ export default function LeaderboardPage() {
       // Yeni sanal sınıf kaydı oluştur
       const newClass: ClassroomInfo = {
         id: `cls-${Date.now()}`,
-        name: `${code} İngilizce Grubu`,
+        name: `${code} ${t("lb_cls_group_suffix", "Grubu")}`,
         code: code,
         studentCount: 15,
       };
@@ -174,7 +176,7 @@ export default function LeaderboardPage() {
                 className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Ana Sayfa</span>
+                <span>{t("home", "Ana Sayfa")}</span>
               </Link>
               <span className="text-slate-600">•</span>
               <Link
@@ -182,16 +184,16 @@ export default function LeaderboardPage() {
                 className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition font-medium"
               >
                 <Gamepad2 className="w-3.5 h-3.5" />
-                <span>Oyun Arenası</span>
+                <span>{t("game_arena", "Oyun Arenası")}</span>
               </Link>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
               <Trophy className="w-7 h-7 text-amber-400 fill-amber-400/20" />
-              <span>Liderlik Tablosu & Lig Arenası</span>
+              <span>{t("lb_page_title", "Liderlik Tablosu & Lig Arenası")}</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              30 kişilik haftalık lig kümesinde yüksel veya sınıf arkadaşlarınla canlı podyumda yarış.
+              {t("lb_page_sub", "30 kişilik haftalık lig kümesinde yüksel veya sınıf arkadaşlarınla canlı podyumda yarış.")}
             </p>
           </div>
 
@@ -204,7 +206,7 @@ export default function LeaderboardPage() {
               </div>
               <div className="text-left">
                 <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider block">
-                  Kalıcı Toplam
+                  {t("lb_col_perm_total", "Kalıcı Toplam")}
                 </span>
                 <span className="text-sm sm:text-base font-black font-mono text-white">
                   ⚡ {currentUserData.totalXp.toLocaleString()} XP
@@ -219,7 +221,7 @@ export default function LeaderboardPage() {
               </div>
               <div className="text-left">
                 <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
-                  Bu Hafta
+                  {t("lb_col_this_week", "Bu Hafta")}
                 </span>
                 <span className="text-sm sm:text-base font-black font-mono text-amber-300">
                   🏆 {currentUserData.weeklyXp.toLocaleString()} XP
@@ -245,7 +247,7 @@ export default function LeaderboardPage() {
               }`}
             >
               <Globe2 className="w-3.5 h-3.5" />
-              <span>🌍 Haftalık Ligim (30 Kişilik Küme)</span>
+              <span>{t("lb_tab_my_league", "🌍 Haftalık Ligim (30 Kişilik Küme)")}</span>
             </button>
 
             <button
@@ -258,14 +260,14 @@ export default function LeaderboardPage() {
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>👥 Sınıf İçi Sıralamam</span>
+              <span>{t("lb_tab_my_class", "👥 Sınıf İçi Sıralamam")}</span>
             </button>
           </div>
 
           {/* 2. AKTİVİTE / BECERİ MİKRO-FİLTRELERİ */}
           <div className="flex items-center gap-1.5 self-center sm:self-auto overflow-x-auto">
             <span className="text-[11px] font-bold text-slate-400 mr-1 hidden sm:inline">
-              Filtre:
+              {t("lb_filter_lbl", "Filtre:")}
             </span>
             <button
               type="button"
@@ -276,7 +278,7 @@ export default function LeaderboardPage() {
                   : "bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800"
               }`}
             >
-              Tüm Aktiviteler
+              {t("lb_filter_all", "Tüm Aktiviteler")}
             </button>
 
             <button
@@ -289,7 +291,7 @@ export default function LeaderboardPage() {
               }`}
             >
               <BookOpen className="w-3 h-3 text-indigo-300" />
-              <span>Okuma Odası</span>
+              <span>{t("reading_room", "Okuma Odası")}</span>
             </button>
 
             <button
@@ -302,7 +304,7 @@ export default function LeaderboardPage() {
               }`}
             >
               <Gamepad2 className="w-3 h-3 text-amber-400" />
-              <span>Oyun Arenası</span>
+              <span>{t("game_arena", "Oyun Arenası")}</span>
             </button>
           </div>
         </div>
