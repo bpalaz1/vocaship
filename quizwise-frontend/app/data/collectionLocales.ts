@@ -15,6 +15,8 @@ export const BUFF_LOCALES: Record<MuseumBuffType, Record<Language, string>> = {
     de: "⚔️ +15% Kritischer Schaden im Drachenangriff",
     es: "⚔️ +15% de Daño Crítico en Asalto al Dragón",
     fr: "⚔️ +15% de Dégâts Critiques en Raid du Dragon",
+    it: "⚔️ +15% Danno Critico nel Raid del Drago",
+    ru: "⚔️ +15% крит. урона в рейде на дракона",
   },
   extra_time: {
     tr: "⏳ Süreli oyunlarda +2 Saniye Ek Süre",
@@ -22,6 +24,8 @@ export const BUFF_LOCALES: Record<MuseumBuffType, Record<Language, string>> = {
     de: "⏳ +2 Bonussekunden in Zeitspielen",
     es: "⏳ +2 Segundos Extra en Juegos Cronometrados",
     fr: "⏳ +2 Secondes Bonus dans les Jeux Chronométrés",
+    it: "⏳ +2 Secondi Bonus nei Giochi a Tempo",
+    ru: "⏳ +2 бонусные секунды в играх на время",
   },
   extra_life: {
     tr: "🛡️ Oyunlara +1 Ekstra Kalkan (Can) ile Başlama",
@@ -29,6 +33,8 @@ export const BUFF_LOCALES: Record<MuseumBuffType, Record<Language, string>> = {
     de: "🛡️ Starte Spiele mit +1 Extraschild (Leben)",
     es: "🛡️ Empieza Juegos con +1 Escudo Extra (Vida)",
     fr: "🛡️ Commencer les Jeux avec +1 Bouclier Extra (Vie)",
+    it: "🛡️ Inizia i Giochi con +1 Scudo Extra (Vita)",
+    ru: "🛡️ Начинайте игры с +1 доп. щитом (жизнью)",
   },
   bonus_gold: {
     tr: "🪙 Tüm oyunlarda +%15 Bonus Altın",
@@ -36,6 +42,8 @@ export const BUFF_LOCALES: Record<MuseumBuffType, Record<Language, string>> = {
     de: "🪙 +15% Bonus-Gold in allen Spielen",
     es: "🪙 +15% de Oro Extra en Todos los Juegos",
     fr: "🪙 +15% d'Or Bonus dans Tous les Jeux",
+    it: "🪙 +15% Oro Bonus in Tutti i Giochi",
+    ru: "🪙 +15% бонусного золота во всех играх",
   },
 };
 

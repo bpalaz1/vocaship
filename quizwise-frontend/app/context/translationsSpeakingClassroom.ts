@@ -1,6 +1,6 @@
 import type { Language } from "./LanguageContext";
 
-export const SPEAKING_CLASS_TRANSLATIONS: Record<Language, Record<string, string>> = {
+export const SPEAKING_CLASS_TRANSLATIONS: Partial<Record<Language, Record<string, string>>> = {
   tr: {
     // Genel ortak butonlar
     cancel: "İptal",

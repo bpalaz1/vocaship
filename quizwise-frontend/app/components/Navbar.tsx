@@ -154,7 +154,7 @@ export default function Navbar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`relative flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:scale-[1.02] active:scale-95 transition-all duration-150 ${
+                    className={`relative flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:scale-[1.02] active:scale-95 transition-all duration-150 whitespace-nowrap shrink-0 ${
                       item.isActive
                         ? "bg-gradient-to-r from-indigo-500/20 to-emerald-500/15 border border-emerald-500/30 text-white shadow-sm font-bold"
                         : "text-slate-400 hover:bg-slate-800/60 hover:text-white transition-all border border-transparent"

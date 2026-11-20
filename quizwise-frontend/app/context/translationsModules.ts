@@ -1,6 +1,6 @@
 import type { Language } from "./LanguageContext";
 
-export const MODULE_TRANSLATIONS: Record<Language, Record<string, string>> = {
+export const MODULE_TRANSLATIONS: Partial<Record<Language, Record<string, string>>> = {
   tr: {
     // Kütüphanem Detaylı (app/page.tsx)
     lib_daily_review_badge: "GÜNLÜK TEKRAR ZAMANI",

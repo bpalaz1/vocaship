@@ -1,6 +1,6 @@
 import type { Language } from "./LanguageContext";
 
-export const CLASSROOM_TRANSLATIONS: Record<Language, Record<string, string>> = {
+export const CLASSROOM_TRANSLATIONS: Partial<Record<Language, Record<string, string>>> = {
   tr: {
     // Classroom Ana Sayfa & Genel
     cls_header_title: "🎓 Sınıflarım & Ders Konsolu",

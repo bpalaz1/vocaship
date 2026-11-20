@@ -1,6 +1,6 @@
-export type UiLang = "tr" | "en" | "de" | "es" | "fr";
+export type UiLang = "tr" | "en" | "de" | "es" | "fr" | "it" | "ru";
 
-export const SUPPORTED_UI_LANGS: UiLang[] = ["tr", "en", "de", "es", "fr"];
+export const SUPPORTED_UI_LANGS: UiLang[] = ["tr", "en", "de", "es", "fr", "it", "ru"];
 
 export function getCurrentUiLang(): UiLang {
   if (typeof window !== "undefined") {

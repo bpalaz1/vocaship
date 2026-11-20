@@ -8,8 +8,9 @@ import { CLASSROOM_TRANSLATIONS } from "./translationsClassroom";
 import { REMAINING_TRANSLATIONS_A } from "./translationsRemainingA";
 import { REMAINING_TRANSLATIONS_B } from "./translationsRemainingB";
 import { REMAINING_TRANSLATIONS_C, REMAINING_ES_FR_PATCH } from "./translationsRemainingC";
+import { IT_RU_TRANSLATIONS } from "./translationsItRu";
 
-export type Language = "tr" | "en" | "de" | "es" | "fr";
+export type Language = "tr" | "en" | "de" | "es" | "fr" | "it" | "ru";
 
 export interface LanguageOption {
   code: Language;
@@ -24,6 +25,8 @@ export const AVAILABLE_LANGUAGES: LanguageOption[] = [
   { code: "de", label: "Almanca", nativeLabel: "Deutsch", flag: "🇩🇪" },
   { code: "es", label: "İspanyolca", nativeLabel: "Español", flag: "🇪🇸" },
   { code: "fr", label: "Fransızca", nativeLabel: "Français", flag: "🇫🇷" },
+  { code: "it", label: "İtalyanca", nativeLabel: "Italiano", flag: "🇮🇹" },
+  { code: "ru", label: "Rusça", nativeLabel: "Русский", flag: "🇷🇺" },
 ];
 
 export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
@@ -4022,6 +4025,12 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     category_finance_accounting_sub: "Finance & Banque • C1",
     reading_sidebar_toggle_menu: "Afficher / Masquer les Catégories",
   },
+  it: {
+    ...IT_RU_TRANSLATIONS.it,
+  },
+  ru: {
+    ...IT_RU_TRANSLATIONS.ru,
+  },
 };
 
 export const translations = UI_TRANSLATIONS;
@@ -4102,16 +4111,16 @@ export const KEY_ALIASES: Record<string, string> = {
   flashcard_interactive_hint: "flashcard_interactive_hint",
 };
 
-(["tr", "en", "de", "es", "fr"] as Language[]).forEach((lang) => {
+(["tr", "en", "de", "es", "fr"] as const).forEach((lang) => {
   Object.assign(
     UI_TRANSLATIONS[lang],
-    EXTRA_TRANSLATIONS[lang],
-    MODULE_TRANSLATIONS[lang],
-    SPEAKING_CLASS_TRANSLATIONS[lang],
-    CLASSROOM_TRANSLATIONS[lang],
-    REMAINING_TRANSLATIONS_A[lang],
-    REMAINING_TRANSLATIONS_B[lang],
-    REMAINING_TRANSLATIONS_C[lang],
+    EXTRA_TRANSLATIONS[lang] || {},
+    MODULE_TRANSLATIONS[lang] || {},
+    SPEAKING_CLASS_TRANSLATIONS[lang] || {},
+    CLASSROOM_TRANSLATIONS[lang] || {},
+    REMAINING_TRANSLATIONS_A[lang] || {},
+    REMAINING_TRANSLATIONS_B[lang] || {},
+    REMAINING_TRANSLATIONS_C[lang] || {},
     lang === "es" || lang === "fr" ? REMAINING_ES_FR_PATCH[lang] : {}
   );
 });
@@ -4134,7 +4143,7 @@ export const LanguageContext = createContext<LanguageContextType>({
   availableLanguages: AVAILABLE_LANGUAGES,
 });
 
-const VALID_LANGS: Language[] = ["tr", "en", "de", "es", "fr"];
+const VALID_LANGS: Language[] = ["tr", "en", "de", "es", "fr", "it", "ru"];
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguageState] = useState<Language>("tr");

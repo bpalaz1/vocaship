@@ -12,16 +12,18 @@ export function pickLang<T>(
   return (map[code] ?? map.en ?? map.tr) as T;
 }
 
-export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
+export const EXTRA_TRANSLATIONS: Partial<Record<Language, Record<string, string>>> = {
   tr: {
     // Dil Seçici & Genel Arayüz
-    five_languages: "5 Dil",
+    five_languages: "7 Dil",
     change_ui_language: "Arayüz Dilini Değiştir",
     lang_name_tr: "Türkçe",
     lang_name_en: "İngilizce",
     lang_name_de: "Almanca",
     lang_name_es: "İspanyolca",
     lang_name_fr: "Fransızca",
+    lang_name_it: "İtalyanca",
+    lang_name_ru: "Rusça",
 
     // Navbar & Profil Menüsü
     nav_speaking: "Konuşma Salonu",
@@ -329,13 +331,15 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     class_ai_extract: "Yapay Zeka ile Soruları & Kelimeleri Çıkar",
   },
   en: {
-    five_languages: "5 Languages",
+    five_languages: "7 Languages",
     change_ui_language: "Change Interface Language",
     lang_name_tr: "Turkish",
     lang_name_en: "English",
     lang_name_de: "German",
     lang_name_es: "Spanish",
     lang_name_fr: "French",
+    lang_name_it: "Italian",
+    lang_name_ru: "Russian",
 
     nav_speaking: "Speaking Studio",
     nav_account_menu: "Account Menu",
@@ -632,13 +636,15 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     class_ai_extract: "Extract Questions & Vocabulary with AI",
   },
   de: {
-    five_languages: "5 Sprachen",
+    five_languages: "7 Sprachen",
     change_ui_language: "Oberflächensprache ändern",
     lang_name_tr: "Türkisch",
     lang_name_en: "Englisch",
     lang_name_de: "Deutsch",
     lang_name_es: "Spanisch",
     lang_name_fr: "Französisch",
+    lang_name_it: "Italienisch",
+    lang_name_ru: "Russisch",
 
     nav_speaking: "Sprachstudio",
     nav_account_menu: "Kontomenü",
@@ -935,13 +941,15 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     class_ai_extract: "Fragen & Vokabeln mit KI extrahieren",
   },
   es: {
-    five_languages: "5 Idiomas",
+    five_languages: "7 Idiomas",
     change_ui_language: "Cambiar idioma de interfaz",
     lang_name_tr: "Turco",
     lang_name_en: "Inglés",
     lang_name_de: "Alemán",
     lang_name_es: "Español",
     lang_name_fr: "Francés",
+    lang_name_it: "Italiano",
+    lang_name_ru: "Ruso",
 
     nav_speaking: "Sala de Conversación",
     nav_account_menu: "Menú de cuenta",
@@ -1238,13 +1246,15 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     class_ai_extract: "Extraer Preguntas y Vocabulario con IA",
   },
   fr: {
-    five_languages: "5 Langues",
+    five_languages: "7 Langues",
     change_ui_language: "Changer la langue de l'interface",
     lang_name_tr: "Turc",
     lang_name_en: "Anglais",
     lang_name_de: "Allemand",
     lang_name_es: "Espagnol",
     lang_name_fr: "Français",
+    lang_name_it: "Italien",
+    lang_name_ru: "Russe",
 
     nav_speaking: "Salon Oral",
     nav_account_menu: "Menu du compte",
