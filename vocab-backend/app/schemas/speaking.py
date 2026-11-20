@@ -98,6 +98,10 @@ class SpeakingRespondResponse(BaseModel):
         default=[],
         description="Kullanıcının 'Ne Diyebilirim?' ipucu kartlarında görebileceği 2 pratik cümle başlatıcı kalıp",
     )
+    hints: List[str] = Field(
+        default=[],
+        description="Her turda AI sorusuna göre dinamik yenilenen 2 pratik cümle başlatıcı",
+    )
     recast_note: Optional[str] = Field(
         default=None,
         description="Kullanıcının gramer hatasının sohbette doğal yankılanma şekli (Recasting)",

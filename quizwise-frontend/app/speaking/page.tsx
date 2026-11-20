@@ -77,34 +77,80 @@ interface ActiveStoryContext {
   topic?: string;
 }
 
-function buildStarterPhrases(
+function generateDynamicHints(
   currentAiPrompt: string,
   storyTitle: string | null,
-  level: string
+  level: string,
+  turnSeed: number = 0
 ): [string, string] {
   const lower = (currentAiPrompt || "").toLowerCase();
   if (storyTitle) {
+    return turnSeed % 2 === 0
+      ? [
+          `In "${storyTitle}", I think the turning point was...`,
+          "If I were in that situation, I would probably...",
+        ]
+      : [
+          `What surprised me most in "${storyTitle}" was...`,
+          "I agree with the character's choice because...",
+        ];
+  }
+  if (/(weather|sunny|rain|cold|warm|hot|temperature|climate)/.test(lower)) {
     return [
-      `In "${storyTitle}", I think the turning point was...`,
-      "If I were in that situation, I would probably...",
+      "Actually, the weather today feels...",
+      "I usually prefer sunny days because...",
     ];
   }
-  if (lower.includes("weekend") || lower.includes("plan") || lower.includes("today")) {
+  if (/(food|eat|coffee|tea|cook|meal|dinner|breakfast|restaurant)/.test(lower)) {
     return [
-      "Earlier today I was actually thinking about...",
-      "Usually when I have free time, I like to...",
+      "One of my favorite things to eat or drink is...",
+      "Usually when I have a chance, I love trying...",
+    ];
+  }
+  if (/(travel|city|izmir|place|visit|trip|country|vacation)/.test(lower)) {
+    return [
+      "What I love most about that place is...",
+      "If I could plan a trip right now, I would...",
+    ];
+  }
+  if (/(work|job|project|study|career|office|goal|learn)/.test(lower)) {
+    return [
+      "Right now, my main focus has been...",
+      "The biggest challenge I've noticed so far is...",
+    ];
+  }
+  if (/(weekend|free time|hobby|music|movie|sport|read|book|game)/.test(lower)) {
+    return [
+      "Whenever I have free time, I usually like to...",
+      "Lately I've been really enjoying...",
+    ];
+  }
+  if (/(why|reason)/.test(lower)) {
+    return [
+      "The main reason I feel that way is because...",
+      "Looking back, what really convinced me was...",
+    ];
+  }
+  if (/(prefer|favorite|choose| or )/.test(lower)) {
+    return [
+      "If I had to choose, I would definitely go with...",
+      "For me, the better option is...",
     ];
   }
   if (level === "A1" || level === "A2") {
-    return [
-      "I really like that because it makes me feel...",
-      "Yes, I think it is very good and I often...",
+    const pools: Array<[string, string]> = [
+      ["I really like that because it makes me feel...", "Yes, I think it is very good and I often..."],
+      ["Today I feel really good because...", "In my daily routine, I usually..."],
+      ["For me, the nicest part is...", "I like doing that when I am..."],
     ];
+    return pools[turnSeed % pools.length];
   }
-  return [
-    "To be honest, what stands out most to me is...",
-    "From my perspective, the main reason is that...",
+  const pools: Array<[string, string]> = [
+    ["To be honest, what stands out most to me is...", "From my perspective, it really depends on..."],
+    ["Actually, I've been thinking about that lately and...", "The first thing that comes to mind is..."],
+    ["What I find most interesting about that is...", "Usually in situations like that, I tend to..."],
   ];
+  return pools[turnSeed % pools.length];
 }
 
 function SpeakingContent() {
@@ -1206,8 +1252,15 @@ function SpeakingContent() {
         if (res.ok) {
           const data = await res.json();
 
-          if (Array.isArray(data.hint_suggestions) && data.hint_suggestions.length > 0) {
-            setStarterHints(data.hint_suggestions.slice(0, 2));
+          const incomingHints =
+            Array.isArray(data.hints) && data.hints.length >= 2
+              ? data.hints
+              : Array.isArray(data.hint_suggestions) && data.hint_suggestions.length >= 2
+              ? data.hint_suggestions
+              : null;
+
+          if (incomingHints) {
+            setStarterHints([String(incomingHints[0]), String(incomingHints[1])]);
           } else {
             setStarterHints([]);
           }
@@ -1668,12 +1721,13 @@ function SpeakingContent() {
     if (starterHints.length >= 2) {
       return starterHints.slice(0, 2);
     }
-    return buildStarterPhrases(
+    return generateDynamicHints(
       aiMessage || openingGreeting,
       activeStoryTitle,
-      activeLevel
+      activeLevel,
+      dialogue.length
     );
-  }, [starterHints, aiMessage, openingGreeting, activeStoryTitle, activeLevel]);
+  }, [starterHints, aiMessage, openingGreeting, activeStoryTitle, activeLevel, dialogue.length]);
 
   const isAvatarImageUrl =
     syncedProfile.avatarUrl.startsWith("http") ||

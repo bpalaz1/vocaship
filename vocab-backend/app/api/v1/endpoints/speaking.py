@@ -184,9 +184,16 @@ def detect_requested_level_change(user_text: str, current_level: str) -> Optiona
     return None
 
 
-def build_default_hints(level: str, story_title: Optional[str] = None) -> List[str]:
-    """Seviyeye ve aktif bağlama uygun 2 pratik cümle başlatıcı (starter phrase) üretir."""
+def build_default_hints(
+    level: str,
+    story_title: Optional[str] = None,
+    ai_reply: Optional[str] = None,
+    turn_index: int = 0,
+) -> List[str]:
+    """Seviyeye, AI sorusunun konusuna ve tur numarasına göre 2 taze cümle başlatıcı üretir."""
     clean = (level or "B1").upper().strip()
+    lower = (ai_reply or "").lower()
+
     if story_title:
         if clean in ("A1", "A2"):
             return [
@@ -198,20 +205,77 @@ def build_default_hints(level: str, story_title: Optional[str] = None) -> List[s
             "In my opinion, the turning point of the story showed that...",
         ]
 
+    # Konu bazlı dinamik ipuçları (AI'nın o an sorduğu soruya göre)
+    if any(k in lower for k in ("weather", "sunny", "rain", "cold", "warm", "hot", "temperature", "climate")):
+        if clean in ("A1", "A2"):
+            return [
+                "Actually, the weather today feels really...",
+                "I usually prefer sunny days because I can...",
+            ]
+        return [
+            "Actually, the weather lately has been quite...",
+            "I tend to feel much more energetic when the weather is...",
+        ]
+
+    if any(k in lower for k in ("food", "eat", "coffee", "tea", "cook", "meal", "dinner", "breakfast", "restaurant")):
+        return [
+            "One of my absolute favorite things to eat or drink is...",
+            "Usually when I have a chance, I love trying...",
+        ]
+
+    if any(k in lower for k in ("travel", "city", "izmir", "place", "visit", "trip", "country", "vacation")):
+        return [
+            "What I love most about that place is the atmosphere and...",
+            "If I could plan a trip right now, I would definitely...",
+        ]
+
+    if any(k in lower for k in ("work", "job", "project", "study", "career", "office", "goal", "learn")):
+        return [
+            "Right now, my main focus has been...",
+            "The biggest challenge I've noticed so far is...",
+        ]
+
+    if any(k in lower for k in ("weekend", "free time", "hobby", "music", "movie", "sport", "read", "book", "game")):
+        return [
+            "Whenever I get some free time, I usually...",
+            "Lately I've been really into...",
+        ]
+
+    if "why" in lower or "reason" in lower:
+        return [
+            "The main reason I feel that way is because...",
+            "Looking back, what really convinced me was...",
+        ]
+
+    if "prefer" in lower or "favorite" in lower or "choose" in lower or "or " in lower:
+        return [
+            "If I had to choose between them, I'd go with...",
+            "For me, the better option is definitely...",
+        ]
+
+    # Genel tur-bazlı rotasyon (asla aynı 2 kalıpta takılı kalmaz)
     if clean in ("A1", "A2"):
-        return [
-            "Today I feel really good because I...",
-            "In my free time, I really enjoy...",
+        pools = [
+            ["Today I feel really good because I...", "In my free time, I really enjoy..."],
+            ["For me, the best part is...", "I usually do that when I..."],
+            ["Yes, I really like it because...", "In my daily life, I often..."],
         ]
+        return pools[turn_index % len(pools)]
+
     if clean in ("C1", "C2"):
-        return [
-            "From my perspective, the most fascinating aspect of this is...",
-            "Looking at the bigger picture, I firmly believe that...",
+        pools = [
+            ["From my perspective, the most compelling aspect is...", "Looking at the broader picture, I'd argue that..."],
+            ["What strikes me as particularly interesting is...", "To put it another way, I've noticed that..."],
+            ["Interestingly enough, my experience suggests that...", "Beyond the surface level, it really comes down to..."],
         ]
-    return [
-        "Personally, I think that...",
-        "In my experience, the most enjoyable part is...",
+        return pools[turn_index % len(pools)]
+
+    pools = [
+        ["To be honest, what stands out most to me is...", "In my experience, it really depends on..."],
+        ["Actually, I've been thinking about that lately and...", "The first thing that comes to mind is..."],
+        ["What I find most interesting about that is...", "Usually in situations like that, I tend to..."],
     ]
+    return pools[turn_index % len(pools)]
 
 
 def parse_flexible_speaking_response(raw_text: str) -> dict:
@@ -1196,7 +1260,16 @@ Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (mak
     reply_message = assistant_reply
 
     final_updated_level = detected_level_change
-    hint_suggestions = build_default_hints(final_updated_level or clean_level, story_title_for_hints)[:2]
+    raw_ai_hints = response_dict.get("hints") or response_dict.get("hint_suggestions")
+    if isinstance(raw_ai_hints, list) and len([h for h in raw_ai_hints if str(h).strip()]) >= 2:
+        hint_suggestions = [str(h).strip() for h in raw_ai_hints if str(h).strip()][:2]
+    else:
+        hint_suggestions = build_default_hints(
+            final_updated_level or clean_level,
+            story_title_for_hints,
+            ai_reply=assistant_reply,
+            turn_index=len(recent_turns),
+        )[:2]
 
     # Recasting Notu
     recast_raw = response_dict.get("recast_note")
@@ -1282,6 +1355,7 @@ Yukarıdaki sohbet bağlamına göre doğrudan doğal İngilizce düz metin (mak
     return SpeakingRespondResponse(
         assistant_reply=assistant_reply,
         hint_suggestions=hint_suggestions,
+        hints=hint_suggestions,
         recast_note=recast_note,
         fluency_hint=fluency_hint,
         session_vocabulary_used=session_vocabulary_used,
