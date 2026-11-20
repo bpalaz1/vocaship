@@ -43,38 +43,6 @@ export default function Navbar() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
-  const [streakCount, setStreakCount] = useState<number>(1);
-
-  useEffect(() => {
-    const syncStreak = () => {
-      try {
-        const rawStreak = localStorage.getItem("vocaship_streak");
-        if (rawStreak) {
-          const parsed = parseInt(rawStreak, 10);
-          if (Number.isFinite(parsed) && parsed > 0) {
-            setStreakCount(parsed);
-            return;
-          }
-        }
-        const rawStats = localStorage.getItem("vocaship_unified_stats");
-        if (rawStats) {
-          const stats = JSON.parse(rawStats);
-          const s = Number(stats?.streak || stats?.dailyStreak || 0);
-          if (Number.isFinite(s) && s > 0) {
-            setStreakCount(s);
-            return;
-          }
-        }
-      } catch {}
-    };
-    syncStreak();
-    window.addEventListener("storage", syncStreak);
-    window.addEventListener("vocaship_unified_stats_updated", syncStreak);
-    return () => {
-      window.removeEventListener("storage", syncStreak);
-      window.removeEventListener("vocaship_unified_stats_updated", syncStreak);
-    };
-  }, []);
 
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -203,18 +171,9 @@ export default function Navbar() {
             </nav>
 
             {/* SAĞ: DİL SEÇİCİ & SADE KULLANICI KAPSÜLÜ */}
-            <div className="flex items-center space-x-2.5 shrink-0 overflow-visible">
+            <div className="flex items-center gap-3 shrink-0 overflow-visible">
               {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR) */}
               <LanguageSelector align="right" />
-
-              {/* Kompakt Günlük Seri (Streak) Rozeti */}
-              <div
-                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold shrink-0 select-none"
-                title={t("nav_streak_tip", "Günlük Seri")}
-              >
-                <span>🔥</span>
-                <span>{streakCount}</span>
-              </div>
 
               {/* SADE KULLANICI KAPSÜLÜ (USER CAPSULE) */}
               <div className="relative shrink-0 overflow-visible" ref={userDropdownRef}>
