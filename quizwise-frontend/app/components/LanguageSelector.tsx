@@ -43,20 +43,21 @@ export default function LanguageSelector({ align = "right", className = "" }: La
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-2xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 hover:border-indigo-500/60 text-slate-100 font-bold text-xs transition-all duration-150 hover:scale-[1.02] active:scale-95 shadow-sm hover:shadow-indigo-500/10 group cursor-pointer shrink-0"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-2xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 hover:border-emerald-500/50 text-slate-100 text-xs transition-all duration-150 hover:scale-[1.02] active:scale-95 shadow-sm group cursor-pointer shrink-0 whitespace-nowrap"
         title={t("change_ui_language")}
         aria-label={t("ui_language")}
         aria-expanded={isOpen}
       >
-        <span className="text-sm sm:text-base leading-none filter drop-shadow-sm">
-          {currentLang.flag}
-        </span>
-        <span className="font-mono text-xs uppercase tracking-tight text-slate-200 group-hover:text-white font-black">
+        <span className="text-emerald-400 font-extrabold font-mono uppercase tracking-tight">
           {currentLang.code.toUpperCase()}
         </span>
+        <span className="text-slate-500">•</span>
+        <span className="text-slate-200 font-medium group-hover:text-white">
+          {currentLang.nativeLabel}
+        </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 transition-transform duration-200 ${
-            isOpen ? "rotate-180 text-indigo-400" : ""
+          className={`w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-400 transition-transform duration-200 ${
+            isOpen ? "rotate-180 text-emerald-400" : ""
           }`}
         />
       </button>
@@ -97,13 +98,13 @@ export default function LanguageSelector({ align = "right", className = "" }: La
                   }`}
                   role="menuitem"
                 >
-                  <div className="flex items-center space-x-2.5">
-                    <span className="text-lg leading-none filter drop-shadow-sm">{lang.flag}</span>
-                    <span className="font-mono text-xs font-black uppercase text-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-emerald-400 font-extrabold font-mono text-xs uppercase">
                       {lang.code.toUpperCase()}
                     </span>
-                    <span className="text-xs text-slate-300 font-medium">
-                      ({t(`lang_name_${lang.code}`)})
+                    <span className="text-slate-500">—</span>
+                    <span className="text-xs text-slate-200 font-medium">
+                      {lang.nativeLabel}
                     </span>
                   </div>
                   {isSelected && <Check className="w-4 h-4 text-indigo-400 shrink-0" />}
