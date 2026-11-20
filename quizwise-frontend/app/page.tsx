@@ -1796,7 +1796,7 @@ export default function Home() {
                 {t("lib_daily_review_badge")}
               </span>
               <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                {t("lib_continue_learning")}
+                {t("nav_library", "Kelime Havuzu")}
               </h1>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                 {t("lib_waiting_words_msg", undefined, { count: heroWaitingCount })}

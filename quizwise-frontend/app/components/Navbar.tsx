@@ -67,7 +67,7 @@ export default function Navbar() {
   // 5 Temel Menü Bağlantısı
   const navLinks = [
     {
-      name: t("nav_decks", "Kütüphanem"),
+      name: t("nav_library", "Kelime Havuzu"),
       href: "/",
       icon: Layers,
       emoji: "📚",
@@ -81,7 +81,7 @@ export default function Navbar() {
       isActive: pathname.startsWith("/reading"),
     },
     {
-      name: t("nav_speaking", "Speaking Lounge"),
+      name: t("nav_speaking", "Konuşma Salonu"),
       href: "/speaking",
       icon: Mic,
       emoji: "🎙️",
@@ -95,7 +95,7 @@ export default function Navbar() {
       isActive: pathname.startsWith("/games"),
     },
     {
-      name: t("nav_classroom", "Sınıfım"),
+      name: t("nav_classroom", "Sınıflarım"),
       href: "/classroom",
       icon: GraduationCap,
       emoji: "🎓",

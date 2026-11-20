@@ -69,12 +69,13 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     decks_count_suffix: "Deste",
 
     // Menü
-    nav_decks: "Kütüphanem",
+    nav_library: "Kelime Havuzu",
+    nav_decks: "Kelime Havuzu",
     nav_reading: "Okuma Odası",
     nav_games: "Oyun Arenası",
     nav_shop: "Mağaza & Sandıklar",
     nav_leaderboard: "Sıralama",
-    nav_classroom: "Sınıfım",
+    nav_classroom: "Sınıflarım",
     nav_join_code: "Kod ile Katıl",
     nav_coins: "Altın",
     nav_language: "Dil",
@@ -596,7 +597,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     search_stories_placeholder: "Hikaye, konu veya anahtar kelime ara (örn: critical path, fener, train, coffee)...",
 
     // AI Speaking Lounge
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Konuşma Salonu",
     speaking_title: "AI Speaking Lounge",
     speaking_subtitle: "İnteraktif Sektörel Rol Yapma & C1 Seviye Konuşma Odası",
     btn_press_and_speak: "Bas ve Konuş",
@@ -874,12 +875,13 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     decks_count_suffix: "Decks",
 
     // Menu
-    nav_decks: "Library",
+    nav_library: "Word Pool",
+    nav_decks: "Word Pool",
     nav_reading: "Reading Room",
     nav_games: "Game Arena",
     nav_shop: "Shop & Chests",
     nav_leaderboard: "Leaderboard",
-    nav_classroom: "Classroom",
+    nav_classroom: "Classrooms",
     nav_join_code: "Join with Code",
     nav_coins: "Coins",
     nav_language: "Language",
@@ -1400,7 +1402,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     search_stories_placeholder: "Search stories, topics or keywords (e.g. critical path, train, coffee)...",
 
     // AI Speaking Lounge
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Speaking Studio",
     speaking_title: "AI Speaking Lounge",
     speaking_subtitle: "Interactive Sectoral Role-Playing & C1 Level Speaking Lounge",
     btn_press_and_speak: "Press and Speak",
@@ -1652,12 +1654,13 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     search_placeholder: "Deck oder Thema suchen...",
 
     // Menü
-    nav_decks: "Bibliothek",
+    nav_library: "Wortpool",
+    nav_decks: "Wortpool",
     nav_reading: "Leseraum",
-    nav_games: "Spielearena",
+    nav_games: "Spielarena",
     nav_shop: "Shop & Truhen",
     nav_leaderboard: "Bestenliste",
-    nav_classroom: "Klassenzimmer",
+    nav_classroom: "Klassenräume",
     nav_join_code: "Mit Code beitreten",
     nav_coins: "Gold",
     nav_language: "Sprache",
@@ -2168,7 +2171,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     pronunciation_coach: "Mikro-Aussprache- & Shadowing-Coach",
 
     // AI Speaking Lounge
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Sprachstudio",
     speaking_title: "KI-Sprechlounge",
     speaking_subtitle: "Interaktives Rollenspiel & C1-Sprechlounge",
     btn_press_and_speak: "Drücken und Sprechen",
@@ -2452,12 +2455,13 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     search_placeholder: "Buscar mazo o tema...",
 
     // Menú
-    nav_decks: "Biblioteca",
+    nav_library: "Banco de Palabras",
+    nav_decks: "Banco de Palabras",
     nav_reading: "Sala de Lectura",
     nav_games: "Arena de Juegos",
     nav_shop: "Tienda & Cofres",
     nav_leaderboard: "Clasificación",
-    nav_classroom: "Mi Clase",
+    nav_classroom: "Mis Clases",
     nav_join_code: "Unirse con Código",
     nav_coins: "Oro",
     nav_language: "Idioma",
@@ -2969,7 +2973,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     pronunciation_coach: "Entrenador de Pronunciación y Shadowing",
 
     // AI Speaking Lounge
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Sala de Conversación",
     speaking_title: "AI Speaking Lounge",
     speaking_subtitle: "Juego de Rol Sectorial Interactivo y Sala de Conversación C1",
     btn_press_and_speak: "Presiona y Habla",
@@ -3243,12 +3247,13 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     search_placeholder: "Rechercher un paquet ou un sujet...",
 
     // Menu
-    nav_decks: "Bibliothèque",
+    nav_library: "Réserve de Mots",
+    nav_decks: "Réserve de Mots",
     nav_reading: "Salle de Lecture",
     nav_games: "Arène de Jeux",
     nav_shop: "Boutique & Coffres",
     nav_leaderboard: "Classement",
-    nav_classroom: "Ma Classe",
+    nav_classroom: "Mes Classes",
     nav_join_code: "Rejoindre avec Code",
     nav_coins: "Pièces",
     nav_language: "Langue",
@@ -3760,7 +3765,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     pronunciation_coach: "Coach de Prononciation & Shadowing",
 
     // AI Speaking Lounge
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Salon Oral",
     speaking_title: "AI Speaking Lounge",
     speaking_subtitle: "Jeu de Rôle Sectoriel Interactif et Salon d'Expression C1",
     btn_press_and_speak: "Appuyez et Parlez",
@@ -4060,6 +4065,7 @@ export const KEY_ALIASES: Record<string, string> = {
   tip_sm2: "tip_sm2",
 
   my_decks: "library",
+  nav_library: "nav_library",
   nav_decks: "library",
   nav_reading: "reading_room",
   nav_games: "game_arena",

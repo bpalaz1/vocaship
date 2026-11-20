@@ -24,7 +24,7 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     lang_name_fr: "Fransızca",
 
     // Navbar & Profil Menüsü
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Konuşma Salonu",
     nav_account_menu: "Hesap Menüsü",
     nav_open_menu: "Menüyü Aç",
     nav_profile_account: "Profil & Hesap Ayarları",
@@ -337,7 +337,7 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     lang_name_es: "Spanish",
     lang_name_fr: "French",
 
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Speaking Studio",
     nav_account_menu: "Account Menu",
     nav_open_menu: "Open Menu",
     nav_profile_account: "Profile & Account Settings",
@@ -640,7 +640,7 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     lang_name_es: "Spanisch",
     lang_name_fr: "Französisch",
 
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Sprachstudio",
     nav_account_menu: "Kontomenü",
     nav_open_menu: "Menü öffnen",
     nav_profile_account: "Profil & Kontoeinstellungen",
@@ -943,7 +943,7 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     lang_name_es: "Español",
     lang_name_fr: "Francés",
 
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Sala de Conversación",
     nav_account_menu: "Menú de cuenta",
     nav_open_menu: "Abrir menú",
     nav_profile_account: "Perfil y Ajustes de Cuenta",
@@ -1246,7 +1246,7 @@ export const EXTRA_TRANSLATIONS: Record<Language, Record<string, string>> = {
     lang_name_es: "Espagnol",
     lang_name_fr: "Français",
 
-    nav_speaking: "Speaking Lounge",
+    nav_speaking: "Salon Oral",
     nav_account_menu: "Menu du compte",
     nav_open_menu: "Ouvrir le menu",
     nav_profile_account: "Profil & Paramètres du compte",
