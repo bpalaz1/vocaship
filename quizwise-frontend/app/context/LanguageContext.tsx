@@ -47,7 +47,7 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     welcome_mod_arena_sub: "Yarış, Kazan, Yüksel",
     welcome_mod_classroom_title: "Sınıfım",
     welcome_mod_classroom_sub: "Canlı Tahta & Ödevler",
-    welcome_card_sm2_badge: "🃏 SM-2 Akıllı Kart",
+    welcome_card_sm2_badge: "🃏 Akıllı Tekrar Kartı",
     welcome_card_sm2_meaning: "dirençli, çabuk toparlanan",
     welcome_card_speak_badge: "🎙️ Speaking Studio",
     welcome_card_speak_xp: "Great pronunciation! +25 XP",
