@@ -48,49 +48,6 @@ export default function WelcomeVoyageModal({
 
   if (!isOpen) return null;
 
-  const modules = [
-    {
-      id: "wordpool",
-      emoji: "🃏",
-      title: t("welcome_mod_wordpool_title", "Word Pool"),
-      subtitle: t("welcome_mod_wordpool_sub", "Akıllı Tekrar Kartları"),
-      accent: "border-indigo-500/30 bg-indigo-500/10 text-indigo-200",
-      spanClass: "",
-    },
-    {
-      id: "reading",
-      emoji: "📖",
-      title: t("welcome_mod_reading_title", "Reading Room"),
-      subtitle: t("welcome_mod_reading_sub", "İnteraktif Hikayeler"),
-      accent: "border-sky-500/30 bg-sky-500/10 text-sky-200",
-      spanClass: "",
-    },
-    {
-      id: "speaking",
-      emoji: "🎙️",
-      title: t("welcome_mod_speaking_title", "Speaking Studio"),
-      subtitle: t("welcome_mod_speaking_sub", "Canlı AI Konuşma"),
-      accent: "border-violet-500/30 bg-violet-500/10 text-violet-200",
-      spanClass: "",
-    },
-    {
-      id: "arena",
-      emoji: "🏆",
-      title: t("welcome_mod_arena_title", "Game Arena"),
-      subtitle: t("welcome_mod_arena_sub", "Yarış, Kazan, Yüksel"),
-      accent: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-      spanClass: "",
-    },
-    {
-      id: "classroom",
-      emoji: "🎓",
-      title: t("welcome_mod_classroom_title", "Sınıfım"),
-      subtitle: t("welcome_mod_classroom_sub", "Canlı Tahta & Ödevler"),
-      accent: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-      spanClass: "col-span-2 sm:col-span-1",
-    },
-  ];
-
   return (
     <div
       data-testid="welcome-voyage-modal"
@@ -134,8 +91,8 @@ export default function WelcomeVoyageModal({
         .sparkle-dot { animation: sparklePulse 3.2s ease-in-out infinite; }
       `}</style>
 
-      {/* 1. MERKEZİ VİTRİN KUTUSU (Dengeli 3 Sütun + Sağ Üst Dil Seçici) */}
-      <div className="relative w-full max-w-5xl flex-1 max-h-[60vh] rounded-3xl border border-slate-800/80 bg-gradient-to-b from-[#070D1A] via-[#0B162C] to-[#081F26] overflow-hidden flex items-center justify-center px-5 py-3 sm:px-7 shadow-[0_0_60px_rgba(16,185,129,0.10)]">
+      {/* 1. GENİŞLETİLMİŞ MERKEZİ VİTRİN KUTUSU (Dengeli 3 Sütun + Sağ Üst Dil Seçici) */}
+      <div className="relative w-full max-w-6xl flex-1 max-h-[72vh] rounded-3xl border border-slate-800/80 bg-gradient-to-b from-[#070D1A] via-[#0B162C] to-[#081F26] overflow-hidden flex items-center justify-center px-5 py-4 sm:px-8 shadow-[0_0_60px_rgba(16,185,129,0.10)]">
         {/* Sağ Üst Köşe: Kompakt Dil Seçici (🌐 TR / EN / DE / ES / FR / IT / RU) */}
         <div
           data-testid="welcome-lang-switcher"
@@ -326,21 +283,8 @@ export default function WelcomeVoyageModal({
         </div>
       </div>
 
-      {/* 2. ALT BÖLÜM: 5 MODÜL ŞERİDİ (Sade İkon + Başlık Hapları) */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full max-w-5xl shrink-0">
-        {modules.map((mod) => (
-          <div
-            key={mod.id}
-            className={`${mod.spanClass} flex items-center justify-center gap-2.5 py-2.5 px-3 rounded-xl border ${mod.accent}`}
-          >
-            <span className="text-base leading-none shrink-0">{mod.emoji}</span>
-            <span className="text-xs font-black truncate">{mod.title}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* 3. TEK SATIR AÇIKLAMA & 3 TEMİZ AKSİYON */}
-      <div className="w-full max-w-5xl flex flex-col items-center gap-2.5 shrink-0">
+      {/* 2. TEK SATIR AÇIKLAMA & 3 TEMİZ AKSİYON */}
+      <div className="w-full max-w-6xl flex flex-col items-center gap-2.5 shrink-0">
         <p className="text-[11px] sm:text-xs text-slate-400 text-center truncate max-w-full px-2">
           {t(
             "welcome_subtitle_full",
