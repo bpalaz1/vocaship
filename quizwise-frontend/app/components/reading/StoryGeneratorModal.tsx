@@ -122,19 +122,38 @@ export default function StoryGeneratorModal({
   const [loadingStepText, setLoadingStepText] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Desteleri Yükle ve Aktif Desteyi Seç
+  // Desteleri Yükle ve Aktif Desteyi Seç (yalnızca kullanıcının gerçek desteleri)
   useEffect(() => {
     if (isOpen) {
       const activeId = getActiveDeckId();
-      if (decks.length > 0) {
-        setAvailableDecks(decks);
-        const match = activeId && decks.some((d) => d.id === activeId) ? activeId : decks[0].id;
+      const filterReal = (list: DeckItem[]) =>
+        list.filter(
+          (d) =>
+            d &&
+            d.id &&
+            !String(d.id).startsWith("preset_") &&
+            !String(d.id).startsWith("guest_")
+        );
+      const realPropsDecks = filterReal(decks);
+      if (realPropsDecks.length > 0) {
+        setAvailableDecks(realPropsDecks);
+        const match =
+          activeId && realPropsDecks.some((d) => d.id === activeId)
+            ? activeId
+            : realPropsDecks[0].id;
         setSelectedDeckId(match);
       } else {
         fetchDecksList().then((data) => {
-          setAvailableDecks(data);
-          const match = activeId && data.some((d) => d.id === activeId) ? activeId : data[0]?.id || "";
+          const realFetched = filterReal(data);
+          setAvailableDecks(realFetched);
+          const match =
+            activeId && realFetched.some((d) => d.id === activeId)
+              ? activeId
+              : realFetched[0]?.id || "";
           setSelectedDeckId(match);
+          if (realFetched.length === 0) {
+            setDeckCards([]);
+          }
         });
       }
     }
@@ -593,6 +612,25 @@ export default function StoryGeneratorModal({
           {/* SEKME 1: DESTELERİMDEN SEÇ */}
           {sourceTab === "decks" && (
             <div className="space-y-3 p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+              {availableDecks.length === 0 ? (
+                <div className="py-6 px-3 text-center space-y-3">
+                  <p className="text-xs sm:text-sm text-slate-300 font-medium">
+                    {t(
+                      "read_gen_no_decks",
+                      "Henüz oluşturulmuş desteniz yok — önce Kelime Havuzu'ndan bir deste oluşturun."
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSourceTab("spaced_repetition")}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-300 text-xs font-bold transition cursor-pointer"
+                  >
+                    <Brain className="w-3.5 h-3.5" />
+                    <span>{t("read_gen_tab_sr", "Hatırlama Eğrisi")}</span>
+                  </button>
+                </div>
+              ) : (
+                <>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">Aktif Deste:</span>
@@ -667,6 +705,8 @@ export default function StoryGeneratorModal({
                     );
                   })}
                 </div>
+              )}
+                </>
               )}
             </div>
           )}

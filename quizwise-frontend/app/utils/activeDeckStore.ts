@@ -52,153 +52,11 @@ export interface FlashcardItem {
   example_sentences?: Array<{ en: string; tr?: string }>;
 }
 
-export const PRESET_DECKS: DeckItem[] = [
-  {
-    id: "preset_core3000",
-    get title() {
-      return pickUiText({
-        tr: "🌐 En Sık Çıkan 3000 Temel Kelime",
-        en: "🌐 Top 3000 Core Vocabulary",
-        de: "🌐 Top 3000 Grundwortschatz",
-        es: "🌐 Top 3000 Vocabulario Esencial",
-        fr: "🌐 Top 3000 Vocabulaire Essentiel",
-      });
-    },
-    get description() {
-      return pickUiText({
-        tr: "A1-A2 Başlangıç ve günlük yaşam için en kritik temel kelimeler",
-        en: "Most essential core words for A1-A2 beginners and everyday life",
-        de: "Die wichtigsten Grundwörter für A1-A2 Einsteiger und Alltag",
-        es: "Palabras esenciales para nivel inicial A1-A2 y vida diaria",
-        fr: "Mots essentiels pour débutants A1-A2 et la vie quotidienne",
-      });
-    },
-    card_count: 12,
-    folder_id: null,
-  },
-  {
-    id: "preset_adv5000",
-    get title() {
-      return pickUiText({
-        tr: "📚 İleri Düzey 5000 Kelime Dağarcığı",
-        en: "📚 Advanced 5000 Vocabulary",
-        de: "📚 Fortgeschrittener 5000er Wortschatz",
-        es: "📚 Vocabulario Avanzado 5000",
-        fr: "📚 Vocabulaire Avancé 5000",
-      });
-    },
-    get description() {
-      return pickUiText({
-        tr: "C1-C2 Akademik ve profesyonel yetkinlik için ileri düzey 5000 kelime seçkisi",
-        en: "Curated advanced 5000-word selection for C1-C2 academic and professional fluency",
-        de: "Ausgewählter 5000er Wortschatz für C1-C2 akademische und berufliche Kompetenz",
-        es: "Selección avanzada de 5000 palabras para dominio académico y profesional C1-C2",
-        fr: "Sélection avancée de 5000 mots pour maîtrise académique et professionnelle C1-C2",
-      });
-    },
-    card_count: 10,
-    folder_id: null,
-  },
-  {
-    id: "preset_c1_pro",
-    get title() {
-      return pickUiText({
-        tr: "💼 C1 Profesyonel İş & Kariyer",
-        en: "💼 C1 Professional Business & Career",
-        de: "💼 C1 Professionell Business & Karriere",
-        es: "💼 C1 Negocios y Carrera Profesional",
-        fr: "💼 C1 Affaires & Carrière Professionnelle",
-      });
-    },
-    get description() {
-      return pickUiText({
-        tr: "Proje Kontrol ve Yönetim terminolojisi içeren ileri seviye iş terimleri",
-        en: "Advanced business terminology covering Project Controls and Management",
-        de: "Fortgeschrittene Geschäftsterminologie für Projektsteuerung und Management",
-        es: "Terminología empresarial avanzada en Control de Proyectos y Gestión",
-        fr: "Terminologie professionnelle avancée en gestion et contrôle de projets",
-      });
-    },
-    card_count: 10,
-    folder_id: null,
-  },
-  {
-    id: "preset_academic",
-    get title() {
-      return pickUiText({
-        tr: "🎓 Akademik Sınav Paketi (YDS & IELTS)",
-        en: "🎓 Academic Exam Pack (IELTS & TOEFL)",
-        de: "🎓 Akademisches Prüfungspaket (IELTS & TOEFL)",
-        es: "🎓 Paquete de Examen Académico (IELTS & TOEFL)",
-        fr: "🎓 Pack Examen Académique (IELTS & TOEFL)",
-      });
-    },
-    get description() {
-      return pickUiText({
-        tr: "Akademik makalelerde ve sınavlarda en sık çıkan kritik fiiller ve bağlaçlar",
-        en: "Critical verbs and connectors frequently tested in academic papers and exams",
-        de: "Wichtige Verben und Konnektoren aus wissenschaftlichen Artikeln und Prüfungen",
-        es: "Verbos clave y conectores frecuentes en artículos académicos y exámenes",
-        fr: "Verbes clés et connecteurs fréquents dans les articles académiques et examens",
-      });
-    },
-    card_count: 8,
-    folder_id: null,
-  },
-];
+export const PRESET_DECKS: DeckItem[] = [];
 
-export const PRESET_CARDS: Record<string, GameWordPair[]> = {
-  preset_core3000: [
-    { word: "opportunity", meaning: "Fırsat, olanak", phonetic: "/ˌɒp.əˈtjuː.nə.ti/", clue: "Yararlanılabilecek elverişli durum" },
-    { word: "achieve", meaning: "Başarmak, elde etmek", phonetic: "/əˈtʃiːv/", clue: "Bir amaca veya hedefe ulaşmak" },
-    { word: "challenge", meaning: "Zorluk, meydan okuma", phonetic: "/ˈtʃæl.ɪndʒ/", clue: "Çaba ve dayanıklılık gerektiren durum" },
-    { word: "discover", meaning: "Keşfetmek, bulmak", phonetic: "/dɪˈskʌv.ər/", clue: "Bilinmeyen bir şeyi ilk kez açığa çıkarmak" },
-    { word: "improve", meaning: "Geliştirmek, iyileştirmek", phonetic: "/ɪmˈpruːv/", clue: "Daha iyi bir seviyeye getirmek" },
-    { word: "decision", meaning: "Karar", phonetic: "/dɪˈsɪʒ.ən/", clue: "Seçenekler arasında yapılan nihai tercih" },
-    { word: "encourage", meaning: "Cesaretlendirmek, teşvik etmek", phonetic: "/ɪnˈkʌr.ɪdʒ/", clue: "Birine moral ve destek vermek" },
-    { word: "essential", meaning: "Gerekli, zorunlu, hayati", phonetic: "/ɪˈsen.ʃəl/", clue: "Olmazsa olmaz nitelikte olan" },
-    { word: "experience", meaning: "Deneyim, tecrübe", phonetic: "/ɪkˈspɪə.ri.əns/", clue: "Zamanla edinilen bilgi ve görgü" },
-    { word: "journey", meaning: "Yolculuk, seyahat", phonetic: "/ˈdʒɜː.ni/", clue: "Bir yerden bir yere kat edilen mesafe" },
-    { word: "knowledge", meaning: "Bilgi, birikim", phonetic: "/ˈnɒl.ɪdʒ/", clue: "Öğrenme veya deneyimle kazanılan gerçekler" },
-    { word: "success", meaning: "Başarı", phonetic: "/səkˈses/", clue: "Hedeflenen sonuca ulaşma durumu" },
-  ],
-  preset_adv5000: [
-    { word: "ubiquitous", meaning: "Her yerde bulunan, çok yaygın", phonetic: "/juːˈbɪk.wɪ.təs/", clue: "Neredeyse her ortamda karşımıza çıkan" },
-    { word: "ephemeral", meaning: "Geçici, kısa ömürlü", phonetic: "/ɪˈfem.ər.əl/", clue: "Çok kısa süren ve hemen yok olan" },
-    { word: "pragmatic", meaning: "Uygulamacı, faydacı, pratik", phonetic: "/præɡˈmæt.ɪk/", clue: "Teoriden ziyade pratik sonuca odaklanan" },
-    { word: "paradox", meaning: "Çelişki, görünüşte mantıksız durum", phonetic: "/ˈpær.ə.dɒks/", clue: "Kendi içinde tutarsız gibi görünen gerçeklik" },
-    { word: "eloquent", meaning: "Güzel ve ikna edici konuşan", phonetic: "/ˈel.ə.kwənt/", clue: "Sözcükleri etkileyici ve akıcı kullanan" },
-    { word: "scrutinize", meaning: "En ince ayrıntısına kadar incelemek", phonetic: "/ˈskruː.tɪ.naɪz/", clue: "Büyük dikkatle ve detaylıca teftiş etmek" },
-    { word: "meticulous", meaning: "Titiz, kılı kırk yaran", phonetic: "/məˈtɪk.jə.ləs/", clue: "Detaylara aşırı özen gösteren" },
-    { word: "ambiguous", meaning: "Muğlak, belirsiz, birden fazla anlama gelen", phonetic: "/æmˈbɪɡ.ju.əs/", clue: "Net olmayan ve yanlış anlaşılmaya açık" },
-    { word: "resilient", meaning: "Dirençli, çabuk toparlanan", phonetic: "/rɪˈzɪl.jənt/", clue: "Zorluklar karşısında güçlü kalan" },
-    { word: "lucid", meaning: "Açık, anlaşılır, berrak", phonetic: "/ˈluː.sɪd/", clue: "Kolayca kavranabilen, net fikirler" },
-  ],
-  preset_c1_pro: [
-    { word: "mitigate", meaning: "Hafifletmek, etkisini azaltmak", phonetic: "/ˈmɪt.ɪ.ɡeɪt/", clue: "Zararlı bir etkinin şiddetini düşürmek" },
-    { word: "contingency", meaning: "Beklenmedik durum payı, yedek plan", phonetic: "/kənˈtɪn.dʒən.si/", clue: "Öngörülemeyen riskler için ayrılan yedek süre/bütçe" },
-    { word: "volatility", meaning: "Dalgalanma, değişkenlik", phonetic: "/ˌvɒl.əˈtɪl.ə.ti/", clue: "Fiyatlarda veya durumlarda ani iniş çıkışlar" },
-    { word: "substantiate", meaning: "Kanıtlamak, somut gerekçelere dayandırmak", phonetic: "/səbˈstæn.ʃi.eɪt/", clue: "Bir iddiayı somut delillerle doğrulamak" },
-    { word: "coherent", meaning: "Tutarlı, mantıklı ve uyumlu", phonetic: "/kəʊˈhɪə.rənt/", clue: "Parçaları birbiriyle mantıksal bütünlük taşıyan" },
-    { word: "detrimental", meaning: "Zararlı, hasar verici", phonetic: "/ˌdet.rɪˈmen.təl/", clue: "Süreçlere ve performansa negatif etkisi olan" },
-    { word: "leverage", meaning: "Kaldıraç olarak kullanmak, avantaja çevirmek", phonetic: "/ˈliː.vər.ɪdʒ/", clue: "Mevcut gücü kullanarak üstünlük sağlamak" },
-    { word: "discrepancy", meaning: "Farklılık, tutarsızlık, çelişki", phonetic: "/dɪˈskrep.ən.si/", clue: "İki veri veya rapor arasındaki uyumsuzluk" },
-    { word: "benchmark", meaning: "Kıyaslama noktası, referans standart", phonetic: "/ˈbentʃ.mɑːk/", clue: "Performans ölçümünde baz alınan standart" },
-    { word: "arbitration", meaning: "Tahkim, hakemlik süreci", phonetic: "/ˌɑː.bɪˈtreɪ.ʃən/", clue: "Uyuşmazlıkların mahkeme dışı çözümü" },
-  ],
-  preset_academic: [
-    { word: "hypothesize", meaning: "Varsayımda bulunmak, hipotez öne sürmek", phonetic: "/haɪˈpɒθ.ə.saɪz/", clue: "Bilimsel bir teori veya varsayım geliştirmek" },
-    { word: "synthesize", meaning: "Bileştirmek, sentezlemek", phonetic: "/ˈsɪn.θə.saɪz/", clue: "Farklı fikirleri bir araya getirerek yeni bir bütün oluşturmak" },
-    { word: "empirical", meaning: "Deneysel, gözleme ve deneyime dayalı", phonetic: "/ɪmˈpɪr.ɪ.kəl/", clue: "Teoriye değil fiili kanıtlara dayanan" },
-    { word: "paradigm", meaning: "Model, kuramsal çerçeve", phonetic: "/ˈpær.ə.daɪm/", clue: "Bir dönemin kabul gören bilimsel düşünce sistemi" },
-    { word: "correlation", meaning: "Karşılıklı ilişki, korelasyon", phonetic: "/ˌkɒr.əˈleɪ.ʃən/", clue: "İki değişken arasındaki istatistiksel bağlantı" },
-    { word: "facilitate", meaning: "Kolaylaştırmak, olanak sağlamak", phonetic: "/fəˈsɪl.ɪ.teɪt/", clue: "Bir sürecin daha rahat ilerlemesini sağlamak" },
-    { word: "predominant", meaning: "Baskın, hakim olan", phonetic: "/prɪˈdɒm.ɪ.nənt/", clue: "En çok dikkat çeken veya sayıca üstün olan" },
-    { word: "comprehensive", meaning: "Kapsamlı, etraflı", phonetic: "/ˌkɒm.prɪˈhen.sɪv/", clue: "Konunun bütün yönlerini içine alan" },
-  ],
-};
+export const PRESET_CARDS: Record<string, GameWordPair[]> = {};
 
-export const DEFAULT_GAME_WORDS: GameWordPair[] = PRESET_CARDS.preset_c1_pro;
+export const DEFAULT_GAME_WORDS: GameWordPair[] = [];
 
 /**
  * Aktif seçili deste kimliğini döndürür
@@ -366,8 +224,16 @@ function clearLegacyShowcaseCaches(): void {
   try {
     localStorage.removeItem(DECKS_CACHE_STORAGE_KEY);
     localStorage.removeItem(FOLDERS_CACHE_STORAGE_KEY);
+    localStorage.removeItem("cached_decks");
+    localStorage.removeItem("vocaship_decks");
+    localStorage.removeItem("quizwise_decks");
+    localStorage.removeItem("vocaship_offline_decks");
     localStorage.removeItem("vocaship_deck_cards_guest_deck_daily");
     localStorage.removeItem("vocaship_deck_cards_guest_deck_business");
+    localStorage.removeItem("vocaship_deck_cards_preset_core3000");
+    localStorage.removeItem("vocaship_deck_cards_preset_adv5000");
+    localStorage.removeItem("vocaship_deck_cards_preset_c1_pro");
+    localStorage.removeItem("vocaship_deck_cards_preset_academic_pack");
   } catch {}
 }
 
@@ -601,11 +467,9 @@ export async function getActiveDeckCards(
   deckId?: string,
   allowFallback: boolean = false
 ): Promise<GameWordPair[]> {
-  const targetId = deckId || getActiveDeckId() || PRESET_DECKS[0].id;
-
-  // Preset deste kontrolü
-  if (PRESET_CARDS[targetId] && PRESET_CARDS[targetId].length > 0) {
-    return PRESET_CARDS[targetId];
+  const targetId = deckId || getActiveDeckId();
+  if (!targetId || targetId.startsWith("preset_") || targetId.startsWith("guest_")) {
+    return [];
   }
 
   // Backend'den kartları çek (15sn timeout korumalı)

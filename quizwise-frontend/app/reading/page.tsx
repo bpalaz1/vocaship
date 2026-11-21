@@ -12,7 +12,6 @@ import SettingsModal from "../components/settings/SettingsModal";
 import { Loader2 } from "lucide-react";
 import { ALL_STORIES } from "../data/stories";
 import {
-  PRESET_DECKS,
   fetchDecksList,
   getActiveDeckId,
   setActiveDeckId,
@@ -172,8 +171,8 @@ export default function ReadingPage() {
   const { t } = useLanguage();
   const { isSettingsModalOpen, setIsSettingsModalOpen } = useProfile();
   const { isDark } = useAppTheme();
-  const [decks, setDecks] = useState<{ id: string; title: string }[]>(PRESET_DECKS);
-  const [activeDeckId, setActiveDeckIdState] = useState<string>(PRESET_DECKS[0]?.id || "");
+  const [decks, setDecks] = useState<{ id: string; title: string }[]>([]);
+  const [activeDeckId, setActiveDeckIdState] = useState<string>("");
   const [stories, setStories] = useState<any[]>(LOCAL_FALLBACK_STORIES);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shareModalConfig, setShareModalConfig] = useState<{
@@ -204,8 +203,8 @@ export default function ReadingPage() {
           })
           .catch(() => null);
 
-        // 2. Desteleri 3 saniye timeout korumalı çek
-        const decksPromise = fetchDecksList().catch(() => PRESET_DECKS);
+        // 2. Desteleri 3 saniye timeout korumalı çek (yalnızca kullanıcının gerçek desteleri)
+        const decksPromise = fetchDecksList().catch(() => []);
 
         const [remoteStories, deckList] = await Promise.all([storiesPromise, decksPromise]);
 
@@ -217,19 +216,23 @@ export default function ReadingPage() {
           setStories(LOCAL_FALLBACK_STORIES);
         }
 
-        const finalDecks = Array.isArray(deckList) && deckList.length > 0 ? deckList : PRESET_DECKS;
+        const finalDecks = Array.isArray(deckList) ? deckList : [];
         setDecks(finalDecks);
 
-        const currentId = getActiveDeckId() || finalDecks[0]?.id || "";
+        const storedId = getActiveDeckId();
+        const currentId =
+          storedId && finalDecks.some((d) => d.id === storedId)
+            ? storedId
+            : finalDecks[0]?.id || "";
         setActiveDeckIdState(currentId);
-        if (currentId && !getActiveDeckId()) {
+        if (currentId && !storedId) {
           setActiveDeckId(currentId);
         }
       } catch (err) {
         console.warn("Okuma Odası backend bağlantısı zaman aşımına uğradı, yerel hikayeler yüklendi:", err);
         if (isMounted) {
           setStories(LOCAL_FALLBACK_STORIES);
-          setDecks(PRESET_DECKS);
+          setDecks([]);
         }
       } finally {
         clearTimeout(timeoutId);
