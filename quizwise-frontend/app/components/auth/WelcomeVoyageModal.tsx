@@ -175,9 +175,9 @@ export default function WelcomeVoyageModal({
 
         {/* 3 Sütunlu Dengeli Yerleşim */}
         <div className="relative z-10 w-full h-full grid grid-cols-1 md:grid-cols-12 items-center gap-4 pb-5">
-          {/* SOL SÜTUN: SM-2 Kart + Speaking Studio */}
-          <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-center gap-3.5 h-full py-3 pointer-events-none">
-            <div className="flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-a">
+          {/* SOL SÜTUN: SM-2 Kart + Sınıfım (2 Kart, Ferah Aralık) */}
+          <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-between gap-8 h-full py-6 pointer-events-none">
+            <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-a">
               <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-extrabold text-indigo-300">
                 {t("welcome_card_sm2_badge", "🃏 SM-2 Akıllı Kart")}
               </span>
@@ -190,23 +190,23 @@ export default function WelcomeVoyageModal({
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b">
+            <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-teal-500/40 shadow-xl card-float-b">
               <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-[10px] font-extrabold text-violet-300">
-                  {t("welcome_card_speak_badge", "🎙️ Speaking Studio")}
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/35 text-[10px] font-extrabold text-indigo-200">
+                  {t("welcome_card_class_badge", "🎓 Sınıfım")}
                 </span>
-                <div className="flex items-end gap-1 h-4">
-                  {WAVE_BARS.map((bar, idx) => (
-                    <span
-                      key={idx}
-                      style={{ height: bar.height, animationDelay: bar.delay }}
-                      className="speak-bar w-1 rounded-full bg-emerald-400"
-                    />
-                  ))}
-                </div>
+                <span className="px-1.5 py-0.5 rounded bg-slate-950/90 border border-teal-500/40 font-mono text-[10px] font-black text-teal-300">
+                  PIN: 7A2-5K9
+                </span>
               </div>
-              <div className="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 text-[11px] font-bold text-emerald-300">
-                {t("welcome_card_speak_xp", "Great pronunciation! +25 XP")}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-emerald-300 truncate">
+                  {t("welcome_card_class_live", "● Canlı Tahta & Ödev")}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-300 shrink-0">
+                  <Users className="w-3 h-3 text-teal-300" />
+                  24
+                </span>
               </div>
             </div>
           </div>
@@ -232,9 +232,9 @@ export default function WelcomeVoyageModal({
             </p>
           </div>
 
-          {/* SAĞ SÜTUN: Reading Room + Game Arena + Sınıfım (Dengeli Aralıkla) */}
-          <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-center gap-3.5 h-full py-3 pt-8 pointer-events-none">
-            <div className="flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b">
+          {/* SAĞ SÜTUN: Reading Room + Game Arena (2 Kart, Ferah Aralık) */}
+          <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-between gap-8 h-full py-6 pt-10 pointer-events-none">
+            <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b">
               <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-[10px] font-extrabold text-sky-300">
                 {t("welcome_card_read_badge", "📖 Reading Room")}
               </span>
@@ -250,7 +250,7 @@ export default function WelcomeVoyageModal({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-amber-500/40 shadow-xl card-float-a">
+            <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-amber-500/40 shadow-xl card-float-a">
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[10px] font-extrabold text-amber-300">
                   {t("welcome_card_arena_badge", "🏆 Game Arena")}
@@ -262,26 +262,6 @@ export default function WelcomeVoyageModal({
               </div>
               <div className="text-[11px] font-bold text-slate-200">
                 {t("welcome_boss_rank", "🐉 Ejderha Baskını • 1. Sıra")}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-teal-500/40 shadow-xl card-float-b">
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/35 text-[10px] font-extrabold text-indigo-200">
-                  {t("welcome_card_class_badge", "🎓 Sınıfım")}
-                </span>
-                <span className="px-1.5 py-0.5 rounded bg-slate-950/90 border border-teal-500/40 font-mono text-[10px] font-black text-teal-300">
-                  PIN: 7A2-5K9
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10.5px] font-bold text-emerald-300 truncate">
-                  {t("welcome_card_class_live", "● Canlı Tahta & Ödev")}
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-300 shrink-0">
-                  <Users className="w-3 h-3 text-teal-300" />
-                  24
-                </span>
               </div>
             </div>
           </div>
