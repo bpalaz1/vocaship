@@ -129,26 +129,26 @@ export async function createLiveVocabularyAssignment(
   if (!params.capturedWords || params.capturedWords.length === 0) {
     return {
       success: false,
-      message: pickUiText({ tr: "Atanacak herhangi bir canlı kelime yakalanmadı.", en: "No live words captured to assign.", de: "Keine Live-Wörter zum Zuweisen erfasst.", es: "No se capturaron palabras en vivo para asignar.", fr: "Aucun mot en direct capturé à attribuer." }),
+      message: pickUiText({ tr: "Atanacak herhangi bir canlı kelime yakalanmadı.", en: "No live words captured to assign.", de: "Keine Live-Wörter zum Zuweisen erfasst.", es: "No se capturaron palabras en vivo para asignar.", fr: "Aucun mot en direct capturé à attribuer.", it: "Nessuna parola acquisita dal vivo da assegnare.", ru: "Нет слов, захваченных на уроке, для задания." }),
     };
   }
 
-  const clsLabel = params.className || params.classCode || pickUiText({ tr: "Canlı Oturum", en: "Live Session", de: "Live-Sitzung", es: "Sesión en vivo", fr: "Session en direct" });
+  const clsLabel = params.className || params.classCode || pickUiText({ tr: "Canlı Oturum", en: "Live Session", de: "Live-Sitzung", es: "Sesión en vivo", fr: "Session en direct", it: "Sessione Live", ru: "Онлайн-занятие" });
   const payload = {
     classroom_id: params.classId || "cls-1",
     class_code: params.classCode || "VRG-2535",
-    title: formatUiText({ tr: "Canlı Ders Kelime Tekrarı: {cls} ({cnt} Terim)", en: "Live Lesson Vocab Review: {cls} ({cnt} Terms)", de: "Live-Unterricht Wortschatz: {cls} ({cnt} Begriffe)", es: "Repaso en vivo: {cls} ({cnt} términos)", fr: "Révision en direct : {cls} ({cnt} termes)" }, { cls: clsLabel, cnt: params.capturedWords.length }),
+    title: formatUiText({ tr: "Canlı Ders Kelime Tekrarı: {cls} ({cnt} Terim)", en: "Live Lesson Vocab Review: {cls} ({cnt} Terms)", de: "Live-Unterricht Wortschatz: {cls} ({cnt} Begriffe)", es: "Repaso en vivo: {cls} ({cnt} términos)", fr: "Révision en direct : {cls} ({cnt} termes)", it: "Ripasso Vocaboli Live: {cls} ({cnt} termini)", ru: "Повторение слов с урока: {cls} ({cnt} терминов)" }, { cls: clsLabel, cnt: params.capturedWords.length }),
     homework_type: "vocabulary_review",
-    story_content: formatUiText({ tr: "Bu ödev, {cls} canlı ders oturumunda eğitmen tarafından konuşulan kritik kelimelerden otomatik olarak derlenmiştir.", en: "This assignment was automatically compiled from key terms spoken by the instructor during the {cls} live session.", de: "Diese Aufgabe wurde automatisch aus wichtigen Begriffen der Live-Sitzung {cls} zusammengestellt.", es: "Esta tarea se compiló automáticamente con los términos clave de la sesión en vivo {cls}.", fr: "Ce devoir a été compilé automatiquement à partir des termes clés de la session en direct {cls}." }, { cls: clsLabel }),
+    story_content: formatUiText({ tr: "Bu ödev, {cls} canlı ders oturumunda eğitmen tarafından konuşulan kritik kelimelerden otomatik olarak derlenmiştir.", en: "This assignment was automatically compiled from key terms spoken by the instructor during the {cls} live session.", de: "Diese Aufgabe wurde automatisch aus wichtigen Begriffen der Live-Sitzung {cls} zusammengestellt.", es: "Esta tarea se compiló automáticamente con los términos clave de la sesión en vivo {cls}.", fr: "Ce devoir a été compilé automatiquement à partir des termes clés de la session en direct {cls}.", it: "Questo compito è stato compilato automaticamente dai termini chiave pronunciati dall'insegnante durante la sessione live {cls}.", ru: "Это задание автоматически составлено из ключевых слов, произнесённых преподавателем на онлайн-уроке {cls}." }, { cls: clsLabel }),
     target_words: params.capturedWords.map((w) => ({
       word: w.word,
-      meaning: w.turkish_meaning || w.meaning || pickUiText({ tr: "Canlı derste işlenen hedef terim", en: "Target term covered in live lesson", de: "Im Live-Unterricht behandelter Zielbegriff", es: "Término clave visto en la clase en vivo", fr: "Terme clé abordé pendant le cours en direct" }),
+      meaning: w.turkish_meaning || w.meaning || pickUiText({ tr: "Canlı derste işlenen hedef terim", en: "Target term covered in live lesson", de: "Im Live-Unterricht behandelter Zielbegriff", es: "Término clave visto en la clase en vivo", fr: "Terme clé abordé pendant le cours en direct", it: "Termine chiave trattato nella lezione live", ru: "Ключевой термин с онлайн-урока" }),
       phonetic: w.phonetic || "",
       example: w.contextSentence || w.context_sentence || "",
     })),
     questions: [
       {
-        question: formatUiText({ tr: "Bu canlı ders kelimelerinden hangisi '{w}' ile en yakından ilişkilidir?", en: "Which of these live lesson terms is most closely related to '{w}'?", de: "Welcher dieser Begriffe aus dem Live-Unterricht steht am engsten mit '{w}' in Verbindung?", es: "¿Cuál de estos términos de la clase en vivo se relaciona más estrechamente con '{w}'?", fr: "Lequel de ces termes du cours en direct est le plus étroitement lié à '{w}' ?" }, { w: params.capturedWords[0]?.word || "" }),
+        question: formatUiText({ tr: "Bu canlı ders kelimelerinden hangisi '{w}' ile en yakından ilişkilidir?", en: "Which of these live lesson terms is most closely related to '{w}'?", de: "Welcher dieser Begriffe aus dem Live-Unterricht steht am engsten mit '{w}' in Verbindung?", es: "¿Cuál de estos términos de la clase en vivo se relaciona más estrechamente con '{w}'?", fr: "Lequel de ces termes du cours en direct est le plus étroitement lié à '{w}' ?", it: "Quale di questi termini della lezione live è più strettamente collegato a '{w}'?", ru: "Какой из этих терминов с урока ближе всего связан со словом «{w}»?" }, { w: params.capturedWords[0]?.word || "" }),
         options: [
           params.capturedWords[0]?.word || "Term",
           "Random incorrect option",
@@ -158,7 +158,7 @@ export async function createLiveVocabularyAssignment(
         correct_answer_index: 0,
       },
     ],
-    due_date: params.dueDate || pickUiText({ tr: "Gelecek Hafta, 18:00", en: "Next Week, 18:00", de: "Nächste Woche, 18:00", es: "Próxima semana, 18:00", fr: "Semaine prochaine, 18:00" }),
+    due_date: params.dueDate || pickUiText({ tr: "Gelecek Hafta, 18:00", en: "Next Week, 18:00", de: "Nächste Woche, 18:00", es: "Próxima semana, 18:00", fr: "Semaine prochaine, 18:00", it: "Prossima settimana, 18:00", ru: "На следующей неделе, 18:00" }),
   };
 
   try {
@@ -173,7 +173,7 @@ export async function createLiveVocabularyAssignment(
       return {
         success: true,
         assignmentId: data?.id || `assign-${Date.now()}`,
-        message: formatUiText({ tr: "{cnt} kelimelik tekrar ödevi {cls} sınıfına başarıyla atandı!", en: "{cnt}-word review assignment successfully assigned to class {cls}!", de: "Aufgabe mit {cnt} Wörtern erfolgreich an Klasse {cls} zugewiesen!", es: "¡Tarea de repaso de {cnt} palabras asignada a la clase {cls}!", fr: "Devoir de révision de {cnt} mots attribué à la classe {cls} !" }, { cnt: params.capturedWords.length, cls: params.classCode }),
+        message: formatUiText({ tr: "{cnt} kelimelik tekrar ödevi {cls} sınıfına başarıyla atandı!", en: "{cnt}-word review assignment successfully assigned to class {cls}!", de: "Aufgabe mit {cnt} Wörtern erfolgreich an Klasse {cls} zugewiesen!", es: "¡Tarea de repaso de {cnt} palabras asignada a la clase {cls}!", fr: "Devoir de révision de {cnt} mots attribué à la classe {cls} !", it: "Compito di ripasso di {cnt} parole assegnato con successo alla classe {cls}!", ru: "Задание на повторение ({cnt} слов) успешно назначено классу {cls}!" }, { cnt: params.capturedWords.length, cls: params.classCode }),
       };
     }
   } catch (err) {
@@ -199,7 +199,7 @@ export async function createLiveVocabularyAssignment(
   return {
     success: true,
     assignmentId: `assign-live-${Date.now()}`,
-    message: formatUiText({ tr: "{cnt} kelimelik tekrar ödevi {cls} sınıfına başarıyla bağlandı!", en: "{cnt}-word review assignment successfully linked to class {cls}!", de: "Aufgabe mit {cnt} Wörtern erfolgreich mit Klasse {cls} verknüpft!", es: "¡Tarea de repaso de {cnt} palabras vinculada a la clase {cls}!", fr: "Devoir de révision de {cnt} mots lié à la classe {cls} !" }, { cnt: params.capturedWords.length, cls: params.classCode }),
+    message: formatUiText({ tr: "{cnt} kelimelik tekrar ödevi {cls} sınıfına başarıyla bağlandı!", en: "{cnt}-word review assignment successfully linked to class {cls}!", de: "Aufgabe mit {cnt} Wörtern erfolgreich mit Klasse {cls} verknüpft!", es: "¡Tarea de repaso de {cnt} palabras vinculada a la clase {cls}!", fr: "Devoir de révision de {cnt} mots lié à la classe {cls} !", it: "Compito di ripasso di {cnt} parole collegato con successo alla classe {cls}!", ru: "Задание на повторение ({cnt} слов) успешно привязано к классу {cls}!" }, { cnt: params.capturedWords.length, cls: params.classCode }),
   };
 }
 

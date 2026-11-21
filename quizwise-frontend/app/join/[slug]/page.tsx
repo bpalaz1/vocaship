@@ -52,7 +52,7 @@ export default function InviteJoinPage() {
 
   // Tarih ve saat formatlayıcı
   const formatSessionDate = (utcIso: string) => {
-    const locMap: Record<string, string> = { tr: "tr-TR", en: "en-US", de: "de-DE", es: "es-ES", fr: "fr-FR" };
+    const locMap: Record<string, string> = { tr: "tr-TR", en: "en-US", de: "de-DE", es: "es-ES", fr: "fr-FR", it: "it-IT", ru: "ru-RU" };
     const loc = locMap[currentLang] || "en-US";
     try {
       const d = new Date(utcIso);

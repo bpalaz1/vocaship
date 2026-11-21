@@ -73,6 +73,10 @@ function SingleFlashcard({
         return "text-rose-300 bg-rose-500/15 border-rose-500/30";
       case "fr":
         return "text-violet-300 bg-violet-500/15 border-violet-500/30";
+      case "it":
+        return "text-teal-300 bg-teal-500/15 border-teal-500/30";
+      case "ru":
+        return "text-cyan-300 bg-cyan-500/15 border-cyan-500/30";
       case "tr":
       default:
         return "text-emerald-300 bg-emerald-500/15 border-emerald-500/30";

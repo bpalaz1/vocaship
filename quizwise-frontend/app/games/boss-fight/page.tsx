@@ -203,32 +203,32 @@ const FALLBACK_CARDS: FlashcardItem[] = [
 
 
 const VOCAB_TRANSLATIONS: Record<string, Record<string, string>> = {
-  animal: { tr: "hayvan", de: "Tier", es: "animal", fr: "animal" },
-  dog: { tr: "köpek", de: "Hund", es: "perro", fr: "chien" },
-  cat: { tr: "kedi", de: "Katze", es: "gato", fr: "chat" },
-  apple: { tr: "elma", de: "Apfel", es: "manzana", fr: "pomme" },
-  orange: { tr: "portakal, turuncu", de: "Orange", es: "naranja", fr: "orange" },
-  routine: { tr: "rutin, alışılmış düzen", de: "Routine", es: "rutina", fr: "routine" },
-  repair: { tr: "tamir etmek, onarmak", de: "reparieren", es: "reparar", fr: "réparer" },
-  squirrel: { tr: "sincap", de: "Eichhörnchen", es: "ardilla", fr: "écureuil" },
-  pocket: { tr: "cep", de: "Tasche", es: "bolsillo", fr: "poche" },
-  cacophonous: { tr: "kulak tırmalayıcı, ahenksiz", de: "kakophonisch", es: "cacofónico", fr: "cacophonique" },
-  mitigate: { tr: "hafifletmek, azaltmak", de: "mildern", es: "mitigar", fr: "atténuer" },
-  ubiquitous: { tr: "her yerde bulunan, yaygın", de: "allgegenwärtig", es: "omnipresente", fr: "omniprésent" },
-  ephemeral: { tr: "geçici, kısa ömürlü", de: "flüchtig, vergänglich", es: "efímero", fr: "éphémère" },
-  resilient: { tr: "dirençli, dayanıklı", de: "widerstandsfähig", es: "resiliente", fr: "résilient" },
-  detrimental: { tr: "zararlı, hasar verici", de: "schädlich", es: "perjudicial", fr: "nuisible" },
-  good: { tr: "iyi, güzel", de: "gut", es: "bueno", fr: "bon" },
-  book: { tr: "kitap", de: "Buch", es: "libro", fr: "livre" },
-  interest: { tr: "faiz / ilgi, çıkar", de: "Interesse / Zins", es: "interés", fr: "intérêt" },
-  victory: { tr: "zafer", de: "Sieg", es: "victoria", fr: "victoire" },
-  courage: { tr: "cesaret", de: "Mut", es: "coraje", fr: "courage" },
-  warrior: { tr: "savaşçı", de: "Krieger", es: "guerrero", fr: "guerrier" },
-  colossal: { tr: "devasa", de: "kolossal", es: "colosal", fr: "colossal" },
-  resilience: { tr: "direnç / dayanıklılık", de: "Widerstandskraft", es: "resiliencia", fr: "résilience" },
-  immense: { tr: "muazzam / uçsuz bucaksız", de: "immens", es: "inmenso", fr: "immense" },
-  alliance: { tr: "ittifak / birlik", de: "Allianz", es: "alianza", fr: "alliance" },
-  dragon: { tr: "ejderha", de: "Drache", es: "dragón", fr: "dragon" },
+  animal: { tr: "hayvan", de: "Tier", es: "animal", fr: "animal", it: "animale", ru: "животное" },
+  dog: { tr: "köpek", de: "Hund", es: "perro", fr: "chien", it: "cane", ru: "собака" },
+  cat: { tr: "kedi", de: "Katze", es: "gato", fr: "chat", it: "gatto", ru: "кошка" },
+  apple: { tr: "elma", de: "Apfel", es: "manzana", fr: "pomme", it: "mela", ru: "яблоко" },
+  orange: { tr: "portakal, turuncu", de: "Orange", es: "naranja", fr: "orange", it: "arancia, arancione", ru: "апельсин, оранжевый" },
+  routine: { tr: "rutin, alışılmış düzen", de: "Routine", es: "rutina", fr: "routine", it: "routine", ru: "рутина, распорядок" },
+  repair: { tr: "tamir etmek, onarmak", de: "reparieren", es: "reparar", fr: "réparer", it: "riparare", ru: "чинить, ремонтировать" },
+  squirrel: { tr: "sincap", de: "Eichhörnchen", es: "ardilla", fr: "écureuil", it: "scoiattolo", ru: "белка" },
+  pocket: { tr: "cep", de: "Tasche", es: "bolsillo", fr: "poche", it: "tasca", ru: "карман" },
+  cacophonous: { tr: "kulak tırmalayıcı, ahenksiz", de: "kakophonisch", es: "cacofónico", fr: "cacophonique", it: "cacofonico, stridente", ru: "какофонический, резкий" },
+  mitigate: { tr: "hafifletmek, azaltmak", de: "mildern", es: "mitigar", fr: "atténuer", it: "mitigare, attenuare", ru: "смягчать, уменьшать" },
+  ubiquitous: { tr: "her yerde bulunan, yaygın", de: "allgegenwärtig", es: "omnipresente", fr: "omniprésent", it: "onnipresente", ru: "вездесущий" },
+  ephemeral: { tr: "geçici, kısa ömürlü", de: "flüchtig, vergänglich", es: "efímero", fr: "éphémère", it: "effimero", ru: "эфемерный, мимолётный" },
+  resilient: { tr: "dirençli, dayanıklı", de: "widerstandsfähig", es: "resiliente", fr: "résilient", it: "resiliente, resistente", ru: "стойкий, выносливый" },
+  detrimental: { tr: "zararlı, hasar verici", de: "schädlich", es: "perjudicial", fr: "nuisible", it: "dannoso, nocivo", ru: "вредный, пагубный" },
+  good: { tr: "iyi, güzel", de: "gut", es: "bueno", fr: "bon", it: "buono, bene", ru: "хороший" },
+  book: { tr: "kitap", de: "Buch", es: "libro", fr: "livre", it: "libro", ru: "книга" },
+  interest: { tr: "faiz / ilgi, çıkar", de: "Interesse / Zins", es: "interés", fr: "intérêt", it: "interesse", ru: "интерес / процент" },
+  victory: { tr: "zafer", de: "Sieg", es: "victoria", fr: "victoire", it: "vittoria", ru: "победа" },
+  courage: { tr: "cesaret", de: "Mut", es: "coraje", fr: "courage", it: "coraggio", ru: "мужество, храбрость" },
+  warrior: { tr: "savaşçı", de: "Krieger", es: "guerrero", fr: "guerrier", it: "guerriero", ru: "воин" },
+  colossal: { tr: "devasa", de: "kolossal", es: "colosal", fr: "colossal", it: "colossale", ru: "колоссальный" },
+  resilience: { tr: "direnç / dayanıklılık", de: "Widerstandskraft", es: "resiliencia", fr: "résilience", it: "resilienza", ru: "стойкость" },
+  immense: { tr: "muazzam / uçsuz bucaksız", de: "immens", es: "inmenso", fr: "immense", it: "immenso", ru: "огромный, безмерный" },
+  alliance: { tr: "ittifak / birlik", de: "Allianz", es: "alianza", fr: "alliance", it: "alleanza", ru: "союз, альянс" },
+  dragon: { tr: "ejderha", de: "Drache", es: "dragón", fr: "dragon", it: "drago", ru: "дракон" },
 };
 
 function getCardMeaning(card: FlashcardItem, lang: string = "tr"): string {
@@ -242,7 +242,7 @@ function getCardMeaning(card: FlashcardItem, lang: string = "tr"): string {
   }
   // Check our offline translations
   if (VOCAB_TRANSLATIONS[wordLower]) {
-    const lKey = lang as "tr" | "de" | "es" | "fr";
+    const lKey = lang as "tr" | "de" | "es" | "fr" | "it" | "ru";
     if (VOCAB_TRANSLATIONS[wordLower][lKey]) {
       return VOCAB_TRANSLATIONS[wordLower][lKey];
     }
@@ -409,6 +409,10 @@ function BossFightContent() {
         ? ["Manzana", "Guerrero", "Coraje", "Dragón", "Victoria", "Bolsillo"]
         : currentLang === "fr"
         ? ["Pomme", "Guerrier", "Courage", "Dragon", "Victoire", "Poche"]
+        : currentLang === "it"
+        ? ["Mela", "Guerriero", "Coraggio", "Drago", "Vittoria", "Tasca", "Animale"]
+        : currentLang === "ru"
+        ? ["Яблоко", "Воин", "Смелость", "Дракон", "Победа", "Карман", "Животное"]
         : ["Elma", "Savaşçı", "Cesaret", "Ejderha", "Zafer", "Cep", "Kedi", "Köpek", "Rutin"];
 
     while (uniqueDistractors.length < 3) {

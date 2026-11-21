@@ -38,17 +38,17 @@ export async function unlockCharacter(
 
   const targetChar = STORE_CHARACTERS.find((c) => c.id === characterId);
   if (!targetChar) {
-    throw new Error(pickUiText({ tr: "Karakter bulunamadı!", en: "Character not found!", de: "Charakter nicht gefunden!", es: "¡Personaje no encontrado!", fr: "Personnage introuvable !" }, language));
+    throw new Error(pickUiText({ tr: "Karakter bulunamadı!", en: "Character not found!", de: "Charakter nicht gefunden!", es: "¡Personaje no encontrado!", fr: "Personnage introuvable !", it: "Personaggio non trovato!", ru: "Персонаж не найден!" }, language));
   }
 
   // 1. İstemci / Ön Doğrulama (Client-side Early Barrier)
-  const milestoneCheck = checkCharacterMilestone(targetChar, userLevel, completedStoriesCount);
+  const milestoneCheck = checkCharacterMilestone(targetChar, userLevel, completedStoriesCount, language);
   if (!milestoneCheck.isUnlocked) {
     throw new Error(`Anti-Tamper: ${milestoneCheck.missingReason}`);
   }
 
   if (userCoins < targetChar.priceGold) {
-    throw new Error(formatUiText({ tr: "Yetersiz Altın! Bu karakter için {coins} 🪙 gerekiyor.", en: "Insufficient Gold! {coins} 🪙 required for this character.", de: "Nicht genug Gold! {coins} 🪙 für diesen Charakter erforderlich.", es: "¡Oro insuficiente! Se necesitan {coins} 🪙 para este personaje.", fr: "Or insuffisant ! {coins} 🪙 requis pour ce personnage." }, { coins: targetChar.priceGold }, language));
+    throw new Error(formatUiText({ tr: "Yetersiz Altın! Bu karakter için {coins} 🪙 gerekiyor.", en: "Insufficient Gold! {coins} 🪙 required for this character.", de: "Nicht genug Gold! {coins} 🪙 für diesen Charakter erforderlich.", es: "¡Oro insuficiente! Se necesitan {coins} 🪙 para este personaje.", fr: "Or insuffisant ! {coins} 🪙 requis pour ce personnage.", it: "Oro insufficiente! Servono {coins} 🪙 per questo personaggio.", ru: "Недостаточно золота! Для этого персонажа требуется {coins} 🪙." }, { coins: targetChar.priceGold }, language));
   }
 
   // 2. Sunucu Tarafı Doğrulama ve Veritabanı Kaydı (Server Anti-Tamper)
@@ -77,7 +77,7 @@ export async function unlockCharacter(
       };
     } else {
       const errData = await res.json().catch(() => ({}));
-      const errMsg = errData.detail || pickUiText({ tr: "Karakter kilidi açılamadı!", en: "Could not unlock character!", de: "Charakter konnte nicht freigeschaltet werden!", es: "¡No se pudo desbloquear el personaje!", fr: "Impossible de débloquer le personnage !" }, language);
+      const errMsg = errData.detail || pickUiText({ tr: "Karakter kilidi açılamadı!", en: "Could not unlock character!", de: "Charakter konnte nicht freigeschaltet werden!", es: "¡No se pudo desbloquear el personaje!", fr: "Impossible de débloquer le personnage !", it: "Impossibile sbloccare il personaggio!", ru: "Не удалось разблокировать персонажа!" }, language);
       throw new Error(errMsg);
     }
   } catch (err: any) {
@@ -93,7 +93,7 @@ export async function unlockCharacter(
       characterId,
       remainingCoins: newCoins,
       unlockedCharacters: [characterId],
-      message: pickUiText({ tr: "Karakter kilidi başarıyla açıldı!", en: "Character unlocked successfully!", de: "Charakter erfolgreich freigeschaltet!", es: "¡Personaje desbloqueado con éxito!", fr: "Personnage débloqué avec succès !" }, language),
+      message: pickUiText({ tr: "Karakter kilidi başarıyla açıldı!", en: "Character unlocked successfully!", de: "Charakter erfolgreich freigeschaltet!", es: "¡Personaje desbloqueado con éxito!", fr: "Personnage débloqué avec succès !", it: "Personaggio sbloccato con successo!", ru: "Персонаж успешно разблокирован!" }, language),
       unlockQuote: quote,
     };
   }

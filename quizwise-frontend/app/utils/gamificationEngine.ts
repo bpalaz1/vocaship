@@ -158,15 +158,15 @@ export function getStreakMultiplier(
   _isFinalQuestion = false
 ): { multiplier: number; label: string; icon: string } {
   if (streak >= 15) {
-    return { multiplier: 5.0, label: pickUiText({ tr: "x5 Süper Çarpan", en: "x5 Super Multiplier", de: "x5 Super-Multiplikator", es: "Multiplicador x5", fr: "Super multiplicateur x5" }), icon: "👑" };
+    return { multiplier: 5.0, label: pickUiText({ tr: "x5 Süper Çarpan", en: "x5 Super Multiplier", de: "x5 Super-Multiplikator", es: "Multiplicador x5", fr: "Super multiplicateur x5", it: "Super Moltiplicatore x5", ru: "Супермножитель x5" }), icon: "👑" };
   }
   if (streak >= 10) {
-    return { multiplier: 3.0, label: pickUiText({ tr: "x3 Çarpan", en: "x3 Multiplier", de: "x3 Multiplikator", es: "Multiplicador x3", fr: "Multiplicateur x3" }), icon: "⚡" };
+    return { multiplier: 3.0, label: pickUiText({ tr: "x3 Çarpan", en: "x3 Multiplier", de: "x3 Multiplikator", es: "Multiplicador x3", fr: "Multiplicateur x3", it: "Moltiplicatore x3", ru: "Множитель x3" }), icon: "⚡" };
   }
   if (streak >= 5) {
-    return { multiplier: 2.0, label: pickUiText({ tr: "x2 Çarpan", en: "x2 Multiplier", de: "x2 Multiplikator", es: "Multiplicador x2", fr: "Multiplicateur x2" }), icon: "🔥" };
+    return { multiplier: 2.0, label: pickUiText({ tr: "x2 Çarpan", en: "x2 Multiplier", de: "x2 Multiplikator", es: "Multiplicador x2", fr: "Multiplicateur x2", it: "Moltiplicatore x2", ru: "Множитель x2" }), icon: "🔥" };
   }
-  return { multiplier: 1.0, label: pickUiText({ tr: "x1 Standart", en: "x1 Standard", de: "x1 Standard", es: "x1 Estándar", fr: "x1 Standard" }), icon: "" };
+  return { multiplier: 1.0, label: pickUiText({ tr: "x1 Standart", en: "x1 Standard", de: "x1 Standard", es: "x1 Estándar", fr: "x1 Standard", it: "x1 Standard", ru: "x1 Стандарт" }), icon: "" };
 }
 
 export interface FiveCardMilestoneInfo {
@@ -214,7 +214,7 @@ export function getFiveCardMilestoneReward(streak: number): FiveCardMilestoneInf
       bonusGold: 25,
       triggerChest: false,
       multiplier: 2,
-      milestoneLabel: pickUiText({ tr: "🔥 5/5 Seri! x2 Çarpan & +25 Bonus Altın!", en: "🔥 5/5 Streak! x2 Multiplier & +25 Bonus Gold!", de: "🔥 5/5 Serie! x2 Multiplikator & +25 Bonus-Gold!", es: "🔥 ¡Racha 5/5! Multiplicador x2 y +25 Oro extra!", fr: "🔥 Série 5/5 ! Multiplicateur x2 & +25 Or bonus !" }),
+      milestoneLabel: pickUiText({ tr: "🔥 5/5 Seri! x2 Çarpan & +25 Bonus Altın!", en: "🔥 5/5 Streak! x2 Multiplier & +25 Bonus Gold!", de: "🔥 5/5 Serie! x2 Multiplikator & +25 Bonus-Gold!", es: "🔥 ¡Racha 5/5! Multiplicador x2 y +25 Oro extra!", fr: "🔥 Série 5/5 ! Multiplicateur x2 & +25 Or bonus !", it: "🔥 Serie 5/5! Moltiplicatore x2 e +25 Oro bonus!", ru: "🔥 Серия 5/5! Множитель x2 и +25 бонусного золота!" }),
       progressInCycle: 5,
     };
   }
@@ -225,7 +225,7 @@ export function getFiveCardMilestoneReward(streak: number): FiveCardMilestoneInf
       bonusGold: 50,
       triggerChest: true,
       multiplier: 3,
-      milestoneLabel: pickUiText({ tr: "⚡ 10. Doğru! x3 Çarpan, +50 Bonus Altın & Sandık Bonusu!", en: "⚡ 10th Correct! x3 Multiplier, +50 Bonus Gold & Chest Bonus!", de: "⚡ 10. Richtig! x3 Multiplikator, +50 Bonus-Gold & Truhenbonus!", es: "⚡ ¡10.ª correcta! Multiplicador x3, +50 Oro extra y Cofre!", fr: "⚡ 10e bonne réponse ! Multiplicateur x3, +50 Or & Coffre !" }),
+      milestoneLabel: pickUiText({ tr: "⚡ 10. Doğru! x3 Çarpan, +50 Bonus Altın & Sandık Bonusu!", en: "⚡ 10th Correct! x3 Multiplier, +50 Bonus Gold & Chest Bonus!", de: "⚡ 10. Richtig! x3 Multiplikator, +50 Bonus-Gold & Truhenbonus!", es: "⚡ ¡10.ª correcta! Multiplicador x3, +50 Oro extra y Cofre!", fr: "⚡ 10e bonne réponse ! Multiplicateur x3, +50 Or & Coffre !", it: "⚡ 10ª risposta esatta! Moltiplicatore x3, +50 Oro bonus e Forziere!", ru: "⚡ 10-й верный ответ! Множитель x3, +50 золота и бонусный сундук!" }),
       progressInCycle: 5,
     };
   }
@@ -235,7 +235,7 @@ export function getFiveCardMilestoneReward(streak: number): FiveCardMilestoneInf
     bonusGold: 100,
     triggerChest: true,
     multiplier: 5,
-    milestoneLabel: formatUiText({ tr: "👑 {n}. Doğru! x5 Süper Çarpan & +100 Bonus Altın!", en: "👑 {n}th Correct! x5 Super Multiplier & +100 Bonus Gold!", de: "👑 {n}. Richtig! x5 Super-Multiplikator & +100 Bonus-Gold!", es: "👑 ¡{n}.ª correcta! Supermultiplicador x5 y +100 Oro extra!", fr: "👑 {n}e bonne réponse ! Super multiplicateur x5 & +100 Or !" }, { n: streak }),
+    milestoneLabel: formatUiText({ tr: "👑 {n}. Doğru! x5 Süper Çarpan & +100 Bonus Altın!", en: "👑 {n}th Correct! x5 Super Multiplier & +100 Bonus Gold!", de: "👑 {n}. Richtig! x5 Super-Multiplikator & +100 Bonus-Gold!", es: "👑 ¡{n}.ª correcta! Supermultiplicador x5 y +100 Oro extra!", fr: "👑 {n}e bonne réponse ! Super multiplicateur x5 & +100 Or !", it: "👑 {n}ª risposta esatta! Super Moltiplicatore x5 e +100 Oro bonus!", ru: "👑 {n}-й верный ответ! Супермножитель x5 и +100 бонусного золота!" }, { n: streak }),
     progressInCycle: 5,
   };
 }
@@ -281,7 +281,7 @@ export function calculateWordReward(options: {
       baseXP: 0,
       cefrMultiplier: cefrMult,
       streakMultiplier: 1.0,
-      streakLabel: pickUiText({ tr: "x1 Standart", en: "x1 Standard", de: "x1 Standard", es: "x1 Estándar", fr: "x1 Standard" }),
+      streakLabel: pickUiText({ tr: "x1 Standart", en: "x1 Standard", de: "x1 Standard", es: "x1 Estándar", fr: "x1 Standard", it: "x1 Standard", ru: "x1 Стандарт" }),
       streakIcon: "",
       buffMultiplier: 1.0,
       totalXP: 0,
@@ -340,7 +340,7 @@ export function awardGamificationReward(
   totalGold: number,
   label?: string
 ): void {
-  const resolvedLabel = label || pickUiText({ tr: "🎮 Arena Ödülü", en: "🎮 Arena Reward", de: "🎮 Arena-Belohnung", es: "🎮 Recompensa de Arena", fr: "🎮 Récompense d'Arène" });
+  const resolvedLabel = label || pickUiText({ tr: "🎮 Arena Ödülü", en: "🎮 Arena Reward", de: "🎮 Arena-Belohnung", es: "🎮 Recompensa de Arena", fr: "🎮 Récompense d'Arène", it: "🎮 Ricompensa Arena", ru: "🎮 Награда арены" });
   if (typeof window === "undefined") return;
 
   if (totalXP > 0) {

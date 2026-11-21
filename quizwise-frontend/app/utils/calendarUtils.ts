@@ -17,12 +17,12 @@ export function getUserTimeZone(): string {
  * Örn: "18 Kasım 2026, 20:00 (Europe/Istanbul)"
  */
 export function formatLocalSessionTime(utcIsoString?: string | null): string {
-  if (!utcIsoString) return pickUiText({ tr: "Tarih belirtilmedi", en: "Date not specified", de: "Kein Datum angegeben", es: "Fecha no especificada", fr: "Date non spécifiée" });
+  if (!utcIsoString) return pickUiText({ tr: "Tarih belirtilmedi", en: "Date not specified", de: "Kein Datum angegeben", es: "Fecha no especificada", fr: "Date non spécifiée", it: "Data non specificata", ru: "Дата не указана" });
   try {
     const date = new Date(utcIsoString);
-    if (isNaN(date.getTime())) return pickUiText({ tr: "Geçersiz Tarih", en: "Invalid Date", de: "Ungültiges Datum", es: "Fecha inválida", fr: "Date invalide" });
+    if (isNaN(date.getTime())) return pickUiText({ tr: "Geçersiz Tarih", en: "Invalid Date", de: "Ungültiges Datum", es: "Fecha inválida", fr: "Date invalide", it: "Data non valida", ru: "Некорректная дата" });
 
-    const locMap: Record<string, string> = { tr: "tr-TR", en: "en-US", de: "de-DE", es: "es-ES", fr: "fr-FR" };
+    const locMap: Record<string, string> = { tr: "tr-TR", en: "en-US", de: "de-DE", es: "es-ES", fr: "fr-FR", it: "it-IT", ru: "ru-RU" };
     const locale = locMap[getCurrentUiLang()] || "en-US";
     const userTz = getUserTimeZone();
     const formatted = new Intl.DateTimeFormat(locale, {
@@ -54,7 +54,7 @@ export function downloadSessionIcs(
 
   const startDate = new Date(scheduledAtUtc);
   if (isNaN(startDate.getTime())) {
-    alert(pickUiText({ tr: "Geçerli bir ders tarihi bulunamadı.", en: "No valid lesson date found.", de: "Kein gültiges Unterrichtsdatum gefunden.", es: "No se encontró una fecha de clase válida.", fr: "Aucune date de cours valide trouvée." }));
+    alert(pickUiText({ tr: "Geçerli bir ders tarihi bulunamadı.", en: "No valid lesson date found.", de: "Kein gültiges Unterrichtsdatum gefunden.", es: "No se encontró una fecha de clase válida.", fr: "Aucune date de cours valide trouvée.", it: "Nessuna data di lezione valida trovata.", ru: "Подходящая дата урока не найдена." }));
     return;
   }
 

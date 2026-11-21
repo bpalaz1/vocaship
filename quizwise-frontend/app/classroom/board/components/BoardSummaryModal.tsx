@@ -433,7 +433,7 @@ export default function BoardSummaryModal({
     setIsSaving(true);
     const now = new Date();
     const localeCode =
-      currentLang === "tr" ? "tr-TR" : currentLang === "de" ? "de-DE" : currentLang === "es" ? "es-ES" : currentLang === "fr" ? "fr-FR" : "en-US";
+      currentLang === "tr" ? "tr-TR" : currentLang === "de" ? "de-DE" : currentLang === "es" ? "es-ES" : currentLang === "fr" ? "fr-FR" : currentLang === "it" ? "it-IT" : currentLang === "ru" ? "ru-RU" : "en-US";
     const formattedDate = `${now.toLocaleDateString(localeCode, { day: "numeric", month: "long", year: "numeric" })} • ${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
     ).padStart(2, "0")}`;
@@ -737,7 +737,7 @@ export default function BoardSummaryModal({
             <p className="text-xs text-slate-600 font-medium">
               {t("cls_mat_class_lbl", "Sınıf:")} <strong>{className}</strong> • {t("cls_cm_date_lbl", "Tarih")}:{" "}
               {new Date().toLocaleDateString(
-                currentLang === "tr" ? "tr-TR" : currentLang === "de" ? "de-DE" : currentLang === "es" ? "es-ES" : currentLang === "fr" ? "fr-FR" : "en-US"
+                currentLang === "tr" ? "tr-TR" : currentLang === "de" ? "de-DE" : currentLang === "es" ? "es-ES" : currentLang === "fr" ? "fr-FR" : currentLang === "it" ? "it-IT" : currentLang === "ru" ? "ru-RU" : "en-US"
               )}
             </p>
           </div>

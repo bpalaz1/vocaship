@@ -184,19 +184,19 @@ export function rewardReadingStoryComplete(storyKey: string): number {
   } catch {}
 
   addPendingGold(40, "reading");
-  syncRewardToBackend(40, "reading_story_complete", formatUiText({ tr: "Hikaye Tamamlama: {k}", en: "Story Completed: {k}", de: "Geschichte abgeschlossen: {k}", es: "Historia completada: {k}", fr: "Histoire terminée : {k}" }, { k: storyKey }));
+  syncRewardToBackend(40, "reading_story_complete", formatUiText({ tr: "Hikaye Tamamlama: {k}", en: "Story Completed: {k}", de: "Geschichte abgeschlossen: {k}", es: "Historia completada: {k}", fr: "Histoire terminée : {k}", it: "Storia completata: {k}", ru: "История завершена: {k}" }, { k: storyKey }));
   return 40;
 }
 
 export function rewardReadingQuestionCorrect(): number {
   addPendingGold(10, "reading");
-  syncRewardToBackend(10, "reading_question_correct", pickUiText({ tr: "Okuma Anlama Doğru Cevap", en: "Reading Comprehension Correct Answer", de: "Leseverständnis Richtige Antwort", es: "Comprensión lectora respuesta correcta", fr: "Compréhension écrite bonne réponse" }));
+  syncRewardToBackend(10, "reading_question_correct", pickUiText({ tr: "Okuma Anlama Doğru Cevap", en: "Reading Comprehension Correct Answer", de: "Leseverständnis Richtige Antwort", es: "Comprensión lectora respuesta correcta", fr: "Compréhension écrite bonne réponse", it: "Risposta corretta alla comprensione del testo", ru: "Верный ответ на вопрос по чтению" }));
   return 10;
 }
 
 export function rewardReadingWordAdded(word: string): number {
   addPendingGold(5, "reading");
-  syncRewardToBackend(5, "reading_word_added", formatUiText({ tr: "Metinden Kelime Ekleme: {w}", en: "Word Added from Text: {w}", de: "Wort aus Text hinzugefügt: {w}", es: "Palabra añadida del texto: {w}", fr: "Mot ajouté depuis le texte : {w}" }, { w: word }));
+  syncRewardToBackend(5, "reading_word_added", formatUiText({ tr: "Metinden Kelime Ekleme: {w}", en: "Word Added from Text: {w}", de: "Wort aus Text hinzugefügt: {w}", es: "Palabra añadida del texto: {w}", fr: "Mot ajouté depuis le texte : {w}", it: "Parola aggiunta dal testo: {w}", ru: "Слово добавлено из текста: {w}" }, { w: word }));
   return 5;
 }
 
@@ -212,13 +212,13 @@ export function rewardSpeakingSessionComplete(userTurnCount: number): number {
     ...prev,
     speakingCompletedSessions: prev.speakingCompletedSessions + 1,
   }));
-  syncRewardToBackend(35, "speaking_session_complete", pickUiText({ tr: "Speaking Oturumu Tamamlama", en: "Speaking Session Completed", de: "Speaking-Sitzung abgeschlossen", es: "Sesión de Speaking completada", fr: "Session Speaking terminée" }));
+  syncRewardToBackend(35, "speaking_session_complete", pickUiText({ tr: "Speaking Oturumu Tamamlama", en: "Speaking Session Completed", de: "Speaking-Sitzung abgeschlossen", es: "Sesión de Speaking completada", fr: "Session Speaking terminée", it: "Sessione di Speaking completata", ru: "Сессия разговорной практики завершена" }));
   return 35;
 }
 
 export function rewardSpeakingTargetWord(word: string): number {
   addPendingGold(10, "speaking");
-  syncRewardToBackend(10, "speaking_target_word", formatUiText({ tr: "Speaking Hedef Kelime: {w}", en: "Speaking Target Word: {w}", de: "Speaking Zielwort: {w}", es: "Palabra objetivo Speaking: {w}", fr: "Mot cible Speaking : {w}" }, { w: word }));
+  syncRewardToBackend(10, "speaking_target_word", formatUiText({ tr: "Speaking Hedef Kelime: {w}", en: "Speaking Target Word: {w}", de: "Speaking Zielwort: {w}", es: "Palabra objetivo Speaking: {w}", fr: "Mot cible Speaking : {w}", it: "Parola obiettivo Speaking: {w}", ru: "Целевое слово Speaking: {w}" }, { w: word }));
   return 10;
 }
 
@@ -232,7 +232,7 @@ export function claimUnifiedPendingGold(): {
 } {
   const claimed = claimPendingGold();
   if (claimed.total > 0 && typeof window !== "undefined") {
-    syncRewardToBackend(claimed.total, "unified_pending_gold_claim", pickUiText({ tr: "Birikmiş Çalışma Altını", en: "Accumulated Study Gold", de: "Angesammeltes Lern-Gold", es: "Oro de estudio acumulado", fr: "Or d'étude accumulé" }));
+    syncRewardToBackend(claimed.total, "unified_pending_gold_claim", pickUiText({ tr: "Birikmiş Çalışma Altını", en: "Accumulated Study Gold", de: "Angesammeltes Lern-Gold", es: "Oro de estudio acumulado", fr: "Or d'étude accumulé", it: "Oro di studio accumulato", ru: "Накопленное учебное золото" }));
   }
   return claimed;
 }

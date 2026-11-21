@@ -53,7 +53,7 @@ export async function awardGameRewards({
         return {
           ...parsed,
           alreadyClaimed: true,
-          message: pickUiText({ tr: "Bu yarışmanın ödüllerini daha önce aldınız.", en: "You have already claimed rewards for this competition.", de: "Sie haben die Belohnungen für diesen Wettbewerb bereits erhalten.", es: "Ya has reclamado las recompensas de esta competición.", fr: "Vous avez déjà réclamé les récompenses de cette compétition." }),
+          message: pickUiText({ tr: "Bu yarışmanın ödüllerini daha önce aldınız.", en: "You have already claimed rewards for this competition.", de: "Sie haben die Belohnungen für diesen Wettbewerb bereits erhalten.", es: "Ya has reclamado las recompensas de esta competición.", fr: "Vous avez déjà réclamé les récompenses de cette compétition.", it: "Hai già riscattato le ricompense per questa competizione.", ru: "Вы уже получили награды за это соревнование." }),
         };
       } catch {}
     }
@@ -99,7 +99,7 @@ export async function awardGameRewards({
             new CustomEvent("quizwise_floating_xp", {
               detail: {
                 amount: result.awardedXP,
-                label: formatUiText({ tr: "🏆 {rank}. Sıra Podyum Ödülü (+{xp} XP)", en: "🏆 Rank #{rank} Podium Reward (+{xp} XP)", de: "🏆 Platz #{rank} Podium-Belohnung (+{xp} XP)", es: "🏆 Premio de podio #{rank} (+{xp} XP)", fr: "🏆 Récompense du podium #{rank} (+{xp} XP)" }, { rank, xp: result.awardedXP }),
+                label: formatUiText({ tr: "🏆 {rank}. Sıra Podyum Ödülü (+{xp} XP)", en: "🏆 Rank #{rank} Podium Reward (+{xp} XP)", de: "🏆 Platz #{rank} Podium-Belohnung (+{xp} XP)", es: "🏆 Premio de podio #{rank} (+{xp} XP)", fr: "🏆 Récompense du podium #{rank} (+{xp} XP)", it: "🏆 Premio Podio #{rank} (+{xp} XP)", ru: "🏆 Награда пьедестала #{rank} (+{xp} XP)" }, { rank, xp: result.awardedXP }),
               },
             })
           );
@@ -133,9 +133,9 @@ export async function awardGameRewards({
   // 3. Çevrimdışı (Offline) Fallback
   const rule = FALLBACK_REWARDS[rank] || FALLBACK_DEFAULT;
   const localizedKeyNames: Record<number, string> = {
-    1: pickUiText({ tr: "Epik Sandık Anahtarı 🔑", en: "Epic Chest Key 🔑", de: "Epischer Truhenschlüssel 🔑", es: "Llave de cofre épico 🔑", fr: "Clé de coffre épique 🔑" }),
-    2: pickUiText({ tr: "Nadir Sandık Anahtarı 🔑", en: "Rare Chest Key 🔑", de: "Seltener Truhenschlüssel 🔑", es: "Llave de cofre raro 🔑", fr: "Clé de coffre rare 🔑" }),
-    3: pickUiText({ tr: "Standart Sandık Anahtarı 🔑", en: "Standard Chest Key 🔑", de: "Standard-Truhenschlüssel 🔑", es: "Llave de cofre estándar 🔑", fr: "Clé de coffre standard 🔑" }),
+    1: pickUiText({ tr: "Epik Sandık Anahtarı 🔑", en: "Epic Chest Key 🔑", de: "Epischer Truhenschlüssel 🔑", es: "Llave de cofre épico 🔑", fr: "Clé de coffre épique 🔑", it: "Chiave del Forziere Epico 🔑", ru: "Ключ от эпического сундука 🔑" }),
+    2: pickUiText({ tr: "Nadir Sandık Anahtarı 🔑", en: "Rare Chest Key 🔑", de: "Seltener Truhenschlüssel 🔑", es: "Llave de cofre raro 🔑", fr: "Clé de coffre rare 🔑", it: "Chiave del Forziere Raro 🔑", ru: "Ключ от редкого сундука 🔑" }),
+    3: pickUiText({ tr: "Standart Sandık Anahtarı 🔑", en: "Standard Chest Key 🔑", de: "Standard-Truhenschlüssel 🔑", es: "Llave de cofre estándar 🔑", fr: "Clé de coffre standard 🔑", it: "Chiave del Forziere Standard 🔑", ru: "Ключ от обычного сундука 🔑" }),
   };
   const offlineResult: AwardGameRewardsResult = {
     success: true,
@@ -148,7 +148,7 @@ export async function awardGameRewards({
     keyName: localizedKeyNames[rank] || rule.keyName || null,
     newTotalXP: 0,
     newCoins: 0,
-    message: formatUiText({ tr: "Tebrikler! {rank}. sıra ödülleri (+{xp} XP, +{coins} 🪙) cüzdanınıza kaydedildi!", en: "Congratulations! Rank #{rank} rewards (+{xp} XP, +{coins} 🪙) added to your wallet!", de: "Glückwunsch! Belohnungen für Platz #{rank} (+{xp} XP, +{coins} 🪙) gutgeschrieben!", es: "¡Felicidades! Recompensas del puesto #{rank} (+{xp} XP, +{coins} 🪙) guardadas en tu cartera.", fr: "Félicitations ! Récompenses du rang #{rank} (+{xp} XP, +{coins} 🪙) ajoutées à votre portefeuille !" }, { rank, xp: rule.xp, coins: rule.coins }),
+    message: formatUiText({ tr: "Tebrikler! {rank}. sıra ödülleri (+{xp} XP, +{coins} 🪙) cüzdanınıza kaydedildi!", en: "Congratulations! Rank #{rank} rewards (+{xp} XP, +{coins} 🪙) added to your wallet!", de: "Glückwunsch! Belohnungen für Platz #{rank} (+{xp} XP, +{coins} 🪙) gutgeschrieben!", es: "¡Felicidades! Recompensas del puesto #{rank} (+{xp} XP, +{coins} 🪙) guardadas en tu cartera.", fr: "Félicitations ! Récompenses du rang #{rank} (+{xp} XP, +{coins} 🪙) ajoutées à votre portefeuille !", it: "Congratulazioni! Ricompense del #{rank}° posto (+{xp} XP, +{coins} 🪙) aggiunte al tuo forziere!", ru: "Поздравляем! Награды за #{rank}-е место (+{xp} XP, +{coins} 🪙) добавлены в ваш кошелёк!" }, { rank, xp: rule.xp, coins: rule.coins }),
     alreadyClaimed: false,
   };
 
@@ -159,7 +159,7 @@ export async function awardGameRewards({
       new CustomEvent("quizwise_floating_xp", {
         detail: {
           amount: rule.xp,
-          label: formatUiText({ tr: "🏆 {rank}. Sıra Podyum Ödülü (+{xp} XP)", en: "🏆 Rank #{rank} Podium Reward (+{xp} XP)", de: "🏆 Platz #{rank} Podium-Belohnung (+{xp} XP)", es: "🏆 Premio de podio #{rank} (+{xp} XP)", fr: "🏆 Récompense du podium #{rank} (+{xp} XP)" }, { rank, xp: rule.xp }),
+          label: formatUiText({ tr: "🏆 {rank}. Sıra Podyum Ödülü (+{xp} XP)", en: "🏆 Rank #{rank} Podium Reward (+{xp} XP)", de: "🏆 Platz #{rank} Podium-Belohnung (+{xp} XP)", es: "🏆 Premio de podio #{rank} (+{xp} XP)", fr: "🏆 Récompense du podium #{rank} (+{xp} XP)", it: "🏆 Premio Podio #{rank} (+{xp} XP)", ru: "🏆 Награда пьедестала #{rank} (+{xp} XP)" }, { rank, xp: rule.xp }),
         },
       })
     );

@@ -118,6 +118,8 @@ export default function VocabHoneycombWidget({
               de: "Wenn Wörter im Langzeitgedächtnis verankert werden, wechseln Zellen von Grau → Saphirblau → Smaragd & Gold.",
               es: "A medida que las palabras pasan a la memoria a largo plazo, las celdas cambian de Gris → Azul Zafiro → Esmeralda y Oro.",
               fr: "À mesure que les mots s'ancrent en mémoire, les alvéoles passent du Gris → Bleu Saphir → Émeraude & Or.",
+              it: "Man mano che le parole si fissano nella memoria a lungo termine, le celle passano da Grigio → Blu Zaffiro → Smeraldo e Oro.",
+              ru: "По мере закрепления слов в долговременной памяти ячейки сот меняют цвет: Серый → Сапфировый → Изумруд и Золото.",
             })}
           </p>
         </div>

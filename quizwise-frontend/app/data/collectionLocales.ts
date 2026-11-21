@@ -1,5 +1,11 @@
 import type { Language } from "../context/LanguageContext";
 import type { MuseumBuffType, MuseumSalonId } from "./museumItems";
+import {
+  CHEST_LOCALES_IT_RU,
+  SALON_LOCALES_IT_RU,
+  CORE_ITEM_LOCALES_IT_RU,
+  MUSEUM_ITEM_LOCALES_IT_RU,
+} from "./collectionLocalesItRu";
 
 export interface LocalizedTextEntry {
   title: string;
@@ -979,6 +985,22 @@ export const MUSEUM_ITEM_LOCALES: Record<
     fr: { title: "Grand Panthéon VocaShip", desc: "Temple éternel des 100 artefacts réunis.", lore: "Plus haute coupole de votre triomphe." },
   },
 };
+
+function mergeLocaleMaps<T extends Record<string, Partial<Record<Language, unknown>>>>(
+  target: T,
+  patch: Record<string, Partial<Record<Language, unknown>>>
+) {
+  for (const [id, langs] of Object.entries(patch)) {
+    if (target[id]) {
+      Object.assign(target[id], langs);
+    }
+  }
+}
+
+mergeLocaleMaps(CHEST_LOCALES, CHEST_LOCALES_IT_RU);
+mergeLocaleMaps(SALON_LOCALES, SALON_LOCALES_IT_RU);
+mergeLocaleMaps(CORE_ITEM_LOCALES, CORE_ITEM_LOCALES_IT_RU);
+mergeLocaleMaps(MUSEUM_ITEM_LOCALES, MUSEUM_ITEM_LOCALES_IT_RU);
 
 export function getLocalizedChestInfo(
   chestId: string,

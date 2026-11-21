@@ -3,6 +3,8 @@
  * TR, EN ve DE dillerine duyarlı yerelleştirme ve Milestone Lock (Seviye/Başarı Kilidi) kuralları.
  */
 
+import { CHARACTER_LOCALES_IT_RU } from "./characterLocalesItRu";
+
 export interface StoreCharacterLocale {
   name: string;
   title: string;
@@ -23,6 +25,8 @@ export interface StoreCharacter {
     de: StoreCharacterLocale;
     es?: StoreCharacterLocale;
     fr?: StoreCharacterLocale;
+    it?: StoreCharacterLocale;
+    ru?: StoreCharacterLocale;
   };
   avatarSvg: string; // Vektörel hafif SVG illüstrasyon
 }
@@ -66,6 +70,8 @@ export function checkCharacterMilestone(
     de: `Stufe ${reqLevelStr} oder ${reqStories} Geschichten abschließen (Aktuell: ${completedStoriesCount}/${reqStories})`,
     es: `Nivel ${reqLevelStr} o completar ${reqStories} historias (Actual: ${completedStoriesCount}/${reqStories})`,
     fr: `Niveau ${reqLevelStr} ou terminer ${reqStories} histoires (Actuel : ${completedStoriesCount}/${reqStories})`,
+    it: `Raggiungi il livello ${reqLevelStr} o completa ${reqStories} storie (Attuale: ${completedStoriesCount}/${reqStories})`,
+    ru: `Достигните уровня ${reqLevelStr} или завершите ${reqStories} историй (Сейчас: ${completedStoriesCount}/${reqStories})`,
   };
 
   return {
@@ -81,7 +87,15 @@ export function getCharacterLocale(
   char: StoreCharacter,
   lang: string = "tr"
 ): StoreCharacterLocale {
-  const normalizedLang = (lang || "tr").toLowerCase() as "tr" | "en" | "de" | "es" | "fr";
+  const normalizedLang = (lang || "tr").toLowerCase() as "tr" | "en" | "de" | "es" | "fr" | "it" | "ru";
+  if (normalizedLang === "it" || normalizedLang === "ru") {
+    return (
+      char.locales[normalizedLang] ||
+      CHARACTER_LOCALES_IT_RU[char.id]?.[normalizedLang] ||
+      char.locales.en ||
+      char.locales.tr
+    );
+  }
   return char.locales[normalizedLang] || char.locales.en || char.locales.tr;
 }
 
@@ -409,4 +423,12 @@ export const STORE_CHARACTERS: StoreCharacter[] = [
     </svg>`,
   },
 ];
+
+for (const ch of STORE_CHARACTERS) {
+  const extra = CHARACTER_LOCALES_IT_RU[ch.id];
+  if (extra) {
+    ch.locales.it = extra.it;
+    ch.locales.ru = extra.ru;
+  }
+}
 

@@ -74,7 +74,7 @@ export async function resilientFetch(
         externalSignal.removeEventListener("abort", onExternalAbort);
       }
       lastError = timedOut
-        ? new Error(formatUiText({ tr: "İstek {ms}ms içinde yanıt vermedi (zaman aşımı).", en: "Request timed out after {ms}ms.", de: "Zeitüberschreitung nach {ms}ms.", es: "La solicitud superó el tiempo límite de {ms}ms.", fr: "La requête a expiré après {ms}ms." }, { ms: timeoutMs }))
+        ? new Error(formatUiText({ tr: "İstek {ms}ms içinde yanıt vermedi (zaman aşımı).", en: "Request timed out after {ms}ms.", de: "Zeitüberschreitung nach {ms}ms.", es: "La solicitud superó el tiempo límite de {ms}ms.", fr: "La requête a expiré après {ms}ms.", it: "Richiesta scaduta dopo {ms}ms.", ru: "Превышено время ожидания запроса ({ms} мс)." }, { ms: timeoutMs }))
         : err;
 
       if (externalSignal?.aborted || attempt >= retries) {
@@ -86,7 +86,7 @@ export async function resilientFetch(
 
   throw lastError instanceof Error
     ? lastError
-    : new Error(pickUiText({ tr: "Ağ bağlantısı kurulamadı.", en: "Network connection failed.", de: "Netzwerkverbindung fehlgeschlagen.", es: "Error de conexión de red.", fr: "Échec de la connexion réseau." }));
+    : new Error(pickUiText({ tr: "Ağ bağlantısı kurulamadı.", en: "Network connection failed.", de: "Netzwerkverbindung fehlgeschlagen.", es: "Error de conexión de red.", fr: "Échec de la connexion réseau.", it: "Connessione di rete non riuscita.", ru: "Ошибка сетевого подключения." }));
 }
 
 
