@@ -53,7 +53,7 @@ export default function WelcomeVoyageModal({
       id: "wordpool",
       emoji: "🃏",
       title: t("welcome_mod_wordpool_title", "Word Pool"),
-      subtitle: t("welcome_mod_wordpool_sub", "SM-2 Akıllı Kartlar"),
+      subtitle: t("welcome_mod_wordpool_sub", "Akıllı Tekrar Kartları"),
       accent: "border-indigo-500/30 bg-indigo-500/10 text-indigo-200",
       spanClass: "",
     },
@@ -332,7 +332,7 @@ export default function WelcomeVoyageModal({
       <div className="w-full max-w-5xl flex flex-col items-center gap-2.5 shrink-0">
         <p className="text-[11px] sm:text-xs text-slate-400 text-center truncate max-w-full px-2">
           {t(
-            "welcome_summary",
+            "welcome_subtitle_full",
             "Kelime havuzun, okuma odan, konuşma stüdyon, oyun arenan ve sınıfın tek bir akıllı gemide seni bekliyor."
           )}
         </p>
