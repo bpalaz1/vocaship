@@ -280,7 +280,7 @@ export default function Navbar() {
                       data-testid="navbar-guest-badge"
                       className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-[11px] font-bold text-slate-300 whitespace-nowrap"
                     >
-                      🧭 Misafir
+                      🧭 {t("header_guest_badge", "Misafir")}
                     </span>
                     <button
                       type="button"
@@ -288,7 +288,7 @@ export default function Navbar() {
                       onClick={() => openAuthModal("register")}
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 text-xs font-black shadow-lg shadow-emerald-500/20 transition active:scale-95 cursor-pointer whitespace-nowrap"
                     >
-                      <span>🚀 Ücretsiz Kayıt Ol</span>
+                      <span>🚀 {t("header_free_signup_btn", "Ücretsiz Kayıt Ol")}</span>
                     </button>
                   </div>
                 ) : (
