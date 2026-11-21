@@ -18,6 +18,7 @@ import {
   LogOut,
   Settings,
   Volume2,
+  Crown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import LanguageSelector from "./LanguageSelector";
@@ -28,6 +29,7 @@ import { useProfile } from "../context/ProfileContext";
 
 const AuthModal = dynamic(() => import("./auth/AuthModal"), { ssr: false });
 const SettingsModal = dynamic(() => import("./auth/SettingsModal"), { ssr: false });
+const CheckoutModal = dynamic(() => import("./payments/CheckoutModal"), { ssr: false });
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -43,6 +45,7 @@ export default function Navbar() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isProCheckoutOpen, setIsProCheckoutOpen] = useState(false);
 
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -112,6 +115,39 @@ export default function Navbar() {
   const isPro = planTier === "pro";
   const avatarUrl = userProfile.avatar_url || "🦊";
 
+  const rawSubscriptionStatus = (
+    userProfile.subscription_status ||
+    user?.subscriptionStatus ||
+    ""
+  )
+    .toLowerCase()
+    .trim();
+  const trialEndsAt = userProfile.trial_ends_at || user?.trialEndsAt || null;
+  const computedTrialDaysLeft: number | null = (() => {
+    const serverDays =
+      typeof userProfile.trial_days_left === "number"
+        ? userProfile.trial_days_left
+        : typeof user?.trialDaysLeft === "number"
+        ? user.trialDaysLeft
+        : null;
+    if (serverDays !== null) return Math.max(0, serverDays);
+    if (rawSubscriptionStatus === "trial" && trialEndsAt) {
+      const diffMs = new Date(trialEndsAt).getTime() - Date.now();
+      if (!isNaN(diffMs)) {
+        return diffMs <= 0 ? 0 : Math.max(1, Math.ceil(diffMs / 86400000));
+      }
+    }
+    return null;
+  })();
+
+  const isTrialActive =
+    rawSubscriptionStatus === "trial" &&
+    (computedTrialDaysLeft === null || computedTrialDaysLeft > 0);
+  const isTrialExpired =
+    rawSubscriptionStatus === "expired" ||
+    (rawSubscriptionStatus === "trial" && computedTrialDaysLeft === 0);
+  const showUpgradeCta = isTrialExpired || rawSubscriptionStatus === "canceled";
+
   // Akıllı tahta sayfasında genel site üst menüsünü (Navbar) gizle; yalnızca tahtanın kendi çubuğu görünsün
   if (pathname?.startsWith("/classroom/board")) {
     return (
@@ -170,9 +206,33 @@ export default function Navbar() {
               })}
             </nav>
 
-            {/* SAĞ: DİL SEÇİCİ & SADE KULLANICI KAPSÜLÜ */}
-            <div className="flex items-center gap-3 shrink-0 overflow-visible">
-              {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR) */}
+            {/* SAĞ: DENEME ROZETİ, DİL SEÇİCİ & SADE KULLANICI KAPSÜLÜ */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0 overflow-visible">
+              {/* 30 Günlük PRO Deneme Sayacı veya PRO'ya Geç Butonu */}
+              {isTrialActive && (
+                <button
+                  type="button"
+                  data-testid="navbar-trial-badge"
+                  onClick={() => setIsProCheckoutOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-indigo-500/20 via-violet-500/20 to-amber-500/20 hover:from-indigo-500/30 hover:to-amber-500/30 border border-amber-400/40 text-[11px] font-extrabold text-amber-200 shadow-sm transition cursor-pointer whitespace-nowrap"
+                >
+                  <span>🎁 {computedTrialDaysLeft ?? 30} Gün PRO Deneme</span>
+                </button>
+              )}
+
+              {showUpgradeCta && (
+                <button
+                  type="button"
+                  data-testid="navbar-upgrade-pro-btn"
+                  onClick={() => setIsProCheckoutOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-[11px] font-black shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 whitespace-nowrap"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>PRO&apos;ya Geç</span>
+                </button>
+              )}
+
+              {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR, IT, RU) */}
               <LanguageSelector align="right" />
 
               {/* SADE KULLANICI KAPSÜLÜ (USER CAPSULE) */}
@@ -253,6 +313,35 @@ export default function Navbar() {
                         </p>
                       </div>
                     </div>
+
+                    {/* Deneme Sayacı / PRO'ya Geç Aksiyonu (Dropdown İçi) */}
+                    {isTrialActive ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserDropdownOpen(false);
+                          setIsProCheckoutOpen(true);
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 text-[11px] font-extrabold text-amber-200 transition flex items-center justify-between cursor-pointer"
+                      >
+                        <span>🎁 {computedTrialDaysLeft ?? 30} Gün PRO Deneme</span>
+                        <span className="text-emerald-300 underline">PRO&apos;ya Geç</span>
+                      </button>
+                    ) : (
+                      (showUpgradeCta || !isPro) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserDropdownOpen(false);
+                            setIsProCheckoutOpen(true);
+                          }}
+                          className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Crown className="w-3.5 h-3.5" />
+                          <span>PRO&apos;ya Geç</span>
+                        </button>
+                      )
+                    )}
 
                     {/* 👤 Profil & Hesap Ayarları */}
                     <button
@@ -388,6 +477,19 @@ export default function Navbar() {
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
         initialTab={settingsInitialTab}
+      />
+
+      <CheckoutModal
+        isOpen={isProCheckoutOpen}
+        onClose={() => setIsProCheckoutOpen(false)}
+        mode="pro_plan"
+        reasonMessage={
+          isTrialExpired
+            ? "30 günlük ücretsiz PRO deneme süreniz sona erdi. Sınırsız erişime devam etmek için PRO planınızı seçin."
+            : isTrialActive
+            ? `Ücretsiz PRO denemenizde ${computedTrialDaysLeft ?? 30} gün kaldı. Dilediğiniz zaman Paddle ile kesintisiz PRO aboneliğe geçebilirsiniz.`
+            : undefined
+        }
       />
     </>
   );

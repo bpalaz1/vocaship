@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
+import { useAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import { API_BASE } from "../../config";
 
@@ -56,23 +57,26 @@ export default function CheckoutModal({
   onConfirmProCheckout,
 }: CheckoutModalProps) {
   const { t } = useLanguage();
-  const { userProfile, updateProfile } = useProfile();
+  const { user } = useAuth();
+  const { userProfile } = useProfile();
   const [proBillingCycle, setProBillingCycle] = useState<"monthly" | "yearly">(
-    "monthly"
+    "yearly"
   );
   const [cardHolder, setCardHolder] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
   const [cardError, setCardError] = useState<string | null>(null);
+  const [paddleError, setPaddleError] = useState<string | null>(null);
   const [internalProcessing, setInternalProcessing] = useState(false);
 
   const effectiveProcessing = isProcessing || internalProcessing;
 
   useEffect(() => {
     if (!isOpen) {
-      setProBillingCycle("monthly");
+      setProBillingCycle("yearly");
       setCardError(null);
+      setPaddleError(null);
       setInternalProcessing(false);
     }
   }, [isOpen]);
@@ -101,40 +105,55 @@ export default function CheckoutModal({
   };
 
   const handleCompleteProPayment = async () => {
-    if (!validateCardFields()) return;
+    setPaddleError(null);
     setInternalProcessing(true);
     try {
-      const uid = userProfile?.id || "00000000-0000-0000-0000-000000000001";
-      const initRes = await fetch(`${API_BASE}/api/v1/payments/upgrade-pro`, {
+      const uid =
+        user?.id ||
+        userProfile?.id ||
+        userProfile?.user_id ||
+        "00000000-0000-0000-0000-000000000001";
+      const email = user?.email || userProfile?.email || undefined;
+
+      const cleanedBase = (API_BASE || "").replace(/\/+$/, "");
+      const paddleUrl = cleanedBase.endsWith("/api/v1")
+        ? `${cleanedBase}/payments/paddle/checkout`
+        : `${cleanedBase}/api/v1/payments/paddle/checkout`;
+
+      const res = await fetch(paddleUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: uid,
-          plan_period: proBillingCycle,
-          provider: "sandbox",
-        }),
-      }).catch(() => null);
-      const initData = initRes && initRes.ok ? await initRes.json() : null;
-
-      await fetch(`${API_BASE}/api/v1/payments/confirm-pro`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: uid,
-          transaction_id: initData?.transaction_id,
+          email,
           plan_period: proBillingCycle,
         }),
-      }).catch(() => null);
-
-      await updateProfile({
-        is_pro: true,
-        plan_tier: "pro",
-        planTier: "pro",
       });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPaddleError(
+          data?.detail ||
+            "Paddle ödeme oturumu başlatılamadı. Lütfen daha sonra tekrar deneyin."
+        );
+        return;
+      }
+
+      const checkoutUrl = data?.checkout_url || data?.checkout?.url;
+      if (!checkoutUrl) {
+        setPaddleError("Paddle ödeme bağlantısı alınamadı.");
+        return;
+      }
 
       if (onConfirmProCheckout) {
         await onConfirmProCheckout(proBillingCycle);
       }
+
+      window.location.href = checkoutUrl;
+    } catch (err: any) {
+      setPaddleError(
+        err?.message || "Paddle ödeme sunucusuna bağlanılamadı."
+      );
     } finally {
       setInternalProcessing(false);
     }
@@ -371,7 +390,7 @@ export default function CheckoutModal({
               >
                 <div className="text-xs font-bold">{t("pay_monthly_pro", "Aylık PRO")}</div>
                 <div className="text-lg font-black font-mono text-indigo-300 mt-1">
-                  199 ₺ / {t("pay_per_month", "ay")}
+                  $7.99/{t("pay_per_month", "ay")}
                 </div>
               </button>
 
@@ -384,14 +403,14 @@ export default function CheckoutModal({
                     : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-1">
                   <span className="text-xs font-bold">{t("pay_yearly_pro", "Yıllık PRO")}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                    {t("pay_discount_25", "%25 İndirim")}
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold whitespace-nowrap">
+                    %38 İndirim
                   </span>
                 </div>
                 <div className="text-lg font-black font-mono text-amber-300 mt-1">
-                  1.790 ₺ / {t("pay_per_year", "yıl")}
+                  $59/{t("pay_per_year", "yıl")}
                 </div>
               </button>
             </div>
@@ -412,7 +431,18 @@ export default function CheckoutModal({
               ))}
             </div>
 
-            {renderCardForm()}
+            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
+              <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                Ödemeler global ödeme altyapısı <strong className="text-white">Paddle Billing</strong> güvencesiyle (Kart, Apple Pay, PayPal) 256-bit SSL üzerinden işlenir.
+              </span>
+            </div>
+
+            {paddleError && (
+              <p className="text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
+                {paddleError}
+              </p>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
               <button
@@ -424,12 +454,12 @@ export default function CheckoutModal({
                 {effectiveProcessing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{t("pay_activating", "PRO Etkinleştiriliyor...")}</span>
+                    <span>Paddle Ödeme Sayfası Açılıyor...</span>
                   </>
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    <span>{t("pay_complete_secure", "🔒 Güvenli Ödemeyi Tamamla")}</span>
+                    <span>🔒 Paddle ile Güvenli Öde</span>
                   </>
                 )}
               </button>

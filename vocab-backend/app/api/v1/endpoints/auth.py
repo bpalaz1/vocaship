@@ -11,6 +11,7 @@ from supabase_auth.errors import AuthApiError
 
 from app.core.database import get_db, get_supabase_client
 from app.core.local_db import LocalDatabaseClient
+from app.services.quota_service import evaluate_user_trial_and_plan, compute_trial_days_left
 from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
@@ -97,11 +98,18 @@ def get_current_user(request: Request) -> Dict[str, Any]:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
         if user_id:
-            user_row = _find_user_by_id(str(user_id)) or {}
-            p_tier = str(user_row.get("plan_tier") or payload.get("plan_tier") or ("pro" if (payload.get("is_pro") or user_row.get("is_pro")) else "basic")).lower().strip()
-            if p_tier not in ("basic", "plus", "pro"):
+            user_row = evaluate_user_trial_and_plan(_find_user_by_id(str(user_id)) or {})
+            sub_status = user_row.get("subscription_status")
+            trial_ends_at = user_row.get("trial_ends_at")
+            trial_days_left = user_row.get("trial_days_left")
+            if str(sub_status or "").lower() == "expired":
                 p_tier = "basic"
-            is_pro_flag = bool(payload.get("is_pro") or user_row.get("is_pro", False) or p_tier == "pro")
+                is_pro_flag = False
+            else:
+                p_tier = str(user_row.get("plan_tier") or payload.get("plan_tier") or ("pro" if (payload.get("is_pro") or user_row.get("is_pro")) else "basic")).lower().strip()
+                if p_tier not in ("basic", "plus", "pro"):
+                    p_tier = "basic"
+                is_pro_flag = bool(user_row.get("is_pro") if "is_pro" in user_row else (payload.get("is_pro") or p_tier == "pro"))
             return {
                 "id": str(user_id),
                 "username": payload.get("username") or user_row.get("username") or "",
@@ -110,6 +118,9 @@ def get_current_user(request: Request) -> Dict[str, Any]:
                 "role": payload.get("role") or user_row.get("role") or "user",
                 "is_pro": is_pro_flag,
                 "plan_tier": p_tier,
+                "subscription_status": sub_status,
+                "trial_ends_at": trial_ends_at,
+                "trial_days_left": trial_days_left,
                 "avatar_url": user_row.get("avatar_url"),
             }
     except Exception as jwt_err:
@@ -124,11 +135,18 @@ def get_current_user(request: Request) -> Dict[str, Any]:
                 sb_user = user_res.user
                 user_id = str(sb_user.id)
                 meta = getattr(sb_user, "user_metadata", {}) or {}
-                user_row = _find_user_by_id(user_id) or {}
-                p_tier = str(user_row.get("plan_tier") or meta.get("plan_tier") or ("pro" if (meta.get("is_pro") or user_row.get("is_pro")) else "basic")).lower().strip()
-                if p_tier not in ("basic", "plus", "pro"):
+                user_row = evaluate_user_trial_and_plan(_find_user_by_id(user_id) or {})
+                sub_status = user_row.get("subscription_status")
+                trial_ends_at = user_row.get("trial_ends_at")
+                trial_days_left = user_row.get("trial_days_left")
+                if str(sub_status or "").lower() == "expired":
                     p_tier = "basic"
-                is_pro_flag = bool(meta.get("is_pro") or user_row.get("is_pro", False) or p_tier == "pro")
+                    is_pro_flag = False
+                else:
+                    p_tier = str(user_row.get("plan_tier") or meta.get("plan_tier") or ("pro" if (meta.get("is_pro") or user_row.get("is_pro")) else "basic")).lower().strip()
+                    if p_tier not in ("basic", "plus", "pro"):
+                        p_tier = "basic"
+                    is_pro_flag = bool(user_row.get("is_pro") if "is_pro" in user_row else (meta.get("is_pro") or p_tier == "pro"))
                 return {
                     "id": user_id,
                     "username": meta.get("username") or user_row.get("username") or "",
@@ -137,6 +155,9 @@ def get_current_user(request: Request) -> Dict[str, Any]:
                     "role": meta.get("role") or user_row.get("role") or "user",
                     "is_pro": is_pro_flag,
                     "plan_tier": p_tier,
+                    "subscription_status": sub_status,
+                    "trial_ends_at": trial_ends_at,
+                    "trial_days_left": trial_days_left,
                     "avatar_url": meta.get("avatar_url") or user_row.get("avatar_url"),
                 }
         except Exception as sb_err:
@@ -226,16 +247,20 @@ def _find_user_by_username(username: str) -> Optional[Dict[str, Any]]:
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_200_OK)
 def register_user(payload: RegisterRequest) -> AuthResponse:
     """
-    Kullaniciyi secilen plan (basic, plus, pro) ile kaydeder ve beklemeden aninda token ile oturum acar.
+    Yeni kayıt olan her kullanıcıya kredi kartı istemeden otomatik 30 günlük
+    PRO deneme (subscription_status='trial', trial_ends_at=NOW()+30 days, plan_tier='pro', is_pro=True)
+    tanımlar ve anında token ile oturum açar.
     """
     clean_username = payload.username.strip()
     clean_full_name = payload.full_name.strip()
     clean_email = str(payload.email).strip().lower() if payload.email else f"{clean_username.lower()}@vocaship.local"
 
-    # plan_tier kontrolü ('basic' | 'plus' | 'pro')
-    raw_plan = str(payload.plan_tier or "basic").lower().strip()
-    plan_tier = raw_plan if raw_plan in ("basic", "plus", "pro") else "basic"
-    is_pro_val = (plan_tier == "pro")
+    # Kartsız 30 Gün Ücretsiz PRO Deneme varsayılanı
+    trial_ends_at_iso = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    subscription_status = "trial"
+    plan_tier = "pro"
+    is_pro_val = True
+    trial_days_left = 30
 
     if not clean_username or len(clean_username) < 2:
         raise HTTPException(
@@ -256,30 +281,48 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
     # E-posta daha once alinmis mi kontrolu (Tekil Kimlik)
     existing_user_by_email = _find_user_by_email(clean_email)
     if existing_user_by_email:
-        # Eğer varsa kullanıcı bilgilerini güncelle ve doğrudan oturum açtır
-        user_id = str(existing_user_by_email.get("id"))
+        evaluated_existing = evaluate_user_trial_and_plan(existing_user_by_email)
+        user_id = str(evaluated_existing.get("id"))
+        ex_sub_status = evaluated_existing.get("subscription_status")
+        ex_trial_ends = evaluated_existing.get("trial_ends_at")
+        if not ex_sub_status:
+            ex_sub_status = "trial"
+            ex_trial_ends = trial_ends_at_iso
+            ex_plan_tier = "pro"
+            ex_is_pro = True
+            ex_days_left = 30
+        else:
+            ex_plan_tier = str(evaluated_existing.get("plan_tier") or ("pro" if evaluated_existing.get("is_pro") else "basic")).lower()
+            ex_is_pro = bool(evaluated_existing.get("is_pro", False))
+            ex_days_left = evaluated_existing.get("trial_days_left")
+
         updates = {
-            "plan_tier": plan_tier,
-            "is_pro": is_pro_val,
-            "is_educator": is_pro_val,
+            "plan_tier": ex_plan_tier,
+            "is_pro": ex_is_pro,
+            "is_educator": ex_is_pro,
+            "subscription_status": ex_sub_status,
+            "trial_ends_at": ex_trial_ends,
         }
         db = get_db()
         try:
             db.table("users").update(updates).eq("id", user_id).execute()
         except Exception:
-            pass
+            try:
+                db.table("users").update({"plan_tier": ex_plan_tier, "is_pro": ex_is_pro, "is_educator": ex_is_pro}).eq("id", user_id).execute()
+            except Exception:
+                pass
         try:
             _local_auth_db.table("users").update(updates).eq("id", user_id).execute()
         except Exception:
             pass
-        
+
         token = create_access_token(
             user_id=user_id,
             username=clean_username,
             role="user",
-            is_pro=is_pro_val,
+            is_pro=ex_is_pro,
             email=clean_email,
-            plan_tier=plan_tier,
+            plan_tier=ex_plan_tier,
         )
         user_resp = UserResponse(
             id=user_id,
@@ -287,9 +330,12 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
             username=clean_username,
             email=clean_email,
             role="user",
-            is_pro=is_pro_val,
-            plan_tier=plan_tier,
-            avatar_url=existing_user_by_email.get("avatar_url"),
+            is_pro=ex_is_pro,
+            plan_tier=ex_plan_tier,
+            subscription_status=ex_sub_status,
+            trial_ends_at=ex_trial_ends,
+            trial_days_left=ex_days_left,
+            avatar_url=evaluated_existing.get("avatar_url"),
         )
         return AuthResponse(
             user_id=user_id,
@@ -297,10 +343,13 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
             full_name=clean_full_name,
             email=clean_email,
             role="user",
-            is_pro=is_pro_val,
-            is_educator=is_pro_val,
-            plan_tier=plan_tier,
-            avatar_url=existing_user_by_email.get("avatar_url"),
+            is_pro=ex_is_pro,
+            is_educator=ex_is_pro,
+            plan_tier=ex_plan_tier,
+            subscription_status=ex_sub_status,
+            trial_ends_at=ex_trial_ends,
+            trial_days_left=ex_days_left,
+            avatar_url=evaluated_existing.get("avatar_url"),
             token=token,
             message="Kayıt başarılı! Oturumunuz açıldı.",
             user=user_resp,
@@ -321,6 +370,8 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
                         "username": clean_username,
                         "plan_tier": plan_tier,
                         "is_pro": is_pro_val,
+                        "subscription_status": subscription_status,
+                        "trial_ends_at": trial_ends_at_iso,
                     }
                 },
             }
@@ -345,6 +396,8 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         "is_pro": is_pro_val,
         "is_educator": is_pro_val,
         "plan_tier": plan_tier,
+        "subscription_status": subscription_status,
+        "trial_ends_at": trial_ends_at_iso,
         "avatar_url": None,
         "email_confirmed": 1,
         "daily_custom_texts_used": 0,
@@ -361,7 +414,11 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         try:
             db.table("users").update(full_user_record).eq("id", user_id).execute()
         except Exception:
-            pass
+            fallback_record = {k: v for k, v in full_user_record.items() if k not in ("subscription_status", "trial_ends_at")}
+            try:
+                db.table("users").insert(fallback_record).execute()
+            except Exception:
+                pass
 
     # Yerel SQLite veritabanı yedeği
     try:
@@ -390,6 +447,9 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         role="user",
         is_pro=is_pro_val,
         plan_tier=plan_tier,
+        subscription_status=subscription_status,
+        trial_ends_at=trial_ends_at_iso,
+        trial_days_left=trial_days_left,
         avatar_url=None,
     )
 
@@ -402,9 +462,12 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         is_pro=is_pro_val,
         is_educator=is_pro_val,
         plan_tier=plan_tier,
+        subscription_status=subscription_status,
+        trial_ends_at=trial_ends_at_iso,
+        trial_days_left=trial_days_left,
         avatar_url=None,
         token=token,
-        message="Kayıt başarılı! Oturumunuz açıldı.",
+        message="Kayıt başarılı! 30 günlük ücretsiz PRO deneme süreniz başlatıldı.",
         user=user_resp,
     )
 
@@ -510,6 +573,7 @@ def login_user(payload: LoginRequest) -> AuthResponse:
                 detail="E-posta adresiniz henüz doğrulanmamış. Lütfen gelen kutunuzdaki aktivasyon linkine tıklayın.",
             )
 
+    user_row = evaluate_user_trial_and_plan(user_row)
     final_user_id = str(user_row.get("id") or "")
     final_email = str(user_row.get("email") or target_email)
     final_username = str(user_row.get("username") or final_email.split("@")[0])
@@ -518,6 +582,11 @@ def login_user(payload: LoginRequest) -> AuthResponse:
     final_is_pro = bool(user_row.get("is_pro", False))
     final_is_educator = bool(user_row.get("is_educator", False))
     final_avatar = user_row.get("avatar_url")
+    final_sub_status = user_row.get("subscription_status")
+    final_trial_ends_at = user_row.get("trial_ends_at")
+    final_trial_days_left = user_row.get("trial_days_left")
+    if final_trial_days_left is None and final_sub_status:
+        final_trial_days_left = compute_trial_days_left(final_sub_status, final_trial_ends_at)
     final_plan_tier = str(user_row.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower().strip()
     if final_plan_tier not in ("basic", "plus", "pro"):
         final_plan_tier = "basic"
@@ -541,6 +610,9 @@ def login_user(payload: LoginRequest) -> AuthResponse:
         role=final_role,
         is_pro=final_is_pro,
         plan_tier=final_plan_tier,
+        subscription_status=final_sub_status,
+        trial_ends_at=final_trial_ends_at,
+        trial_days_left=final_trial_days_left,
         avatar_url=final_avatar,
     )
 
@@ -553,6 +625,9 @@ def login_user(payload: LoginRequest) -> AuthResponse:
         is_pro=final_is_pro,
         is_educator=final_is_educator,
         plan_tier=final_plan_tier,
+        subscription_status=final_sub_status,
+        trial_ends_at=final_trial_ends_at,
+        trial_days_left=final_trial_days_left,
         avatar_url=final_avatar,
         token=token,
         message="Giriş başarılı.",
@@ -637,7 +712,7 @@ def update_user_profile(
             logger.debug(f"[Auth] Supabase auth metadata güncelleme uyarısı: {exc}")
 
     # Güncel kullanıcı kaydını getir
-    updated_user = _find_user_by_id(user_id) or {}
+    updated_user = evaluate_user_trial_and_plan(_find_user_by_id(user_id) or {})
 
     final_full_name = str(update_data.get("full_name") or updated_user.get("full_name") or current_user.get("full_name") or "")
     final_username = str(update_data.get("username") or updated_user.get("username") or current_user.get("username") or "")
@@ -645,6 +720,11 @@ def update_user_profile(
     final_role = str(updated_user.get("role") or current_user.get("role") or "user")
     final_is_pro = bool(updated_user.get("is_pro", current_user.get("is_pro", False)))
     final_avatar = update_data.get("avatar_url", updated_user.get("avatar_url"))
+    final_sub_status = updated_user.get("subscription_status") or current_user.get("subscription_status")
+    final_trial_ends_at = updated_user.get("trial_ends_at") or current_user.get("trial_ends_at")
+    final_trial_days_left = updated_user.get("trial_days_left")
+    if final_trial_days_left is None and final_sub_status:
+        final_trial_days_left = compute_trial_days_left(final_sub_status, final_trial_ends_at)
 
     p_tier = str(update_data.get("plan_tier") or updated_user.get("plan_tier") or current_user.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower()
 
@@ -656,6 +736,9 @@ def update_user_profile(
         role=final_role,
         is_pro=final_is_pro,
         plan_tier=p_tier,
+        subscription_status=final_sub_status,
+        trial_ends_at=final_trial_ends_at,
+        trial_days_left=final_trial_days_left,
         avatar_url=final_avatar,
     )
 
@@ -667,19 +750,28 @@ def update_user_profile(
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
 def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_user)) -> UserResponse:
     """
-    Oturum acmis kullanicinin profil bilgilerini dondurur.
+    Oturum acmis kullanicinin profil, deneme ve abonelik bilgilerini dondurur.
     """
     user_id = str(current_user["id"])
-    user_row = _find_user_by_id(user_id) or {}
-    p_tier = str(user_row.get("plan_tier") or current_user.get("plan_tier") or ("pro" if (current_user.get("is_pro") or user_row.get("is_pro")) else "basic")).lower()
+    user_row = evaluate_user_trial_and_plan(_find_user_by_id(user_id) or {})
+    final_sub_status = user_row.get("subscription_status") or current_user.get("subscription_status")
+    final_trial_ends_at = user_row.get("trial_ends_at") or current_user.get("trial_ends_at")
+    final_trial_days_left = user_row.get("trial_days_left")
+    if final_trial_days_left is None and final_sub_status:
+        final_trial_days_left = compute_trial_days_left(final_sub_status, final_trial_ends_at)
+    final_is_pro = bool(user_row.get("is_pro", current_user.get("is_pro", False)))
+    p_tier = str(user_row.get("plan_tier") or current_user.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower()
     return UserResponse(
         id=user_id,
         full_name=str(user_row.get("full_name") or current_user.get("full_name") or ""),
         username=str(user_row.get("username") or current_user.get("username") or ""),
         email=str(user_row.get("email") or current_user.get("email") or ""),
         role=str(user_row.get("role") or current_user.get("role") or "user"),
-        is_pro=bool(user_row.get("is_pro", current_user.get("is_pro", False))),
+        is_pro=final_is_pro,
         plan_tier=p_tier,
+        subscription_status=final_sub_status,
+        trial_ends_at=final_trial_ends_at,
+        trial_days_left=final_trial_days_left,
         avatar_url=user_row.get("avatar_url") or current_user.get("avatar_url"),
     )
 

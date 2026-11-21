@@ -20,6 +20,9 @@ export interface UserProfile {
   is_pro: boolean;
   plan_tier?: "basic" | "plus" | "pro";
   planTier?: "basic" | "plus" | "pro";
+  subscription_status?: string | null;
+  trial_ends_at?: string | null;
+  trial_days_left?: number | null;
   study_level?: string;
   daily_goal?: number;
   tts_voice?: string;
@@ -123,11 +126,24 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       setUserProfile((prev) => {
         const updated: UserProfile = {
           ...prev,
+          id: user.id || prev.id,
+          user_id: user.id || prev.user_id,
           full_name: user.fullName || prev.full_name,
           username: user.username || prev.username,
+          email: user.email || prev.email,
           is_pro: user.isPro ?? prev.is_pro,
           plan_tier: tier,
           planTier: tier,
+          subscription_status:
+            user.subscriptionStatus !== undefined
+              ? user.subscriptionStatus
+              : prev.subscription_status,
+          trial_ends_at:
+            user.trialEndsAt !== undefined ? user.trialEndsAt : prev.trial_ends_at,
+          trial_days_left:
+            user.trialDaysLeft !== undefined
+              ? user.trialDaysLeft
+              : prev.trial_days_left,
         };
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -168,6 +184,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             const synced: UserProfile = {
               ...prev,
               ...localStored,
+              id: data.id || prev.id,
+              user_id: data.id || prev.user_id,
               full_name: localStored.full_name || data.full_name || prev.full_name || "Öğrenci",
               username: (localStored.username || data.username || prev.username).replace(/^@+/, ""),
               email: preservedEmail,
@@ -175,6 +193,12 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
               is_pro: Boolean(data.is_pro),
               plan_tier: tier,
               planTier: tier,
+              subscription_status: data.subscription_status ?? prev.subscription_status ?? null,
+              trial_ends_at: data.trial_ends_at ?? prev.trial_ends_at ?? null,
+              trial_days_left:
+                typeof data.trial_days_left === "number"
+                  ? data.trial_days_left
+                  : prev.trial_days_left ?? null,
             };
             try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(synced));

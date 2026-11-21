@@ -306,6 +306,12 @@ class LocalDatabaseClient:
                 cursor.execute("ALTER TABLE users ADD COLUMN email_confirmed INTEGER DEFAULT 0;")
             if "plan_tier" not in existing_user_cols:
                 cursor.execute("ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'basic';")
+            if "trial_ends_at" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN trial_ends_at TEXT;")
+            if "lemon_customer_id" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN lemon_customer_id TEXT;")
+            if "lemon_subscription_id" not in existing_user_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN lemon_subscription_id TEXT;")
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS folders (

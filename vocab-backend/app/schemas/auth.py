@@ -24,6 +24,9 @@ class UserResponse(BaseModel):
     role: Union[Literal["user", "admin"], str] = "user"
     is_pro: bool = False
     plan_tier: str = "basic"
+    subscription_status: Optional[str] = None
+    trial_ends_at: Optional[str] = None
+    trial_days_left: Optional[int] = None
     avatar_url: Optional[str] = None
 
 
@@ -44,6 +47,9 @@ class AuthResponse(BaseModel):
     is_pro: bool = False
     is_educator: bool = False
     plan_tier: str = "basic"
+    subscription_status: Optional[str] = None
+    trial_ends_at: Optional[str] = None
+    trial_days_left: Optional[int] = None
     avatar_url: Optional[str] = None
     token: Optional[str] = ""
     message: Optional[str] = None

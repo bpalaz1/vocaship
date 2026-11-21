@@ -1,9 +1,14 @@
 import os
+import hmac
+import json
 import uuid
+import hashlib
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Literal
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi import APIRouter, HTTPException, Depends, Query, Request, status
 from supabase import Client
 from app.core.database import get_db
 from app.core.local_db import LocalDatabaseClient
@@ -380,6 +385,248 @@ def confirm_class_checkout_endpoint(
         "user_id": payload.user_id.strip(),
         "payment_status": "paid",
         "access_granted": True,
+    }
+
+
+# =========================================================================
+# PADDLE BILLING CHECKOUT & HMAC-SHA256 WEBHOOK ENTEGRASYONU
+# =========================================================================
+
+class PaddleCheckoutRequest(BaseModel):
+    user_id: str
+    email: Optional[str] = None
+    plan_period: Literal["monthly", "yearly"] = "monthly"
+
+
+def _get_paddle_api_base() -> tuple[str, str]:
+    env = (os.getenv("PADDLE_ENVIRONMENT") or "sandbox").strip().lower()
+    if env == "production":
+        return "production", "https://api.paddle.com"
+    return "sandbox", "https://sandbox-api.paddle.com"
+
+
+def _verify_paddle_signature(raw_body: bytes, signature_header: str, secret: str) -> bool:
+    """
+    Paddle-Signature: ts=<unix_ts>;h1=<hex_hmac_sha256>
+    İmzalanan metin: "{ts}:{raw_body_utf8}"
+    """
+    if not signature_header or not secret:
+        return False
+
+    ts_val: Optional[str] = None
+    signatures: list[str] = []
+    for part in signature_header.split(";"):
+        piece = part.strip()
+        if "=" not in piece:
+            continue
+        k, v = piece.split("=", 1)
+        k = k.strip().lower()
+        v = v.strip()
+        if k == "ts":
+            ts_val = v
+        elif k == "h1" and v:
+            signatures.append(v)
+
+    if not ts_val or not signatures:
+        return False
+
+    signed_payload = f"{ts_val}:{raw_body.decode('utf-8')}".encode("utf-8")
+    expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+    return any(hmac.compare_digest(expected, sig) for sig in signatures)
+
+
+def _update_user_subscription(
+    db: Optional[Client],
+    updates: Dict[str, Any],
+    user_id: Optional[str] = None,
+    subscription_id: Optional[str] = None,
+) -> None:
+    if not user_id and not subscription_id:
+        return
+
+    def _apply(client: Any, label: str) -> None:
+        if not client:
+            return
+        try:
+            q = client.table("users").update(updates)
+            if user_id:
+                q.eq("id", user_id).execute()
+            elif subscription_id:
+                q.eq("lemon_subscription_id", subscription_id).execute()
+        except Exception as exc:
+            print(f"[{label} Paddle Update Warning]: {exc}")
+            # Fallback if optional columns don't exist yet on remote Supabase
+            safe_updates = {k: v for k, v in updates.items() if k in ("is_pro", "is_educator", "plan_tier", "subscription_status")}
+            if safe_updates:
+                try:
+                    q2 = client.table("users").update(safe_updates)
+                    if user_id:
+                        q2.eq("id", user_id).execute()
+                except Exception:
+                    pass
+
+    _apply(db, "PrimaryDB")
+    _apply(_local_payment_db, "LocalDB")
+
+
+@router.post("/paddle/checkout", status_code=status.HTTP_200_OK)
+def create_paddle_checkout_endpoint(payload: PaddleCheckoutRequest):
+    """
+    Paddle Billing Transactions API üzerinden PRO abonelik checkout URL'i oluşturur.
+    """
+    user_id = payload.user_id.strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id zorunludur.")
+
+    api_key = (os.getenv("PADDLE_API_KEY") or "").strip()
+    monthly_price_id = (os.getenv("PADDLE_MONTHLY_PRICE_ID") or "").strip()
+    yearly_price_id = (os.getenv("PADDLE_YEARLY_PRICE_ID") or "").strip()
+    selected_price_id = yearly_price_id if payload.plan_period == "yearly" else monthly_price_id
+    env, base_url = _get_paddle_api_base()
+
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Paddle ödeme altyapısı henüz yapılandırılmadı (PADDLE_API_KEY eksik).",
+        )
+    if not selected_price_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Seçilen plan ({payload.plan_period}) için Paddle price_id tanımlı değil.",
+        )
+
+    custom_data: Dict[str, Any] = {
+        "user_id": user_id,
+        "plan_period": payload.plan_period,
+    }
+    if payload.email and payload.email.strip():
+        custom_data["email"] = payload.email.strip().lower()
+
+    paddle_body: Dict[str, Any] = {
+        "items": [
+            {
+                "price_id": selected_price_id,
+                "quantity": 1,
+            }
+        ],
+        "custom_data": custom_data,
+    }
+
+    url = f"{base_url}/transactions"
+    req_bytes = json.dumps(paddle_body).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=req_bytes,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            resp_data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as http_err:
+        err_text = http_err.read().decode("utf-8", errors="ignore")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Paddle API hatası ({http_err.code}): {err_text or http_err.reason}",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Paddle API bağlantı hatası: {exc}",
+        )
+
+    tx_data = resp_data.get("data") or {}
+    checkout_obj = tx_data.get("checkout") or resp_data.get("checkout") or {}
+    checkout_url = checkout_obj.get("url")
+    tx_id = tx_data.get("id")
+
+    if not checkout_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Paddle yanıtında checkout.url bulunamadı. Lütfen Paddle Checkout varsayılan ödeme bağlantısını kontrol edin.",
+        )
+
+    return {
+        "success": True,
+        "environment": env,
+        "transaction_id": tx_id,
+        "plan_period": payload.plan_period,
+        "checkout_url": checkout_url,
+        "checkout": {"url": checkout_url},
+    }
+
+
+@router.post("/paddle/webhook", status_code=status.HTTP_200_OK)
+async def paddle_webhook_endpoint(
+    request: Request,
+    db: Client = Depends(get_db),
+):
+    """
+    Paddle Billing webhook olaylarını Paddle-Signature (HMAC-SHA256) ile doğrular
+    ve users tablosundaki abonelik durumunu günceller.
+    """
+    raw_body = await request.body()
+    webhook_secret = (os.getenv("PADDLE_WEBHOOK_SECRET") or "").strip()
+    signature_header = request.headers.get("Paddle-Signature") or request.headers.get("paddle-signature") or ""
+
+    if not webhook_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PADDLE_WEBHOOK_SECRET tanımlı değil.",
+        )
+
+    if not _verify_paddle_signature(raw_body, signature_header, webhook_secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Geçersiz Paddle-Signature imzası.",
+        )
+
+    try:
+        event = json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Geçersiz JSON webhook gövdesi.")
+
+    event_type = str(event.get("event_type") or "").strip()
+    data = event.get("data") or {}
+    custom_data = data.get("custom_data") or {}
+    user_id = str(custom_data.get("user_id") or "").strip() or None
+    customer_id = data.get("customer_id")
+    subscription_id = data.get("subscription_id") or data.get("id")
+
+    if event_type in ("transaction.completed", "subscription.activated"):
+        updates: Dict[str, Any] = {
+            "is_pro": True,
+            "is_educator": True,
+            "plan_tier": "pro",
+            "subscription_status": "active",
+            "lemon_customer_id": customer_id,
+            "lemon_subscription_id": subscription_id,
+        }
+        _update_user_subscription(
+            db=db,
+            updates=updates,
+            user_id=user_id,
+            subscription_id=subscription_id,
+        )
+    elif event_type == "subscription.canceled":
+        _update_user_subscription(
+            db=db,
+            updates={"subscription_status": "canceled"},
+            user_id=user_id,
+            subscription_id=subscription_id,
+        )
+
+    return {
+        "success": True,
+        "event_type": event_type,
+        "user_id": user_id,
+        "customer_id": customer_id,
+        "subscription_id": subscription_id,
     }
 
 

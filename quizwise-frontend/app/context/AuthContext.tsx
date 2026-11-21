@@ -14,6 +14,9 @@ export interface AuthUser {
   isPro: boolean;
   isEducator: boolean;
   planTier: PlanTier;
+  subscriptionStatus?: string | null;
+  trialEndsAt?: string | null;
+  trialDaysLeft?: number | null;
 }
 
 export interface AuthContextType {
@@ -111,10 +114,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id: String(data.user_id || data.id || ""),
       username: String(data.username || username.trim()),
       fullName: String(data.full_name || data.fullName || data.username || ""),
+      email: data.email || data.user?.email || undefined,
       role: String(data.role || "user"),
       isPro: tier === "pro" || Boolean(data.is_pro ?? data.isPro ?? false),
       isEducator: Boolean(data.is_educator ?? data.isEducator ?? false),
       planTier: tier,
+      subscriptionStatus: data.subscription_status ?? data.user?.subscription_status ?? null,
+      trialEndsAt: data.trial_ends_at ?? data.user?.trial_ends_at ?? null,
+      trialDaysLeft:
+        typeof (data.trial_days_left ?? data.user?.trial_days_left) === "number"
+          ? (data.trial_days_left ?? data.user?.trial_days_left)
+          : null,
     };
     const jwtToken = String(data.token || "");
 
@@ -127,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     username: string,
     password: string,
     email?: string,
-    planTier: PlanTier = "basic"
+    planTier: PlanTier = "pro"
   ): Promise<AuthUser> => {
     const res = await fetch(getAuthEndpoint("register"), {
       method: "POST",
@@ -148,16 +158,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    const tier: PlanTier = (data.plan_tier as PlanTier) || planTier;
+    const tier: PlanTier = (data.plan_tier as PlanTier) || "pro";
 
     const mappedUser: AuthUser = {
       id: String(data.user_id || data.id || ""),
       username: String(data.username || username.trim()),
       fullName: String(data.full_name || data.fullName || fullName.trim()),
+      email: data.email || data.user?.email || (email ? email.trim() : undefined),
       role: String(data.role || "user"),
-      isPro: tier === "pro" || Boolean(data.is_pro ?? data.isPro ?? false),
-      isEducator: Boolean(data.is_educator ?? data.isEducator ?? false),
+      isPro: tier === "pro" || Boolean(data.is_pro ?? data.isPro ?? true),
+      isEducator: Boolean(data.is_educator ?? data.isEducator ?? true),
       planTier: tier,
+      subscriptionStatus: data.subscription_status ?? data.user?.subscription_status ?? "trial",
+      trialEndsAt: data.trial_ends_at ?? data.user?.trial_ends_at ?? null,
+      trialDaysLeft:
+        typeof (data.trial_days_left ?? data.user?.trial_days_left) === "number"
+          ? (data.trial_days_left ?? data.user?.trial_days_left)
+          : 30,
     };
     const jwtToken = String(data.token || "");
 

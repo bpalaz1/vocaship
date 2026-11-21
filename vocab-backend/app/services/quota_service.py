@@ -1,6 +1,7 @@
 import os
+import math
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Dict, Any, Optional, Literal
 import jwt
 from fastapi import Request, HTTPException, status
@@ -148,6 +149,101 @@ def _update_user_fields(user_id: str, updates: Dict[str, Any]) -> None:
         logger.debug(f"[Quota] Local DB update uyarısı: {exc}")
 
 
+def _parse_utc_datetime(raw_value: Optional[str]) -> Optional[datetime]:
+    if not raw_value:
+        return None
+    try:
+        cleaned = str(raw_value).strip()
+        if cleaned.endswith("Z"):
+            cleaned = cleaned[:-1] + "+00:00"
+        dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def compute_trial_days_left(
+    subscription_status: Optional[str],
+    trial_ends_at: Optional[str],
+) -> Optional[int]:
+    status_norm = str(subscription_status or "").lower().strip()
+    if status_norm != "trial":
+        return 0 if status_norm == "expired" else None
+    ends_dt = _parse_utc_datetime(trial_ends_at)
+    if not ends_dt:
+        return None
+    remaining_seconds = (ends_dt - datetime.now(timezone.utc)).total_seconds()
+    if remaining_seconds <= 0:
+        return 0
+    return max(1, math.ceil(remaining_seconds / 86400))
+
+
+def evaluate_user_trial_and_plan(user_row: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Kullanıcının kartsız 30 günlük deneme durumunu kontrol eder:
+    - subscription_status == 'trial' ise trial_ends_at tarihine bakar.
+    - 30 gün dolmuşsa ve aktif ücretli aboneliği ('active') yoksa kullanıcıyı
+      otomatik olarak 'basic' kotalarına düşürür (is_pro=False, plan_tier='basic', subscription_status='expired').
+    """
+    if not user_row:
+        return user_row
+
+    sub_status = str(user_row.get("subscription_status") or "").lower().strip()
+    trial_ends_at = user_row.get("trial_ends_at")
+
+    if sub_status == "active":
+        return {
+            **user_row,
+            "is_pro": True,
+            "plan_tier": "pro",
+            "subscription_status": "active",
+            "trial_days_left": None,
+        }
+
+    if sub_status == "trial":
+        ends_dt = _parse_utc_datetime(trial_ends_at)
+        now_utc = datetime.now(timezone.utc)
+        if ends_dt and ends_dt <= now_utc:
+            downgrade_updates = {
+                "is_pro": False,
+                "plan_tier": "basic",
+                "subscription_status": "expired",
+            }
+            user_id = str(user_row.get("id") or "").strip()
+            if user_id:
+                _update_user_fields(user_id, downgrade_updates)
+            return {
+                **user_row,
+                **downgrade_updates,
+                "trial_days_left": 0,
+            }
+
+        days_left = compute_trial_days_left("trial", trial_ends_at)
+        return {
+            **user_row,
+            "is_pro": True,
+            "plan_tier": "pro",
+            "subscription_status": "trial",
+            "trial_days_left": days_left,
+        }
+
+    if sub_status == "expired":
+        return {
+            **user_row,
+            "is_pro": False,
+            "plan_tier": "basic",
+            "subscription_status": "expired",
+            "trial_days_left": 0,
+        }
+
+    return {
+        **user_row,
+        "trial_days_left": None,
+    }
+
+
 def reset_daily_quota_if_needed(user_row: Dict[str, Any]) -> Dict[str, Any]:
     """
     Eğer last_quota_reset_date < CURRENT_DATE ise daily_custom_texts_used = 0,
@@ -171,6 +267,22 @@ def reset_daily_quota_if_needed(user_row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_user_plan_tier(request: Request, user_row: Optional[Dict[str, Any]] = None) -> str:
+    if user_row is None:
+        user_row = get_user_record_from_request(request)
+
+    if user_row:
+        user_row = evaluate_user_trial_and_plan(user_row)
+        sub_status = str(user_row.get("subscription_status") or "").lower().strip()
+        if str(user_row.get("role")) == "admin":
+            return "pro"
+        if sub_status == "expired":
+            return "basic"
+        if sub_status in ("trial", "active") or bool(user_row.get("is_pro")):
+            return "pro"
+        u_tier = str(user_row.get("plan_tier") or "").lower().strip()
+        if u_tier in ("basic", "plus", "pro"):
+            return u_tier
+
     header_tier = (request.headers.get("X-Plan-Tier") or "").lower().strip()
     if header_tier in ("basic", "plus", "pro"):
         return header_tier
@@ -186,16 +298,6 @@ def get_user_plan_tier(request: Request, user_row: Optional[Dict[str, Any]] = No
         t_tier = str(token_data.get("plan_tier") or "").lower().strip()
         if t_tier in ("basic", "plus", "pro"):
             return t_tier
-
-    if user_row is None:
-        user_row = get_user_record_from_request(request)
-
-    if user_row:
-        if bool(user_row.get("is_pro")) or str(user_row.get("role")) == "admin":
-            return "pro"
-        u_tier = str(user_row.get("plan_tier") or "").lower().strip()
-        if u_tier in ("basic", "plus", "pro"):
-            return u_tier
 
     return "basic"
 
@@ -213,13 +315,14 @@ def check_and_consume_quota(
     Kullanıcının günlük kotasını plan_tier ('basic', 'plus', 'pro') bazında kontrol eder:
     - basic: 1 AI hikaye, 1 Speaking seansı, maks. 50 kart
     - plus: 5 AI hikaye, 3 Speaking seansı, maks. 500 kart
-    - pro: Sınırsız
+    - pro: Sınırsız (aktif abonelik veya süresi dolmamış 30 günlük deneme)
     """
     user_row = get_user_record_from_request(request)
     if not user_row:
         # Oturum açmamış / anonim isteklerde mevcut akışı bozma
         return
 
+    user_row = evaluate_user_trial_and_plan(user_row)
     user_row = reset_daily_quota_if_needed(user_row)
     tier = get_user_plan_tier(request, user_row)
 
