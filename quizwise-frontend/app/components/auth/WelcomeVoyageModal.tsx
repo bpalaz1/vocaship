@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { ArrowRight, RotateCw, Sparkles, Volume2 } from "lucide-react";
+import React from "react";
+import { ArrowRight, Coins } from "lucide-react";
 import { VocaShipLogo } from "../brand/VocaShipLogo";
 
 export interface WelcomeVoyageModalProps {
@@ -54,44 +54,21 @@ const MODULES = [
   },
 ];
 
-const DEMO_CARDS = [
-  {
-    word: "resilient",
-    phonetic: "/rɪˈzɪliənt/",
-    meaning: "dirençli, çabuk toparlanan",
-    example: "Children are remarkably resilient.",
-  },
-  {
-    word: "eloquent",
-    phonetic: "/ˈeləkwənt/",
-    meaning: "akıcı, etkileyici konuşan",
-    example: "She delivered an eloquent speech on stage.",
-  },
-  {
-    word: "endeavor",
-    phonetic: "/ɪnˈdevər/",
-    meaning: "çaba, girişim, gayret",
-    example: "Learning a language is a rewarding endeavor.",
-  },
+const SPARKLES = [
+  { top: "14%", left: "34%", delay: "0s", size: "w-1.5 h-1.5" },
+  { top: "20%", left: "66%", delay: "0.9s", size: "w-2 h-2" },
+  { top: "68%", left: "38%", delay: "1.6s", size: "w-1 h-1" },
+  { top: "64%", left: "62%", delay: "2.2s", size: "w-1.5 h-1.5" },
+  { top: "12%", left: "50%", delay: "1.2s", size: "w-1 h-1" },
 ];
 
-const READING_WORDS: Record<
-  "eloquent" | "horizon",
-  { word: string; phonetic: string; meaning: string; pos: string }
-> = {
-  eloquent: {
-    word: "eloquent",
-    phonetic: "/ˈeləkwənt/",
-    meaning: "akıcı, güzel ve etkileyici",
-    pos: "sıfat",
-  },
-  horizon: {
-    word: "horizon",
-    phonetic: "/həˈraɪzən/",
-    meaning: "ufuk, görüş alanı",
-    pos: "isim",
-  },
-};
+const WAVE_BARS = [
+  { height: "45%", delay: "0s" },
+  { height: "85%", delay: "0.15s" },
+  { height: "100%", delay: "0.3s" },
+  { height: "70%", delay: "0.45s" },
+  { height: "50%", delay: "0.6s" },
+];
 
 export default function WelcomeVoyageModal({
   isOpen,
@@ -99,45 +76,30 @@ export default function WelcomeVoyageModal({
   onOpenRegister,
   onOpenLogin,
 }: WelcomeVoyageModalProps) {
-  const [demoTab, setDemoTab] = useState<"flashcard" | "reading">("flashcard");
-  const [cardIndex, setCardIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false);
-  const [xpToast, setXpToast] = useState<string | null>(null);
-  const [selectedWord, setSelectedWord] = useState<"eloquent" | "horizon">("eloquent");
-
   if (!isOpen) return null;
-
-  const activeCard = DEMO_CARDS[cardIndex % DEMO_CARDS.length];
-  const activeReadingWord = READING_WORDS[selectedWord];
-
-  const speakWord = (text: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = "en-US";
-      utter.rate = 0.92;
-      window.speechSynthesis.speak(utter);
-    } catch {}
-  };
-
-  const handleRateDemo = (xpLabel: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setXpToast(xpLabel);
-    setTimeout(() => {
-      setXpToast(null);
-      setIsFlipped(false);
-      setCardIndex((prev) => (prev + 1) % DEMO_CARDS.length);
-    }, 650);
-  };
 
   return (
     <div
       data-testid="welcome-voyage-modal"
-      className="fixed inset-0 z-[110] h-dvh w-screen overflow-hidden bg-[#070B14] flex flex-col items-center justify-between px-4 py-3 sm:py-4 text-slate-100 animate-in fade-in duration-300"
+      className="fixed inset-0 z-[110] h-dvh w-screen overflow-hidden bg-[#070B14] flex flex-col items-center justify-between px-4 py-4 sm:py-5 gap-3 text-slate-100 animate-in fade-in duration-300"
     >
       <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(-1.2deg); }
+          50% { transform: translateY(-7px) rotate(1.2deg); }
+        }
+        @keyframes cardFloatA {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-6px); }
+        }
+        @keyframes cardFloatB {
+          0%, 100% { transform: translateY(-4px); }
+          50% { transform: translateY(4px); }
+        }
+        @keyframes waveBar {
+          0%, 100% { transform: scaleY(0.42); }
+          50% { transform: scaleY(1); }
+        }
         @keyframes waveFlowA {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
@@ -146,268 +108,127 @@ export default function WelcomeVoyageModal({
           0% { transform: translateX(-50%); }
           100% { transform: translateX(0); }
         }
-        .wave-a { animation: waveFlowA 10s linear infinite; }
-        .wave-b { animation: waveFlowB 13s linear infinite; }
+        @keyframes sparklePulse {
+          0%, 100% { opacity: 0.2; transform: scale(0.8); }
+          50% { opacity: 0.95; transform: scale(1.35); }
+        }
+        .sail-float { animation: float 4s ease-in-out infinite; }
+        .card-float-a { animation: cardFloatA 4.8s ease-in-out infinite; }
+        .card-float-b { animation: cardFloatB 5.2s ease-in-out infinite; }
+        .speak-bar { transform-origin: bottom; animation: waveBar 1.1s ease-in-out infinite; }
+        .wave-a { animation: waveFlowA 9s linear infinite; }
+        .wave-b { animation: waveFlowB 12s linear infinite; }
+        .sparkle-dot { animation: sparklePulse 3.2s ease-in-out infinite; }
       `}</style>
 
-      {/* 1. ÜST BAR (Giriş Yap • Kayıt Ol • Atla) */}
-      <header className="w-full max-w-5xl flex items-center justify-between py-2 gap-2 shrink-0">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-slate-300 text-[11px] font-bold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span className="truncate">Yeni Nesil Akıllı Dil Platformu</span>
-        </div>
+      {/* 1. MERKEZİ VİTRİN KUTUSU (Yüzen Canlı Ürün Kartları + Taç Rozetli Marka) */}
+      <div className="relative w-full max-w-5xl flex-1 max-h-[60vh] rounded-3xl border border-slate-800/80 bg-gradient-to-b from-[#070D1A] via-[#0B162C] to-[#081F26] overflow-hidden flex items-center justify-center p-6 shadow-[0_0_60px_rgba(16,185,129,0.10)]">
+        {/* Arka Plan Atmosferik Işık & Parıltılar */}
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 w-72 h-44 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute top-12 left-1/3 w-52 h-36 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
+        {SPARKLES.map((sp, i) => (
+          <span
+            key={i}
+            style={{ top: sp.top, left: sp.left, animationDelay: sp.delay }}
+            className={`sparkle-dot absolute ${sp.size} rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.9)] pointer-events-none`}
+          />
+        ))}
 
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          <button
-            type="button"
-            data-testid="welcome-top-login-btn"
-            onClick={onOpenLogin}
-            className="px-3.5 py-1.5 rounded-full bg-slate-900/70 hover:bg-slate-800/90 border border-slate-700/80 hover:border-emerald-400/50 backdrop-blur-md text-xs font-bold text-slate-100 transition active:scale-95 cursor-pointer"
-          >
-            Giriş Yap
-          </button>
-
-          <button
-            type="button"
-            data-testid="welcome-top-register-btn"
-            onClick={onOpenRegister}
-            className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 text-xs font-black shadow-md shadow-emerald-500/20 transition active:scale-95 cursor-pointer"
-          >
-            Kayıt Ol
-          </button>
-
-          <button
-            type="button"
-            data-testid="welcome-skip-btn"
-            onClick={onSkip}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-transparent hover:bg-slate-900/80 border border-transparent hover:border-slate-800 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer"
-          >
-            <span>Atla</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </header>
-
-      {/* 2. MERKEZİ BÖLÜNMÜŞ SAHNE KUTUSU (Sol Marka, Sağ Tıklanabilir Mini Demo) */}
-      <div className="w-full max-w-5xl flex-1 max-h-[58vh] md:max-h-[54vh] my-1.5 rounded-3xl border border-slate-800/80 bg-gradient-to-br from-[#070D1A] via-[#0B162C] to-[#081F26] relative overflow-hidden grid grid-cols-1 md:grid-cols-12 items-center px-5 py-5 sm:px-8 sm:py-6 gap-4 sm:gap-6 shadow-[0_0_60px_rgba(16,185,129,0.10)]">
-        {/* Arka Plan Aurora Işığı */}
-        <div className="absolute -top-12 left-10 w-64 h-48 rounded-full bg-indigo-600/15 blur-3xl pointer-events-none" />
-        <div className="absolute top-8 right-10 w-72 h-52 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-
-        {/* SOL SÜTUN: Tek Marka Odağı & Hızlı Aksiyonlar */}
-        <div className="md:col-span-5 flex flex-col items-start justify-center text-left space-y-2.5 sm:space-y-3 relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-2xl bg-slate-900/80 border border-emerald-400/25 shadow-[0_8px_24px_rgba(16,185,129,0.18)] shrink-0">
-              <VocaShipLogo variant="icon" className="w-10 h-10 sm:w-12 sm:h-12" />
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-none">
-                Voca<span className="text-[#10B981]">Ship</span>
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm font-extrabold bg-gradient-to-r from-emerald-300 via-teal-200 to-sky-300 bg-clip-text text-transparent">
-                Sail to Fluency.
-              </p>
-            </div>
+        {/* SOL ÜST YÜZEN KART: SM-2 Akıllı Kart */}
+        <div className="hidden md:flex flex-col gap-1.5 absolute top-5 left-5 lg:left-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-a pointer-events-none">
+          <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-extrabold text-indigo-300">
+            🃏 SM-2 Akıllı Kart
+          </span>
+          <div className="flex items-baseline justify-between gap-2 mt-0.5">
+            <span className="text-base font-black text-white tracking-tight">resilient</span>
+            <span className="text-[11px] font-mono text-indigo-300">/rɪˈzɪliənt/</span>
           </div>
-
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md">
-            Kelime havuzun, okuma odan, konuşma stüdyon, oyun arenan ve sınıfın tek bir akıllı gemide.
+          <p className="text-xs text-slate-300 font-medium">
+            dirençli, çabuk toparlanan
           </p>
-
-          <div className="flex flex-row items-center gap-2.5 pt-1 w-full sm:w-auto">
-            <button
-              type="button"
-              data-testid="welcome-register-btn"
-              onClick={onOpenRegister}
-              className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition active:scale-95 cursor-pointer whitespace-nowrap"
-            >
-              🚀 Ücretsiz Başla
-            </button>
-            <button
-              type="button"
-              data-testid="welcome-login-btn"
-              onClick={onOpenLogin}
-              className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-400/50 text-slate-100 font-extrabold text-xs sm:text-sm transition active:scale-95 cursor-pointer whitespace-nowrap"
-            >
-              🔑 Giriş Yap
-            </button>
-          </div>
         </div>
 
-        {/* SAĞ SÜTUN: Ziyaretçinin Tıklayabileceği Canlı Mini Demo Kutusu */}
-        <div className="md:col-span-7 flex flex-col justify-center relative z-10">
-          <div className="bg-slate-950/85 border border-slate-700/70 rounded-2xl p-4 sm:p-5 shadow-2xl backdrop-blur-md space-y-3">
-            {/* Demo Sekmeleri */}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-900/90 border border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setDemoTab("flashcard")}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                    demoTab === "flashcard"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  🃏 Canlı SM-2 Kart
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDemoTab("reading")}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                    demoTab === "reading"
-                      ? "bg-sky-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  📖 İnteraktif Okuma
-                </button>
-              </div>
-
-              {xpToast ? (
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-black animate-bounce">
-                  {xpToast}
-                </span>
-              ) : (
-                <span className="text-[10px] font-semibold text-slate-400">
-                  {demoTab === "flashcard" ? "Tıkla & Dene" : "Kelimeye Tıkla"}
-                </span>
-              )}
+        {/* SOL ALT YÜZEN KART: AI Speaking & Ses Dalgası */}
+        <div className="hidden md:flex flex-col gap-2 absolute bottom-12 left-5 lg:left-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b pointer-events-none">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-[10px] font-extrabold text-violet-300">
+              🎙️ Speaking Studio
+            </span>
+            <div className="flex items-end gap-1 h-4">
+              {WAVE_BARS.map((bar, idx) => (
+                <span
+                  key={idx}
+                  style={{ height: bar.height, animationDelay: bar.delay }}
+                  className="speak-bar w-1 rounded-full bg-emerald-400"
+                />
+              ))}
             </div>
-
-            {/* SEKME 1: Tıklanabilir SM-2 Kelime Kartı */}
-            {demoTab === "flashcard" ? (
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => setIsFlipped((prev) => !prev)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setIsFlipped((prev) => !prev);
-                  }
-                }}
-                className="relative rounded-xl border border-slate-700/80 hover:border-emerald-400/50 bg-gradient-to-br from-slate-900/95 to-slate-900/70 p-4 cursor-pointer transition-all duration-200 select-none"
-              >
-                {!isFlipped ? (
-                  <div className="flex flex-col items-center text-center py-2 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                        {activeCard.word}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => speakWord(activeCard.word, e)}
-                        aria-label="Telaffuzu dinle"
-                        className="p-1.5 rounded-full bg-indigo-500/20 hover:bg-indigo-500/35 border border-indigo-400/30 text-indigo-300 transition cursor-pointer"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <span className="text-xs font-mono text-indigo-300">
-                      {activeCard.phonetic}
-                    </span>
-                    <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 pt-1">
-                      <RotateCw className="w-3 h-3 text-emerald-400" />
-                      <span>Çevirmek için karta tıkla</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center text-center space-y-2 animate-in fade-in duration-150">
-                    <span className="text-base sm:text-lg font-black text-emerald-300">
-                      {activeCard.meaning}
-                    </span>
-                    <p className="text-xs text-slate-300 italic">
-                      &ldquo;{activeCard.example}&rdquo;
-                    </p>
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={(e) => handleRateDemo("+10 XP!", e)}
-                        className="px-3 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-200 text-[11px] font-bold transition cursor-pointer"
-                      >
-                        Zorlandım
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleRateDemo("+15 XP!", e)}
-                        className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 text-[11px] font-bold transition cursor-pointer"
-                      >
-                        Çok Kolay
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* SEKME 2: Tıklanabilir Okuma Odası Cümlesi */
-              <div className="space-y-2.5 animate-in fade-in duration-150">
-                <p className="text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-900/80 border border-slate-800 rounded-xl p-3">
-                  &ldquo;Her{" "}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedWord("eloquent")}
-                    className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
-                      selectedWord === "eloquent"
-                        ? "bg-sky-500/30 border border-sky-400 text-sky-200 shadow-[0_0_12px_rgba(56,189,248,0.35)]"
-                        : "bg-sky-500/15 border border-sky-500/30 text-sky-300 hover:bg-sky-500/25"
-                    }`}
-                  >
-                    eloquent
-                  </button>{" "}
-                  words inspired the crew as they sailed toward the distant{" "}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedWord("horizon")}
-                    className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
-                      selectedWord === "horizon"
-                        ? "bg-emerald-500/30 border border-emerald-400 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
-                        : "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25"
-                    }`}
-                  >
-                    horizon
-                  </button>
-                  .&rdquo;
-                </p>
-
-                {/* Mini Sözlük Baloncuğu */}
-                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-900/95 border border-sky-500/30">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-white">
-                        {activeReadingWord.word}
-                      </span>
-                      <span className="text-[10px] font-mono text-sky-300">
-                        {activeReadingWord.phonetic}
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-bold text-slate-300">
-                        {activeReadingWord.pos}
-                      </span>
-                    </div>
-                    <p className="text-xs font-semibold text-amber-300 truncate mt-0.5">
-                      💬 {activeReadingWord.meaning}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => speakWord(activeReadingWord.word, e)}
-                    aria-label="Kelimeyi dinle"
-                    className="p-1.5 rounded-full bg-sky-500/20 hover:bg-sky-500/35 border border-sky-400/30 text-sky-300 shrink-0 transition cursor-pointer"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
+          </div>
+          <div className="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 text-[11px] font-bold text-emerald-300">
+            Great pronunciation! +25 XP
           </div>
         </div>
 
-        {/* Alt Kenarda İnce Çift Katmanlı Zümrüt-Turkuaz Dalga Şeridi */}
-        <div className="absolute bottom-0 left-0 right-0 h-8 sm:h-10 overflow-hidden pointer-events-none">
+        {/* MERKEZ SÜTUN: Taç Rozet + VocaShip Logosu & Sloganı */}
+        <div className="relative z-10 flex flex-col items-center text-center px-4 pb-6 sm:pb-8">
+          <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 mb-3">
+            ✨ Yeni Nesil Akıllı Dil Platformu
+          </span>
+
+          <div className="sail-float mb-2.5 p-3 rounded-3xl bg-slate-900/55 border border-emerald-400/25 shadow-[0_12px_35px_rgba(16,185,129,0.22)]">
+            <VocaShipLogo
+              variant="icon"
+              className="w-16 h-16 sm:w-20 sm:h-20"
+            />
+          </div>
+
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-none">
+            Voca<span className="text-[#10B981]">Ship</span>
+          </h1>
+          <p className="mt-1.5 text-sm sm:text-lg font-extrabold bg-gradient-to-r from-emerald-300 via-sky-300 to-indigo-300 bg-clip-text text-transparent tracking-wide">
+            Sail to Fluency.
+          </p>
+        </div>
+
+        {/* SAĞ ÜST YÜZEN KART: Okuma Odası İnteraktif Metin */}
+        <div className="hidden md:flex flex-col gap-1.5 absolute top-5 right-5 lg:right-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b pointer-events-none">
+          <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-[10px] font-extrabold text-sky-300">
+            📖 Reading Room
+          </span>
+          <p className="text-xs text-slate-200 leading-relaxed">
+            &ldquo;She delivered an{" "}
+            <span className="px-1.5 py-0.5 rounded bg-sky-500/25 border border-sky-400/40 text-sky-200 font-bold">
+              eloquent
+            </span>{" "}
+            speech.&rdquo;
+          </p>
+          <div className="px-2.5 py-1 rounded-lg bg-slate-950/90 border border-slate-700/80 text-[11px] font-semibold text-amber-300">
+            💬 akıcı ve etkileyici
+          </div>
+        </div>
+
+        {/* SAĞ ALT YÜZEN KART: Oyun Arenası & Sınıfım */}
+        <div className="hidden md:flex flex-col gap-2 absolute bottom-12 right-5 lg:right-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-a pointer-events-none">
+          <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[10px] font-extrabold text-amber-300">
+            🏆 Game Arena &amp; Sınıfım
+          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1 text-xs font-black text-amber-300">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              +120 Altın
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-[10px] font-bold text-emerald-300">
+              ● Canlı Sınıf
+            </span>
+          </div>
+        </div>
+
+        {/* Alt Kenarda İnce Çift Katmanlı Zümrüt-Turkuaz Dalga Ufku */}
+        <div className="absolute bottom-0 left-0 right-0 h-10 sm:h-12 overflow-hidden pointer-events-none">
           <svg
             viewBox="0 0 1200 100"
             preserveAspectRatio="none"
-            className="wave-a absolute bottom-0 left-0 w-[200%] h-8 opacity-40"
+            className="wave-a absolute bottom-0 left-0 w-[200%] h-10 opacity-45"
           >
             <path
               d="M0,45 C150,88 300,6 450,45 C600,88 750,6 900,45 C1050,88 1125,22 1200,45 L1200,100 L0,100 Z"
@@ -417,7 +238,7 @@ export default function WelcomeVoyageModal({
           <svg
             viewBox="0 0 1200 100"
             preserveAspectRatio="none"
-            className="wave-b absolute bottom-0 left-0 w-[200%] h-6 opacity-65"
+            className="wave-b absolute bottom-0 left-0 w-[200%] h-7 opacity-70"
           >
             <path
               d="M0,55 C180,15 320,90 500,50 C680,10 820,85 1000,48 C1100,28 1150,65 1200,55 L1200,100 L0,100 Z"
@@ -427,7 +248,7 @@ export default function WelcomeVoyageModal({
         </div>
       </div>
 
-      {/* 3. ALT BÖLÜM: 5 MODÜL ŞERİDİ */}
+      {/* 2. ALT BÖLÜM: 5 MODÜL ŞERİDİ */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full max-w-5xl shrink-0">
         {MODULES.map((mod) => (
           <div
@@ -441,6 +262,43 @@ export default function WelcomeVoyageModal({
             </div>
           </div>
         ))}
+      </div>
+
+      {/* 3. TEK SATIR AÇIKLAMA & 3 TEMİZ AKSİYON */}
+      <div className="w-full max-w-5xl flex flex-col items-center gap-2.5 shrink-0">
+        <p className="text-[11px] sm:text-xs text-slate-400 text-center truncate max-w-full px-2">
+          Kelime havuzun, okuma odan, konuşma stüdyon, oyun arenan ve sınıfın tek bir akıllı gemide seni bekliyor.
+        </p>
+
+        <div className="flex flex-row items-center justify-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <button
+            type="button"
+            data-testid="welcome-register-btn"
+            onClick={onOpenRegister}
+            className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+          >
+            <span>🚀 Ücretsiz Kayıt Ol</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="welcome-login-btn"
+            onClick={onOpenLogin}
+            className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-400/50 backdrop-blur-md text-slate-100 font-extrabold text-xs sm:text-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+          >
+            <span>🔑 Giriş Yap</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="welcome-skip-btn"
+            onClick={onSkip}
+            className="px-3.5 sm:px-5 py-2.5 rounded-2xl bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800 text-slate-300 hover:text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
+          >
+            <span>Atla</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
