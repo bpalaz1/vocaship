@@ -6,6 +6,7 @@ import FloatingXP from "./components/FloatingXP";
 import ActiveClassBanner from "./components/classroom/ActiveClassBanner";
 import MainContentWrapper from "./components/MainContentWrapper";
 import PaddleCheckoutListener from "./components/payments/PaddleCheckoutListener";
+import GuestNudgeBanner from "./components/auth/GuestNudgeBanner";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ExperienceProvider } from "./context/ExperienceContext";
 import { PersonaProvider } from "./context/PersonaContext";
@@ -87,6 +88,9 @@ export default function RootLayout({
 
                       {/* Sayfa İçeriği Kapsayıcısı */}
                       <MainContentWrapper>
+                        {/* Misafir Modu İnce Üst Bilgi Çubuğu */}
+                        <GuestNudgeBanner />
+
                         {/* Aktif Ders Devam Ediyor Geri Dönüş Şeridi */}
                         <ActiveClassBanner />
                         {children}

@@ -70,7 +70,7 @@ function ClassroomContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { userProfile } = useProfile();
-  const { user } = useAuth();
+  const { user, isGuest, openRegistrationGate } = useAuth();
   const { isDark } = useAppTheme();
 
   const currentUserId = userProfile?.id || "00000000-0000-0000-0000-000000000001";
@@ -92,11 +92,23 @@ function ClassroomContent() {
   const [payoutRefreshKey, setPayoutRefreshKey] = useState(0);
 
   const handleOpenCreateClass = () => {
+    if (!user && isGuest) {
+      openRegistrationGate("Sınıfa katılmak veya kendi sınıfını oluşturmak için ücretsiz hesabını oluştur.");
+      return;
+    }
     if (!isUserPro) {
       setShowProModal(true);
     } else {
       setShowCreateClassModal(true);
     }
+  };
+
+  const handleOpenJoinPin = () => {
+    if (!user && isGuest) {
+      openRegistrationGate("Sınıfa katılmak veya kendi sınıfını oluşturmak için ücretsiz hesabını oluştur.");
+      return;
+    }
+    setShowJoinPinModal(true);
   };
 
   // Aktif Sekme: 'classes' | 'calendar'
@@ -368,7 +380,7 @@ function ClassroomContent() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setShowJoinPinModal(true)}
+              onClick={handleOpenJoinPin}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
             >
               <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
@@ -423,7 +435,7 @@ function ClassroomContent() {
 
                   <button
                     type="button"
-                    onClick={() => setShowJoinPinModal(true)}
+                    onClick={handleOpenJoinPin}
                     className={`px-5 py-3.5 rounded-2xl border font-bold text-sm flex items-center gap-2 transition hover:scale-105 active:scale-95 cursor-pointer ${
                       isDark
                         ? "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200"

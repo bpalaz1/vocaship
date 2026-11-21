@@ -28,7 +28,9 @@ import {
   CornerDownRight,
 } from "lucide-react";
 import { API_BASE } from "./config";
+import { useAuth } from "./context/AuthContext";
 import { useProfile } from "./context/ProfileContext";
+import { ensureGuestShowcaseDecks } from "./utils/guestShowcase";
 import { useAppTheme } from "./context/ThemeContext";
 import { useLanguage } from "./context/LanguageContext";
 import {
@@ -100,6 +102,7 @@ const SUPPORTED_LANGUAGES: (SupportedLanguageItem & { ttsLocale: string })[] = [
 
 export default function Home() {
   const router = useRouter();
+  const { user, isGuest, openRegistrationGate } = useAuth();
   const { isSettingsModalOpen, setIsSettingsModalOpen } = useProfile();
   const { isDark } = useAppTheme();
   const { t } = useLanguage();
@@ -237,11 +240,18 @@ export default function Home() {
       const orphanDecks = fetchedDecks.filter(
         (d) => !d.id.startsWith("preset_") && normalizeFolderId(d.folder_id) === null
       );
-      const cleanDecks = fetchedDecks.filter(
+      let cleanDecks = fetchedDecks.filter(
         (d) => !d.id.startsWith("preset_") && normalizeFolderId(d.folder_id) !== null
       );
+      let finalFolders = fetchedFolders;
 
-      setFolders(fetchedFolders);
+      if (!user && isGuest && cleanDecks.length === 0) {
+        const seeded = ensureGuestShowcaseDecks();
+        finalFolders = seeded.folders;
+        cleanDecks = seeded.decks;
+      }
+
+      setFolders(finalFolders);
       setDecks(cleanDecks);
 
       if (orphanDecks.length > 0) {
@@ -266,7 +276,7 @@ export default function Home() {
     } finally {
       setLoadingDecks(false);
     }
-  }, [hydrateDeckCards]);
+  }, [hydrateDeckCards, user, isGuest]);
 
   const fetchStudyMetrics = useCallback(async () => {
     // Önce yerel ortak önbelleği hemen yansıt (anlık sayı tutarlılığı için)
@@ -1680,6 +1690,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => {
+                  if (!user && isGuest) {
+                    openRegistrationGate("Harika gidiyorsun! Öğrendiğin kelimeleri kalıcı olarak kaydetmek için 10 saniyede ücretsiz hesabını aç.");
+                    return;
+                  }
                   setNewFolderName("");
                   setNewFolderColor("#f59e0b");
                   setNewFolderParentId("");
@@ -1896,6 +1910,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => {
+                  if (!user && isGuest) {
+                    openRegistrationGate("Harika gidiyorsun! Öğrendiğin kelimeleri kalıcı olarak kaydetmek için 10 saniyede ücretsiz hesabını aç.");
+                    return;
+                  }
                   if (selectedFolderFilter && selectedFolderFilter !== "all") {
                     setNewDeckFolderId(selectedFolderFilter);
                   } else if (folders.length > 0) {

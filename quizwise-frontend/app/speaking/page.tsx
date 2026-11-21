@@ -175,7 +175,7 @@ function buildContextualHints(
 function SpeakingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, isGuest, openRegistrationGate } = useAuth();
   const { selectedCharacter } = usePersona();
   const { userProfile } = useProfile();
   const { isDark } = useAppTheme();
@@ -1431,6 +1431,10 @@ function SpeakingContent() {
   // ---------------------------------------------------------------------------
 
   const handleStartChat = async () => {
+    if (!user && isGuest) {
+      openRegistrationGate("AI Speaking Studio ile canlı konuşma pratiği yapmak için ücretsiz hesabını oluştur.");
+      return;
+    }
     setMicError(null);
     isAiSpeakingRef.current = false;
     isThinkingRef.current = false;

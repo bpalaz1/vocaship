@@ -31,7 +31,7 @@ export default function AuthModal({
   initialTab = "login",
 }: AuthModalProps) {
   const router = useRouter();
-  const { login, register, verifyEmail, forgotPassword, resetPassword, openWelcomeModal } =
+  const { login, register, verifyEmail, forgotPassword, resetPassword, openWelcomeModal, gateReason, setGateReason } =
     useAuth();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">(initialTab);
@@ -606,6 +606,15 @@ export default function AuthModal({
 
             {/* Sade Form Alanı */}
             <form onSubmit={handleSubmit} className="relative z-10 p-6 space-y-4">
+              {activeTab === "register" && gateReason && (
+                <div
+                  data-testid="auth-registration-gate-banner"
+                  className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-sky-500/15 border border-amber-400/40 text-amber-200 text-xs font-semibold leading-relaxed"
+                >
+                  ✨ {gateReason}
+                </div>
+              )}
+
               {activeTab === "login" && (
                 <div className="flex items-center justify-between -mt-1">
                   <button

@@ -3,7 +3,13 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Sparkles, RotateCw, Volume2, Check, Languages, Zap, Database } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { useAuth } from "../context/AuthContext";
 import { API_BASE } from "../config";
+import {
+  GUEST_MAX_WORDS,
+  getGuestAddedWordCount,
+  incrementGuestAddedWordCount,
+} from "../utils/guestShowcase";
 import {
   buildWordCacheKey,
   getCachedWordEntry,
@@ -32,6 +38,7 @@ export function useAddWordController({
   onSaved,
 }: UseAddWordControllerOptions) {
   const { t } = useLanguage();
+  const { user, isGuest, openRegistrationGate } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedDeckForWord, setSelectedDeckForWord] = useState("");
   const [termLang, setTermLang] = useState("en");
@@ -63,6 +70,12 @@ export function useAddWordController({
 
   const openModal = useCallback(
     (preferredDeckId?: string) => {
+      if (!user && isGuest && getGuestAddedWordCount() >= GUEST_MAX_WORDS) {
+        openRegistrationGate(
+          "Harika gidiyorsun! Öğrendiğin kelimeleri kalıcı olarak kaydetmek için 10 saniyede ücretsiz hesabını aç."
+        );
+        return;
+      }
       cancelPendingRequests();
       requestSeqRef.current += 1;
       if (preferredDeckId) {
@@ -79,7 +92,7 @@ export function useAddWordController({
       lastAutoWordRef.current = "";
       setIsOpen(true);
     },
-    [decks, cancelPendingRequests]
+    [decks, cancelPendingRequests, user, isGuest, openRegistrationGate]
   );
 
   const closeModal = useCallback(() => {
@@ -360,6 +373,13 @@ export function useAddWordController({
 
   const runFetchAi = useCallback(
     async (searchWord: string, forceRefresh = false) => {
+      if (!user && isGuest) {
+        setIsOpen(false);
+        openRegistrationGate(
+          "AI destekli kelime zenginleştirme özelliğini kullanmak için ücretsiz hesabını oluştur."
+        );
+        return;
+      }
       const targetDeck = selectedDeckForWord || decks[0]?.id || "";
       const cleaned = searchWord.trim();
       if (!targetDeck || !cleaned) return;
@@ -371,7 +391,7 @@ export function useAddWordController({
         isButtonTrigger: true,
       });
     },
-    [selectedDeckForWord, decks, termLang, defLang, contextHint, performLookup]
+    [selectedDeckForWord, decks, termLang, defLang, contextHint, performLookup, user, isGuest, openRegistrationGate]
   );
 
   const handleManualInputMode = useCallback(() => {
@@ -403,6 +423,13 @@ export function useAddWordController({
   const handleSaveCard = useCallback(async () => {
     const targetDeck = selectedDeckForWord || decks[0]?.id || "";
     if (!enrichedData || !targetDeck) return;
+    if (!user && isGuest && getGuestAddedWordCount() >= GUEST_MAX_WORDS) {
+      setIsOpen(false);
+      openRegistrationGate(
+        "Harika gidiyorsun! Öğrendiğin kelimeleri kalıcı olarak kaydetmek için 10 saniyede ücretsiz hesabını aç."
+      );
+      return;
+    }
     setIsSavingCard(true);
     try {
       const cleanWord = enrichedData.word.trim();
@@ -442,6 +469,40 @@ export function useAddWordController({
           collocations: [],
         }),
       });
+      if (!user && isGuest) {
+        incrementGuestAddedWordCount();
+        if (typeof window !== "undefined") {
+          try {
+            const storageKey = `vocaship_deck_cards_${targetDeck}`;
+            const existingRaw = localStorage.getItem(storageKey);
+            const existingList = existingRaw ? JSON.parse(existingRaw) : [];
+            const newLocalCard = {
+              id: `guest_card_${Date.now()}`,
+              word: cleanWord,
+              phonetic: cleanPhonetic,
+              meanings: [{ translation: cleanTranslation, part_of_speech: "" }],
+              example_sentences: cleanExTarget
+                ? [{ target: cleanExTarget, native: cleanExNative }]
+                : [],
+            };
+            localStorage.setItem(
+              storageKey,
+              JSON.stringify([...(Array.isArray(existingList) ? existingList : []), newLocalCard])
+            );
+          } catch {}
+        }
+        setWordInput("");
+        setContextHint("");
+        setEnrichedData(null);
+        setIsManualMode(false);
+        lastAutoWordRef.current = "";
+        setIsOpen(false);
+        if (onSaved) {
+          await onSaved(targetDeck);
+        }
+        return;
+      }
+
       if (res.ok) {
         // Kaydedilen kelimeyi tarayıcı hafızasına da işle (0ms tekrar erişim)
         if (cleanTranslation) {
@@ -474,7 +535,7 @@ export function useAddWordController({
     } finally {
       setIsSavingCard(false);
     }
-  }, [selectedDeckForWord, decks, enrichedData, termLang, defLang, onSaved]);
+  }, [selectedDeckForWord, decks, enrichedData, termLang, defLang, onSaved, user, isGuest, openRegistrationGate]);
 
   return {
     isOpen,

@@ -444,7 +444,7 @@ export default function ReadingRoom({
   const { t } = useTranslation();
   const { isDark } = useAppTheme();
   const { userStories, deleteUserStory } = useUserStories();
-  const { user } = useAuth();
+  const { user, isGuest, openRegistrationGate } = useAuth();
   const { userProfile } = useProfile();
 
   const planTier: "basic" | "plus" | "pro" =
@@ -808,7 +808,13 @@ export default function ReadingRoom({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setIsGeneratorModalOpen(true)}
+                  onClick={() => {
+                    if (!user && isGuest) {
+                      openRegistrationGate("Yapay zekâ ile özel hikaye üretmek için ücretsiz hesabını oluştur.");
+                      return;
+                    }
+                    setIsGeneratorModalOpen(true);
+                  }}
                   className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-amber-500 hover:from-indigo-500 hover:to-amber-400 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition active:scale-95 cursor-pointer shrink-0"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-200" />

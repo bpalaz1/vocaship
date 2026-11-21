@@ -38,13 +38,14 @@ export default function Navbar() {
   const {
     user,
     isLoading: isAuthLoading,
+    isGuest,
+    enterGuestMode,
     logout,
     isAuthModalOpen,
     setIsAuthModalOpen,
     authModalTab,
     openAuthModal,
     isWelcomeModalOpen,
-    setIsWelcomeModalOpen,
   } = useAuth();
   const {
     userProfile,
@@ -255,16 +256,35 @@ export default function Navbar() {
               {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR, IT, RU) */}
               <LanguageSelector align="right" />
 
-              {/* OTURUM YOKSA: Şık Giriş Yap / Kayıt Ol Butonu — OTURUM VARSA: Kullanıcı Kapsülü */}
+              {/* OTURUM YOKSA: Misafir Etiketi + Ücretsiz Kayıt Ol / Giriş Yap — OTURUM VARSA: Kullanıcı Kapsülü */}
               {!user ? (
-                <button
-                  type="button"
-                  data-testid="navbar-auth-cta-btn"
-                  onClick={() => openAuthModal("login")}
-                  className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white text-xs font-black shadow-lg shadow-sky-500/25 transition active:scale-95 cursor-pointer whitespace-nowrap"
-                >
-                  <span>🚀 Giriş Yap / Kayıt Ol</span>
-                </button>
+                isGuest ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      data-testid="navbar-guest-badge"
+                      className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-[11px] font-bold text-slate-300 whitespace-nowrap"
+                    >
+                      🧭 Misafir
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="navbar-guest-register-btn"
+                      onClick={() => openAuthModal("register")}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 text-xs font-black shadow-lg shadow-emerald-500/20 transition active:scale-95 cursor-pointer whitespace-nowrap"
+                    >
+                      <span>🚀 Ücretsiz Kayıt Ol</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="navbar-auth-cta-btn"
+                    onClick={() => openAuthModal("login")}
+                    className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white text-xs font-black shadow-lg shadow-sky-500/25 transition active:scale-95 cursor-pointer whitespace-nowrap"
+                  >
+                    <span>🚀 Giriş Yap / Kayıt Ol</span>
+                  </button>
+                )
               ) : (
                 <div className="relative shrink-0 overflow-visible" ref={userDropdownRef}>
                   <button
@@ -487,13 +507,8 @@ export default function Navbar() {
 
       {/* Global Modallar */}
       <WelcomeVoyageModal
-        isOpen={!isAuthLoading && !user && isWelcomeModalOpen && !isAuthModalOpen}
-        onSkip={() => {
-          try {
-            sessionStorage.setItem("vocaship_welcome_skipped", "1");
-          } catch {}
-          setIsWelcomeModalOpen(false);
-        }}
+        isOpen={!isAuthLoading && !user && !isGuest && isWelcomeModalOpen && !isAuthModalOpen}
+        onSkip={enterGuestMode}
         onOpenRegister={() => openAuthModal("register")}
         onOpenLogin={() => openAuthModal("login")}
       />

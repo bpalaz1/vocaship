@@ -33,6 +33,11 @@ export interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
+  isGuest: boolean;
+  gateReason: string | null;
+  setGateReason: (reason: string | null) => void;
+  enterGuestMode: () => void;
+  openRegistrationGate: (reason?: string) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   authModalTab: "login" | "register";
@@ -65,6 +70,7 @@ export const AUTH_TOKEN_STORAGE_KEY = "vorego_auth_token";
 export const AUTH_USER_STORAGE_KEY = "vorego_auth_user";
 const WELCOME_SKIPPED_KEY = "vocaship_welcome_skipped";
 const LOGGED_OUT_KEY = "vocaship_logged_out";
+const GUEST_MODE_KEY = "vocaship_guest";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -92,14 +98,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [gateReason, setGateReason] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalTab, setAuthModalTab] = useState<"login" | "register">("login");
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState<boolean>(false);
 
   const openAuthModal = (tab: "login" | "register" = "login") => {
+    setGateReason(null);
     setAuthModalTab(tab);
     setIsWelcomeModalOpen(false);
     setIsAuthModalOpen(true);
+  };
+
+  const openRegistrationGate = (
+    reason = "Harika gidiyorsun! Öğrendiğin kelimeleri kalıcı olarak kaydetmek için 10 saniyede ücretsiz hesabını aç."
+  ) => {
+    setGateReason(reason);
+    setAuthModalTab("register");
+    setIsWelcomeModalOpen(false);
+    setIsAuthModalOpen(true);
+  };
+
+  const enterGuestMode = () => {
+    setIsGuest(true);
+    setIsWelcomeModalOpen(false);
+    setIsAuthModalOpen(false);
+    setGateReason(null);
+    try {
+      sessionStorage.setItem(GUEST_MODE_KEY, "true");
+      sessionStorage.setItem(WELCOME_SKIPPED_KEY, "1");
+      sessionStorage.removeItem(LOGGED_OUT_KEY);
+    } catch {}
   };
 
   const openWelcomeModal = () => {
@@ -111,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsWelcomeModalOpen(true);
   };
 
-  // Sayfa ilk açıldığında localStorage'dan oturumu geri yükle; yoksa karşılama sahnesini aç
+  // Sayfa ilk açıldığında localStorage'dan oturumu geri yükle; yoksa misafir/karşılama sahnesini aç
   useEffect(() => {
     let restored = false;
     try {
@@ -126,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const normalizedUser: AuthUser = { ...parsedUser, planTier: tier };
           setToken(savedToken);
           setUser(normalizedUser);
+          setIsGuest(false);
           restored = true;
         }
       }
@@ -137,9 +168,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!restored) {
       try {
+        const wasGuest = sessionStorage.getItem(GUEST_MODE_KEY) === "true";
         const wasLoggedOut = sessionStorage.getItem(LOGGED_OUT_KEY) === "true";
         const skipped = sessionStorage.getItem(WELCOME_SKIPPED_KEY) === "1";
-        if (wasLoggedOut) {
+        if (wasGuest) {
+          setIsGuest(true);
+          setIsWelcomeModalOpen(false);
+        } else if (wasLoggedOut) {
+          setIsGuest(false);
           setIsWelcomeModalOpen(false);
           setAuthModalTab("login");
           setIsAuthModalOpen(true);
@@ -179,9 +215,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistSession = (authUser: AuthUser, authToken: string) => {
     setUser(authUser);
     setToken(authToken);
+    setIsGuest(false);
+    setGateReason(null);
     setIsWelcomeModalOpen(false);
     try {
       sessionStorage.removeItem(LOGGED_OUT_KEY);
+      sessionStorage.removeItem(GUEST_MODE_KEY);
       localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(authUser));
       localStorage.setItem("vocaship_plan_tier", authUser.planTier);
@@ -427,6 +466,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setIsGuest(false);
+    setGateReason(null);
     setIsWelcomeModalOpen(false);
     setAuthModalTab("login");
     try {
@@ -434,6 +475,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(AUTH_USER_STORAGE_KEY);
       localStorage.removeItem("vocaship_plan_tier");
       localStorage.removeItem("vocaship_profile");
+      sessionStorage.removeItem(GUEST_MODE_KEY);
       sessionStorage.setItem(LOGGED_OUT_KEY, "true");
       window.dispatchEvent(new CustomEvent("vocaship_logged_out"));
     } catch {
@@ -448,6 +490,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isLoading,
+        isGuest,
+        gateReason,
+        setGateReason,
+        enterGuestMode,
+        openRegistrationGate,
         isAuthModalOpen,
         setIsAuthModalOpen,
         authModalTab,

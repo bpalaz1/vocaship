@@ -76,7 +76,7 @@ export default function WelcomeVoyageModal({
       data-testid="welcome-voyage-modal"
       className="fixed inset-0 z-[110] h-dvh w-screen overflow-hidden bg-[#070B14] flex flex-col items-center justify-between px-4 py-4 sm:py-6 text-slate-100 animate-in fade-in duration-300"
     >
-      <style jsx>{`
+      <style>{`
         @keyframes float {
           0%, 100% {
             transform: translateY(0px) rotate(-1.5deg);
@@ -135,10 +135,11 @@ export default function WelcomeVoyageModal({
           type="button"
           data-testid="welcome-skip-btn"
           onClick={onSkip}
-          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer shrink-0"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shrink-0"
         >
           <span>Atla</span>
           <ArrowRight className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline text-slate-400 font-semibold">(Misafir Olarak İncele)</span>
         </button>
       </div>
 
