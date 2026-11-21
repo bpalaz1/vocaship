@@ -263,55 +263,45 @@ class LocalDatabaseClient:
             );
             """)
 
+            def _safe_add_columns(table_name: str, columns: List[tuple]) -> None:
+                try:
+                    cursor.execute(f"PRAGMA table_info({table_name});")
+                    existing_cols = {col[1] for col in cursor.fetchall()}
+                except Exception:
+                    existing_cols = set()
+                for col_name, col_def in columns:
+                    if col_name not in existing_cols:
+                        try:
+                            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def};")
+                            existing_cols.add(col_name)
+                        except Exception:
+                            pass
+
             # Dynamic migration for existing users table
-            cursor.execute("PRAGMA table_info(users);")
-            existing_user_cols = {col[1] for col in cursor.fetchall()}
-            if "total_xp" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN total_xp INTEGER DEFAULT 0;")
-            if "level" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1;")
-            if "streak_days" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN streak_days INTEGER DEFAULT 1;")
-            if "subscription_status" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN subscription_status TEXT;")
-            if "pro_expires_at" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN pro_expires_at TEXT;")
-            if "plan_tier" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'basic';")
-            if "last_active_date" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN last_active_date TEXT;")
-            if "coins" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN coins INTEGER DEFAULT 300;")
-            if "active_avatar" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN active_avatar TEXT DEFAULT '🌟';")
-            if "active_avatar_id" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN active_avatar_id TEXT DEFAULT 'char_default';")
-            if "username" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN username TEXT;")
-            if "password_hash" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN password_hash TEXT;")
-            if "role" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';")
-            if "daily_custom_texts_used" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN daily_custom_texts_used INTEGER DEFAULT 0;")
-            if "daily_speaking_sessions_used" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN daily_speaking_sessions_used INTEGER DEFAULT 0;")
-            if "last_quota_reset_date" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN last_quota_reset_date TEXT;")
-            if "inventory_keys" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN inventory_keys TEXT DEFAULT '{}';")
-            if "avatar_url" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT;")
-            if "email_confirmed" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN email_confirmed INTEGER DEFAULT 0;")
-            if "plan_tier" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'basic';")
-            if "trial_ends_at" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN trial_ends_at TEXT;")
-            if "lemon_customer_id" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN lemon_customer_id TEXT;")
-            if "lemon_subscription_id" not in existing_user_cols:
-                cursor.execute("ALTER TABLE users ADD COLUMN lemon_subscription_id TEXT;")
+            _safe_add_columns("users", [
+                ("total_xp", "INTEGER DEFAULT 0"),
+                ("level", "INTEGER DEFAULT 1"),
+                ("streak_days", "INTEGER DEFAULT 1"),
+                ("subscription_status", "TEXT"),
+                ("pro_expires_at", "TEXT"),
+                ("plan_tier", "TEXT DEFAULT 'basic'"),
+                ("last_active_date", "TEXT"),
+                ("coins", "INTEGER DEFAULT 300"),
+                ("active_avatar", "TEXT DEFAULT '🌟'"),
+                ("active_avatar_id", "TEXT DEFAULT 'char_default'"),
+                ("username", "TEXT"),
+                ("password_hash", "TEXT"),
+                ("role", "TEXT DEFAULT 'user'"),
+                ("daily_custom_texts_used", "INTEGER DEFAULT 0"),
+                ("daily_speaking_sessions_used", "INTEGER DEFAULT 0"),
+                ("last_quota_reset_date", "TEXT"),
+                ("inventory_keys", "TEXT DEFAULT '{}'"),
+                ("avatar_url", "TEXT"),
+                ("email_confirmed", "INTEGER DEFAULT 0"),
+                ("trial_ends_at", "TEXT"),
+                ("lemon_customer_id", "TEXT"),
+                ("lemon_subscription_id", "TEXT"),
+            ])
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS folders (
@@ -360,14 +350,11 @@ class LocalDatabaseClient:
             );
             """)
 
-            cursor.execute("PRAGMA table_info(flashcards);")
-            existing_fc_cols = {col[1] for col in cursor.fetchall()}
-            if "mistake_count" not in existing_fc_cols:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN mistake_count INTEGER DEFAULT 0;")
-            if "consecutive_correct" not in existing_fc_cols:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN consecutive_correct INTEGER DEFAULT 0;")
-            if "needs_review" not in existing_fc_cols:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN needs_review INTEGER DEFAULT 0;")
+            _safe_add_columns("flashcards", [
+                ("mistake_count", "INTEGER DEFAULT 0"),
+                ("consecutive_correct", "INTEGER DEFAULT 0"),
+                ("needs_review", "INTEGER DEFAULT 0"),
+            ])
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS shared_items (
@@ -551,17 +538,14 @@ class LocalDatabaseClient:
                 ON word_cache (word, target_lang, native_lang);
             """)
 
-            cursor.execute("PRAGMA table_info(unlocked_characters);")
-            existing_uc_cols = {col[1] for col in cursor.fetchall()}
-            if "created_at" not in existing_uc_cols:
-                cursor.execute("ALTER TABLE unlocked_characters ADD COLUMN created_at TEXT;")
+            _safe_add_columns("unlocked_characters", [
+                ("created_at", "TEXT"),
+            ])
 
-            cursor.execute("PRAGMA table_info(class_sessions);")
-            existing_cs_cols = {col[1] for col in cursor.fetchall()}
-            if "join_code" not in existing_cs_cols:
-                cursor.execute("ALTER TABLE class_sessions ADD COLUMN join_code TEXT;")
-            if "notes" not in existing_cs_cols:
-                cursor.execute("ALTER TABLE class_sessions ADD COLUMN notes TEXT;")
+            _safe_add_columns("class_sessions", [
+                ("join_code", "TEXT"),
+                ("notes", "TEXT"),
+            ])
 
             # Ensure default user exists
             cursor.execute("SELECT id FROM users LIMIT 1;")
