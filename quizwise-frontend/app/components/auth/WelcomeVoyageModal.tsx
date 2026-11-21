@@ -193,7 +193,7 @@ export default function WelcomeVoyageModal({
             <div className="flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-emerald-500/30 shadow-xl card-float-b">
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-[10px] font-extrabold text-violet-300">
-                  {t("welcome_card_speak_badge", "🎙️ Speaking Studio")}
+                  🎙️ {t("welcome_mod_speaking_title", "Konuşma Stüdyosu")}
                 </span>
                 <div className="flex items-end gap-1 h-4">
                   {WAVE_BARS.map((bar, idx) => (
@@ -213,7 +213,7 @@ export default function WelcomeVoyageModal({
             <div className="flex flex-col gap-1 p-3 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-teal-500/40 shadow-xl card-float-a">
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/35 text-[10px] font-extrabold text-indigo-200">
-                  {t("welcome_card_class_badge", "🎓 Sınıfım")}
+                  🎓 {t("welcome_mod_classroom_title", "Sınıfım")}
                 </span>
                 <span className="px-1.5 py-0.5 rounded bg-slate-950/90 border border-teal-500/40 font-mono text-[10px] font-black text-teal-300">
                   PIN: 7A2-5K9
@@ -256,7 +256,7 @@ export default function WelcomeVoyageModal({
           <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-between gap-2.5 h-full py-4 pt-10 pointer-events-none">
             <div className="flex flex-col gap-1 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b">
               <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-[10px] font-extrabold text-sky-300">
-                {t("welcome_card_read_badge", "📖 Reading Room")}
+                📖 {t("welcome_mod_reading_title", "Okuma Odası")}
               </span>
               <p className="text-[11px] text-slate-200 leading-snug">
                 &ldquo;She delivered an{" "}
@@ -287,7 +287,7 @@ export default function WelcomeVoyageModal({
             <div className="flex flex-col gap-1 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-amber-500/40 shadow-xl card-float-b">
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[10px] font-extrabold text-amber-300">
-                  {t("welcome_card_arena_badge", "🏆 Game Arena")}
+                  🏆 {t("welcome_mod_arena_title", "Oyun Arenası")}
                 </span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-black text-amber-300">
                   <Coins className="w-3 h-3 text-amber-400" />
