@@ -1,8 +1,9 @@
 "use client";
 
 import React from "react";
-import { ArrowRight, Coins } from "lucide-react";
+import { ArrowRight, Coins, Globe, Users } from "lucide-react";
 import { VocaShipLogo } from "../brand/VocaShipLogo";
+import { Language, useLanguage } from "../../context/LanguageContext";
 
 export interface WelcomeVoyageModalProps {
   isOpen: boolean;
@@ -11,47 +12,12 @@ export interface WelcomeVoyageModalProps {
   onOpenLogin: () => void;
 }
 
-const MODULES = [
-  {
-    id: "wordpool",
-    emoji: "🃏",
-    title: "Word Pool",
-    subtitle: "SM-2 Akıllı Kartlar",
-    accent: "border-indigo-500/30 bg-indigo-500/10 text-indigo-200",
-    spanClass: "",
-  },
-  {
-    id: "reading",
-    emoji: "📖",
-    title: "Reading Room",
-    subtitle: "İnteraktif Hikayeler",
-    accent: "border-sky-500/30 bg-sky-500/10 text-sky-200",
-    spanClass: "",
-  },
-  {
-    id: "speaking",
-    emoji: "🎙️",
-    title: "Speaking Studio",
-    subtitle: "Canlı AI Konuşma",
-    accent: "border-violet-500/30 bg-violet-500/10 text-violet-200",
-    spanClass: "",
-  },
-  {
-    id: "arena",
-    emoji: "🏆",
-    title: "Game Arena",
-    subtitle: "Yarış, Kazan, Yüksel",
-    accent: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-    spanClass: "",
-  },
-  {
-    id: "classroom",
-    emoji: "🎓",
-    title: "Sınıfım",
-    subtitle: "Canlı Tahta & Ödevler",
-    accent: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-    spanClass: "col-span-2 sm:col-span-1",
-  },
+const WELCOME_LANGS: { code: Language; label: string }[] = [
+  { code: "tr", label: "TR" },
+  { code: "en", label: "EN" },
+  { code: "de", label: "DE" },
+  { code: "es", label: "ES" },
+  { code: "fr", label: "FR" },
 ];
 
 const SPARKLES = [
@@ -76,7 +42,52 @@ export default function WelcomeVoyageModal({
   onOpenRegister,
   onOpenLogin,
 }: WelcomeVoyageModalProps) {
+  const { language, setLanguage, t } = useLanguage();
+
   if (!isOpen) return null;
+
+  const modules = [
+    {
+      id: "wordpool",
+      emoji: "🃏",
+      title: t("welcome_mod_wordpool_title", "Word Pool"),
+      subtitle: t("welcome_mod_wordpool_sub", "SM-2 Akıllı Kartlar"),
+      accent: "border-indigo-500/30 bg-indigo-500/10 text-indigo-200",
+      spanClass: "",
+    },
+    {
+      id: "reading",
+      emoji: "📖",
+      title: t("welcome_mod_reading_title", "Reading Room"),
+      subtitle: t("welcome_mod_reading_sub", "İnteraktif Hikayeler"),
+      accent: "border-sky-500/30 bg-sky-500/10 text-sky-200",
+      spanClass: "",
+    },
+    {
+      id: "speaking",
+      emoji: "🎙️",
+      title: t("welcome_mod_speaking_title", "Speaking Studio"),
+      subtitle: t("welcome_mod_speaking_sub", "Canlı AI Konuşma"),
+      accent: "border-violet-500/30 bg-violet-500/10 text-violet-200",
+      spanClass: "",
+    },
+    {
+      id: "arena",
+      emoji: "🏆",
+      title: t("welcome_mod_arena_title", "Game Arena"),
+      subtitle: t("welcome_mod_arena_sub", "Yarış, Kazan, Yüksel"),
+      accent: "border-amber-500/30 bg-amber-500/10 text-amber-200",
+      spanClass: "",
+    },
+    {
+      id: "classroom",
+      emoji: "🎓",
+      title: t("welcome_mod_classroom_title", "Sınıfım"),
+      subtitle: t("welcome_mod_classroom_sub", "Canlı Tahta & Ödevler"),
+      accent: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+      spanClass: "col-span-2 sm:col-span-1",
+    },
+  ];
 
   return (
     <div
@@ -121,8 +132,34 @@ export default function WelcomeVoyageModal({
         .sparkle-dot { animation: sparklePulse 3.2s ease-in-out infinite; }
       `}</style>
 
-      {/* 1. MERKEZİ VİTRİN KUTUSU (Yüzen Canlı Ürün Kartları + Taç Rozetli Marka) */}
+      {/* 1. MERKEZİ VİTRİN KUTUSU (Yüzen Canlı Ürün Kartları + Sağ Üst Kompakt Dil Seçici) */}
       <div className="relative w-full max-w-5xl flex-1 max-h-[60vh] rounded-3xl border border-slate-800/80 bg-gradient-to-b from-[#070D1A] via-[#0B162C] to-[#081F26] overflow-hidden flex items-center justify-center p-6 shadow-[0_0_60px_rgba(16,185,129,0.10)]">
+        {/* Sağ Üst Köşe: Kompakt Dil Seçici (🌐 TR / EN / DE / ES / FR) */}
+        <div
+          data-testid="welcome-lang-switcher"
+          className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 z-30 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-900/90 border border-slate-700/80 backdrop-blur-md shadow-lg"
+        >
+          <Globe className="w-3.5 h-3.5 text-emerald-400 ml-0.5 mr-0.5 shrink-0" />
+          {WELCOME_LANGS.map((item) => {
+            const active = language === item.code;
+            return (
+              <button
+                key={item.code}
+                type="button"
+                data-testid={`welcome-lang-${item.code}`}
+                onClick={() => setLanguage(item.code)}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide transition cursor-pointer ${
+                  active
+                    ? "bg-emerald-500 text-slate-950 shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-slate-800"
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Arka Plan Atmosferik Işık & Parıltılar */}
         <div className="absolute top-6 left-1/2 -translate-x-1/2 w-72 h-44 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
         <div className="absolute top-12 left-1/3 w-52 h-36 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
@@ -137,14 +174,14 @@ export default function WelcomeVoyageModal({
         {/* SOL ÜST YÜZEN KART: SM-2 Akıllı Kart */}
         <div className="hidden md:flex flex-col gap-1.5 absolute top-5 left-5 lg:left-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-a pointer-events-none">
           <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-extrabold text-indigo-300">
-            🃏 SM-2 Akıllı Kart
+            {t("welcome_card_sm2_badge", "🃏 SM-2 Akıllı Kart")}
           </span>
           <div className="flex items-baseline justify-between gap-2 mt-0.5">
             <span className="text-base font-black text-white tracking-tight">resilient</span>
             <span className="text-[11px] font-mono text-indigo-300">/rɪˈzɪliənt/</span>
           </div>
           <p className="text-xs text-slate-300 font-medium">
-            dirençli, çabuk toparlanan
+            {t("welcome_card_sm2_meaning", "dirençli, çabuk toparlanan")}
           </p>
         </div>
 
@@ -152,7 +189,7 @@ export default function WelcomeVoyageModal({
         <div className="hidden md:flex flex-col gap-2 absolute bottom-12 left-5 lg:left-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b pointer-events-none">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-[10px] font-extrabold text-violet-300">
-              🎙️ Speaking Studio
+              {t("welcome_card_speak_badge", "🎙️ Speaking Studio")}
             </span>
             <div className="flex items-end gap-1 h-4">
               {WAVE_BARS.map((bar, idx) => (
@@ -165,14 +202,14 @@ export default function WelcomeVoyageModal({
             </div>
           </div>
           <div className="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 text-[11px] font-bold text-emerald-300">
-            Great pronunciation! +25 XP
+            {t("welcome_card_speak_xp", "Great pronunciation! +25 XP")}
           </div>
         </div>
 
         {/* MERKEZ SÜTUN: Taç Rozet + VocaShip Logosu & Sloganı */}
         <div className="relative z-10 flex flex-col items-center text-center px-4 pb-6 sm:pb-8">
           <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 mb-3">
-            ✨ Yeni Nesil Akıllı Dil Platformu
+            {t("welcome_badge", "✨ Yeni Nesil Akıllı Dil Platformu")}
           </span>
 
           <div className="sail-float mb-2.5 p-3 rounded-3xl bg-slate-900/55 border border-emerald-400/25 shadow-[0_12px_35px_rgba(16,185,129,0.22)]">
@@ -191,34 +228,55 @@ export default function WelcomeVoyageModal({
         </div>
 
         {/* SAĞ ÜST YÜZEN KART: Okuma Odası İnteraktif Metin */}
-        <div className="hidden md:flex flex-col gap-1.5 absolute top-5 right-5 lg:right-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b pointer-events-none">
+        <div className="hidden md:flex flex-col gap-1.5 absolute top-14 right-5 lg:right-7 z-10 w-60 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b pointer-events-none">
           <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-[10px] font-extrabold text-sky-300">
-            📖 Reading Room
+            {t("welcome_card_read_badge", "📖 Reading Room")}
           </span>
-          <p className="text-xs text-slate-200 leading-relaxed">
+          <p className="text-[11px] text-slate-200 leading-snug">
             &ldquo;She delivered an{" "}
             <span className="px-1.5 py-0.5 rounded bg-sky-500/25 border border-sky-400/40 text-sky-200 font-bold">
               eloquent
             </span>{" "}
             speech.&rdquo;
           </p>
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950/90 border border-slate-700/80 text-[11px] font-semibold text-amber-300">
-            💬 akıcı ve etkileyici
+          <div className="px-2 py-1 rounded-lg bg-slate-950/90 border border-slate-700/80 text-[10.5px] font-semibold text-amber-300">
+            {t("welcome_card_read_meaning", "💬 akıcı ve etkileyici")}
           </div>
         </div>
 
-        {/* SAĞ ALT YÜZEN KART: Oyun Arenası & Sınıfım */}
-        <div className="hidden md:flex flex-col gap-2 absolute bottom-12 right-5 lg:right-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-a pointer-events-none">
-          <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[10px] font-extrabold text-amber-300">
-            🏆 Game Arena &amp; Sınıfım
-          </span>
+        {/* SAĞ ORTA-ALT YÜZEN KART 1: Game Arena (Ayrı Kart) */}
+        <div className="hidden md:flex flex-col gap-1.5 absolute bottom-[126px] right-5 lg:right-7 z-10 w-60 p-2.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-amber-500/40 shadow-xl card-float-a pointer-events-none">
           <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1 text-xs font-black text-amber-300">
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              +120 Altın
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[10px] font-extrabold text-amber-300">
+              {t("welcome_card_arena_badge", "🏆 Game Arena")}
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-[10px] font-bold text-emerald-300">
-              ● Canlı Sınıf
+            <span className="inline-flex items-center gap-1 text-[11px] font-black text-amber-300">
+              <Coins className="w-3 h-3 text-amber-400" />
+              {t("welcome_card_arena_gold", "+120 Altın")}
+            </span>
+          </div>
+          <div className="text-[11px] font-bold text-slate-200">
+            {t("welcome_card_arena_rank", "🐉 Boss Raid • 1. Sıra")}
+          </div>
+        </div>
+
+        {/* SAĞ ALT YÜZEN KART 2: Sınıfım / Classroom (Ayrı Kart) */}
+        <div className="hidden md:flex flex-col gap-1.5 absolute bottom-6 right-5 lg:right-7 z-10 w-60 p-2.5 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-teal-500/40 shadow-xl card-float-b pointer-events-none">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/35 text-[10px] font-extrabold text-indigo-200">
+              {t("welcome_card_class_badge", "🎓 Sınıfım")}
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-950/90 border border-teal-500/40 font-mono text-[10px] font-black text-teal-300">
+              PIN: 7A2-5K9
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10.5px] font-bold text-emerald-300 truncate">
+              {t("welcome_card_class_live", "● Canlı Tahta & Ödev")}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-300 shrink-0">
+              <Users className="w-3 h-3 text-teal-300" />
+              24
             </span>
           </div>
         </div>
@@ -250,7 +308,7 @@ export default function WelcomeVoyageModal({
 
       {/* 2. ALT BÖLÜM: 5 MODÜL ŞERİDİ */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full max-w-5xl shrink-0">
-        {MODULES.map((mod) => (
+        {modules.map((mod) => (
           <div
             key={mod.id}
             className={`${mod.spanClass} flex items-center gap-2 px-2.5 py-2 rounded-xl border ${mod.accent}`}
@@ -267,7 +325,10 @@ export default function WelcomeVoyageModal({
       {/* 3. TEK SATIR AÇIKLAMA & 3 TEMİZ AKSİYON */}
       <div className="w-full max-w-5xl flex flex-col items-center gap-2.5 shrink-0">
         <p className="text-[11px] sm:text-xs text-slate-400 text-center truncate max-w-full px-2">
-          Kelime havuzun, okuma odan, konuşma stüdyon, oyun arenan ve sınıfın tek bir akıllı gemide seni bekliyor.
+          {t(
+            "welcome_summary",
+            "Kelime havuzun, okuma odan, konuşma stüdyon, oyun arenan ve sınıfın tek bir akıllı gemide seni bekliyor."
+          )}
         </p>
 
         <div className="flex flex-row items-center justify-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -277,7 +338,7 @@ export default function WelcomeVoyageModal({
             onClick={onOpenRegister}
             className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
           >
-            <span>🚀 Ücretsiz Kayıt Ol</span>
+            <span>🚀 {t("welcome_btn_register", "Ücretsiz Kayıt Ol")}</span>
           </button>
 
           <button
@@ -286,7 +347,7 @@ export default function WelcomeVoyageModal({
             onClick={onOpenLogin}
             className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-400/50 backdrop-blur-md text-slate-100 font-extrabold text-xs sm:text-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
           >
-            <span>🔑 Giriş Yap</span>
+            <span>🔑 {t("welcome_btn_login", "Giriş Yap")}</span>
           </button>
 
           <button
@@ -295,7 +356,7 @@ export default function WelcomeVoyageModal({
             onClick={onSkip}
             className="px-3.5 sm:px-5 py-2.5 rounded-2xl bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800 text-slate-300 hover:text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
           >
-            <span>Atla</span>
+            <span>{t("welcome_btn_skip", "Atla")}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

@@ -31,6 +31,33 @@ export const AVAILABLE_LANGUAGES: LanguageOption[] = [
 
 export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
   tr: {
+    // Karşılama Ekranı (WelcomeVoyageModal)
+    welcome_badge: "✨ Yeni Nesil Akıllı Dil Platformu",
+    welcome_summary: "Kelime havuzun, okuma odan, konuşma stüdyon, oyun arenan ve sınıfın tek bir akıllı gemide seni bekliyor.",
+    welcome_btn_register: "Ücretsiz Kayıt Ol",
+    welcome_btn_login: "Giriş Yap",
+    welcome_btn_skip: "Atla",
+    welcome_mod_wordpool_title: "Word Pool",
+    welcome_mod_wordpool_sub: "SM-2 Akıllı Kartlar",
+    welcome_mod_reading_title: "Reading Room",
+    welcome_mod_reading_sub: "İnteraktif Hikayeler",
+    welcome_mod_speaking_title: "Speaking Studio",
+    welcome_mod_speaking_sub: "Canlı AI Konuşma",
+    welcome_mod_arena_title: "Game Arena",
+    welcome_mod_arena_sub: "Yarış, Kazan, Yüksel",
+    welcome_mod_classroom_title: "Sınıfım",
+    welcome_mod_classroom_sub: "Canlı Tahta & Ödevler",
+    welcome_card_sm2_badge: "🃏 SM-2 Akıllı Kart",
+    welcome_card_sm2_meaning: "dirençli, çabuk toparlanan",
+    welcome_card_speak_badge: "🎙️ Speaking Studio",
+    welcome_card_speak_xp: "Great pronunciation! +25 XP",
+    welcome_card_read_badge: "📖 Reading Room",
+    welcome_card_read_meaning: "💬 akıcı ve etkileyici",
+    welcome_card_arena_badge: "🏆 Game Arena",
+    welcome_card_arena_gold: "+120 Altın",
+    welcome_card_arena_rank: "🐉 Boss Raid • 1. Sıra",
+    welcome_card_class_badge: "🎓 Sınıfım",
+    welcome_card_class_live: "● Canlı Tahta & Ödev",
     // Modlar & Navigasyon
     header_subtitle: "Çok Dilli Kelime Arenası & İnteraktif Okuma Odası",
     mode_academic: "Akademik",
@@ -836,6 +863,33 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_sidebar_toggle_menu: "Kategorileri Göster / Gizle",
   },
   en: {
+    // Welcome Screen (WelcomeVoyageModal)
+    welcome_badge: "✨ Next-Gen Smart Language Platform",
+    welcome_summary: "Your word pool, reading room, speaking studio, game arena, and classroom await on one smart ship.",
+    welcome_btn_register: "Sign Up Free",
+    welcome_btn_login: "Log In",
+    welcome_btn_skip: "Skip",
+    welcome_mod_wordpool_title: "Word Pool",
+    welcome_mod_wordpool_sub: "SM-2 Smart Cards",
+    welcome_mod_reading_title: "Reading Room",
+    welcome_mod_reading_sub: "Interactive Stories",
+    welcome_mod_speaking_title: "Speaking Studio",
+    welcome_mod_speaking_sub: "Live AI Speaking",
+    welcome_mod_arena_title: "Game Arena",
+    welcome_mod_arena_sub: "Compete, Win, Level Up",
+    welcome_mod_classroom_title: "My Classroom",
+    welcome_mod_classroom_sub: "Live Board & Homework",
+    welcome_card_sm2_badge: "🃏 SM-2 Smart Card",
+    welcome_card_sm2_meaning: "resilient, quick to recover",
+    welcome_card_speak_badge: "🎙️ Speaking Studio",
+    welcome_card_speak_xp: "Great pronunciation! +25 XP",
+    welcome_card_read_badge: "📖 Reading Room",
+    welcome_card_read_meaning: "💬 fluent and persuasive",
+    welcome_card_arena_badge: "🏆 Game Arena",
+    welcome_card_arena_gold: "+120 Gold",
+    welcome_card_arena_rank: "🐉 Boss Raid • Rank #1",
+    welcome_card_class_badge: "🎓 My Classroom",
+    welcome_card_class_live: "● Live Board & Homework",
     // Modes & Navigation
     header_subtitle: "Multilingual Vocabulary Arena & Interactive Reading Room",
     mode_academic: "Academic",
@@ -1641,6 +1695,33 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_sidebar_toggle_menu: "Show / Hide Categories",
   },
   de: {
+    // Willkommensbildschirm (WelcomeVoyageModal)
+    welcome_badge: "✨ Intelligente Sprachplattform der nächsten Generation",
+    welcome_summary: "Wortschatz, Lesesaal, Sprachstudio, Spielarena und Klassenzimmer vereint auf einem smarten Schiff.",
+    welcome_btn_register: "Kostenlos registrieren",
+    welcome_btn_login: "Anmelden",
+    welcome_btn_skip: "Überspringen",
+    welcome_mod_wordpool_title: "Word Pool",
+    welcome_mod_wordpool_sub: "SM-2 Lernkarten",
+    welcome_mod_reading_title: "Lesesaal",
+    welcome_mod_reading_sub: "Interaktive Geschichten",
+    welcome_mod_speaking_title: "Sprachstudio",
+    welcome_mod_speaking_sub: "Live-KI-Gespräch",
+    welcome_mod_arena_title: "Spielarena",
+    welcome_mod_arena_sub: "Spielen & Aufsteigen",
+    welcome_mod_classroom_title: "Mein Klassenzimmer",
+    welcome_mod_classroom_sub: "Live-Tafel & Aufgaben",
+    welcome_card_sm2_badge: "🃏 SM-2 Lernkarte",
+    welcome_card_sm2_meaning: "widerstandsfähig, belastbar",
+    welcome_card_speak_badge: "🎙️ Sprachstudio",
+    welcome_card_speak_xp: "Tolle Aussprache! +25 XP",
+    welcome_card_read_badge: "📖 Lesesaal",
+    welcome_card_read_meaning: "💬 redegewandt & ausdrucksstark",
+    welcome_card_arena_badge: "🏆 Spielarena",
+    welcome_card_arena_gold: "+120 Gold",
+    welcome_card_arena_rank: "🐉 Boss Raid • Platz 1",
+    welcome_card_class_badge: "🎓 Mein Klassenzimmer",
+    welcome_card_class_live: "● Live-Tafel & Aufgaben",
     // Modi & Navigation
     header_subtitle: "Mehrsprachige Vokabel-Arena & Interaktiver Lesesaal",
     mode_academic: "Akademisch",
@@ -2442,6 +2523,33 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_sidebar_toggle_menu: "Kategorien anzeigen / ausblenden",
   },
   es: {
+    // Pantalla de Bienvenida (WelcomeVoyageModal)
+    welcome_badge: "✨ Plataforma Inteligente de Idiomas de Nueva Generación",
+    welcome_summary: "Tu banco de palabras, sala de lectura, estudio de habla, arena de juegos y aula en un solo barco.",
+    welcome_btn_register: "Regístrate Gratis",
+    welcome_btn_login: "Iniciar Sesión",
+    welcome_btn_skip: "Saltar",
+    welcome_mod_wordpool_title: "Word Pool",
+    welcome_mod_wordpool_sub: "Tarjetas SM-2",
+    welcome_mod_reading_title: "Sala de Lectura",
+    welcome_mod_reading_sub: "Historias Interactivas",
+    welcome_mod_speaking_title: "Estudio de Habla",
+    welcome_mod_speaking_sub: "Práctica IA en Vivo",
+    welcome_mod_arena_title: "Arena de Juegos",
+    welcome_mod_arena_sub: "Compite y Sube",
+    welcome_mod_classroom_title: "Mi Aula",
+    welcome_mod_classroom_sub: "Pizarra en Vivo y Tareas",
+    welcome_card_sm2_badge: "🃏 Tarjeta SM-2",
+    welcome_card_sm2_meaning: "resiliente, capaz de adaptarse",
+    welcome_card_speak_badge: "🎙️ Estudio de Habla",
+    welcome_card_speak_xp: "¡Gran pronunciación! +25 XP",
+    welcome_card_read_badge: "📖 Sala de Lectura",
+    welcome_card_read_meaning: "💬 elocuente y expresivo",
+    welcome_card_arena_badge: "🏆 Arena de Juegos",
+    welcome_card_arena_gold: "+120 Oro",
+    welcome_card_arena_rank: "🐉 Boss Raid • 1.º Puesto",
+    welcome_card_class_badge: "🎓 Mi Aula",
+    welcome_card_class_live: "● Pizarra en Vivo y Tareas",
     // Modos y Navegación
     header_subtitle: "Arena de Vocabulario Multilingüe y Sala de Lectura Interactiva",
     mode_academic: "Académico",
@@ -3234,6 +3342,33 @@ export const UI_TRANSLATIONS: Record<Language, Record<string, string>> = {
     reading_sidebar_toggle_menu: "Mostrar / Ocultar Categorías",
   },
   fr: {
+    // Écran d'Accueil (WelcomeVoyageModal)
+    welcome_badge: "✨ Plateforme Linguistique Intelligente Nouvelle Génération",
+    welcome_summary: "Votre réserve de mots, salle de lecture, studio oral, arène de jeu et classe réunis sur un navire.",
+    welcome_btn_register: "S'inscrire Gratuitement",
+    welcome_btn_login: "Se Connecter",
+    welcome_btn_skip: "Passer",
+    welcome_mod_wordpool_title: "Word Pool",
+    welcome_mod_wordpool_sub: "Cartes SM-2",
+    welcome_mod_reading_title: "Salle de Lecture",
+    welcome_mod_reading_sub: "Histoires Interactives",
+    welcome_mod_speaking_title: "Studio Oral",
+    welcome_mod_speaking_sub: "Conversation IA en Direct",
+    welcome_mod_arena_title: "Arène de Jeu",
+    welcome_mod_arena_sub: "Jouer & Progresser",
+    welcome_mod_classroom_title: "Ma Classe",
+    welcome_mod_classroom_sub: "Tableau Live & Devoirs",
+    welcome_card_sm2_badge: "🃏 Carte SM-2",
+    welcome_card_sm2_meaning: "résilient, persévérant",
+    welcome_card_speak_badge: "🎙️ Studio Oral",
+    welcome_card_speak_xp: "Excellente prononciation ! +25 XP",
+    welcome_card_read_badge: "📖 Salle de Lecture",
+    welcome_card_read_meaning: "💬 éloquent et expressif",
+    welcome_card_arena_badge: "🏆 Arène de Jeu",
+    welcome_card_arena_gold: "+120 Or",
+    welcome_card_arena_rank: "🐉 Boss Raid • 1re Place",
+    welcome_card_class_badge: "🎓 Ma Classe",
+    welcome_card_class_live: "● Tableau Live & Devoirs",
     // Modes et Navigation
     header_subtitle: "Arène de Vocabulaire Multilingue & Salle de Lecture Interactive",
     mode_academic: "Académique",
@@ -4149,17 +4284,32 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguageState] = useState<Language>("tr");
 
   useEffect(() => {
+    const detectBrowserLanguage = (): Language => {
+      if (typeof navigator === "undefined") return "en";
+      const navLang = (navigator.language || "").toLowerCase();
+      if (navLang.startsWith("tr")) return "tr";
+      if (navLang.startsWith("de")) return "de";
+      if (navLang.startsWith("es")) return "es";
+      if (navLang.startsWith("fr")) return "fr";
+      return "en";
+    };
+
     const syncLangFromStorage = () => {
       try {
-        const saved = (localStorage.getItem("vocaship_ui_lang") || localStorage.getItem("quizwise_ui_lang")) as Language | null;
-        if (saved && VALID_LANGS.includes(saved)) {
-          setLanguageState(saved);
-          if (typeof document !== "undefined") {
-            document.documentElement.lang = saved;
-          }
+        const saved = (
+          localStorage.getItem("vocaship_lang") ||
+          localStorage.getItem("vocaship_ui_lang") ||
+          localStorage.getItem("quizwise_ui_lang")
+        ) as Language | null;
+        const resolved: Language =
+          saved && VALID_LANGS.includes(saved) ? saved : detectBrowserLanguage();
+        setLanguageState(resolved);
+        if (typeof document !== "undefined") {
+          document.documentElement.lang = resolved;
         }
       } catch {
-        // localStorage erişilemezse varsayılan 'tr' kalır
+        const fallback = detectBrowserLanguage();
+        setLanguageState(fallback);
       }
     };
 
@@ -4179,6 +4329,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     try {
       localStorage.setItem("quizwise_ui_lang", lang);
       localStorage.setItem("vocaship_ui_lang", lang);
+      localStorage.setItem("vocaship_lang", lang);
       if (typeof document !== "undefined") {
         document.documentElement.lang = lang;
       }
