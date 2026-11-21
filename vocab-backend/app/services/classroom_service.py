@@ -167,16 +167,7 @@ IN_MEMORY_ASSIGNMENTS: List[Dict[str, Any]] = [
     }
 ]
 
-IN_MEMORY_CLASS_MEMBERS: List[Dict[str, Any]] = [
-    {
-        "id": "mem-1",
-        "class_id": "cls-1",
-        "class_code": "VRG-2535",
-        "user_id": "00000000-0000-0000-0000-000000000001",
-        "student_id": "00000000-0000-0000-0000-000000000001",
-        "joined_at": "2026-10-22T10:00:00Z"
-    }
-]
+IN_MEMORY_CLASS_MEMBERS: List[Dict[str, Any]] = []
 
 def generate_classroom_code() -> str:
     """VRG- ile başlayan 6-8 haneli benzersiz sınıf kodu üretir (örn: VRG-2535)."""
@@ -233,8 +224,22 @@ _DEMO_CLASS_NAMES = {
 }
 
 
+_STALE_TEST_CLASS_NAMES_LOWER = {
+    "dfd",
+    "aaa",
+    "dsa",
+    "test",
+    "asdasd",
+    "deneme",
+}
+
+
 def list_classrooms(db=None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Kullanıcının yalnızca gerçek oluşturduğu veya katıldığı sınıfları listeler."""
+    clean_uid = str(user_id or "").strip()
+    if not clean_uid:
+        return []
+
     rows: List[Dict[str, Any]] = []
     if db:
         try:
@@ -251,32 +256,57 @@ def list_classrooms(db=None, user_id: Optional[str] = None) -> List[Dict[str, An
     if not rows:
         rows = list(IN_MEMORY_CLASSES)
 
-    # Sahte demo sınıfları her koşulda ele
+    # Sahte demo ve sahipsiz test sınıflarını her koşulda ele
     cleaned: List[Dict[str, Any]] = []
     seen_ids = set()
     for r in rows:
         rid = r.get("id")
         rname = str(r.get("name") or "").strip()
-        if not rid or rid in seen_ids or rname in _DEMO_CLASS_NAMES:
+        r_teacher = str(r.get("teacher_id") or "").strip()
+        if (
+            not rid
+            or rid in seen_ids
+            or not r_teacher
+            or rname in _DEMO_CLASS_NAMES
+            or rname.lower() in _STALE_TEST_CLASS_NAMES_LOWER
+        ):
             continue
         seen_ids.add(rid)
         cleaned.append(r)
 
-    if not user_id:
-        return cleaned
-
     joined_class_ids = set()
+    for m in IN_MEMORY_CLASS_MEMBERS:
+        if str(m.get("user_id") or "") == clean_uid or str(m.get("student_id") or "") == clean_uid:
+            cid = m.get("class_id")
+            if cid:
+                joined_class_ids.add(cid)
+
     if db:
         try:
-            att = db.table("session_attendees").select("class_id").eq("user_id", user_id).execute()
-            if att.data:
-                joined_class_ids = {a.get("class_id") for a in att.data if a.get("class_id")}
+            cm_u = db.table("class_members").select("class_id").eq("user_id", clean_uid).execute()
+            for a in cm_u.data or []:
+                if a.get("class_id"):
+                    joined_class_ids.add(a["class_id"])
+        except Exception:
+            pass
+        try:
+            cm_s = db.table("class_members").select("class_id").eq("student_id", clean_uid).execute()
+            for a in cm_s.data or []:
+                if a.get("class_id"):
+                    joined_class_ids.add(a["class_id"])
+        except Exception:
+            pass
+        try:
+            att = db.table("session_attendees").select("class_id").eq("user_id", clean_uid).execute()
+            for a in att.data or []:
+                if a.get("class_id"):
+                    joined_class_ids.add(a["class_id"])
         except Exception:
             pass
 
     return [
         c for c in cleaned
-        if c.get("teacher_id") == user_id or c.get("id") in joined_class_ids
+        if str(c.get("teacher_id") or "").strip() == clean_uid or c.get("id") in joined_class_ids
     ]
 
 def create_assignment(data: dict, db=None) -> Dict[str, Any]:

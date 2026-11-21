@@ -73,7 +73,7 @@ function ClassroomContent() {
   const { user, isGuest, openRegistrationGate } = useAuth();
   const { isDark } = useAppTheme();
 
-  const currentUserId = userProfile?.id || "00000000-0000-0000-0000-000000000001";
+  const currentUserId = user?.id || userProfile?.id || "";
   const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com").replace(/\/+$/, "");
 
   // PRO Yetki Kontrolü (Yalnızca ücretli PRO üyeler veya admin sınıf oluşturabilir)
@@ -174,37 +174,24 @@ function ClassroomContent() {
     };
   }, []);
 
-  // 1. LocalStorage & Backend Sınıf Yükleme (Sahte demo sınıflarını temizle)
+  // 1. Eski tarayıcı sınıf önbelleklerini temizle ve yalnızca giriş yapmış kullanıcının DB sınıflarını yükle
   useEffect(() => {
-    const DEMO_CLASS_NAMES = new Set([
-      "10-A İngilizce",
-      "Genel Pratik Grubu",
-      "9-B Dil Sınıfı",
-      "C1 Advanced Business & Engineering English",
-      "FIDIC & EPC Project Control Lab",
-    ]);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("vocaship_classes");
+        localStorage.removeItem("quizwise_classes");
+        localStorage.removeItem("classroom_mock_data");
+      } catch {}
+    }
 
     const loadClasses = async () => {
-      let localList: ClassroomItem[] = [];
-      try {
-        if (typeof window !== "undefined") {
-          const savedClasses = localStorage.getItem("vocaship_classes");
-          if (savedClasses) {
-            const parsed = JSON.parse(savedClasses);
-            if (Array.isArray(parsed)) {
-              localList = parsed.filter(
-                (c: any) => c && c.name && !DEMO_CLASS_NAMES.has(String(c.name).trim())
-              );
-              if (localList.length !== parsed.length) {
-                localStorage.setItem("vocaship_classes", JSON.stringify(localList));
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Storage load error:", e);
+      if (!user || isGuest || !currentUserId) {
+        setClassrooms([]);
+        setIsLoaded(true);
+        return;
       }
 
+      let remoteClasses: ClassroomItem[] = [];
       try {
         const res = await fetch(
           `${apiUrl}/api/v1/classroom/classes?user_id=${encodeURIComponent(currentUserId)}`
@@ -212,11 +199,10 @@ function ClassroomContent() {
         if (res && res.ok) {
           const remoteList = await res.json();
           if (Array.isArray(remoteList)) {
-            const seenIds = new Set(localList.map((c) => c.id));
-            const merged = [...localList];
+            const seenIds = new Set<string>();
             for (const rc of remoteList) {
-              if (rc && rc.id && !seenIds.has(rc.id) && !DEMO_CLASS_NAMES.has(String(rc.name || "").trim())) {
-                merged.push({
+              if (rc && rc.id && !seenIds.has(rc.id)) {
+                remoteClasses.push({
                   id: rc.id,
                   name: rc.name,
                   code: rc.code || rc.invite_slug || "VRG-0000",
@@ -227,20 +213,24 @@ function ClassroomContent() {
                 seenIds.add(rc.id);
               }
             }
-            localList = merged;
           }
         }
       } catch {}
 
-      setClassrooms(localList);
+      setClassrooms(remoteClasses);
       setIsLoaded(true);
     };
 
     loadClasses();
-  }, [apiUrl, currentUserId]);
+  }, [apiUrl, currentUserId, user, isGuest]);
 
   // Timeline Verisini Çek
   const fetchTimeline = async () => {
+    if (!user || isGuest || !currentUserId) {
+      setTeachingSessions([]);
+      setAttendingSessions([]);
+      return;
+    }
     setTimelineLoading(true);
     try {
       const res = await fetch(`${apiUrl}/api/v1/classroom/timeline?user_id=${encodeURIComponent(currentUserId)}`);
@@ -258,15 +248,12 @@ function ClassroomContent() {
 
   useEffect(() => {
     fetchTimeline();
-  }, [currentUserId]);
+  }, [currentUserId, user, isGuest]);
 
   // 2. Sınıf Silme
   const handleDeleteClass = (id: string) => {
     const updated = classrooms.filter((c) => c.id !== id);
     setClassrooms(updated);
-    try {
-      localStorage.setItem("vocaship_classes", JSON.stringify(updated));
-    } catch {}
   };
 
   // 3. Öğrenci PIN ile Katılım
@@ -819,9 +806,6 @@ function ClassroomContent() {
           };
           const updated = [newCls, ...classrooms];
           setClassrooms(updated);
-          try {
-            localStorage.setItem("vocaship_classes", JSON.stringify(updated));
-          } catch {}
           fetchTimeline();
         }}
         onOpenPayoutModal={() => {
@@ -850,9 +834,6 @@ function ClassroomContent() {
               c.id === pinModalClass.id ? { ...c, code: newPin } : c
             );
             setClassrooms(updated);
-            try {
-              localStorage.setItem("vocaship_classes", JSON.stringify(updated));
-            } catch {}
           }
         }}
       />

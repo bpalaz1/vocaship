@@ -84,11 +84,23 @@ def create_class(
     return new_class
 
 @router.get("/classes", response_model=List[ClassroomResponse])
-def get_classes(user_id: Optional[str] = None, db: Client = Depends(get_db)):
+def get_classes(request: Request, user_id: Optional[str] = None, db: Client = Depends(get_db)):
     """
     Eğitmenin veya öğrencinin gerçek sınıflarını ve katılım kodlarını listeler.
+    user_id olmadan genel tablo döndürmez; yalnızca kullanıcının kendi/üye olduğu sınıfları döner.
     """
-    return classroom_service.list_classrooms(db=db, user_id=user_id)
+    effective_user_id = (user_id or "").strip()
+    if not effective_user_id:
+        try:
+            from app.services.quota_service import _extract_token_payload
+            token_data = _extract_token_payload(request)
+            if token_data and token_data.get("sub"):
+                effective_user_id = str(token_data["sub"]).strip()
+        except Exception:
+            pass
+    if not effective_user_id:
+        return []
+    return classroom_service.list_classrooms(db=db, user_id=effective_user_id)
 
 # =========================================================================
 # 2. AI İLE OTOMATİK METİN ANALİZİ VE ÖDEV ÇIKARTMA
