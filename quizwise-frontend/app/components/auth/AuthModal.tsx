@@ -16,6 +16,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { suggestUsernameFromFullName } from "../../utils/avatarHelper";
 
 export interface AuthModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export default function AuthModal({
 
   const [fullName, setFullName] = useState<string>("");
   const [username, setUsername] = useState<string>("");
+  const [usernameManuallyEdited, setUsernameManuallyEdited] = useState<boolean>(false);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
 
@@ -81,6 +83,7 @@ export default function AuthModal({
   const resetAllFields = () => {
     setFullName("");
     setUsername("");
+    setUsernameManuallyEdited(false);
     setEmail("");
     setPassword("");
     setPendingEmail("");
@@ -118,6 +121,10 @@ export default function AuthModal({
       }
       if (!username.trim() || username.trim().length < 2) {
         setErrorMsg("Kullanıcı adı en az 2 karakter olmalıdır.");
+        return;
+      }
+      if (username.includes("@")) {
+        setErrorMsg("Kullanıcı adı (rumuz) '@' veya e-posta adresi içeremez.");
         return;
       }
       if (!email.trim() || !email.includes("@")) {
@@ -659,7 +666,13 @@ export default function AuthModal({
                     type="text"
                     data-testid="auth-input-fullname"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFullName(val);
+                      if (!usernameManuallyEdited) {
+                        setUsername(suggestUsernameFromFullName(val));
+                      }
+                    }}
                     placeholder="Adınız ve Soyadınız"
                     autoComplete="name"
                     required
@@ -675,20 +688,28 @@ export default function AuthModal({
                   <span>
                     {activeTab === "login"
                       ? "E-posta veya Kullanıcı Adı"
-                      : "Kullanıcı Adı"}
+                      : "Kullanıcı Adı (Rumuz)"}
                   </span>
                 </label>
                 <input
                   type="text"
                   data-testid="auth-input-username"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (activeTab === "register") {
+                      setUsernameManuallyEdited(true);
+                      setUsername(val.replace(/@/g, ""));
+                    } else {
+                      setUsername(val);
+                    }
+                  }}
                   placeholder={
                     activeTab === "login"
                       ? "ornek@eposta.com veya kullaniciadi"
-                      : "Kullanıcı adınız"
+                      : "burakpalaz"
                   }
-                  autoComplete="username"
+                  autoComplete={activeTab === "login" ? "username" : "off"}
                   required
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
                 />

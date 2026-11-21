@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { API_BASE } from "../config";
+import { sanitizeUsername } from "../utils/avatarHelper";
 
 export type PlanTier = "free" | "pro";
 
@@ -258,11 +259,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       Boolean(data.is_pro ?? data.isPro),
       data.role
     );
+    const safeEmail = data.email || data.user?.email || fallbackEmail || undefined;
+    const safeUsername = sanitizeUsername(data.username || fallbackUsername, safeEmail);
+    const rawFullName = String(data.full_name || data.fullName || "").trim();
+    const safeFullName =
+      rawFullName && !rawFullName.includes("@") ? rawFullName : safeUsername;
+
     return {
       id: String(data.user_id || data.id || ""),
-      username: String(data.username || fallbackUsername),
-      fullName: String(data.full_name || data.fullName || data.username || fallbackUsername),
-      email: data.email || data.user?.email || fallbackEmail || undefined,
+      username: safeUsername,
+      fullName: safeFullName,
+      email: safeEmail,
       role: String(data.role || "user"),
       isPro: tier === "pro" || Boolean(data.is_pro ?? data.isPro ?? false),
       isEducator: Boolean(data.is_educator ?? data.isEducator ?? false),

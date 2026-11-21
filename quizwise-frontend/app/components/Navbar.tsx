@@ -26,6 +26,7 @@ import { VocaShipLogo } from "./brand/VocaShipLogo";
 import { useTranslation } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
+import { getInitials, isImageAvatarUrl } from "../utils/avatarHelper";
 
 const AuthModal = dynamic(() => import("./auth/AuthModal"), { ssr: false });
 const SettingsModal = dynamic(() => import("./auth/SettingsModal"), { ssr: false });
@@ -129,7 +130,10 @@ export default function Navbar() {
         userProfile.plan_tier === "pro")
   );
   const planTier: "free" | "pro" = isPro ? "pro" : "free";
-  const avatarUrl = user ? (userProfile.avatar_url || "🦊") : "";
+  const avatarUrl = user ? (userProfile.avatar_url || "") : "";
+  const userInitials = user
+    ? getInitials(userProfile.full_name || user.fullName, currentUsername)
+    : "";
 
   const rawSubscriptionStatus = (
     userProfile.subscription_status ||
@@ -307,16 +311,18 @@ export default function Navbar() {
                     aria-expanded={isUserDropdownOpen}
                     title={t("nav_account_menu")}
                   >
-                    {/* Seçili Avatar İkonu (36x36 yuvarlak portre) */}
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600/40 to-violet-600/30 border border-indigo-400/40 flex items-center justify-center text-base shadow-inner shrink-0 overflow-hidden">
-                      {avatarUrl && (avatarUrl.startsWith("http") || avatarUrl.startsWith("/") || avatarUrl.startsWith("data:")) ? (
+                    {/* Seçili Avatar İkonu veya Baş Harf Monogramı (36x36 yuvarlak portre) */}
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-600 border border-emerald-300/40 flex items-center justify-center text-xs font-black text-white shadow-inner shrink-0 overflow-hidden">
+                      {isImageAvatarUrl(avatarUrl) ? (
                         <img
                           src={avatarUrl}
                           alt={currentUsername}
                           className="w-full h-full object-cover"
                         />
+                      ) : avatarUrl ? (
+                        <span className="text-base leading-none">{avatarUrl}</span>
                       ) : (
-                        <span>{avatarUrl || "🦊"}</span>
+                        <span>{userInitials}</span>
                       )}
                     </div>
 
@@ -346,15 +352,17 @@ export default function Navbar() {
                     >
                       {/* Kullanıcı Özeti Başlığı */}
                       <div className="px-3 py-2 border-b border-slate-800/80 flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-sm shrink-0 overflow-hidden">
-                          {avatarUrl && (avatarUrl.startsWith("http") || avatarUrl.startsWith("/") || avatarUrl.startsWith("data:")) ? (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-600 border border-emerald-300/40 flex items-center justify-center text-xs font-black text-white shrink-0 overflow-hidden">
+                          {isImageAvatarUrl(avatarUrl) ? (
                             <img
                               src={avatarUrl}
                               alt=""
                               className="w-full h-full object-cover rounded-full"
                             />
+                          ) : avatarUrl ? (
+                            <span className="text-sm leading-none">{avatarUrl}</span>
                           ) : (
-                            <span>{avatarUrl || "🦊"}</span>
+                            <span>{userInitials}</span>
                           )}
                         </div>
                         <div className="min-w-0 flex-1">

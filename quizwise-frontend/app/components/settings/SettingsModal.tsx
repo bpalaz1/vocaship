@@ -25,6 +25,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { useLanguage, AVAILABLE_LANGUAGES, Language } from "../../context/LanguageContext";
 import { usePersona } from "../../context/PersonaContext";
 import AvatarPickerModal from "../profile/AvatarPickerModal";
+import { getInitials, isImageAvatarUrl } from "../../utils/avatarHelper";
 import { NEURAL_VOICES, setStoredNeuralVoice, getLocalizedNeuralVoice } from "../../utils/ttsVoices";
 
 export interface SettingsModalProps {
@@ -47,7 +48,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [selectedAvatar, setSelectedAvatar] = useState("🦊");
+  const [selectedAvatar, setSelectedAvatar] = useState("");
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
   // Şifre Değiştirme Alt Formu
@@ -104,7 +105,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
       setUsername(resolvedUsername);
       setEmail(resolvedEmail);
       setEmailError(null);
-      setSelectedAvatar(storedProfile.avatar_url || userProfile.avatar_url || "🦊");
+      setSelectedAvatar(storedProfile.avatar_url ?? userProfile.avatar_url ?? "");
       setSelectedLang(language || "tr");
       setStudyLevel(storedProfile.study_level || userProfile.study_level || "B1");
       setDailyGoal(storedProfile.daily_goal || userProfile.daily_goal || 20);
@@ -301,25 +302,38 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               <div className="space-y-4 animate-in fade-in duration-200">
                 {/* Avatar Önizleme & Değiştirme Kartı */}
                 <div className="flex items-center gap-4 p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600/30 to-violet-600/20 border-2 border-indigo-400/50 flex items-center justify-center text-2xl shadow-inner shrink-0 overflow-hidden">
-                    {selectedAvatar && (selectedAvatar.startsWith("http") || selectedAvatar.startsWith("/") || selectedAvatar.startsWith("data:")) ? (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-600 border-2 border-emerald-300/50 flex items-center justify-center text-xl font-black text-white shadow-inner shrink-0 overflow-hidden">
+                    {isImageAvatarUrl(selectedAvatar) ? (
                       <img src={selectedAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : selectedAvatar ? (
+                      <span className="text-2xl leading-none">{selectedAvatar}</span>
                     ) : (
-                      <span>{selectedAvatar || "🦊"}</span>
+                      <span>{getInitials(fullName, username)}</span>
                     )}
                   </div>
 
                   <div className="flex-1 flex flex-col justify-center">
                     <span className="text-xs font-bold text-white">{t("settings_photo_avatar")}</span>
                     <span className="text-[11px] text-slate-400">{t("settings_avatar_sub")}</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsAvatarPickerOpen(true)}
-                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-xs font-semibold transition cursor-pointer self-start"
-                    >
-                      <Palette className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>{t("settings_change_avatar")}</span>
-                    </button>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsAvatarPickerOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-xs font-semibold transition cursor-pointer"
+                      >
+                        <Palette className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>{t("settings_change_avatar")}</span>
+                      </button>
+                      {selectedAvatar && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAvatar("")}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer"
+                        >
+                          <span>Monograma Dön</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

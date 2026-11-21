@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useAuth } from "./AuthContext";
 import { API_BASE } from "../config";
+import { sanitizeUsername } from "../utils/avatarHelper";
 
 export interface UserProfile {
   id?: string;
@@ -215,10 +216,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
               ...localStored,
               id: data.id || prev.id,
               user_id: data.id || prev.user_id,
-              full_name: localStored.full_name || data.full_name || prev.full_name || "Öğrenci",
-              username: (localStored.username || data.username || prev.username).replace(/^@+/, ""),
+              full_name: localStored.full_name || data.full_name || prev.full_name || "",
+              username: sanitizeUsername(
+                localStored.username || data.username || prev.username,
+                preservedEmail
+              ),
               email: preservedEmail,
-              avatar_url: localStored.avatar_url || data.avatar_url || prev.avatar_url || "🦊",
+              avatar_url: localStored.avatar_url ?? data.avatar_url ?? prev.avatar_url ?? "",
               is_pro: Boolean(data.is_pro),
               plan_tier: tier,
               planTier: tier,

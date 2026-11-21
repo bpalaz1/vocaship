@@ -265,9 +265,15 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
     Tüm yeni kullanıcılar otomatik plan_tier='free', is_pro=False, email_verified=False
     olarak oluşturulur ve 6 haneli e-posta doğrulama kodu üretilir.
     """
-    clean_username = payload.username.strip()
-    clean_full_name = payload.full_name.strip()
     clean_email = str(payload.email).strip().lower()
+    raw_username = (payload.username or "").strip()
+    if "@" in raw_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kullanıcı adı (rumuz) e-posta adresi veya '@' içeremez.",
+        )
+    clean_username = raw_username or clean_email.split("@")[0]
+    clean_full_name = payload.full_name.strip()
 
     if not clean_username or len(clean_username) < 2:
         raise HTTPException(
