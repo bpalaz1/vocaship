@@ -347,50 +347,88 @@ export function wouldCreateFolderCycle(
   return false;
 }
 
+function getScopedUserContext(): { userId: string; token: string | null } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const rawUser = localStorage.getItem("vorego_auth_user");
+    const token = localStorage.getItem("vorego_auth_token");
+    if (!rawUser) return null;
+    const parsed = JSON.parse(rawUser);
+    if (!parsed?.id) return null;
+    return { userId: String(parsed.id), token };
+  } catch {
+    return null;
+  }
+}
+
+function clearLegacyShowcaseCaches(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(DECKS_CACHE_STORAGE_KEY);
+    localStorage.removeItem(FOLDERS_CACHE_STORAGE_KEY);
+    localStorage.removeItem("vocaship_deck_cards_guest_deck_daily");
+    localStorage.removeItem("vocaship_deck_cards_guest_deck_business");
+  } catch {}
+}
+
 /**
- * Kullanıcının klasörlerini backend'den çeker, localStorage'a önbelleğe alır
+ * Kullanıcının klasörlerini backend'den çeker, kullanıcıya özel localStorage anahtarına önbelleğe alır
  */
 export async function fetchFoldersList(): Promise<FolderItem[]> {
+  clearLegacyShowcaseCaches();
+  const authCtx = getScopedUserContext();
+  if (!authCtx) {
+    return [];
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   const hierarchy = getFolderHierarchyMap();
+  const scopedCacheKey = `${FOLDERS_CACHE_STORAGE_KEY}_${authCtx.userId}`;
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/folders`, {
-      signal: controller.signal,
-    });
+    const headers: Record<string, string> = {};
+    if (authCtx.token) {
+      headers["Authorization"] = `Bearer ${authCtx.token}`;
+    }
+    const res = await fetch(
+      `${API_BASE}/api/v1/folders?user_id=${encodeURIComponent(authCtx.userId)}`,
+      {
+        headers,
+        signal: controller.signal,
+      }
+    );
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        const mapped: FolderItem[] = data.map((f: any) => {
-          const id = String(f.id || "").trim();
-          const parentId =
-            normalizeFolderId(f.parent_id) ?? normalizeFolderId(hierarchy[id]);
-          return {
-            id,
-            name: String(
-              f.name ||
-                pickUiText({
-                  tr: "Klasör",
-                  en: "Folder",
-                  de: "Ordner",
-                  es: "Carpeta",
-                  fr: "Dossier",
-                })
-            ),
-            color: f.color || "#f59e0b",
-            parent_id: parentId === id ? null : parentId,
-            deck_count:
-              typeof f.deck_count === "number" ? f.deck_count : undefined,
-          };
-        });
+        const mapped: FolderItem[] = data
+          .filter((f: any) => !String(f.id || "").startsWith("guest_"))
+          .map((f: any) => {
+            const id = String(f.id || "").trim();
+            const parentId =
+              normalizeFolderId(f.parent_id) ?? normalizeFolderId(hierarchy[id]);
+            return {
+              id,
+              name: String(
+                f.name ||
+                  pickUiText({
+                    tr: "Klasör",
+                    en: "Folder",
+                    de: "Ordner",
+                    es: "Carpeta",
+                    fr: "Dossier",
+                  })
+              ),
+              color: f.color || "#f59e0b",
+              parent_id: parentId === id ? null : parentId,
+              deck_count:
+                typeof f.deck_count === "number" ? f.deck_count : undefined,
+            };
+          });
         const normalized = sortFoldersBySavedOrder(mapped);
         if (typeof window !== "undefined") {
           try {
-            localStorage.setItem(
-              FOLDERS_CACHE_STORAGE_KEY,
-              JSON.stringify(normalized)
-            );
+            localStorage.setItem(scopedCacheKey, JSON.stringify(normalized));
           } catch {}
         }
         return normalized;
@@ -404,22 +442,24 @@ export async function fetchFoldersList(): Promise<FolderItem[]> {
 
   if (typeof window !== "undefined") {
     try {
-      const cached = localStorage.getItem(FOLDERS_CACHE_STORAGE_KEY);
+      const cached = localStorage.getItem(scopedCacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
           return sortFoldersBySavedOrder(
-            parsed.map((f: any) => {
-              const id = String(f.id || "").trim();
-              const parentId =
-                normalizeFolderId(f.parent_id) ??
-                normalizeFolderId(hierarchy[id]);
-              return {
-                ...f,
-                id,
-                parent_id: parentId === id ? null : parentId,
-              };
-            })
+            parsed
+              .filter((f: any) => !String(f.id || "").startsWith("guest_"))
+              .map((f: any) => {
+                const id = String(f.id || "").trim();
+                const parentId =
+                  normalizeFolderId(f.parent_id) ??
+                  normalizeFolderId(hierarchy[id]);
+                return {
+                  ...f,
+                  id,
+                  parent_id: parentId === id ? null : parentId,
+                };
+              })
           );
         }
       }
@@ -430,33 +470,38 @@ export async function fetchFoldersList(): Promise<FolderItem[]> {
 }
 
 /**
- * Kullanıcının destelerini backend'den çeker, localStorage'a önbelleğe alır
+ * Kullanıcının destelerini backend'den çeker, kullanıcıya özel localStorage anahtarına önbelleğe alır
  */
 export async function fetchDecksList(): Promise<DeckItem[]> {
+  clearLegacyShowcaseCaches();
+  const authCtx = getScopedUserContext();
+  if (!authCtx) {
+    return [];
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const scopedCacheKey = `${DECKS_CACHE_STORAGE_KEY}_${authCtx.userId}`;
   try {
-    let url = `${API_BASE}/api/v1/decks`;
-    if (typeof window !== "undefined") {
-      try {
-        const rawUser = localStorage.getItem("vorego_auth_user");
-        if (rawUser) {
-          const parsedUser = JSON.parse(rawUser);
-          if (parsedUser?.id) {
-            url = `${API_BASE}/api/v1/decks?user_id=${encodeURIComponent(parsedUser.id)}`;
-          }
-        }
-      } catch {}
+    const url = `${API_BASE}/api/v1/decks?user_id=${encodeURIComponent(authCtx.userId)}`;
+    const headers: Record<string, string> = {};
+    if (authCtx.token) {
+      headers["Authorization"] = `Bearer ${authCtx.token}`;
     }
 
     const res = await fetch(url, {
+      headers,
       signal: controller.signal,
     });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
         const normalizedBackend: DeckItem[] = data
-          .filter((d: any) => !String(d.id || "").startsWith("preset_"))
+          .filter(
+            (d: any) =>
+              !String(d.id || "").startsWith("preset_") &&
+              !String(d.id || "").startsWith("guest_")
+          )
           .map((d: any) => ({
             ...d,
             id: String(d.id || "").trim(),
@@ -477,7 +522,7 @@ export async function fetchDecksList(): Promise<DeckItem[]> {
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem(
-              DECKS_CACHE_STORAGE_KEY,
+              scopedCacheKey,
               JSON.stringify(normalizedBackend)
             );
           } catch {}
@@ -491,15 +536,19 @@ export async function fetchDecksList(): Promise<DeckItem[]> {
     clearTimeout(timeoutId);
   }
 
-  // Önbelleği dene (otomatik preset seed devre dışı)
+  // Kullanıcıya özel önbelleği dene (otomatik preset/vitrin seed devre dışı)
   if (typeof window !== "undefined") {
     try {
-      const cached = localStorage.getItem(DECKS_CACHE_STORAGE_KEY);
+      const cached = localStorage.getItem(scopedCacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
           return parsed
-            .filter((d: any) => !String(d.id || "").startsWith("preset_"))
+            .filter(
+              (d: any) =>
+                !String(d.id || "").startsWith("preset_") &&
+                !String(d.id || "").startsWith("guest_")
+            )
             .map((d: any) => ({
               ...d,
               folder_id: normalizeFolderId(d.folder_id),

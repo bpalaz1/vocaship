@@ -1,9 +1,10 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from supabase import Client
 from app.core.database import get_db
 from app.schemas.folder import FolderCreate, FolderResponse
+from app.services.quota_service import _extract_token_payload
 
 router = APIRouter()
 
@@ -15,9 +16,21 @@ class FolderUpdate(BaseModel):
 
 @router.get("", response_model=List[FolderResponse])
 @router.get("/", response_model=List[FolderResponse])
-async def list_folders(db: Client = Depends(get_db)):
-    """Kullanıcının klasörlerini ve içerdikleri deste sayısını listeler."""
-    res = db.table("folders").select("*").order("created_at").execute()
+async def list_folders(
+    request: Request,
+    user_id: Optional[str] = None,
+    db: Client = Depends(get_db),
+):
+    """Yalnızca giriş yapmış kullanıcının kendi klasörlerini listeler; yoksa [] döner."""
+    effective_user_id = (user_id or "").strip()
+    if not effective_user_id:
+        token_data = _extract_token_payload(request)
+        if token_data and token_data.get("sub"):
+            effective_user_id = str(token_data["sub"]).strip()
+    if not effective_user_id:
+        return []
+
+    res = db.table("folders").select("*").eq("user_id", effective_user_id).order("created_at").execute()
     folders = res.data or []
     for f in folders:
         count_res = db.table("decks").select("id", count="exact").eq("folder_id", f["id"]).execute()
@@ -27,13 +40,15 @@ async def list_folders(db: Client = Depends(get_db)):
 
 @router.post("", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
-async def create_folder(folder_in: FolderCreate, db: Client = Depends(get_db)):
+async def create_folder(folder_in: FolderCreate, request: Request, db: Client = Depends(get_db)):
     """Yeni bir klasör (örn: Kuzey, Animals) oluşturur."""
     data = folder_in.model_dump()
     if not data.get("user_id"):
-        user_res = db.table("users").select("id").limit(1).execute()
-        if user_res.data:
-            data["user_id"] = user_res.data[0]["id"]
+        token_data = _extract_token_payload(request)
+        if token_data and token_data.get("sub"):
+            data["user_id"] = str(token_data["sub"]).strip()
+        else:
+            raise HTTPException(status_code=401, detail="Klasör oluşturmak için oturum açmalısınız.")
 
     res = db.table("folders").insert(data).execute()
     if not res.data:

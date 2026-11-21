@@ -30,7 +30,7 @@ import {
 import { API_BASE } from "./config";
 import { useAuth } from "./context/AuthContext";
 import { useProfile } from "./context/ProfileContext";
-import { ensureGuestShowcaseDecks } from "./utils/guestShowcase";
+// guestShowcase seed removed; empty library zero-state is enforced
 import { useAppTheme } from "./context/ThemeContext";
 import { useLanguage } from "./context/LanguageContext";
 import {
@@ -241,15 +241,14 @@ export default function Home() {
         (d) => !d.id.startsWith("preset_") && normalizeFolderId(d.folder_id) === null
       );
       let cleanDecks = fetchedDecks.filter(
-        (d) => !d.id.startsWith("preset_") && normalizeFolderId(d.folder_id) !== null
+        (d) =>
+          !d.id.startsWith("preset_") &&
+          !d.id.startsWith("guest_") &&
+          normalizeFolderId(d.folder_id) !== null
       );
-      let finalFolders = fetchedFolders;
-
-      if (!user && isGuest && cleanDecks.length === 0) {
-        const seeded = ensureGuestShowcaseDecks();
-        finalFolders = seeded.folders;
-        cleanDecks = seeded.decks;
-      }
+      const finalFolders = fetchedFolders.filter(
+        (f) => !String(f.id || "").startsWith("guest_")
+      );
 
       setFolders(finalFolders);
       setDecks(cleanDecks);
@@ -666,6 +665,7 @@ export default function Home() {
           title: newTitle.trim(),
           description: newDescription.trim(),
           folder_id: cleanFolderId,
+          ...(user?.id ? { user_id: user.id } : {}),
         }),
       });
       if (res.ok) {

@@ -1,12 +1,13 @@
 from datetime import date
 from typing import List, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from supabase import Client
 from app.core.database import get_db
 from app.schemas.deck import DeckCreate, DeckResponse
 from app.schemas.flashcard import FlashcardCreate
 from app.api.v1.endpoints.ai import save_word_to_cache
+from app.services.quota_service import _extract_token_payload
 
 router = APIRouter()
 
@@ -26,9 +27,27 @@ class CardUpdatePayload(BaseModel):
 
 @router.get("", response_model=List[DeckResponse])
 @router.get("/", response_model=List[DeckResponse])
-async def list_decks(folder_id: Optional[str] = None, db: Client = Depends(get_db)):
-    """Tüm desteleri ve bağlı oldukları folder_id bilgisini net olarak döner."""
-    query = db.table("decks").select("id, title, description, folder_id, user_id, created_at").order("created_at")
+async def list_decks(
+    request: Request,
+    user_id: Optional[str] = None,
+    folder_id: Optional[str] = None,
+    db: Client = Depends(get_db),
+):
+    """Yalnızca giriş yapmış kullanıcının kendi oluşturduğu desteleri döner; deste yoksa [] döner."""
+    effective_user_id = (user_id or "").strip()
+    if not effective_user_id:
+        token_data = _extract_token_payload(request)
+        if token_data and token_data.get("sub"):
+            effective_user_id = str(token_data["sub"]).strip()
+    if not effective_user_id:
+        return []
+
+    query = (
+        db.table("decks")
+        .select("id, title, description, folder_id, user_id, created_at")
+        .eq("user_id", effective_user_id)
+        .order("created_at")
+    )
     if folder_id:
         query = query.eq("folder_id", folder_id)
     decks_res = query.execute()
@@ -46,7 +65,7 @@ async def list_decks(folder_id: Optional[str] = None, db: Client = Depends(get_d
 
 @router.post("", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
-async def create_deck(deck_in: DeckCreate, db: Client = Depends(get_db)):
+async def create_deck(deck_in: DeckCreate, request: Request, db: Client = Depends(get_db)):
     data = deck_in.model_dump()
     # Supabase UUID syntax hatasını önle: boş string veya geçersiz değerleri kesinlikle None yap
     raw_fid = data.get("folder_id")
@@ -56,11 +75,11 @@ async def create_deck(deck_in: DeckCreate, db: Client = Depends(get_db)):
         data["folder_id"] = str(raw_fid).strip()
 
     if not data.get("user_id"):
-        user_res = db.table("users").select("id").limit(1).execute()
-        if user_res.data:
-            data["user_id"] = user_res.data[0]["id"]
+        token_data = _extract_token_payload(request)
+        if token_data and token_data.get("sub"):
+            data["user_id"] = str(token_data["sub"]).strip()
         else:
-            raise HTTPException(status_code=400, detail="Kullanıcı bulunamadı.")
+            raise HTTPException(status_code=401, detail="Deste oluşturmak için oturum açmalısınız.")
 
     res = db.table("decks").insert(data).execute()
     if not res.data:
