@@ -117,14 +117,14 @@ export default function Navbar() {
     },
   ];
 
-  const currentUsername = userProfile.username || user?.username || "ogrenci";
+  const currentUsername = user ? (userProfile.username || user.username || "") : "";
   const planTier: "basic" | "plus" | "pro" =
     user?.planTier ||
     userProfile.planTier ||
     userProfile.plan_tier ||
     (user?.isPro ? "pro" : "basic");
-  const isPro = planTier === "pro";
-  const avatarUrl = userProfile.avatar_url || "🦊";
+  const isPro = Boolean(user) && planTier === "pro";
+  const avatarUrl = user ? (userProfile.avatar_url || "🦊") : "";
 
   const rawSubscriptionStatus = (
     userProfile.subscription_status ||
@@ -217,10 +217,10 @@ export default function Navbar() {
               })}
             </nav>
 
-            {/* SAĞ: DENEME ROZETİ, DİL SEÇİCİ & SADE KULLANICI KAPSÜLÜ */}
+            {/* SAĞ: DENEME ROZETİ, DİL SEÇİCİ & KULLANICI KAPSÜLÜ VEYA GİRİŞ/KAYIT */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0 overflow-visible">
-              {/* 30 Günlük PRO Deneme Sayacı, Aktif 👑 PRO Rozeti veya PRO'ya Geç Butonu */}
-              {isTrialActive && (
+              {/* 30 Günlük PRO Deneme Sayacı, Aktif 👑 PRO Rozeti veya PRO'ya Geç Butonu (Yalnızca oturum açıksa) */}
+              {user && isTrialActive && (
                 <button
                   type="button"
                   data-testid="navbar-trial-badge"
@@ -231,7 +231,7 @@ export default function Navbar() {
                 </button>
               )}
 
-              {!isTrialActive && !showUpgradeCta && (rawSubscriptionStatus === "active" || isPro) && (
+              {user && !isTrialActive && !showUpgradeCta && (rawSubscriptionStatus === "active" || isPro) && (
                 <span
                   data-testid="navbar-pro-badge"
                   className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/15 border border-amber-400/50 text-[11px] font-black text-amber-300 shadow-sm whitespace-nowrap select-none"
@@ -240,7 +240,7 @@ export default function Navbar() {
                 </span>
               )}
 
-              {showUpgradeCta && (
+              {user && showUpgradeCta && (
                 <button
                   type="button"
                   data-testid="navbar-upgrade-pro-btn"
@@ -255,159 +255,168 @@ export default function Navbar() {
               {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR, IT, RU) */}
               <LanguageSelector align="right" />
 
-              {/* SADE KULLANICI KAPSÜLÜ (USER CAPSULE) */}
-              <div className="relative shrink-0 overflow-visible" ref={userDropdownRef}>
+              {/* OTURUM YOKSA: Şık Giriş Yap / Kayıt Ol Butonu — OTURUM VARSA: Kullanıcı Kapsülü */}
+              {!user ? (
                 <button
                   type="button"
-                  data-testid="navbar-user-capsule"
-                  onClick={() => setIsUserDropdownOpen((prev) => !prev)}
-                  className="flex items-center gap-2 px-1.5 py-1 sm:pr-3 rounded-full bg-slate-900/90 hover:bg-slate-850 border border-slate-800/90 hover:border-slate-700 transition-all cursor-pointer shadow-sm active:scale-95 select-none"
-                  aria-expanded={isUserDropdownOpen}
-                  title={t("nav_account_menu")}
+                  data-testid="navbar-auth-cta-btn"
+                  onClick={() => openAuthModal("login")}
+                  className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white text-xs font-black shadow-lg shadow-sky-500/25 transition active:scale-95 cursor-pointer whitespace-nowrap"
                 >
-                  {/* Seçili Avatar İkonu (36x36 yuvarlak portre) */}
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600/40 to-violet-600/30 border border-indigo-400/40 flex items-center justify-center text-base shadow-inner shrink-0 overflow-hidden">
-                    {avatarUrl && (avatarUrl.startsWith("http") || avatarUrl.startsWith("/") || avatarUrl.startsWith("data:")) ? (
-                      <img
-                        src={avatarUrl}
-                        alt={currentUsername}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span>{avatarUrl || "🦊"}</span>
-                    )}
-                  </div>
-
-                  {/* Yanında yalnızca username */}
-                  <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate">
-                    {currentUsername.replace(/^@+/, "")}
-                  </span>
-
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 hidden sm:block ${
-                      isUserDropdownOpen ? "rotate-180 text-white" : ""
-                    }`}
-                  />
+                  <span>🚀 Giriş Yap / Kayıt Ol</span>
                 </button>
-
-                {/* MİNİMAL DROPDOWN MENÜ */}
-                {isUserDropdownOpen && (
-                  <div
-                    data-theme-preserve="dark"
-                    className="absolute right-0 top-full mt-2 w-64 z-[9999] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150 overflow-visible"
+              ) : (
+                <div className="relative shrink-0 overflow-visible" ref={userDropdownRef}>
+                  <button
+                    type="button"
+                    data-testid="navbar-user-capsule"
+                    onClick={() => setIsUserDropdownOpen((prev) => !prev)}
+                    className="flex items-center gap-2 px-1.5 py-1 sm:pr-3 rounded-full bg-slate-900/90 hover:bg-slate-850 border border-slate-800/90 hover:border-slate-700 transition-all cursor-pointer shadow-sm active:scale-95 select-none"
+                    aria-expanded={isUserDropdownOpen}
+                    title={t("nav_account_menu")}
                   >
-                    {/* Kullanıcı Özeti Başlığı */}
-                    <div className="px-3 py-2 border-b border-slate-800/80 flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-sm shrink-0 overflow-hidden">
-                        {avatarUrl && (avatarUrl.startsWith("http") || avatarUrl.startsWith("/") || avatarUrl.startsWith("data:")) ? (
-                          <img
-                            src={avatarUrl}
-                            alt=""
-                            className="w-full h-full object-cover rounded-full"
-                          />
-                        ) : (
-                          <span>{avatarUrl || "🦊"}</span>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-black text-white truncate">
-                            {userProfile.full_name || currentUsername}
-                          </p>
-                          {planTier === "pro" ? (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[9px] leading-none shrink-0">
-                              👑 PRO
-                            </span>
-                          ) : planTier === "plus" ? (
-                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold text-[9px] leading-none shrink-0">
-                              ⚡ PLUS
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-extrabold text-[9px] leading-none shrink-0">
-                              BASIC
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-400 truncate font-mono">
-                          {currentUsername.replace(/^@+/, "")}
-                        </p>
-                      </div>
+                    {/* Seçili Avatar İkonu (36x36 yuvarlak portre) */}
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600/40 to-violet-600/30 border border-indigo-400/40 flex items-center justify-center text-base shadow-inner shrink-0 overflow-hidden">
+                      {avatarUrl && (avatarUrl.startsWith("http") || avatarUrl.startsWith("/") || avatarUrl.startsWith("data:")) ? (
+                        <img
+                          src={avatarUrl}
+                          alt={currentUsername}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>{avatarUrl || "🦊"}</span>
+                      )}
                     </div>
 
-                    {/* Deneme Sayacı / PRO'ya Geç Aksiyonu (Dropdown İçi) */}
-                    {isTrialActive ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsUserDropdownOpen(false);
-                          setIsProCheckoutOpen(true);
-                        }}
-                        className="w-full px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 text-[11px] font-extrabold text-amber-200 transition flex items-center justify-between cursor-pointer"
-                      >
-                        <span>🎁 {computedTrialDaysLeft ?? 30} Gün PRO Deneme</span>
-                        <span className="text-emerald-300 underline">PRO&apos;ya Geç</span>
-                      </button>
-                    ) : (
-                      (showUpgradeCta || !isPro) && (
+                    {/* Yanında yalnızca kullanıcının kendi kullanıcı adı */}
+                    <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate">
+                      {currentUsername.replace(/^@+/, "")}
+                    </span>
+
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 hidden sm:block ${
+                        isUserDropdownOpen ? "rotate-180 text-white" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {/* MİNİMAL DROPDOWN MENÜ (Yalnızca oturum açıkken) */}
+                  {isUserDropdownOpen && (
+                    <div
+                      data-theme-preserve="dark"
+                      className="absolute right-0 top-full mt-2 w-64 z-[9999] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150 overflow-visible"
+                    >
+                      {/* Kullanıcı Özeti Başlığı */}
+                      <div className="px-3 py-2 border-b border-slate-800/80 flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-sm shrink-0 overflow-hidden">
+                          {avatarUrl && (avatarUrl.startsWith("http") || avatarUrl.startsWith("/") || avatarUrl.startsWith("data:")) ? (
+                            <img
+                              src={avatarUrl}
+                              alt=""
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          ) : (
+                            <span>{avatarUrl || "🦊"}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-black text-white truncate">
+                              {userProfile.full_name || user.fullName || currentUsername}
+                            </p>
+                            {planTier === "pro" ? (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[9px] leading-none shrink-0">
+                                👑 PRO
+                              </span>
+                            ) : planTier === "plus" ? (
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold text-[9px] leading-none shrink-0">
+                                ⚡ PLUS
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-extrabold text-[9px] leading-none shrink-0">
+                                BASIC
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate font-mono">
+                            {currentUsername.replace(/^@+/, "")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Deneme Sayacı / PRO'ya Geç Aksiyonu (Dropdown İçi) */}
+                      {isTrialActive ? (
                         <button
                           type="button"
                           onClick={() => {
                             setIsUserDropdownOpen(false);
                             setIsProCheckoutOpen(true);
                           }}
-                          className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          className="w-full px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 text-[11px] font-extrabold text-amber-200 transition flex items-center justify-between cursor-pointer"
                         >
-                          <Crown className="w-3.5 h-3.5" />
-                          <span>PRO&apos;ya Geç</span>
+                          <span>🎁 {computedTrialDaysLeft ?? 30} Gün PRO Deneme</span>
+                          <span className="text-emerald-300 underline">PRO&apos;ya Geç</span>
                         </button>
-                      )
-                    )}
+                      ) : (
+                        (showUpgradeCta || !isPro) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsUserDropdownOpen(false);
+                              setIsProCheckoutOpen(true);
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Crown className="w-3.5 h-3.5" />
+                            <span>PRO&apos;ya Geç</span>
+                          </button>
+                        )
+                      )}
 
-                    {/* 👤 Profil & Hesap Ayarları */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUserDropdownOpen(false);
-                        setSettingsInitialTab("profile");
-                        setIsSettingsModalOpen(true);
-                      }}
-                      className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
-                    >
-                      <User className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span>👤 {t("nav_profile_account")}</span>
-                    </button>
+                      {/* 👤 Profil & Hesap Ayarları */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserDropdownOpen(false);
+                          setSettingsInitialTab("profile");
+                          setIsSettingsModalOpen(true);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
+                      >
+                        <User className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <span>👤 {t("nav_profile_account")}</span>
+                      </button>
 
-                    {/* 📖 Öğrenme & Dil Tercihleri */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUserDropdownOpen(false);
-                        setSettingsInitialTab("learning");
-                        setIsSettingsModalOpen(true);
-                      }}
-                      className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
-                    >
-                      <BookOpen className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span>📖 {t("nav_learning_prefs")}</span>
-                    </button>
+                      {/* 📖 Öğrenme & Dil Tercihleri */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserDropdownOpen(false);
+                          setSettingsInitialTab("learning");
+                          setIsSettingsModalOpen(true);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
+                      >
+                        <BookOpen className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <span>📖 {t("nav_learning_prefs")}</span>
+                      </button>
 
-                    {/* 🔊 Ses & Tema Ayarları */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUserDropdownOpen(false);
-                        setSettingsInitialTab("audio_theme");
-                        setIsSettingsModalOpen(true);
-                      }}
-                      className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
-                    >
-                      <Volume2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span>🔊 {t("nav_audio_theme")}</span>
-                    </button>
+                      {/* 🔊 Ses & Tema Ayarları */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserDropdownOpen(false);
+                          setSettingsInitialTab("audio_theme");
+                          setIsSettingsModalOpen(true);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center gap-2.5 cursor-pointer text-left"
+                      >
+                        <Volume2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <span>🔊 {t("nav_audio_theme")}</span>
+                      </button>
 
-                    {/* 🚪 Çıkış Yap (Oturum açıksa Log In / Sign Up kesinlikle gizlenir) */}
-                    <div className="pt-1 border-t border-slate-800/80">
-                      {user ? (
+                      {/* 🚪 Yalnızca Çıkış Yap */}
+                      <div className="pt-1 border-t border-slate-800/80">
                         <button
                           type="button"
                           data-testid="navbar-logout-btn"
@@ -420,24 +429,11 @@ export default function Navbar() {
                           <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
                           <span>🚪 {t("nav_logout", "Çıkış Yap")}</span>
                         </button>
-                      ) : (
-                        <button
-                          type="button"
-                          data-testid="navbar-login-btn"
-                          onClick={() => {
-                            setIsUserDropdownOpen(false);
-                            openAuthModal("login");
-                          }}
-                          className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 transition text-left cursor-pointer flex items-center gap-2.5"
-                        >
-                          <User className="w-4 h-4 text-indigo-400 shrink-0" />
-                          <span>🔑 {t("nav_login_register")}</span>
-                        </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {/* Mobil Hamburger Menü Butonu */}
               <button

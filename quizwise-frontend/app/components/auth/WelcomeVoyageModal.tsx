@@ -138,18 +138,7 @@ export default function WelcomeVoyageModal({
         <div className="absolute -top-28 left-1/2 -translate-x-1/2 w-[420px] h-[220px] rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-[460px] h-[180px] rounded-full bg-sky-500/15 blur-3xl pointer-events-none" />
 
-        {/* Her Zaman Tıklanabilir Atla → Butonu */}
-        <button
-          type="button"
-          data-testid="welcome-skip-btn"
-          onClick={onSkip}
-          className="absolute top-4 right-4 sm:top-5 sm:right-5 z-20 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer"
-        >
-          <span>Atla</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="relative z-10 px-5 sm:px-8 pt-8 pb-7 space-y-6">
+        <div className="relative z-10 px-5 sm:px-8 pt-8 pb-6 space-y-6">
           {/* Üst Rozet */}
           <div className="flex justify-center">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-500/10 border border-sky-400/30 text-sky-300 text-[11px] font-extrabold tracking-wide uppercase">
@@ -291,6 +280,19 @@ export default function WelcomeVoyageModal({
               className="w-full sm:w-52 py-3.5 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-sky-400/50 text-slate-100 font-extrabold text-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
             >
               <span>🔑 Giriş Yap</span>
+            </button>
+          </div>
+
+          {/* Sağ Altta Her Zaman Tıklanabilir Atla → Butonu */}
+          <div className="flex justify-end pt-1">
+            <button
+              type="button"
+              data-testid="welcome-skip-btn"
+              onClick={onSkip}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer"
+            >
+              <span>Atla</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

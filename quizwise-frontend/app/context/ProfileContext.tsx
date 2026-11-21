@@ -45,10 +45,10 @@ export interface ProfileContextType {
 const STORAGE_KEY = "vocaship_profile";
 
 const DEFAULT_PROFILE: UserProfile = {
-  full_name: "Öğrenci",
-  username: "ogrenci",
-  email: "ogrenci@vocaship.com",
-  avatar_url: "🦊",
+  full_name: "",
+  username: "",
+  email: "",
+  avatar_url: "",
   is_pro: false,
   plan_tier: "basic",
   planTier: "basic",
@@ -69,17 +69,34 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     "profile" | "learning" | "audio_theme"
   >("profile");
 
-  // 1. Sayfa yüklendiğinde localStorage'dan profili geri yükle ve CustomEvent senkronizasyonunu dinle
+  // 1. Sayfa yüklendiğinde yalnızca gerçek oturum varsa localStorage'dan profili geri yükle
   useEffect(() => {
     const loadFromStorage = () => {
       try {
-        // Eski karakter unvanı kaydını temizle (yalnızca @username + avatar görseli kullanılır)
         localStorage.removeItem("vocaship_equipped_title");
+        const hasAuthSession = Boolean(
+          localStorage.getItem("vorego_auth_token") &&
+            localStorage.getItem("vorego_auth_user")
+        );
+        if (!hasAuthSession) {
+          localStorage.removeItem(STORAGE_KEY);
+          setUserProfile(DEFAULT_PROFILE);
+          return;
+        }
+
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed === "object") {
             const { equipped_title: _removed, ...cleanProfile } = parsed;
+            if (
+              String(cleanProfile.username || "").toLowerCase() === "ogrenci" &&
+              String(cleanProfile.email || "").toLowerCase() === "ogrenci@vocaship.com"
+            ) {
+              localStorage.removeItem(STORAGE_KEY);
+              setUserProfile(DEFAULT_PROFILE);
+              return;
+            }
             if (_removed !== undefined) {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanProfile));
             }
@@ -125,38 +142,41 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // 2. AuthContext'teki kullanıcı değiştiğinde profili güncelle
+  // 2. AuthContext'teki kullanıcı değiştiğinde profili güncelle; oturum yoksa sıfırla
   useEffect(() => {
-    if (user) {
-      const tier = user.planTier || (user.isPro ? "pro" : "basic");
-      setUserProfile((prev) => {
-        const updated: UserProfile = {
-          ...prev,
-          id: user.id || prev.id,
-          user_id: user.id || prev.user_id,
-          full_name: user.fullName || prev.full_name,
-          username: user.username || prev.username,
-          email: user.email || prev.email,
-          is_pro: user.isPro ?? prev.is_pro,
-          plan_tier: tier,
-          planTier: tier,
-          subscription_status:
-            user.subscriptionStatus !== undefined
-              ? user.subscriptionStatus
-              : prev.subscription_status,
-          trial_ends_at:
-            user.trialEndsAt !== undefined ? user.trialEndsAt : prev.trial_ends_at,
-          trial_days_left:
-            user.trialDaysLeft !== undefined
-              ? user.trialDaysLeft
-              : prev.trial_days_left,
-        };
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        } catch {}
-        return updated;
-      });
+    if (!user) {
+      setUserProfile(DEFAULT_PROFILE);
+      return;
     }
+
+    const tier = user.planTier || (user.isPro ? "pro" : "basic");
+    setUserProfile((prev) => {
+      const updated: UserProfile = {
+        ...prev,
+        id: user.id || prev.id,
+        user_id: user.id || prev.user_id,
+        full_name: user.fullName || prev.full_name,
+        username: user.username || prev.username,
+        email: user.email || prev.email,
+        is_pro: user.isPro ?? prev.is_pro,
+        plan_tier: tier,
+        planTier: tier,
+        subscription_status:
+          user.subscriptionStatus !== undefined
+            ? user.subscriptionStatus
+            : prev.subscription_status,
+        trial_ends_at:
+          user.trialEndsAt !== undefined ? user.trialEndsAt : prev.trial_ends_at,
+        trial_days_left:
+          user.trialDaysLeft !== undefined
+            ? user.trialDaysLeft
+            : prev.trial_days_left,
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   }, [user]);
 
   // 3. Sunucudan güncel profil verisini çek (varsa)
