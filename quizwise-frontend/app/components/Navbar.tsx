@@ -326,10 +326,9 @@ export default function Navbar() {
                       )}
                     </div>
 
-                    {/* Yanında kullanıcı adı (PRO ise taç & PRO etiketi) */}
+                    {/* Yanında kullanıcı adı (PRO ise sade (PRO) etiketi) */}
                     <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate flex items-center gap-1">
-                      {isPro && <span className="text-amber-400">👑</span>}
-                      <span>@{currentUsername.replace(/^@+/, "")}</span>
+                      <span>{currentUsername.replace(/^@+/, "")}</span>
                       {isPro && (
                         <span className="hidden sm:inline text-[10px] font-black text-amber-300">
                           (PRO)
