@@ -252,9 +252,9 @@ export default function WelcomeVoyageModal({
             </p>
           </div>
 
-          {/* SAĞ SÜTUN: Reading Room + Game Arena (2 Kart, Ferah Aralık) */}
-          <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-between gap-8 h-full py-4 pt-10 pointer-events-none">
-            <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b">
+          {/* SAĞ SÜTUN: Reading Room + AI İçerik Stüdyosu + Game Arena (3 Simetrik Kart) */}
+          <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-between gap-2.5 h-full py-4 pt-10 pointer-events-none">
+            <div className="flex flex-col gap-1 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-b">
               <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-[10px] font-extrabold text-sky-300">
                 {t("welcome_card_read_badge", "📖 Reading Room")}
               </span>
@@ -270,7 +270,21 @@ export default function WelcomeVoyageModal({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-amber-500/40 shadow-xl card-float-a">
+            <div className="flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-indigo-500/30 shadow-xl card-float-a">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-extrabold text-indigo-300">
+                  ✨ {t("welcome_ai_studio_badge", "AI İçerik Stüdyosu")}
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 border border-indigo-400/30 text-[9.5px] font-black text-indigo-200">
+                  AI ⚡
+                </span>
+              </div>
+              <p className="text-[10.5px] font-semibold text-slate-200 truncate">
+                📄 {t("welcome_ai_studio_desc", "Metin Yapıştır → Anında Kelime Analizi")}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-amber-500/40 shadow-xl card-float-b">
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[10px] font-extrabold text-amber-300">
                   {t("welcome_card_arena_badge", "🏆 Game Arena")}
