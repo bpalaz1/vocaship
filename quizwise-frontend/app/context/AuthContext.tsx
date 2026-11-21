@@ -49,7 +49,9 @@ export interface AuthContextType {
     email: string
   ) => Promise<RegisterResult>;
   verifyEmail: (email: string, code: string) => Promise<AuthUser>;
-  forgotPassword: (email: string) => Promise<{ ok: boolean; message: string }>;
+  forgotPassword: (
+    email: string
+  ) => Promise<{ ok: boolean; message: string; devCode?: string | null }>;
   resetPassword: (
     email: string,
     code: string,
@@ -221,19 +223,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string
   ): Promise<AuthUser> => {
     const cleanInput = usernameOrEmail.trim();
+    const normalizedLower = cleanInput.toLowerCase();
     const res = await fetch(getAuthEndpoint("login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        cleanInput.includes("@")
-          ? { email: cleanInput.toLowerCase(), username: cleanInput, password }
-          : { username: cleanInput, password }
-      ),
+      body: JSON.stringify({
+        identifier: normalizedLower,
+        email: cleanInput.includes("@") ? normalizedLower : undefined,
+        username: cleanInput,
+        password,
+      }),
     });
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data?.detail || "E-posta/kullanıcı adı veya şifre hatalı.");
+      throw new Error(
+        typeof data?.detail === "string"
+          ? data.detail
+          : "Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin."
+      );
     }
 
     const mappedUser = mapAuthResponseToUser(data, cleanInput);
@@ -317,7 +325,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const forgotPassword = async (
     email: string
-  ): Promise<{ ok: boolean; message: string }> => {
+  ): Promise<{ ok: boolean; message: string; devCode?: string | null }> => {
     const cleanEmail = email.trim().toLowerCase();
     const res = await fetch(getAuthEndpoint("forgot-password"), {
       method: "POST",
@@ -335,6 +343,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       message:
         data.message ||
         "Eğer bu e-posta sistemde kayıtlıysa şifre sıfırlama kodu gönderildi.",
+      devCode: data.dev_code || null,
     };
   };
 

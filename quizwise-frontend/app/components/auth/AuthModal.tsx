@@ -212,6 +212,7 @@ export default function AuthModal({
     try {
       const res = await forgotPassword(clean);
       setResetEmail(clean);
+      setDevCodeHint(res.devCode || null);
       setInfoMsg(res.message);
       setStep("forgot_reset");
     } catch (err: any) {
@@ -484,9 +485,19 @@ export default function AuthModal({
             )}
 
             {infoMsg && (
-              <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-400/30 text-sky-200 text-xs font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>{infoMsg}</span>
+              <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-400/30 text-sky-200 text-xs font-semibold space-y-1">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{infoMsg}</span>
+                </div>
+                {devCodeHint && (
+                  <p className="text-[11px] text-amber-300 font-bold pl-6">
+                    Test Sıfırlama Kodu:{" "}
+                    <span className="font-mono tracking-widest">
+                      {devCodeHint}
+                    </span>
+                  </p>
+                )}
               </div>
             )}
 

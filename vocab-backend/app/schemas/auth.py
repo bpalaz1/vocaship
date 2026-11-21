@@ -27,9 +27,11 @@ class ResetPasswordRequest(BaseModel):
 class MessageOkResponse(BaseModel):
     ok: bool = True
     message: str
+    dev_code: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
+    identifier: Optional[str] = Field(None, description="E-posta adresi veya kullanıcı adı")
     email: Optional[EmailStr] = Field(None, description="Kullanıcı e-posta adresi")
     username: Optional[str] = Field(None, description="Kullanıcı adı veya e-posta")
     password: str = Field(..., min_length=1, description="Kullanıcı şifresi")
