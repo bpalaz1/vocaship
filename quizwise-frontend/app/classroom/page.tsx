@@ -409,42 +409,82 @@ function ClassroomContent() {
         {activeTab === "classes" && (
           <>
             {classrooms.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-14 text-center max-w-lg mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-300 my-auto">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-600/25 to-violet-600/20 border border-indigo-500/30 flex items-center justify-center text-4xl shadow-2xl text-indigo-400 shadow-indigo-600/20">
-                  🎓
-                </div>
-
-                <div className="space-y-2.5">
-                  <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
-                    {t("cls_empty_hdr", "🎓 Sınıflarım")}
-                  </h2>
-                  <p className={`text-sm leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-                    {t("cls_empty_zero_desc", "Henüz aktif bir sınıfınız yok. Yeni sınıf oluşturabilir veya PIN ile bir derse katılabilirsiniz.")}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateClass}
-                    className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm flex items-center gap-2.5 shadow-xl shadow-indigo-600/35 hover:scale-105 active:scale-95 transition cursor-pointer"
-                  >
-                    <Plus className="w-5 h-5" />
-                    <span>{t("cls_new_btn", "+ Yeni Sınıf Oluştur")}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleOpenJoinPin}
-                    className={`px-5 py-3.5 rounded-2xl border font-bold text-sm flex items-center gap-2 transition hover:scale-105 active:scale-95 cursor-pointer ${
+              <div className="flex-1 flex items-center justify-center py-8 sm:py-12 animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* SOL KART: Öğrenci Olarak Katıl (Ücretsiz) */}
+                  <div
+                    data-testid="classroom-zero-student-card"
+                    className={`rounded-3xl border p-6 sm:p-8 flex flex-col justify-between gap-6 shadow-xl transition ${
                       isDark
-                        ? "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200"
-                        : "bg-white hover:bg-slate-50 border-slate-300 text-slate-800"
+                        ? "bg-slate-900/80 border-emerald-500/30 hover:border-emerald-400/50"
+                        : "bg-white border-emerald-200 hover:border-emerald-400"
                     }`}
                   >
-                    <KeyRound className="w-4 h-4 text-indigo-400" />
-                    <span>{t("cls_join_pin", "PIN ile Katıl")}</span>
-                  </button>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-3xl">🎒</span>
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-black text-emerald-400 tracking-wide">
+                          {t("classroom_zero_student_badge", "ÜCRETSİZ")}
+                        </span>
+                      </div>
+                      <h2 className={`text-xl font-black tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                        {t("classroom_zero_student_title", "Bir Derse mi Katılıyorsun?")}
+                      </h2>
+                      <p className={`text-sm leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                        {t(
+                          "classroom_zero_student_desc",
+                          "Eğitmeninden aldığın 6 haneli sınıf kodunu (PIN) veya davet linkini kullanarak ücretsiz derse katıl."
+                        )}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      data-testid="classroom-zero-join-btn"
+                      onClick={handleOpenJoinPin}
+                      className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition cursor-pointer"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                      <span>{t("classroom_join_pin", "PIN ile Katıl")}</span>
+                    </button>
+                  </div>
+
+                  {/* SAĞ KART: Eğitmen Olarak Sınıf Aç (PRO) */}
+                  <div
+                    data-testid="classroom-zero-teacher-card"
+                    className={`rounded-3xl border p-6 sm:p-8 flex flex-col justify-between gap-6 shadow-xl transition ${
+                      isDark
+                        ? "bg-slate-900/80 border-indigo-500/35 hover:border-indigo-400/60"
+                        : "bg-white border-indigo-200 hover:border-indigo-400"
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-3xl">🖥️</span>
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-400/35 text-[11px] font-black text-amber-300 tracking-wide">
+                          {t("classroom_zero_teacher_badge", "PRO")}
+                        </span>
+                      </div>
+                      <h2 className={`text-xl font-black tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                        {t("classroom_zero_teacher_title", "Kendi Sınıfını Yönet")}
+                      </h2>
+                      <ul className={`space-y-1.5 text-sm font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                        <li>{t("classroom_zero_step_1", "1. Sınıfını oluştur")}</li>
+                        <li>{t("classroom_zero_step_2", "2. Öğrencilerini davet et")}</li>
+                        <li>{t("classroom_zero_step_3", "3. Akıllı tahtada dersi başlat")}</li>
+                      </ul>
+                    </div>
+
+                    <button
+                      type="button"
+                      data-testid="classroom-zero-create-btn"
+                      onClick={handleOpenCreateClass}
+                      className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-95 transition cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{t("classroom_create_btn", "Yeni Sınıf Oluştur")}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
