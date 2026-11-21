@@ -300,6 +300,8 @@ class LocalDatabaseClient:
                 ("email_confirmed", "INTEGER DEFAULT 0"),
                 ("email_verified", "INTEGER DEFAULT 0"),
                 ("verification_code", "TEXT"),
+                ("reset_code", "TEXT"),
+                ("reset_code_expires_at", "TEXT"),
                 ("trial_ends_at", "TEXT"),
                 ("lemon_customer_id", "TEXT"),
                 ("lemon_subscription_id", "TEXT"),

@@ -48,6 +48,12 @@ export interface AuthContextType {
     email: string
   ) => Promise<RegisterResult>;
   verifyEmail: (email: string, code: string) => Promise<AuthUser>;
+  forgotPassword: (email: string) => Promise<{ ok: boolean; message: string }>;
+  resetPassword: (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => Promise<{ ok: boolean; message: string }>;
   upgradeToPro: () => Promise<AuthUser>;
   logout: () => void;
 }
@@ -59,7 +65,13 @@ const WELCOME_SKIPPED_KEY = "vocaship_welcome_skipped";
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getAuthEndpoint(
-  path: "login" | "register" | "verify-email" | "upgrade-pro"
+  path:
+    | "login"
+    | "register"
+    | "verify-email"
+    | "forgot-password"
+    | "reset-password"
+    | "upgrade-pro"
 ): string {
   const cleaned = (
     API_BASE ||
@@ -286,6 +298,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return mappedUser;
   };
 
+  const forgotPassword = async (
+    email: string
+  ): Promise<{ ok: boolean; message: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const res = await fetch(getAuthEndpoint("forgot-password"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        data?.detail || "Şifre sıfırlama kodu gönderilemedi. Lütfen tekrar deneyin."
+      );
+    }
+    return {
+      ok: Boolean(data.ok ?? true),
+      message:
+        data.message ||
+        "Eğer bu e-posta sistemde kayıtlıysa şifre sıfırlama kodu gönderildi.",
+    };
+  };
+
+  const resetPassword = async (
+    email: string,
+    code: string,
+    newPassword: string
+  ): Promise<{ ok: boolean; message: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const res = await fetch(getAuthEndpoint("reset-password"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: cleanEmail,
+        code: code.trim(),
+        new_password: newPassword,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        data?.detail || "Şifre sıfırlanamadı. Kodu kontrol edip tekrar deneyin."
+      );
+    }
+    return {
+      ok: Boolean(data.ok ?? true),
+      message:
+        data.message ||
+        "Şifreniz başarıyla güncellendi. Yeni şifrenizle giriş yapabilirsiniz.",
+    };
+  };
+
   const upgradeToPro = async (): Promise<AuthUser> => {
     const baseUser: AuthUser = user
       ? { ...user, isPro: true, isEducator: true, planTier: "pro" }
@@ -367,6 +431,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         verifyEmail,
+        forgotPassword,
+        resetPassword,
         upgradeToPro,
         logout,
       }}

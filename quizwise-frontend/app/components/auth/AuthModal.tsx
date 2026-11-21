@@ -16,7 +16,6 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { useLanguage } from "../../context/LanguageContext";
 
 export interface AuthModalProps {
   isOpen: boolean;
@@ -24,17 +23,19 @@ export interface AuthModalProps {
   initialTab?: "login" | "register";
 }
 
+type ModalStep = "form" | "verify" | "forgot_email" | "forgot_reset";
+
 export default function AuthModal({
   isOpen,
   onClose,
   initialTab = "login",
 }: AuthModalProps) {
   const router = useRouter();
-  const { login, register, verifyEmail } = useAuth();
-  const { t } = useLanguage();
+  const { login, register, verifyEmail, forgotPassword, resetPassword } =
+    useAuth();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">(initialTab);
-  const [step, setStep] = useState<"form" | "verify">("form");
+  const [step, setStep] = useState<ModalStep>("form");
 
   const [fullName, setFullName] = useState<string>("");
   const [username, setUsername] = useState<string>("");
@@ -44,6 +45,11 @@ export default function AuthModal({
   const [pendingEmail, setPendingEmail] = useState<string>("");
   const [verificationCode, setVerificationCode] = useState<string>("");
   const [devCodeHint, setDevCodeHint] = useState<string | null>(null);
+
+  const [resetEmail, setResetEmail] = useState<string>("");
+  const [resetCode, setResetCode] = useState<string>("");
+  const [newPassword, setNewPassword] = useState<string>("");
+
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -56,13 +62,19 @@ export default function AuthModal({
       setInfoMsg(null);
       setVerificationCode("");
       setDevCodeHint(null);
+      setResetCode("");
+      setNewPassword("");
     }
   }, [isOpen, initialTab]);
 
   useEffect(() => {
     setErrorMsg(null);
-    setInfoMsg(null);
-  }, [activeTab, step]);
+    if (step === "form") {
+      // keep infoMsg only if returning from reset success
+    } else {
+      setInfoMsg(null);
+    }
+  }, [activeTab]);
 
   if (!isOpen) return null;
 
@@ -74,9 +86,24 @@ export default function AuthModal({
     setPendingEmail("");
     setVerificationCode("");
     setDevCodeHint(null);
+    setResetEmail("");
+    setResetCode("");
+    setNewPassword("");
     setInfoMsg(null);
     setErrorMsg(null);
     setStep("form");
+  };
+
+  const handleOpenForgotPassword = () => {
+    setErrorMsg(null);
+    setInfoMsg(null);
+    setResetCode("");
+    setNewPassword("");
+    const prefill = username.trim().includes("@")
+      ? username.trim().toLowerCase()
+      : email.trim().toLowerCase();
+    setResetEmail(prefill);
+    setStep("forgot_email");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,11 +113,11 @@ export default function AuthModal({
 
     if (activeTab === "register") {
       if (!fullName.trim()) {
-        setErrorMsg(t("auth_err_fullname", "Lütfen ad ve soyadınızı girin."));
+        setErrorMsg("Lütfen ad ve soyadınızı girin.");
         return;
       }
       if (!username.trim() || username.trim().length < 2) {
-        setErrorMsg(t("auth_err_username", "Kullanıcı adı en az 2 karakter olmalıdır."));
+        setErrorMsg("Kullanıcı adı en az 2 karakter olmalıdır.");
         return;
       }
       if (!email.trim() || !email.includes("@")) {
@@ -98,7 +125,7 @@ export default function AuthModal({
         return;
       }
       if (!password || password.length < 3) {
-        setErrorMsg(t("auth_err_password_min", "Şifre en az 3 karakter olmalıdır."));
+        setErrorMsg("Şifre en az 3 karakter olmalıdır.");
         return;
       }
 
@@ -119,20 +146,20 @@ export default function AuthModal({
           router.push("/");
         }
       } catch (err: any) {
-        setErrorMsg(err?.message || t("auth_err_failed", "İşlem başarısız oldu."));
+        setErrorMsg(err?.message || "Kayıt işlemi başarısız oldu.");
       } finally {
         setIsSubmitting(false);
       }
       return;
     }
 
-    // Login sekmesi
+    // Giriş Yap sekmesi
     if (!username.trim()) {
       setErrorMsg("Lütfen e-posta adresinizi veya kullanıcı adınızı girin.");
       return;
     }
     if (!password || password.length < 3) {
-      setErrorMsg(t("auth_err_password_min", "Şifre en az 3 karakter olmalıdır."));
+      setErrorMsg("Şifre en az 3 karakter olmalıdır.");
       return;
     }
 
@@ -143,7 +170,7 @@ export default function AuthModal({
       onClose();
       router.push("/");
     } catch (err: any) {
-      setErrorMsg(err?.message || t("auth_err_failed", "Giriş yapılamadı."));
+      setErrorMsg(err?.message || "E-posta/kullanıcı adı veya şifre hatalı.");
     } finally {
       setIsSubmitting(false);
     }
@@ -171,6 +198,82 @@ export default function AuthModal({
     }
   };
 
+  const handleSendResetCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setInfoMsg(null);
+    const clean = resetEmail.trim().toLowerCase();
+    if (!clean || !clean.includes("@")) {
+      setErrorMsg("Lütfen geçerli bir e-posta adresi girin.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await forgotPassword(clean);
+      setResetEmail(clean);
+      setInfoMsg(res.message);
+      setStep("forgot_reset");
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Sıfırlama kodu gönderilemedi.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setInfoMsg(null);
+
+    const cleanCode = resetCode.trim();
+    if (cleanCode.length < 6) {
+      setErrorMsg("Lütfen e-postanıza gelen 6 haneli sıfırlama kodunu girin.");
+      return;
+    }
+    if (!newPassword || newPassword.length < 3) {
+      setErrorMsg("Yeni şifre en az 3 karakter olmalıdır.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await resetPassword(resetEmail, cleanCode, newPassword);
+      setInfoMsg(
+        res.message ||
+          "Şifreniz başarıyla güncellendi. Yeni şifrenizle giriş yapabilirsiniz."
+      );
+      setUsername(resetEmail);
+      setPassword("");
+      setResetCode("");
+      setNewPassword("");
+      setActiveTab("login");
+      setStep("form");
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Şifre sıfırlama işlemi başarısız oldu.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const headerTitle =
+    step === "verify"
+      ? "📩 E-postanı Doğrula"
+      : step === "forgot_email" || step === "forgot_reset"
+      ? "🔐 Şifre Sıfırlama"
+      : activeTab === "login"
+      ? "Giriş Yap"
+      : "Kayıt Ol";
+
+  const headerSubtitle =
+    step === "verify"
+      ? "6 haneli onay kodunu girerek yolculuğa başla"
+      : step === "forgot_email"
+      ? "Kayıtlı e-posta adresine sıfırlama kodu gönder"
+      : step === "forgot_reset"
+      ? "6 haneli kodu ve yeni şifreni belirle"
+      : "VocaShip — Sail to Fluency.";
+
   return (
     <div
       className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150"
@@ -188,25 +291,19 @@ export default function AuthModal({
         <div className="relative z-10 flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-800/80">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
-              {step === "verify" ? (
+              {step === "verify" || step === "forgot_email" ? (
                 <Mail className="w-4 h-4" />
+              ) : step === "forgot_reset" ? (
+                <KeyRound className="w-4 h-4" />
               ) : (
                 <Sparkles className="w-4 h-4" />
               )}
             </div>
             <div>
               <h2 className="text-base font-black text-white tracking-tight">
-                {step === "verify"
-                  ? "📩 E-postanı Doğrula"
-                  : activeTab === "login"
-                  ? t("auth_login_heading", "Giriş Yap")
-                  : t("auth_register_heading", "Hesap Oluştur")}
+                {headerTitle}
               </h2>
-              <p className="text-[11px] text-slate-400">
-                {step === "verify"
-                  ? "6 haneli onay kodunu girerek yolculuğa başla"
-                  : "VocaShip — Sail to Fluency."}
-              </p>
+              <p className="text-[11px] text-slate-400">{headerSubtitle}</p>
             </div>
           </div>
 
@@ -214,7 +311,7 @@ export default function AuthModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            aria-label={t("auth_close", "Kapat")}
+            aria-label="Kapat"
           >
             <X className="w-4 h-4" />
           </button>
@@ -239,14 +336,19 @@ export default function AuthModal({
             <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-400/30 space-y-1.5">
               <p className="text-xs font-semibold text-sky-200 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>{infoMsg || "Onay kodu e-posta adresinize gönderildi."}</span>
+                <span>
+                  {infoMsg || "Onay kodu e-posta adresinize gönderildi."}
+                </span>
               </p>
               <p className="text-[11px] text-slate-300 font-mono break-all">
                 {pendingEmail}
               </p>
               {devCodeHint && (
                 <p className="text-[11px] text-amber-300 font-bold pt-1">
-                  Test Onay Kodu: <span className="font-mono tracking-widest">{devCodeHint}</span>
+                  Test Onay Kodu:{" "}
+                  <span className="font-mono tracking-widest">
+                    {devCodeHint}
+                  </span>
                 </p>
               )}
             </div>
@@ -262,7 +364,9 @@ export default function AuthModal({
                 maxLength={6}
                 data-testid="auth-input-verify-code"
                 value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) =>
+                  setVerificationCode(e.target.value.replace(/\D/g, ""))
+                }
                 placeholder="000000"
                 required
                 className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 text-center text-xl font-black font-mono tracking-[0.45em] text-white placeholder-slate-600 outline-none transition"
@@ -297,6 +401,160 @@ export default function AuthModal({
               <span>Kayıt bilgilerine geri dön</span>
             </button>
           </form>
+        ) : step === "forgot_email" ? (
+          <form
+            onSubmit={handleSendResetCode}
+            className="relative z-10 p-6 space-y-4"
+            data-testid="auth-forgot-email-form"
+          >
+            {errorMsg && (
+              <div
+                data-testid="auth-error-toast"
+                className="p-3.5 rounded-2xl bg-rose-950/90 border border-rose-500/50 text-rose-200 text-xs font-semibold flex items-center gap-2.5"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Hesabına bağlı e-posta adresini gir. Sana 15 dakika geçerli 6 haneli tek kullanımlık bir sıfırlama kodu göndereceğiz.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-sky-400" />
+                <span>E-posta Adresi</span>
+              </label>
+              <input
+                type="email"
+                data-testid="auth-forgot-input-email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                placeholder="ornek@eposta.com"
+                autoComplete="email"
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
+              />
+            </div>
+
+            <button
+              type="submit"
+              data-testid="auth-forgot-send-btn"
+              disabled={isSubmitting}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white font-black text-xs sm:text-sm shadow-xl shadow-sky-500/25 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Gönderiliyor...</span>
+                </>
+              ) : (
+                <span>📩 Sıfırlama Kodu Gönder</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep("form");
+                setActiveTab("login");
+                setErrorMsg(null);
+              }}
+              className="w-full py-2 text-xs font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Giriş Yap ekranına dön</span>
+            </button>
+          </form>
+        ) : step === "forgot_reset" ? (
+          <form
+            onSubmit={handleConfirmResetPassword}
+            className="relative z-10 p-6 space-y-4"
+            data-testid="auth-forgot-reset-form"
+          >
+            {errorMsg && (
+              <div
+                data-testid="auth-error-toast"
+                className="p-3.5 rounded-2xl bg-rose-950/90 border border-rose-500/50 text-rose-200 text-xs font-semibold flex items-center gap-2.5"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            {infoMsg && (
+              <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-400/30 text-sky-200 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{infoMsg}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                <span>6 Haneli Sıfırlama Kodu</span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                data-testid="auth-reset-input-code"
+                value={resetCode}
+                onChange={(e) =>
+                  setResetCode(e.target.value.replace(/\D/g, ""))
+                }
+                placeholder="000000"
+                required
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 text-center text-xl font-black font-mono tracking-[0.45em] text-white placeholder-slate-600 outline-none transition"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Yeni Şifre</span>
+              </label>
+              <input
+                type="password"
+                data-testid="auth-reset-input-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
+              />
+            </div>
+
+            <button
+              type="submit"
+              data-testid="auth-reset-submit-btn"
+              disabled={isSubmitting}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/25 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Güncelleniyor...</span>
+                </>
+              ) : (
+                <span>🔒 Şifreyi Güncelle</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep("forgot_email");
+                setErrorMsg(null);
+              }}
+              className="w-full py-2 text-xs font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Farklı e-posta adresi dene</span>
+            </button>
+          </form>
         ) : (
           <>
             {/* İki Sekmeli Seçici: Giriş Yap / Kayıt Ol */}
@@ -305,32 +563,48 @@ export default function AuthModal({
                 <button
                   type="button"
                   data-testid="auth-tab-login"
-                  onClick={() => setActiveTab("login")}
+                  onClick={() => {
+                    setInfoMsg(null);
+                    setActiveTab("login");
+                  }}
                   className={`py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
                     activeTab === "login"
                       ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  {t("auth_tab_login", "Giriş Yap")}
+                  Giriş Yap
                 </button>
                 <button
                   type="button"
                   data-testid="auth-tab-register"
-                  onClick={() => setActiveTab("register")}
+                  onClick={() => {
+                    setInfoMsg(null);
+                    setActiveTab("register");
+                  }}
                   className={`py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
                     activeTab === "register"
                       ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  {t("auth_tab_register", "Kayıt Ol")}
+                  Kayıt Ol
                 </button>
               </div>
             </div>
 
-            {/* Sade Form Alanı (Paket seçimi yok) */}
+            {/* Sade Form Alanı */}
             <form onSubmit={handleSubmit} className="relative z-10 p-6 space-y-4">
+              {infoMsg && (
+                <div
+                  data-testid="auth-info-toast"
+                  className="p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-semibold flex items-center gap-2.5 shadow-lg animate-in fade-in duration-150"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{infoMsg}</span>
+                </div>
+              )}
+
               {errorMsg && (
                 <div
                   data-testid="auth-error-toast"
@@ -346,14 +620,14 @@ export default function AuthModal({
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <BadgeCheck className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{t("auth_fullname_label", "Ad Soyad")}</span>
+                    <span>Ad Soyad</span>
                   </label>
                   <input
                     type="text"
                     data-testid="auth-input-fullname"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder={t("auth_fullname_ph", "Adınız ve Soyadınız")}
+                    placeholder="Adınız ve Soyadınız"
                     autoComplete="name"
                     required
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
@@ -368,7 +642,7 @@ export default function AuthModal({
                   <span>
                     {activeTab === "login"
                       ? "E-posta veya Kullanıcı Adı"
-                      : t("auth_username_label", "Kullanıcı Adı")}
+                      : "Kullanıcı Adı"}
                   </span>
                 </label>
                 <input
@@ -379,7 +653,7 @@ export default function AuthModal({
                   placeholder={
                     activeTab === "login"
                       ? "ornek@eposta.com veya kullaniciadi"
-                      : t("auth_username_ph", "Kullanıcı adınız")
+                      : "Kullanıcı adınız"
                   }
                   autoComplete="username"
                   required
@@ -407,12 +681,24 @@ export default function AuthModal({
                 </div>
               )}
 
-              {/* 4. Şifre */}
+              {/* 4. Şifre (+ Şifremi Unuttum?) */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{t("auth_password_label", "Şifre")}</span>
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Şifre</span>
+                  </label>
+                  {activeTab === "login" && (
+                    <button
+                      type="button"
+                      data-testid="auth-forgot-password-btn"
+                      onClick={handleOpenForgotPassword}
+                      className="text-[11px] font-bold text-sky-400 hover:text-sky-300 hover:underline transition cursor-pointer"
+                    >
+                      Şifremi Unuttum?
+                    </button>
+                  )}
+                </div>
                 <input
                   type="password"
                   data-testid="auth-input-password"
@@ -438,10 +724,10 @@ export default function AuthModal({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>{t("auth_processing", "İşleniyor...")}</span>
+                      <span>İşleniyor...</span>
                     </>
                   ) : activeTab === "login" ? (
-                    <span>{t("auth_submit_login", "Giriş Yap")}</span>
+                    <span>Giriş Yap</span>
                   ) : (
                     <span>Hesabı Oluştur</span>
                   )}

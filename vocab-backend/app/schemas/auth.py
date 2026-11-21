@@ -14,6 +14,21 @@ class VerifyEmailRequest(BaseModel):
     code: str = Field(..., min_length=4, max_length=12, description="6 haneli doğrulama kodu")
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., description="Şifre sıfırlama kodu gönderilecek e-posta adresi")
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., description="Kullanıcı e-posta adresi")
+    code: str = Field(..., min_length=4, max_length=12, description="6 haneli şifre sıfırlama kodu")
+    new_password: str = Field(..., min_length=3, description="Yeni şifre (en az 3 karakter)")
+
+
+class MessageOkResponse(BaseModel):
+    ok: bool = True
+    message: str
+
+
 class LoginRequest(BaseModel):
     email: Optional[EmailStr] = Field(None, description="Kullanıcı e-posta adresi")
     username: Optional[str] = Field(None, description="Kullanıcı adı veya e-posta")

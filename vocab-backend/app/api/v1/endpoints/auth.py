@@ -1,11 +1,7 @@
 import os
-import json
 import uuid
 import random
-import smtplib
 import logging
-import urllib.request
-from email.message import EmailMessage
 from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, Optional, List
 
@@ -17,9 +13,13 @@ from supabase_auth.errors import AuthApiError
 from app.core.database import get_db, get_supabase_client
 from app.core.local_db import LocalDatabaseClient
 from app.services.quota_service import evaluate_user_trial_and_plan, compute_trial_days_left
+from app.services.email_service import send_verification_email, send_password_reset_email
 from app.schemas.auth import (
     RegisterRequest,
     VerifyEmailRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    MessageOkResponse,
     LoginRequest,
     AuthResponse,
     UserResponse,
@@ -37,6 +37,7 @@ JWT_EXPIRE_DAYS = 30
 # In-memory / Local fallback cache in case remote Supabase schema lacks new columns or is offline
 _local_auth_db = LocalDatabaseClient()
 _PENDING_VERIFICATION_CODES: Dict[str, str] = {}
+_PENDING_RESET_CODES: Dict[str, tuple[str, datetime]] = {}
 
 
 def _generate_verification_code() -> str:
@@ -44,73 +45,7 @@ def _generate_verification_code() -> str:
 
 
 def _send_verification_email(to_email: str, full_name: str, code: str) -> bool:
-    """
-    RESEND_API_KEY veya SMTP_* ortam değişkenleri tanımlıysa gerçek 6 haneli
-    doğrulama e-postası gönderir. Tanımlı değilse False döner.
-    """
-    resend_key = (os.getenv("RESEND_API_KEY") or "").strip()
-    from_email = (os.getenv("RESEND_FROM_EMAIL") or os.getenv("SMTP_FROM") or "VocaShip <noreply@vocaship.com>").strip()
-    subject = f"VocaShip E-posta Doğrulama Kodunuz: {code}"
-    html_body = (
-        f"<div style='font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;color:#f8fafc;border-radius:16px;'>"
-        f"<h2 style='margin:0 0 8px;color:#fbbf24;'>VocaShip — Sail to Fluency.</h2>"
-        f"<p style='color:#cbd5e1;'>Merhaba {full_name}, hesabınızı doğrulamak için aşağıdaki 6 haneli kodu girin:</p>"
-        f"<div style='font-size:32px;font-weight:800;letter-spacing:8px;text-align:center;padding:16px;background:#1e293b;border-radius:12px;color:#38bdf8;margin:20px 0;'>{code}</div>"
-        f"<p style='font-size:12px;color:#94a3b8;'>Bu işlemi siz yapmadıysanız bu e-postayı görmezden gelebilirsiniz.</p>"
-        f"</div>"
-    )
-
-    if resend_key:
-        try:
-            payload = json.dumps({
-                "from": from_email,
-                "to": [to_email],
-                "subject": subject,
-                "html": html_body,
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                data=payload,
-                method="POST",
-                headers={
-                    "Authorization": f"Bearer {resend_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if 200 <= resp.status < 300:
-                    return True
-        except Exception as exc:
-            logger.warning(f"[Auth] Resend e-posta gönderim hatası: {exc}")
-
-    smtp_host = (os.getenv("SMTP_HOST") or "").strip()
-    smtp_user = (os.getenv("SMTP_USER") or "").strip()
-    smtp_pass = (os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD") or "").strip()
-    smtp_port = int(os.getenv("SMTP_PORT") or "587")
-
-    if smtp_host and smtp_user and smtp_pass:
-        try:
-            msg = EmailMessage()
-            msg["Subject"] = subject
-            msg["From"] = from_email
-            msg["To"] = to_email
-            msg.set_content(f"Merhaba {full_name},\n\nVocaShip doğrulama kodunuz: {code}\n\nVocaShip — Sail to Fluency.")
-            msg.add_alternative(html_body, subtype="html")
-
-            if smtp_port == 465:
-                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
-                    server.login(smtp_user, smtp_pass)
-                    server.send_message(msg)
-            else:
-                with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                    server.starttls()
-                    server.login(smtp_user, smtp_pass)
-                    server.send_message(msg)
-            return True
-        except Exception as exc:
-            logger.warning(f"[Auth] SMTP e-posta gönderim hatası: {exc}")
-
-    return False
+    return send_verification_email(to_email=to_email, full_name=full_name, code=code)
 
 
 def hash_password(plain_password: str) -> str:
@@ -802,6 +737,135 @@ def login_user(payload: LoginRequest) -> AuthResponse:
         token=token,
         message="Giriş başarılı.",
         user=user_resp,
+    )
+
+
+# =========================================================================
+# 2B. ŞİFREMİ UNUTTUM & ŞİFRE SIFIRLAMA ENDPOINT'LERİ
+# =========================================================================
+@router.post("/forgot-password", response_model=MessageOkResponse, status_code=status.HTTP_200_OK)
+def forgot_password(payload: ForgotPasswordRequest) -> MessageOkResponse:
+    """
+    Kayıtlı e-posta adresine 15 dakika geçerli 6 haneli tek kullanımlık
+    şifre sıfırlama kodu üretip gönderir.
+    """
+    clean_email = str(payload.email).strip().lower()
+    user_row = _find_user_by_email(clean_email)
+
+    if user_row:
+        user_id = str(user_row.get("id") or "")
+        full_name = str(user_row.get("full_name") or user_row.get("username") or "Kullanıcı")
+        reset_code = _generate_verification_code()
+        expires_dt = datetime.now(timezone.utc) + timedelta(minutes=15)
+        expires_iso = expires_dt.isoformat()
+        _PENDING_RESET_CODES[clean_email] = (reset_code, expires_dt)
+
+        updates = {
+            "reset_code": reset_code,
+            "reset_code_expires_at": expires_iso,
+        }
+        db = get_db()
+        try:
+            db.table("users").update(updates).eq("id", user_id).execute()
+        except Exception:
+            pass
+        try:
+            _local_auth_db.table("users").update(updates).eq("id", user_id).execute()
+        except Exception as exc:
+            logger.warning(f"[Auth] Yerel DB reset_code kayıt uyarısı: {exc}")
+
+        send_password_reset_email(to_email=clean_email, full_name=full_name, code=reset_code)
+
+    return MessageOkResponse(
+        ok=True,
+        message="Eğer bu e-posta sistemde kayıtlıysa şifre sıfırlama kodu gönderildi.",
+    )
+
+
+@router.post("/reset-password", response_model=MessageOkResponse, status_code=status.HTTP_200_OK)
+def reset_password(payload: ResetPasswordRequest) -> MessageOkResponse:
+    """
+    6 haneli şifre sıfırlama kodunu doğrular, yeni şifreyi bcrypt ile hash'ler
+    ve kullanıcı kaydını günceller.
+    """
+    clean_email = str(payload.email).strip().lower()
+    clean_code = str(payload.code).strip()
+    new_password = payload.new_password
+
+    if len(new_password) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Yeni şifre en az 3 karakter olmalıdır.",
+        )
+
+    user_row = _find_user_by_email(clean_email)
+    if not user_row:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Geçersiz veya süresi dolmuş sıfırlama kodu.",
+        )
+
+    now_utc = datetime.now(timezone.utc)
+    db_code = str(user_row.get("reset_code") or "").strip()
+    db_exp_raw = user_row.get("reset_code_expires_at")
+    mem_entry = _PENDING_RESET_CODES.get(clean_email)
+
+    matched = False
+    if db_code and clean_code == db_code:
+        if db_exp_raw:
+            try:
+                exp_dt = datetime.fromisoformat(str(db_exp_raw).replace("Z", "+00:00"))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if exp_dt >= now_utc:
+                    matched = True
+            except Exception:
+                matched = True
+        else:
+            matched = True
+    elif mem_entry:
+        mem_code, mem_exp = mem_entry
+        if clean_code == mem_code and mem_exp >= now_utc:
+            matched = True
+
+    if not matched:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Doğrulama kodu geçersiz veya 15 dakikalık süresi dolmuş.",
+        )
+
+    user_id = str(user_row.get("id") or "")
+    new_hash = hash_password(new_password)
+    clear_updates = {
+        "password_hash": new_hash,
+        "reset_code": None,
+        "reset_code_expires_at": None,
+    }
+    db = get_db()
+    try:
+        db.table("users").update(clear_updates).eq("id", user_id).execute()
+    except Exception:
+        try:
+            db.table("users").update({"password_hash": new_hash}).eq("id", user_id).execute()
+        except Exception:
+            pass
+    try:
+        _local_auth_db.table("users").update(clear_updates).eq("id", user_id).execute()
+    except Exception as exc:
+        logger.warning(f"[Auth] Yerel DB şifre güncelleme uyarısı: {exc}")
+
+    supabase_client = get_supabase_client()
+    if supabase_client and user_id:
+        try:
+            supabase_client.auth.admin.update_user_by_id(user_id, {"password": new_password})
+        except Exception:
+            pass
+
+    _PENDING_RESET_CODES.pop(clean_email, None)
+
+    return MessageOkResponse(
+        ok=True,
+        message="Şifreniz başarıyla güncellendi. Yeni şifrenizle giriş yapabilirsiniz.",
     )
 
 
