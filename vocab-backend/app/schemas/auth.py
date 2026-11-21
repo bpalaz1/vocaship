@@ -5,9 +5,13 @@ from pydantic import BaseModel, EmailStr, Field
 class RegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=1, description="Kullanıcının Adı ve Soyadı")
     username: str = Field(..., min_length=2, description="Kullanıcı adı (Rumuz - non-unique)")
-    email: Optional[EmailStr] = Field(None, description="Kullanıcının geçerli e-posta adresi")
+    email: EmailStr = Field(..., description="Kullanıcının geçerli e-posta adresi (UNIQUE)")
     password: str = Field(..., min_length=3, description="Kullanıcı şifresi (en az 3 karakter)")
-    plan_tier: str = Field("basic", description="Kullanıcı üyelik planı: basic | plus | pro")
+
+
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr = Field(..., description="Doğrulanacak e-posta adresi")
+    code: str = Field(..., min_length=4, max_length=12, description="6 haneli doğrulama kodu")
 
 
 class LoginRequest(BaseModel):
@@ -24,6 +28,7 @@ class UserResponse(BaseModel):
     role: Union[Literal["user", "admin"], str] = "user"
     is_pro: bool = False
     plan_tier: str = "basic"
+    email_verified: bool = True
     subscription_status: Optional[str] = None
     trial_ends_at: Optional[str] = None
     trial_days_left: Optional[int] = None
@@ -47,6 +52,10 @@ class AuthResponse(BaseModel):
     is_pro: bool = False
     is_educator: bool = False
     plan_tier: str = "basic"
+    email_verified: bool = True
+    requires_email_verification: bool = False
+    verification_sent: bool = False
+    dev_verification_code: Optional[str] = None
     subscription_status: Optional[str] = None
     trial_ends_at: Optional[str] = None
     trial_days_left: Optional[int] = None

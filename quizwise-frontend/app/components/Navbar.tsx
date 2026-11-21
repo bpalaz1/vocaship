@@ -30,11 +30,22 @@ import { useProfile } from "../context/ProfileContext";
 const AuthModal = dynamic(() => import("./auth/AuthModal"), { ssr: false });
 const SettingsModal = dynamic(() => import("./auth/SettingsModal"), { ssr: false });
 const CheckoutModal = dynamic(() => import("./payments/CheckoutModal"), { ssr: false });
+const WelcomeVoyageModal = dynamic(() => import("./auth/WelcomeVoyageModal"), { ssr: false });
 
 export default function Navbar() {
   const pathname = usePathname();
   const { t } = useTranslation();
-  const { user, logout, isAuthModalOpen, setIsAuthModalOpen } = useAuth();
+  const {
+    user,
+    isLoading: isAuthLoading,
+    logout,
+    isAuthModalOpen,
+    setIsAuthModalOpen,
+    authModalTab,
+    openAuthModal,
+    isWelcomeModalOpen,
+    setIsWelcomeModalOpen,
+  } = useAuth();
   const {
     userProfile,
     isSettingsModalOpen,
@@ -394,11 +405,12 @@ export default function Navbar() {
                       <span>🔊 {t("nav_audio_theme")}</span>
                     </button>
 
-                    {/* 🚪 Çıkış Yap / Giriş Yap */}
+                    {/* 🚪 Çıkış Yap (Oturum açıksa Log In / Sign Up kesinlikle gizlenir) */}
                     <div className="pt-1 border-t border-slate-800/80">
                       {user ? (
                         <button
                           type="button"
+                          data-testid="navbar-logout-btn"
                           onClick={() => {
                             setIsUserDropdownOpen(false);
                             logout();
@@ -406,14 +418,15 @@ export default function Navbar() {
                           className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left cursor-pointer flex items-center gap-2.5"
                         >
                           <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
-                          <span>🚪 {t("nav_logout")}</span>
+                          <span>🚪 {t("nav_logout", "Çıkış Yap")}</span>
                         </button>
                       ) : (
                         <button
                           type="button"
+                          data-testid="navbar-login-btn"
                           onClick={() => {
                             setIsUserDropdownOpen(false);
-                            setIsAuthModalOpen(true);
+                            openAuthModal("login");
                           }}
                           className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 transition text-left cursor-pointer flex items-center gap-2.5"
                         >
@@ -477,9 +490,22 @@ export default function Navbar() {
       </header>
 
       {/* Global Modallar */}
+      <WelcomeVoyageModal
+        isOpen={!isAuthLoading && !user && isWelcomeModalOpen && !isAuthModalOpen}
+        onSkip={() => {
+          try {
+            sessionStorage.setItem("vocaship_welcome_skipped", "1");
+          } catch {}
+          setIsWelcomeModalOpen(false);
+        }}
+        onOpenRegister={() => openAuthModal("register")}
+        onOpenLogin={() => openAuthModal("login")}
+      />
+
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        initialTab={authModalTab}
       />
 
       <SettingsModal

@@ -1,19 +1,21 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   X,
   User,
   Lock,
+  Mail,
   BadgeCheck,
   AlertCircle,
   Loader2,
   Sparkles,
-  Zap,
-  Crown,
-  Check,
+  CheckCircle2,
+  ArrowLeft,
+  KeyRound,
 } from "lucide-react";
-import { useAuth, PlanTier } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 
 export interface AuthModalProps {
@@ -27,55 +29,143 @@ export default function AuthModal({
   onClose,
   initialTab = "login",
 }: AuthModalProps) {
-  const { login, register } = useAuth();
+  const router = useRouter();
+  const { login, register, verifyEmail } = useAuth();
   const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">(initialTab);
+  const [step, setStep] = useState<"form" | "verify">("form");
+
   const [fullName, setFullName] = useState<string>("");
   const [username, setUsername] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
-  const [selectedPlan, setSelectedPlan] = useState<PlanTier>("basic");
+
+  const [pendingEmail, setPendingEmail] = useState<string>("");
+  const [verificationCode, setVerificationCode] = useState<string>("");
+  const [devCodeHint, setDevCodeHint] = useState<string | null>(null);
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
+      setActiveTab(initialTab);
+      setStep("form");
       setErrorMsg(null);
+      setInfoMsg(null);
+      setVerificationCode("");
+      setDevCodeHint(null);
     }
-  }, [isOpen, activeTab]);
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    setErrorMsg(null);
+    setInfoMsg(null);
+  }, [activeTab, step]);
 
   if (!isOpen) return null;
+
+  const resetAllFields = () => {
+    setFullName("");
+    setUsername("");
+    setEmail("");
+    setPassword("");
+    setPendingEmail("");
+    setVerificationCode("");
+    setDevCodeHint(null);
+    setInfoMsg(null);
+    setErrorMsg(null);
+    setStep("form");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setInfoMsg(null);
 
-    if (activeTab === "register" && !fullName.trim()) {
-      setErrorMsg(t("auth_err_fullname"));
+    if (activeTab === "register") {
+      if (!fullName.trim()) {
+        setErrorMsg(t("auth_err_fullname", "Lütfen ad ve soyadınızı girin."));
+        return;
+      }
+      if (!username.trim() || username.trim().length < 2) {
+        setErrorMsg(t("auth_err_username", "Kullanıcı adı en az 2 karakter olmalıdır."));
+        return;
+      }
+      if (!email.trim() || !email.includes("@")) {
+        setErrorMsg("Lütfen geçerli bir e-posta adresi girin.");
+        return;
+      }
+      if (!password || password.length < 3) {
+        setErrorMsg(t("auth_err_password_min", "Şifre en az 3 karakter olmalıdır."));
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const res = await register(fullName, username, password, email);
+        if (res.requiresEmailVerification) {
+          setPendingEmail(res.email);
+          setDevCodeHint(res.devVerificationCode || null);
+          setInfoMsg(
+            res.message ||
+              "Doğrulama kodu e-posta adresinize gönderildi. Lütfen 6 haneli kodu girin."
+          );
+          setStep("verify");
+        } else {
+          resetAllFields();
+          onClose();
+          router.push("/");
+        }
+      } catch (err: any) {
+        setErrorMsg(err?.message || t("auth_err_failed", "İşlem başarısız oldu."));
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
+
+    // Login sekmesi
     if (!username.trim()) {
-      setErrorMsg(t("auth_err_username"));
+      setErrorMsg("Lütfen e-posta adresinizi veya kullanıcı adınızı girin.");
       return;
     }
     if (!password || password.length < 3) {
-      setErrorMsg(t("auth_err_password_min"));
+      setErrorMsg(t("auth_err_password_min", "Şifre en az 3 karakter olmalıdır."));
       return;
     }
 
     setIsSubmitting(true);
     try {
-      if (activeTab === "login") {
-        await login(username, password);
-      } else {
-        await register(fullName, username, password, undefined, selectedPlan);
-      }
-      setFullName("");
-      setUsername("");
-      setPassword("");
+      await login(username, password);
+      resetAllFields();
       onClose();
+      router.push("/");
     } catch (err: any) {
-      setErrorMsg(err?.message || t("auth_err_failed"));
+      setErrorMsg(err?.message || t("auth_err_failed", "Giriş yapılamadı."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    const cleanCode = verificationCode.trim();
+    if (cleanCode.length < 6) {
+      setErrorMsg("Lütfen 6 haneli doğrulama kodunu eksiksiz girin.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await verifyEmail(pendingEmail, cleanCode);
+      resetAllFields();
+      onClose();
+      router.push("/");
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Doğrulama kodu geçersiz.");
     } finally {
       setIsSubmitting(false);
     }
@@ -83,7 +173,7 @@ export default function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
@@ -97,15 +187,25 @@ export default function AuthModal({
         {/* Başlık ve Kapat Butonu */}
         <div className="relative z-10 flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-800/80">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
-              <Sparkles className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+              {step === "verify" ? (
+                <Mail className="w-4 h-4" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
             </div>
             <div>
               <h2 className="text-base font-black text-white tracking-tight">
-                {activeTab === "login" ? t("auth_login_heading") : t("auth_register_heading")}
+                {step === "verify"
+                  ? "📩 E-postanı Doğrula"
+                  : activeTab === "login"
+                  ? t("auth_login_heading", "Giriş Yap")
+                  : t("auth_register_heading", "Hesap Oluştur")}
               </h2>
               <p className="text-[11px] text-slate-400">
-                {t("auth_instant_subtitle")}
+                {step === "verify"
+                  ? "6 haneli onay kodunu girerek yolculuğa başla"
+                  : "VocaShip — Sail to Fluency."}
               </p>
             </div>
           </div>
@@ -114,227 +214,243 @@ export default function AuthModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            aria-label={t("auth_close")}
+            aria-label={t("auth_close", "Kapat")}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* İki Sekmeli Seçici: Giriş Yap / Kayıt Ol */}
-        <div className="relative z-10 px-6 pt-5">
-          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-950 border border-slate-800">
-            <button
-              type="button"
-              data-testid="auth-tab-login"
-              onClick={() => setActiveTab("login")}
-              className={`py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                activeTab === "login"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              {t("auth_tab_login")}
-            </button>
-            <button
-              type="button"
-              data-testid="auth-tab-register"
-              onClick={() => setActiveTab("register")}
-              className={`py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                activeTab === "register"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              {t("auth_tab_register")}
-            </button>
-          </div>
-        </div>
+        {step === "verify" ? (
+          <form
+            onSubmit={handleVerifySubmit}
+            className="relative z-10 p-6 space-y-4"
+            data-testid="auth-verify-form"
+          >
+            {errorMsg && (
+              <div
+                data-testid="auth-error-toast"
+                className="p-3.5 rounded-2xl bg-rose-950/90 border border-rose-500/50 text-rose-200 text-xs font-semibold flex items-center gap-2.5"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
-        {/* Form Alanı */}
-        <form onSubmit={handleSubmit} className="relative z-10 p-6 space-y-4">
-          {/* Kırmızı Uyarı Toast'u */}
-          {errorMsg && (
-            <div
-              data-testid="auth-error-toast"
-              className="p-3.5 rounded-2xl bg-rose-950/90 border border-rose-500/50 text-rose-200 text-xs font-semibold flex items-center gap-2.5 shadow-lg animate-in fade-in duration-150"
-            >
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-400/30 space-y-1.5">
+              <p className="text-xs font-semibold text-sky-200 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{infoMsg || "Onay kodu e-posta adresinize gönderildi."}</span>
+              </p>
+              <p className="text-[11px] text-slate-300 font-mono break-all">
+                {pendingEmail}
+              </p>
+              {devCodeHint && (
+                <p className="text-[11px] text-amber-300 font-bold pt-1">
+                  Test Onay Kodu: <span className="font-mono tracking-widest">{devCodeHint}</span>
+                </p>
+              )}
             </div>
-          )}
 
-          {/* Kayıt Ol Sekmesinde: Sadece Ad Soyad + Kullanıcı Adı + Şifre */}
-          {activeTab === "register" && (
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <BadgeCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{t("auth_fullname_label")}</span>
+                <KeyRound className="w-3.5 h-3.5 text-sky-400" />
+                <span>6 Haneli Doğrulama Kodu</span>
               </label>
               <input
                 type="text"
-                data-testid="auth-input-fullname"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder={t("auth_fullname_ph")}
-                autoComplete="name"
+                inputMode="numeric"
+                maxLength={6}
+                data-testid="auth-input-verify-code"
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
                 required
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 text-center text-xl font-black font-mono tracking-[0.45em] text-white placeholder-slate-600 outline-none transition"
               />
             </div>
-          )}
 
-          {/* Kullanıcı Adı */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{t("auth_username_label")}</span>
-            </label>
-            <input
-              type="text"
-              data-testid="auth-input-username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={t("auth_username_ph")}
-              autoComplete="username"
-              required
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
-            />
-          </div>
-
-          {/* Şifre */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{t("auth_password_label")}</span>
-            </label>
-            <input
-              type="password"
-              data-testid="auth-input-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete={activeTab === "login" ? "current-password" : "new-password"}
-              required
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
-            />
-          </div>
-
-          {/* Plan Seçimi (Sadece Kayıt Ol Sekmesinde) */}
-          {activeTab === "register" && (
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{t("auth_select_plan")}</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">
-                  {t("auth_plan_changeable")}
-                </span>
-              </label>
-
-              <div className="grid grid-cols-3 gap-2">
-                {/* Basic Card */}
-                <button
-                  type="button"
-                  data-testid="plan-select-basic"
-                  onClick={() => setSelectedPlan("basic")}
-                  className={`relative p-2.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
-                    selectedPlan === "basic"
-                      ? "bg-slate-800/90 border-slate-400 shadow-md ring-1 ring-slate-400"
-                      : "bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-slate-200">🆓 Basic</span>
-                      {selectedPlan === "basic" && <Check className="w-3 h-3 text-emerald-400" />}
-                    </div>
-                    <div className="text-[10px] font-bold text-slate-400 mt-0.5">{t("auth_plan_free")}</div>
-                    <p className="text-[9px] text-slate-400 leading-tight mt-1 line-clamp-2">
-                      {t("auth_plan_basic_desc")}
-                    </p>
-                  </div>
-                </button>
-
-                {/* Plus Card */}
-                <button
-                  type="button"
-                  data-testid="plan-select-plus"
-                  onClick={() => setSelectedPlan("plus")}
-                  className={`relative p-2.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
-                    selectedPlan === "plus"
-                      ? "bg-indigo-950/60 border-indigo-400 shadow-md shadow-indigo-500/20 ring-1 ring-indigo-400"
-                      : "bg-slate-950/60 border-slate-800 hover:border-indigo-800/60 opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-indigo-300 flex items-center gap-0.5">
-                        <Zap className="w-3 h-3 text-indigo-400" /> Plus
-                      </span>
-                      {selectedPlan === "plus" && <Check className="w-3 h-3 text-indigo-400" />}
-                    </div>
-                    <div className="text-[10px] font-bold text-indigo-400 mt-0.5">{t("auth_plan_student")}</div>
-                    <p className="text-[9px] text-indigo-200/80 leading-tight mt-1 line-clamp-2">
-                      {t("auth_plan_plus_desc")}
-                    </p>
-                  </div>
-                </button>
-
-                {/* PRO Card */}
-                <button
-                  type="button"
-                  data-testid="plan-select-pro"
-                  onClick={() => setSelectedPlan("pro")}
-                  className={`relative p-2.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
-                    selectedPlan === "pro"
-                      ? "bg-amber-950/60 border-amber-400 shadow-md shadow-amber-500/20 ring-1 ring-amber-400"
-                      : "bg-slate-950/60 border-slate-800 hover:border-amber-800/60 opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <div className="absolute -top-1.5 -right-1 px-1.5 py-0.2 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-[8px] font-black text-slate-950 uppercase tracking-wider shadow">
-                    PRO
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-amber-300 flex items-center gap-0.5">
-                        <Crown className="w-3 h-3 text-amber-400" /> PRO
-                      </span>
-                      {selectedPlan === "pro" && <Check className="w-3 h-3 text-amber-400" />}
-                    </div>
-                    <div className="text-[10px] font-bold text-amber-400 mt-0.5">{t("auth_plan_instructor")}</div>
-                    <p className="text-[9px] text-amber-200/80 leading-tight mt-1 line-clamp-2">
-                      {t("auth_plan_pro_desc")}
-                    </p>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Gönder Butonu */}
-          <div className="pt-2">
             <button
               type="submit"
-              data-testid="auth-submit-btn"
+              data-testid="auth-verify-submit-btn"
               disabled={isSubmitting}
-              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-emerald-500/25 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{t("auth_processing")}</span>
+                  <span>Doğrulanıyor...</span>
                 </>
-              ) : activeTab === "login" ? (
-                <span>{t("auth_submit_login")}</span>
               ) : (
-                <span>{t("auth_submit_register")}</span>
+                <span>✅ E-postayı Doğrula ve Başla</span>
               )}
             </button>
-          </div>
-        </form>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep("form");
+                setErrorMsg(null);
+              }}
+              className="w-full py-2 text-xs font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Kayıt bilgilerine geri dön</span>
+            </button>
+          </form>
+        ) : (
+          <>
+            {/* İki Sekmeli Seçici: Giriş Yap / Kayıt Ol */}
+            <div className="relative z-10 px-6 pt-5">
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-950 border border-slate-800">
+                <button
+                  type="button"
+                  data-testid="auth-tab-login"
+                  onClick={() => setActiveTab("login")}
+                  className={`py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                    activeTab === "login"
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {t("auth_tab_login", "Giriş Yap")}
+                </button>
+                <button
+                  type="button"
+                  data-testid="auth-tab-register"
+                  onClick={() => setActiveTab("register")}
+                  className={`py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                    activeTab === "register"
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {t("auth_tab_register", "Kayıt Ol")}
+                </button>
+              </div>
+            </div>
+
+            {/* Sade Form Alanı (Paket seçimi yok) */}
+            <form onSubmit={handleSubmit} className="relative z-10 p-6 space-y-4">
+              {errorMsg && (
+                <div
+                  data-testid="auth-error-toast"
+                  className="p-3.5 rounded-2xl bg-rose-950/90 border border-rose-500/50 text-rose-200 text-xs font-semibold flex items-center gap-2.5 shadow-lg animate-in fade-in duration-150"
+                >
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {/* 1. Ad Soyad (Sadece Kayıt) */}
+              {activeTab === "register" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <BadgeCheck className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{t("auth_fullname_label", "Ad Soyad")}</span>
+                  </label>
+                  <input
+                    type="text"
+                    data-testid="auth-input-fullname"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder={t("auth_fullname_ph", "Adınız ve Soyadınız")}
+                    autoComplete="name"
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
+                  />
+                </div>
+              )}
+
+              {/* 2. Kullanıcı Adı (Girişte E-posta veya Kullanıcı Adı) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>
+                    {activeTab === "login"
+                      ? "E-posta veya Kullanıcı Adı"
+                      : t("auth_username_label", "Kullanıcı Adı")}
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  data-testid="auth-input-username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder={
+                    activeTab === "login"
+                      ? "ornek@eposta.com veya kullaniciadi"
+                      : t("auth_username_ph", "Kullanıcı adınız")
+                  }
+                  autoComplete="username"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
+                />
+              </div>
+
+              {/* 3. E-posta Adresi (Sadece Kayıt) */}
+              {activeTab === "register" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>E-posta Adresi</span>
+                  </label>
+                  <input
+                    type="email"
+                    data-testid="auth-input-email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="ornek@eposta.com"
+                    autoComplete="email"
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
+                  />
+                </div>
+              )}
+
+              {/* 4. Şifre */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{t("auth_password_label", "Şifre")}</span>
+                </label>
+                <input
+                  type="password"
+                  data-testid="auth-input-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete={
+                    activeTab === "login" ? "current-password" : "new-password"
+                  }
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition"
+                />
+              </div>
+
+              {/* Gönder Butonu */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  data-testid="auth-submit-btn"
+                  disabled={isSubmitting}
+                  className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{t("auth_processing", "İşleniyor...")}</span>
+                    </>
+                  ) : activeTab === "login" ? (
+                    <span>{t("auth_submit_login", "Giriş Yap")}</span>
+                  ) : (
+                    <span>Hesabı Oluştur</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
 }
-

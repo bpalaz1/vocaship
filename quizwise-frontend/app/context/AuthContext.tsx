@@ -14,9 +14,19 @@ export interface AuthUser {
   isPro: boolean;
   isEducator: boolean;
   planTier: PlanTier;
+  emailVerified?: boolean;
   subscriptionStatus?: string | null;
   trialEndsAt?: string | null;
   trialDaysLeft?: number | null;
+}
+
+export interface RegisterResult {
+  requiresEmailVerification: boolean;
+  email: string;
+  devVerificationCode?: string | null;
+  verificationSent?: boolean;
+  message?: string;
+  user?: AuthUser;
 }
 
 export interface AuthContextType {
@@ -25,25 +35,37 @@ export interface AuthContextType {
   isLoading: boolean;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
-  login: (username: string, password: string) => Promise<AuthUser>;
+  authModalTab: "login" | "register";
+  setAuthModalTab: (tab: "login" | "register") => void;
+  openAuthModal: (tab?: "login" | "register") => void;
+  isWelcomeModalOpen: boolean;
+  setIsWelcomeModalOpen: (open: boolean) => void;
+  login: (usernameOrEmail: string, password: string) => Promise<AuthUser>;
   register: (
     fullName: string,
     username: string,
     password: string,
-    email?: string,
-    planTier?: PlanTier
-  ) => Promise<AuthUser>;
+    email: string
+  ) => Promise<RegisterResult>;
+  verifyEmail: (email: string, code: string) => Promise<AuthUser>;
   upgradeToPro: () => Promise<AuthUser>;
   logout: () => void;
 }
 
 export const AUTH_TOKEN_STORAGE_KEY = "vorego_auth_token";
 export const AUTH_USER_STORAGE_KEY = "vorego_auth_user";
+const WELCOME_SKIPPED_KEY = "vocaship_welcome_skipped";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function getAuthEndpoint(path: "login" | "register" | "upgrade-pro"): string {
-  const cleaned = (API_BASE || process.env.NEXT_PUBLIC_API_URL || "https://vocaship-api.onrender.com").replace(/\/+$/, "");
+function getAuthEndpoint(
+  path: "login" | "register" | "verify-email" | "upgrade-pro"
+): string {
+  const cleaned = (
+    API_BASE ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://vocaship-api.onrender.com"
+  ).replace(/\/+$/, "");
   if (cleaned.endsWith("/api/v1")) {
     return `${cleaned}/auth/${path}`;
   }
@@ -55,9 +77,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalTab, setAuthModalTab] = useState<"login" | "register">("login");
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState<boolean>(false);
 
-  // Sayfa ilk açıldığında localStorage'dan oturumu otomatik geri yükle
+  const openAuthModal = (tab: "login" | "register" = "login") => {
+    setAuthModalTab(tab);
+    setIsWelcomeModalOpen(false);
+    setIsAuthModalOpen(true);
+  };
+
+  // Sayfa ilk açıldığında localStorage'dan oturumu geri yükle; yoksa karşılama sahnesini aç
   useEffect(() => {
+    let restored = false;
     try {
       const savedToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
       const savedUserRaw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
@@ -70,12 +101,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const normalizedUser: AuthUser = { ...parsedUser, planTier: tier };
           setToken(savedToken);
           setUser(normalizedUser);
+          restored = true;
         }
       }
     } catch (err) {
       console.warn("[AuthContext] Oturum geri yüklenemedi:", err);
     } finally {
       setIsLoading(false);
+    }
+
+    if (!restored) {
+      try {
+        const skipped = sessionStorage.getItem(WELCOME_SKIPPED_KEY) === "1";
+        if (!skipped) {
+          setIsWelcomeModalOpen(true);
+        }
+      } catch {
+        setIsWelcomeModalOpen(true);
+      }
     }
 
     const handleProActivated = () => {
@@ -106,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistSession = (authUser: AuthUser, authToken: string) => {
     setUser(authUser);
     setToken(authToken);
+    setIsWelcomeModalOpen(false);
     try {
       localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(authUser));
@@ -115,41 +159,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (username: string, password: string): Promise<AuthUser> => {
-    const res = await fetch(getAuthEndpoint("login"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: username.trim(),
-        password,
-      }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data?.detail || "Kullanıcı adı veya şifre hatalı.");
-    }
-
+  const mapAuthResponseToUser = (
+    data: any,
+    fallbackUsername = "",
+    fallbackEmail?: string
+  ): AuthUser => {
     const tier: PlanTier =
       (data.plan_tier as PlanTier) ||
       (Boolean(data.is_pro ?? data.isPro) ? "pro" : "basic");
-
-    const mappedUser: AuthUser = {
+    return {
       id: String(data.user_id || data.id || ""),
-      username: String(data.username || username.trim()),
-      fullName: String(data.full_name || data.fullName || data.username || ""),
-      email: data.email || data.user?.email || undefined,
+      username: String(data.username || fallbackUsername),
+      fullName: String(data.full_name || data.fullName || data.username || fallbackUsername),
+      email: data.email || data.user?.email || fallbackEmail || undefined,
       role: String(data.role || "user"),
       isPro: tier === "pro" || Boolean(data.is_pro ?? data.isPro ?? false),
       isEducator: Boolean(data.is_educator ?? data.isEducator ?? false),
       planTier: tier,
-      subscriptionStatus: data.subscription_status ?? data.user?.subscription_status ?? null,
+      emailVerified: Boolean(data.email_verified ?? data.user?.email_verified ?? true),
+      subscriptionStatus:
+        data.subscription_status ?? data.user?.subscription_status ?? null,
       trialEndsAt: data.trial_ends_at ?? data.user?.trial_ends_at ?? null,
       trialDaysLeft:
         typeof (data.trial_days_left ?? data.user?.trial_days_left) === "number"
-          ? (data.trial_days_left ?? data.user?.trial_days_left)
+          ? data.trial_days_left ?? data.user?.trial_days_left
           : null,
     };
+  };
+
+  const login = async (
+    usernameOrEmail: string,
+    password: string
+  ): Promise<AuthUser> => {
+    const cleanInput = usernameOrEmail.trim();
+    const res = await fetch(getAuthEndpoint("login"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        cleanInput.includes("@")
+          ? { email: cleanInput.toLowerCase(), username: cleanInput, password }
+          : { username: cleanInput, password }
+      ),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.detail || "E-posta/kullanıcı adı veya şifre hatalı.");
+    }
+
+    const mappedUser = mapAuthResponseToUser(data, cleanInput);
     const jwtToken = String(data.token || "");
 
     persistSession(mappedUser, jwtToken);
@@ -160,18 +218,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fullName: string,
     username: string,
     password: string,
-    email?: string,
-    planTier: PlanTier = "pro"
-  ): Promise<AuthUser> => {
+    email: string
+  ): Promise<RegisterResult> => {
+    const cleanEmail = email.trim().toLowerCase();
     const res = await fetch(getAuthEndpoint("register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         full_name: fullName.trim(),
         username: username.trim(),
+        email: cleanEmail,
         password,
-        email: email ? email.trim() : undefined,
-        plan_tier: planTier,
       }),
     });
 
@@ -182,26 +239,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    const tier: PlanTier = (data.plan_tier as PlanTier) || "pro";
+    if (data.requires_email_verification || !data.token) {
+      return {
+        requiresEmailVerification: true,
+        email: String(data.email || cleanEmail),
+        devVerificationCode: data.dev_verification_code || null,
+        verificationSent: Boolean(data.verification_sent),
+        message:
+          data.message ||
+          "Doğrulama kodu e-posta adresinize gönderildi.",
+      };
+    }
 
-    const mappedUser: AuthUser = {
-      id: String(data.user_id || data.id || ""),
-      username: String(data.username || username.trim()),
-      fullName: String(data.full_name || data.fullName || fullName.trim()),
-      email: data.email || data.user?.email || (email ? email.trim() : undefined),
-      role: String(data.role || "user"),
-      isPro: tier === "pro" || Boolean(data.is_pro ?? data.isPro ?? true),
-      isEducator: Boolean(data.is_educator ?? data.isEducator ?? true),
-      planTier: tier,
-      subscriptionStatus: data.subscription_status ?? data.user?.subscription_status ?? "trial",
-      trialEndsAt: data.trial_ends_at ?? data.user?.trial_ends_at ?? null,
-      trialDaysLeft:
-        typeof (data.trial_days_left ?? data.user?.trial_days_left) === "number"
-          ? (data.trial_days_left ?? data.user?.trial_days_left)
-          : 30,
-    };
+    const mappedUser = mapAuthResponseToUser(data, username.trim(), cleanEmail);
     const jwtToken = String(data.token || "");
+    persistSession(mappedUser, jwtToken);
 
+    return {
+      requiresEmailVerification: false,
+      email: cleanEmail,
+      user: mappedUser,
+    };
+  };
+
+  const verifyEmail = async (email: string, code: string): Promise<AuthUser> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const res = await fetch(getAuthEndpoint("verify-email"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: cleanEmail,
+        code: code.trim(),
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        data?.detail || "Doğrulama kodu geçersiz. Lütfen tekrar deneyin."
+      );
+    }
+
+    const mappedUser = mapAuthResponseToUser(data, cleanEmail.split("@")[0], cleanEmail);
+    const jwtToken = String(data.token || "");
     persistSession(mappedUser, jwtToken);
     return mappedUser;
   };
@@ -235,10 +315,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id: String(data.user_id || baseUser.id),
           username: String(data.username || baseUser.username),
           fullName: String(data.full_name || baseUser.fullName),
+          email: data.email || baseUser.email,
           role: String(data.role || baseUser.role),
           isPro: true,
           isEducator: true,
           planTier: "pro",
+          subscriptionStatus: "active",
         };
         const newToken = String(data.token || token || "pro-test-token");
         persistSession(upgradedUser, newToken);
@@ -255,13 +337,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setIsAuthModalOpen(false);
     try {
       localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
       localStorage.removeItem(AUTH_USER_STORAGE_KEY);
       localStorage.removeItem("vocaship_plan_tier");
+      localStorage.removeItem("vocaship_profile");
+      sessionStorage.removeItem(WELCOME_SKIPPED_KEY);
+      window.dispatchEvent(new CustomEvent("vocaship_logged_out"));
     } catch {
       // ignore storage errors
     }
+    setIsWelcomeModalOpen(true);
   };
 
   return (
@@ -272,8 +359,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isAuthModalOpen,
         setIsAuthModalOpen,
+        authModalTab,
+        setAuthModalTab,
+        openAuthModal,
+        isWelcomeModalOpen,
+        setIsWelcomeModalOpen,
         login,
         register,
+        verifyEmail,
         upgradeToPro,
         logout,
       }}

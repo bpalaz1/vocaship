@@ -49,7 +49,7 @@ const DEFAULT_PROFILE: UserProfile = {
   username: "ogrenci",
   email: "ogrenci@vocaship.com",
   avatar_url: "🦊",
-  is_pro: true,
+  is_pro: false,
   plan_tier: "basic",
   planTier: "basic",
   study_level: "B1",
@@ -111,11 +111,17 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    const handleLoggedOut = () => {
+      setUserProfile(DEFAULT_PROFILE);
+    };
+
     window.addEventListener("vocaship_profile_updated", handleProfileCustomEvent);
     window.addEventListener("storage", handleStorageEvent);
+    window.addEventListener("vocaship_logged_out", handleLoggedOut);
     return () => {
       window.removeEventListener("vocaship_profile_updated", handleProfileCustomEvent);
       window.removeEventListener("storage", handleStorageEvent);
+      window.removeEventListener("vocaship_logged_out", handleLoggedOut);
     };
   }, []);
 

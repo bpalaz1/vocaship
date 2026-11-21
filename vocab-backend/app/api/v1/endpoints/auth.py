@@ -1,6 +1,11 @@
 import os
+import json
 import uuid
+import random
+import smtplib
 import logging
+import urllib.request
+from email.message import EmailMessage
 from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, Optional, List
 
@@ -14,6 +19,7 @@ from app.core.local_db import LocalDatabaseClient
 from app.services.quota_service import evaluate_user_trial_and_plan, compute_trial_days_left
 from app.schemas.auth import (
     RegisterRequest,
+    VerifyEmailRequest,
     LoginRequest,
     AuthResponse,
     UserResponse,
@@ -30,6 +36,81 @@ JWT_EXPIRE_DAYS = 30
 
 # In-memory / Local fallback cache in case remote Supabase schema lacks new columns or is offline
 _local_auth_db = LocalDatabaseClient()
+_PENDING_VERIFICATION_CODES: Dict[str, str] = {}
+
+
+def _generate_verification_code() -> str:
+    return f"{random.randint(100000, 999999)}"
+
+
+def _send_verification_email(to_email: str, full_name: str, code: str) -> bool:
+    """
+    RESEND_API_KEY veya SMTP_* ortam değişkenleri tanımlıysa gerçek 6 haneli
+    doğrulama e-postası gönderir. Tanımlı değilse False döner.
+    """
+    resend_key = (os.getenv("RESEND_API_KEY") or "").strip()
+    from_email = (os.getenv("RESEND_FROM_EMAIL") or os.getenv("SMTP_FROM") or "VocaShip <noreply@vocaship.com>").strip()
+    subject = f"VocaShip E-posta Doğrulama Kodunuz: {code}"
+    html_body = (
+        f"<div style='font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;color:#f8fafc;border-radius:16px;'>"
+        f"<h2 style='margin:0 0 8px;color:#fbbf24;'>VocaShip — Sail to Fluency.</h2>"
+        f"<p style='color:#cbd5e1;'>Merhaba {full_name}, hesabınızı doğrulamak için aşağıdaki 6 haneli kodu girin:</p>"
+        f"<div style='font-size:32px;font-weight:800;letter-spacing:8px;text-align:center;padding:16px;background:#1e293b;border-radius:12px;color:#38bdf8;margin:20px 0;'>{code}</div>"
+        f"<p style='font-size:12px;color:#94a3b8;'>Bu işlemi siz yapmadıysanız bu e-postayı görmezden gelebilirsiniz.</p>"
+        f"</div>"
+    )
+
+    if resend_key:
+        try:
+            payload = json.dumps({
+                "from": from_email,
+                "to": [to_email],
+                "subject": subject,
+                "html": html_body,
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=payload,
+                method="POST",
+                headers={
+                    "Authorization": f"Bearer {resend_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if 200 <= resp.status < 300:
+                    return True
+        except Exception as exc:
+            logger.warning(f"[Auth] Resend e-posta gönderim hatası: {exc}")
+
+    smtp_host = (os.getenv("SMTP_HOST") or "").strip()
+    smtp_user = (os.getenv("SMTP_USER") or "").strip()
+    smtp_pass = (os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD") or "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT") or "587")
+
+    if smtp_host and smtp_user and smtp_pass:
+        try:
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            msg["From"] = from_email
+            msg["To"] = to_email
+            msg.set_content(f"Merhaba {full_name},\n\nVocaShip doğrulama kodunuz: {code}\n\nVocaShip — Sail to Fluency.")
+            msg.add_alternative(html_body, subtype="html")
+
+            if smtp_port == 465:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+            return True
+        except Exception as exc:
+            logger.warning(f"[Auth] SMTP e-posta gönderim hatası: {exc}")
+
+    return False
 
 
 def hash_password(plain_password: str) -> str:
@@ -242,25 +323,18 @@ def _find_user_by_username(username: str) -> Optional[Dict[str, Any]]:
 
 
 # =========================================================================
-# 1. KAYIT ENDPOINT'İ (E-posta Onaylı & Non-Unique Username)
+# 1. SADE KAYIT & E-POSTA DOĞRULAMA ENDPOINT'LERİ (UNIQUE Email, Non-Unique Username)
 # =========================================================================
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_200_OK)
 def register_user(payload: RegisterRequest) -> AuthResponse:
     """
-    Yeni kayıt olan her kullanıcıya kredi kartı istemeden otomatik 30 günlük
-    PRO deneme (subscription_status='trial', trial_ends_at=NOW()+30 days, plan_tier='pro', is_pro=True)
-    tanımlar ve anında token ile oturum açar.
+    Sade kayıt akışı: Yalnızca Ad Soyad, Kullanıcı Adı, E-posta ve Şifre alır.
+    Tüm yeni kullanıcılar otomatik plan_tier='basic', is_pro=False, email_verified=False
+    olarak oluşturulur ve 6 haneli e-posta doğrulama kodu üretilir.
     """
     clean_username = payload.username.strip()
     clean_full_name = payload.full_name.strip()
-    clean_email = str(payload.email).strip().lower() if payload.email else f"{clean_username.lower()}@vocaship.local"
-
-    # Kartsız 30 Gün Ücretsiz PRO Deneme varsayılanı
-    trial_ends_at_iso = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-    subscription_status = "trial"
-    plan_tier = "pro"
-    is_pro_val = True
-    trial_days_left = 30
+    clean_email = str(payload.email).strip().lower()
 
     if not clean_username or len(clean_username) < 2:
         raise HTTPException(
@@ -278,64 +352,60 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
             detail="Şifre en az 3 karakter olmalıdır.",
         )
 
-    # E-posta daha once alinmis mi kontrolu (Tekil Kimlik)
+    plan_tier = "basic"
+    is_pro_val = False
+    verification_code = _generate_verification_code()
+    _PENDING_VERIFICATION_CODES[clean_email] = verification_code
+
+    # E-posta tekilliği kontrolü (UNIQUE yalnızca email üzerindedir; username tekrarlanabilir)
     existing_user_by_email = _find_user_by_email(clean_email)
     if existing_user_by_email:
-        evaluated_existing = evaluate_user_trial_and_plan(existing_user_by_email)
-        user_id = str(evaluated_existing.get("id"))
-        ex_sub_status = evaluated_existing.get("subscription_status")
-        ex_trial_ends = evaluated_existing.get("trial_ends_at")
-        if not ex_sub_status:
-            ex_sub_status = "trial"
-            ex_trial_ends = trial_ends_at_iso
-            ex_plan_tier = "pro"
-            ex_is_pro = True
-            ex_days_left = 30
-        else:
-            ex_plan_tier = str(evaluated_existing.get("plan_tier") or ("pro" if evaluated_existing.get("is_pro") else "basic")).lower()
-            ex_is_pro = bool(evaluated_existing.get("is_pro", False))
-            ex_days_left = evaluated_existing.get("trial_days_left")
+        already_verified = bool(
+            existing_user_by_email.get("email_verified")
+            or existing_user_by_email.get("email_confirmed")
+            or existing_user_by_email.get("email_confirmed_at")
+        )
+        if already_verified:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Bu e-posta adresi ile kayıtlı bir hesap zaten mevcut. Lütfen giriş yapın.",
+            )
 
-        updates = {
-            "plan_tier": ex_plan_tier,
-            "is_pro": ex_is_pro,
-            "is_educator": ex_is_pro,
-            "subscription_status": ex_sub_status,
-            "trial_ends_at": ex_trial_ends,
+        # Doğrulanmamış yarım kalmış kayıt için yeni kod üretip güncelle
+        user_id = str(existing_user_by_email.get("id"))
+        pwd_hash = hash_password(payload.password)
+        refresh_updates = {
+            "full_name": clean_full_name,
+            "username": clean_username,
+            "password_hash": pwd_hash,
+            "plan_tier": plan_tier,
+            "is_pro": is_pro_val,
+            "is_educator": False,
+            "email_verified": 0,
+            "email_confirmed": 0,
+            "verification_code": verification_code,
         }
         db = get_db()
         try:
-            db.table("users").update(updates).eq("id", user_id).execute()
+            db.table("users").update(refresh_updates).eq("id", user_id).execute()
         except Exception:
-            try:
-                db.table("users").update({"plan_tier": ex_plan_tier, "is_pro": ex_is_pro, "is_educator": ex_is_pro}).eq("id", user_id).execute()
-            except Exception:
-                pass
+            pass
         try:
-            _local_auth_db.table("users").update(updates).eq("id", user_id).execute()
+            _local_auth_db.table("users").update(refresh_updates).eq("id", user_id).execute()
         except Exception:
             pass
 
-        token = create_access_token(
-            user_id=user_id,
-            username=clean_username,
-            role="user",
-            is_pro=ex_is_pro,
-            email=clean_email,
-            plan_tier=ex_plan_tier,
-        )
+        sent = _send_verification_email(clean_email, clean_full_name, verification_code)
         user_resp = UserResponse(
             id=user_id,
             full_name=clean_full_name,
             username=clean_username,
             email=clean_email,
             role="user",
-            is_pro=ex_is_pro,
-            plan_tier=ex_plan_tier,
-            subscription_status=ex_sub_status,
-            trial_ends_at=ex_trial_ends,
-            trial_days_left=ex_days_left,
-            avatar_url=evaluated_existing.get("avatar_url"),
+            is_pro=False,
+            plan_tier=plan_tier,
+            email_verified=False,
+            avatar_url=existing_user_by_email.get("avatar_url"),
         )
         return AuthResponse(
             user_id=user_id,
@@ -343,22 +413,23 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
             full_name=clean_full_name,
             email=clean_email,
             role="user",
-            is_pro=ex_is_pro,
-            is_educator=ex_is_pro,
-            plan_tier=ex_plan_tier,
-            subscription_status=ex_sub_status,
-            trial_ends_at=ex_trial_ends,
-            trial_days_left=ex_days_left,
-            avatar_url=evaluated_existing.get("avatar_url"),
-            token=token,
-            message="Kayıt başarılı! Oturumunuz açıldı.",
+            is_pro=False,
+            is_educator=False,
+            plan_tier=plan_tier,
+            email_verified=False,
+            requires_email_verification=True,
+            verification_sent=sent,
+            dev_verification_code=None if sent else verification_code,
+            avatar_url=existing_user_by_email.get("avatar_url"),
+            token="",
+            message="Doğrulama kodu e-posta adresinize gönderildi. Lütfen 6 haneli kodu girin.",
             user=user_resp,
         )
 
     user_id = str(uuid.uuid4())
     supabase_client = get_supabase_client()
 
-    # 1. Supabase Auth servisine kayıt
+    # 1. Supabase Auth servisine kayıt (varsa)
     if supabase_client:
         try:
             sign_up_payload = {
@@ -369,20 +440,18 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
                         "full_name": clean_full_name,
                         "username": clean_username,
                         "plan_tier": plan_tier,
-                        "is_pro": is_pro_val,
-                        "subscription_status": subscription_status,
-                        "trial_ends_at": trial_ends_at_iso,
+                        "is_pro": False,
                     }
                 },
             }
             res = supabase_client.auth.sign_up(sign_up_payload)
             if res and res.user:
                 user_id = str(res.user.id)
-                logger.info(f"[Auth] Supabase kullanıcısı başarıyla kaydedildi: {clean_email} ({user_id})")
+                logger.info(f"[Auth] Supabase kullanıcısı oluşturuldu: {clean_email} ({user_id})")
         except Exception as exc:
             logger.warning(f"[Auth] Supabase sign_up uyarısı: {exc}")
 
-    # 2. Veritabanı Kullanıcı Profil Tablosu Kaydı (public.users)
+    # 2. Veritabanı Kullanıcı Profil Tablosu Kaydı (email_verified=False, basic plan)
     pwd_hash = hash_password(payload.password)
     today_str = date.today().isoformat()
 
@@ -393,34 +462,35 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         "full_name": clean_full_name,
         "password_hash": pwd_hash,
         "role": "user",
-        "is_pro": is_pro_val,
-        "is_educator": is_pro_val,
+        "is_pro": False,
+        "is_educator": False,
         "plan_tier": plan_tier,
-        "subscription_status": subscription_status,
-        "trial_ends_at": trial_ends_at_iso,
         "avatar_url": None,
-        "email_confirmed": 1,
+        "email_confirmed": 0,
+        "email_verified": 0,
+        "verification_code": verification_code,
         "daily_custom_texts_used": 0,
         "daily_speaking_sessions_used": 0,
         "last_quota_reset_date": today_str,
     }
 
     db = get_db()
-    # Supabase public.users
     try:
         db.table("users").insert(full_user_record).execute()
     except Exception as exc:
         logger.warning(f"[Auth] Supabase users tablosu kaydı: {exc}")
+        fallback_record = {
+            k: v for k, v in full_user_record.items()
+            if k not in ("email_verified", "verification_code")
+        }
         try:
-            db.table("users").update(full_user_record).eq("id", user_id).execute()
+            db.table("users").insert(fallback_record).execute()
         except Exception:
-            fallback_record = {k: v for k, v in full_user_record.items() if k not in ("subscription_status", "trial_ends_at")}
             try:
-                db.table("users").insert(fallback_record).execute()
+                db.table("users").update(fallback_record).eq("id", user_id).execute()
             except Exception:
                 pass
 
-    # Yerel SQLite veritabanı yedeği
     try:
         _local_auth_db.table("users").insert(full_user_record).execute()
     except Exception:
@@ -429,15 +499,7 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         except Exception as local_exc:
             logger.warning(f"[Auth] Yerel DB kayıt uyarısı: {local_exc}")
 
-    # 3. Yanıt Oluşturma: Doğrudan oturum açtıran access token üret
-    token = create_access_token(
-        user_id=user_id,
-        username=clean_username,
-        role="user",
-        is_pro=is_pro_val,
-        email=clean_email,
-        plan_tier=plan_tier,
-    )
+    sent = _send_verification_email(clean_email, clean_full_name, verification_code)
 
     user_resp = UserResponse(
         id=user_id,
@@ -445,11 +507,9 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         username=clean_username,
         email=clean_email,
         role="user",
-        is_pro=is_pro_val,
+        is_pro=False,
         plan_tier=plan_tier,
-        subscription_status=subscription_status,
-        trial_ends_at=trial_ends_at_iso,
-        trial_days_left=trial_days_left,
+        email_verified=False,
         avatar_url=None,
     )
 
@@ -459,15 +519,121 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         full_name=clean_full_name,
         email=clean_email,
         role="user",
-        is_pro=is_pro_val,
-        is_educator=is_pro_val,
+        is_pro=False,
+        is_educator=False,
         plan_tier=plan_tier,
-        subscription_status=subscription_status,
-        trial_ends_at=trial_ends_at_iso,
-        trial_days_left=trial_days_left,
+        email_verified=False,
+        requires_email_verification=True,
+        verification_sent=sent,
+        dev_verification_code=None if sent else verification_code,
         avatar_url=None,
+        token="",
+        message="Kayıt oluşturuldu! Devam etmek için e-postanıza gönderilen 6 haneli kodu girin.",
+        user=user_resp,
+    )
+
+
+@router.post("/verify-email", response_model=AuthResponse, status_code=status.HTTP_200_OK)
+def verify_email_code(payload: VerifyEmailRequest) -> AuthResponse:
+    """
+    6 haneli doğrulama kodunu (veya test ortamı için '000000') doğrular,
+    email_verified = True yapar ve kullanıcının oturum token'ını döndürür.
+    """
+    clean_email = str(payload.email).strip().lower()
+    clean_code = str(payload.code).strip()
+
+    user_row = _find_user_by_email(clean_email)
+    if not user_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bu e-posta adresiyle eşleşen bir kayıt bulunamadı.",
+        )
+
+    expected_code = str(
+        user_row.get("verification_code")
+        or _PENDING_VERIFICATION_CODES.get(clean_email)
+        or ""
+    ).strip()
+
+    is_valid = (clean_code == "000000") or (bool(expected_code) and clean_code == expected_code)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Doğrulama kodu geçersiz. Lütfen e-postanızdaki 6 haneli kodu kontrol edin.",
+        )
+
+    user_id = str(user_row.get("id") or "")
+    verify_updates = {
+        "email_verified": 1,
+        "email_confirmed": 1,
+        "verification_code": None,
+    }
+    db = get_db()
+    try:
+        db.table("users").update(verify_updates).eq("id", user_id).execute()
+    except Exception:
+        try:
+            db.table("users").update({"email_confirmed": 1}).eq("id", user_id).execute()
+        except Exception:
+            pass
+    try:
+        _local_auth_db.table("users").update(verify_updates).eq("id", user_id).execute()
+    except Exception as exc:
+        logger.warning(f"[Auth] Yerel DB email_verified güncelleme uyarısı: {exc}")
+
+    _PENDING_VERIFICATION_CODES.pop(clean_email, None)
+
+    evaluated = evaluate_user_trial_and_plan(user_row)
+    final_username = str(evaluated.get("username") or clean_email.split("@")[0])
+    final_full_name = str(evaluated.get("full_name") or final_username)
+    final_role = str(evaluated.get("role") or "user")
+    final_is_pro = bool(evaluated.get("is_pro", False))
+    final_is_educator = bool(evaluated.get("is_educator", False))
+    final_plan_tier = str(evaluated.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower().strip()
+    if final_plan_tier not in ("basic", "plus", "pro"):
+        final_plan_tier = "basic"
+
+    token = create_access_token(
+        user_id=user_id,
+        username=final_username,
+        role=final_role,
+        is_pro=final_is_pro,
+        email=clean_email,
+        plan_tier=final_plan_tier,
+    )
+
+    user_resp = UserResponse(
+        id=user_id,
+        full_name=final_full_name,
+        username=final_username,
+        email=clean_email,
+        role=final_role,
+        is_pro=final_is_pro,
+        plan_tier=final_plan_tier,
+        email_verified=True,
+        subscription_status=evaluated.get("subscription_status"),
+        trial_ends_at=evaluated.get("trial_ends_at"),
+        trial_days_left=evaluated.get("trial_days_left"),
+        avatar_url=evaluated.get("avatar_url"),
+    )
+
+    return AuthResponse(
+        user_id=user_id,
+        username=final_username,
+        full_name=final_full_name,
+        email=clean_email,
+        role=final_role,
+        is_pro=final_is_pro,
+        is_educator=final_is_educator,
+        plan_tier=final_plan_tier,
+        email_verified=True,
+        requires_email_verification=False,
+        subscription_status=evaluated.get("subscription_status"),
+        trial_ends_at=evaluated.get("trial_ends_at"),
+        trial_days_left=evaluated.get("trial_days_left"),
+        avatar_url=evaluated.get("avatar_url"),
         token=token,
-        message="Kayıt başarılı! 30 günlük ücretsiz PRO deneme süreniz başlatıldı.",
+        message="E-posta adresiniz doğrulandı! VocaShip'e hoş geldiniz.",
         user=user_resp,
     )
 
@@ -566,11 +732,15 @@ def login_user(payload: LoginRequest) -> AuthResponse:
         # Yerel doğrulama durumunda e-posta kontrolü
         # Seeded varsayılan kullanıcılar (user@quizwise.com vb.) hariç
         is_seed_user = target_email in ("user@quizwise.com", "pro@vocaship.com")
-        has_email_confirmed = bool(user_row.get("email_confirmed") or user_row.get("email_confirmed_at"))
+        has_email_confirmed = bool(
+            user_row.get("email_verified")
+            or user_row.get("email_confirmed")
+            or user_row.get("email_confirmed_at")
+        )
         if not is_seed_user and not has_email_confirmed and not is_confirmed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="E-posta adresiniz henüz doğrulanmamış. Lütfen gelen kutunuzdaki aktivasyon linkine tıklayın.",
+                detail="E-posta adresiniz henüz doğrulanmamış. Lütfen 6 haneli doğrulama kodunu girin.",
             )
 
     user_row = evaluate_user_trial_and_plan(user_row)
