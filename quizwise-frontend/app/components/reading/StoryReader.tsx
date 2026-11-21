@@ -7,7 +7,9 @@ const SentenceShadowingWidget = dynamic(() => import("./SentenceShadowingWidget"
 const SentenceXRayModal = dynamic(() => import("./SentenceXRayModal"), { ssr: false });
 import TargetVocabularyFlashcards from "./TargetVocabularyFlashcards";
 import { useLanguage } from "../../context/LanguageContext";
+import { useAuth } from "../../context/AuthContext";
 import { useUserStories } from "../../context/UserStoriesContext";
+import { getReadingProgressKey } from "../../utils/readingStorage";
 import { usePersona } from "../../context/PersonaContext";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useRouter } from "next/navigation";
@@ -1276,12 +1278,16 @@ export default function StoryReader({
         buildCleanQuestions(story.comprehension_questions || [])
     );
 
-    // Kaldığı Yeri ve İlerlemeyi Yükle
+    // Kaldığı Yeri ve İlerlemeyi Yükle (kullanıcıya özel anahtar)
+    const { user } = useAuth();
+    const scopedProgressKey = getReadingProgressKey(storyKey, user?.id);
+
     useEffect(() => {
         setUserAnswers({});
+        setIsCompleted(false);
         setCleanQuestions(buildCleanQuestions(story.comprehension_questions || []));
         try {
-            const savedProgress = localStorage.getItem(`quizwise_progress_${storyKey}`);
+            const savedProgress = localStorage.getItem(scopedProgressKey);
             if (savedProgress) {
                 const parsed = JSON.parse(savedProgress);
                 if (typeof parsed.lastParagraph === "number") {
@@ -1297,16 +1303,16 @@ export default function StoryReader({
         } catch (e) {
             console.error(e);
         }
-    }, [storyKey, story.title, story.content]);
+    }, [scopedProgressKey, story.title, story.content]);
 
     // Sayfa değiştiğinde sayfa bazlı ilerlemeyi otomatik kaydet
     useEffect(() => {
         if (totalPages > 0) {
             try {
-                const existing = localStorage.getItem(`quizwise_progress_${storyKey}`);
+                const existing = localStorage.getItem(scopedProgressKey);
                 const data = existing ? JSON.parse(existing) : {};
                 localStorage.setItem(
-                    `quizwise_progress_${storyKey}`,
+                    scopedProgressKey,
                     JSON.stringify({
                         ...data,
                         storyKey,
@@ -1324,15 +1330,15 @@ export default function StoryReader({
                 console.error(e);
             }
         }
-    }, [currentPage, totalPages, storyKey, story.title, story.level, story.topic, lastReadParagraph]);
+    }, [currentPage, totalPages, scopedProgressKey, storyKey, story.title, story.level, story.topic, lastReadParagraph]);
 
     const handleParagraphClick = (pIdx: number) => {
         setLastReadParagraph(pIdx);
         try {
-            const existing = localStorage.getItem(`quizwise_progress_${storyKey}`);
+            const existing = localStorage.getItem(scopedProgressKey);
             const data = existing ? JSON.parse(existing) : {};
             localStorage.setItem(
-                `quizwise_progress_${storyKey}`,
+                scopedProgressKey,
                 JSON.stringify({
                     ...data,
                     storyKey,
@@ -1356,10 +1362,10 @@ export default function StoryReader({
         // Sessiz Altın Köprüsü: Okuma Odası tamamlama ödülü (+40)
         rewardReadingStoryComplete(storyKey);
         try {
-            const existing = localStorage.getItem(`quizwise_progress_${storyKey}`);
+            const existing = localStorage.getItem(scopedProgressKey);
             const data = existing ? JSON.parse(existing) : {};
             localStorage.setItem(
-                `quizwise_progress_${storyKey}`,
+                scopedProgressKey,
                 JSON.stringify({
                     ...data,
                     storyKey,

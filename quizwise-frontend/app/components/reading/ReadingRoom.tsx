@@ -16,6 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import { useAppTheme } from "../../context/ThemeContext";
 import { autoAssignCover, autoAssignGradient } from "../../utils/autoCover";
+import { getReadingProgressPrefix } from "../../utils/readingStorage";
 import { useTranslation, useLanguage } from "../../context/LanguageContext";
 import {
   BookOpen,
@@ -521,15 +522,16 @@ export default function ReadingRoom({
   // Yapay Zekâ ile Hikaye Üret Modalı State'i
   const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
 
-  // İlerleme Listesi (localStorage: quizwise_progress_...)
+  // İlerleme Listesi (kullanıcı kimliğine göre izole: vocaship_progress_${userId}_...)
   const [progressList, setProgressList] = useState<ProgressItem[]>([]);
 
   const loadSavedProgress = () => {
     try {
+      const prefix = getReadingProgressPrefix(user?.id);
       const items: ProgressItem[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith("quizwise_progress_")) {
+        if (key && key.startsWith(prefix)) {
           const val = localStorage.getItem(key);
           if (val) {
             try {
@@ -546,8 +548,9 @@ export default function ReadingRoom({
   };
 
   useEffect(() => {
+    setProgressList([]);
     loadSavedProgress();
-  }, [story]);
+  }, [story, user?.id, isGuest]);
 
   // Initial story veya session kontrolü (Açılışta her zaman vitrin standardı)
   useEffect(() => {

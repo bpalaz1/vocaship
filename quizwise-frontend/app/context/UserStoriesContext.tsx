@@ -9,6 +9,8 @@ import React, {
   ReactNode,
 } from "react";
 import { autoAssignCover, autoAssignCategoryLabel } from "../utils/autoCover";
+import { useAuth } from "./AuthContext";
+import { getUserStoriesStorageKey } from "../utils/readingStorage";
 
 export const USER_STORIES_STORAGE_KEY = "vocaship_user_stories";
 
@@ -62,10 +64,10 @@ const UserStoriesContext = createContext<UserStoriesContextType | undefined>(und
 /**
  * LocalStorage'dan kullanıcı hikayelerini güvenli okuma
  */
-export function getSavedUserStories(): CustomStory[] {
+export function getSavedUserStories(explicitUserId?: string | null): CustomStory[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(USER_STORIES_STORAGE_KEY);
+    const raw = localStorage.getItem(getUserStoriesStorageKey(explicitUserId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -78,10 +80,16 @@ export function getSavedUserStories(): CustomStory[] {
 /**
  * LocalStorage'a kaydetme ve event tetikleme
  */
-export function persistUserStories(stories: CustomStory[]): void {
+export function persistUserStories(
+  stories: CustomStory[],
+  explicitUserId?: string | null
+): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(USER_STORIES_STORAGE_KEY, JSON.stringify(stories));
+    localStorage.setItem(
+      getUserStoriesStorageKey(explicitUserId),
+      JSON.stringify(stories)
+    );
     window.dispatchEvent(new Event("vocaship_user_stories_updated"));
   } catch (e) {
     console.error("[UserStories] LocalStorage yazma hatası:", e);
@@ -89,18 +97,21 @@ export function persistUserStories(stories: CustomStory[]): void {
 }
 
 export function UserStoriesProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const activeUserId = user?.id || null;
   const [userStories, setUserStories] = useState<CustomStory[]>([]);
 
-  // Sayfa yüklendiğinde ve storage eventlerinde senkronizasyon
+  // Sayfa yüklendiğinde, kullanıcı değiştiğinde ve storage eventlerinde senkronizasyon
   const syncStories = useCallback(() => {
-    setUserStories(getSavedUserStories());
-  }, []);
+    setUserStories(getSavedUserStories(activeUserId));
+  }, [activeUserId]);
 
   useEffect(() => {
+    setUserStories([]);
     syncStories();
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === USER_STORIES_STORAGE_KEY) {
+      if (e.key === getUserStoriesStorageKey(activeUserId)) {
         syncStories();
       }
     };
