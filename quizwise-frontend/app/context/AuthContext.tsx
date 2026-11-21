@@ -40,6 +40,7 @@ export interface AuthContextType {
   openAuthModal: (tab?: "login" | "register") => void;
   isWelcomeModalOpen: boolean;
   setIsWelcomeModalOpen: (open: boolean) => void;
+  openWelcomeModal: () => void;
   login: (usernameOrEmail: string, password: string) => Promise<AuthUser>;
   register: (
     fullName: string,
@@ -61,6 +62,7 @@ export interface AuthContextType {
 export const AUTH_TOKEN_STORAGE_KEY = "vorego_auth_token";
 export const AUTH_USER_STORAGE_KEY = "vorego_auth_user";
 const WELCOME_SKIPPED_KEY = "vocaship_welcome_skipped";
+const LOGGED_OUT_KEY = "vocaship_logged_out";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -98,6 +100,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthModalOpen(true);
   };
 
+  const openWelcomeModal = () => {
+    try {
+      sessionStorage.removeItem(LOGGED_OUT_KEY);
+      sessionStorage.removeItem(WELCOME_SKIPPED_KEY);
+    } catch {}
+    setIsAuthModalOpen(false);
+    setIsWelcomeModalOpen(true);
+  };
+
   // Sayfa ilk açıldığında localStorage'dan oturumu geri yükle; yoksa karşılama sahnesini aç
   useEffect(() => {
     let restored = false;
@@ -124,8 +135,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!restored) {
       try {
+        const wasLoggedOut = sessionStorage.getItem(LOGGED_OUT_KEY) === "true";
         const skipped = sessionStorage.getItem(WELCOME_SKIPPED_KEY) === "1";
-        if (!skipped) {
+        if (wasLoggedOut) {
+          setIsWelcomeModalOpen(false);
+          setAuthModalTab("login");
+          setIsAuthModalOpen(true);
+        } else if (!skipped) {
           setIsWelcomeModalOpen(true);
         }
       } catch {
@@ -163,6 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(authToken);
     setIsWelcomeModalOpen(false);
     try {
+      sessionStorage.removeItem(LOGGED_OUT_KEY);
       localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(authUser));
       localStorage.setItem("vocaship_plan_tier", authUser.planTier);
@@ -401,18 +418,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     setToken(null);
-    setIsAuthModalOpen(false);
+    setIsWelcomeModalOpen(false);
+    setAuthModalTab("login");
     try {
       localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
       localStorage.removeItem(AUTH_USER_STORAGE_KEY);
       localStorage.removeItem("vocaship_plan_tier");
       localStorage.removeItem("vocaship_profile");
-      sessionStorage.removeItem(WELCOME_SKIPPED_KEY);
+      sessionStorage.setItem(LOGGED_OUT_KEY, "true");
       window.dispatchEvent(new CustomEvent("vocaship_logged_out"));
     } catch {
       // ignore storage errors
     }
-    setIsWelcomeModalOpen(true);
+    setIsAuthModalOpen(true);
   };
 
   return (
@@ -428,6 +446,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         openAuthModal,
         isWelcomeModalOpen,
         setIsWelcomeModalOpen,
+        openWelcomeModal,
         login,
         register,
         verifyEmail,

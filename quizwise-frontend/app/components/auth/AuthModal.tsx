@@ -31,7 +31,7 @@ export default function AuthModal({
   initialTab = "login",
 }: AuthModalProps) {
   const router = useRouter();
-  const { login, register, verifyEmail, forgotPassword, resetPassword } =
+  const { login, register, verifyEmail, forgotPassword, resetPassword, openWelcomeModal } =
     useAuth();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">(initialTab);
@@ -595,6 +595,19 @@ export default function AuthModal({
 
             {/* Sade Form Alanı */}
             <form onSubmit={handleSubmit} className="relative z-10 p-6 space-y-4">
+              {activeTab === "login" && (
+                <div className="flex items-center justify-between -mt-1">
+                  <button
+                    type="button"
+                    data-testid="auth-back-to-intro-btn"
+                    onClick={openWelcomeModal}
+                    className="text-[11px] font-semibold text-slate-400 hover:text-sky-300 transition cursor-pointer"
+                  >
+                    ← Tanıtımı Gör
+                  </button>
+                </div>
+              )}
+
               {infoMsg && (
                 <div
                   data-testid="auth-info-toast"
