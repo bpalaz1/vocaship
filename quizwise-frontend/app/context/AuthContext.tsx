@@ -33,6 +33,8 @@ export interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
+  isAuthReady: boolean;
+  hasEntered: boolean;
   isGuest: boolean;
   gateReason: string | null;
   setGateReason: (reason: string | null) => void;
@@ -68,6 +70,7 @@ export interface AuthContextType {
 
 export const AUTH_TOKEN_STORAGE_KEY = "vorego_auth_token";
 export const AUTH_USER_STORAGE_KEY = "vorego_auth_user";
+const ENTERED_STORAGE_KEY = "vocaship_entered";
 const WELCOME_SKIPPED_KEY = "vocaship_welcome_skipped";
 const LOGGED_OUT_KEY = "vocaship_logged_out";
 const GUEST_MODE_KEY = "vocaship_guest";
@@ -98,6 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [hasEntered, setHasEntered] = useState<boolean>(false);
   const [isGuest, setIsGuest] = useState<boolean>(false);
   const [gateReason, setGateReason] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -122,10 +127,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const enterGuestMode = () => {
     setIsGuest(true);
+    setHasEntered(true);
     setIsWelcomeModalOpen(false);
     setIsAuthModalOpen(false);
     setGateReason(null);
     try {
+      localStorage.setItem(ENTERED_STORAGE_KEY, "true");
+      localStorage.setItem(GUEST_MODE_KEY, "true");
       sessionStorage.setItem(GUEST_MODE_KEY, "true");
       sessionStorage.setItem(WELCOME_SKIPPED_KEY, "1");
       sessionStorage.removeItem(LOGGED_OUT_KEY);
@@ -141,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsWelcomeModalOpen(true);
   };
 
-  // Sayfa ilk açıldığında localStorage'dan oturumu geri yükle; yoksa misafir/karşılama sahnesini aç
+  // Sayfa ilk açıldığında localStorage'dan oturum / giriş bayrağını oku
   useEffect(() => {
     let restored = false;
     try {
@@ -157,34 +165,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(savedToken);
           setUser(normalizedUser);
           setIsGuest(false);
+          setHasEntered(true);
+          localStorage.setItem(ENTERED_STORAGE_KEY, "true");
           restored = true;
+        }
+      }
+
+      if (!restored) {
+        const enteredBefore = localStorage.getItem(ENTERED_STORAGE_KEY) === "true";
+        const wasGuest =
+          localStorage.getItem(GUEST_MODE_KEY) === "true" ||
+          sessionStorage.getItem(GUEST_MODE_KEY) === "true";
+        if (enteredBefore) {
+          setHasEntered(true);
+          setIsGuest(true);
+          setIsWelcomeModalOpen(false);
+        } else if (wasGuest) {
+          setHasEntered(true);
+          setIsGuest(true);
+          setIsWelcomeModalOpen(false);
+          localStorage.setItem(ENTERED_STORAGE_KEY, "true");
+        } else {
+          setHasEntered(false);
+          setIsWelcomeModalOpen(true);
         }
       }
     } catch (err) {
       console.warn("[AuthContext] Oturum geri yüklenemedi:", err);
+      setHasEntered(false);
+      setIsWelcomeModalOpen(true);
     } finally {
       setIsLoading(false);
-    }
-
-    if (!restored) {
-      try {
-        const wasGuest = sessionStorage.getItem(GUEST_MODE_KEY) === "true";
-        const wasLoggedOut = sessionStorage.getItem(LOGGED_OUT_KEY) === "true";
-        const skipped = sessionStorage.getItem(WELCOME_SKIPPED_KEY) === "1";
-        if (wasGuest) {
-          setIsGuest(true);
-          setIsWelcomeModalOpen(false);
-        } else if (wasLoggedOut) {
-          setIsGuest(false);
-          setIsWelcomeModalOpen(false);
-          setAuthModalTab("login");
-          setIsAuthModalOpen(true);
-        } else if (!skipped) {
-          setIsWelcomeModalOpen(true);
-        }
-      } catch {
-        setIsWelcomeModalOpen(true);
-      }
+      setIsAuthReady(true);
     }
 
     const handleProActivated = () => {
@@ -216,11 +228,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(authUser);
     setToken(authToken);
     setIsGuest(false);
+    setHasEntered(true);
     setGateReason(null);
     setIsWelcomeModalOpen(false);
     try {
       sessionStorage.removeItem(LOGGED_OUT_KEY);
       sessionStorage.removeItem(GUEST_MODE_KEY);
+      localStorage.removeItem(GUEST_MODE_KEY);
+      localStorage.setItem(ENTERED_STORAGE_KEY, "true");
       localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(authUser));
       localStorage.setItem("vocaship_plan_tier", authUser.planTier);
@@ -467,21 +482,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setToken(null);
     setIsGuest(false);
+    setHasEntered(false);
     setGateReason(null);
-    setIsWelcomeModalOpen(false);
-    setAuthModalTab("login");
+    setIsAuthModalOpen(false);
     try {
       localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
       localStorage.removeItem(AUTH_USER_STORAGE_KEY);
       localStorage.removeItem("vocaship_plan_tier");
       localStorage.removeItem("vocaship_profile");
+      localStorage.removeItem(ENTERED_STORAGE_KEY);
+      localStorage.removeItem(GUEST_MODE_KEY);
       sessionStorage.removeItem(GUEST_MODE_KEY);
-      sessionStorage.setItem(LOGGED_OUT_KEY, "true");
+      sessionStorage.removeItem(LOGGED_OUT_KEY);
+      sessionStorage.removeItem(WELCOME_SKIPPED_KEY);
       window.dispatchEvent(new CustomEvent("vocaship_logged_out"));
     } catch {
       // ignore storage errors
     }
-    setIsAuthModalOpen(true);
+    setIsWelcomeModalOpen(true);
   };
 
   return (
@@ -490,6 +508,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isLoading,
+        isAuthReady,
+        hasEntered,
         isGuest,
         gateReason,
         setGateReason,

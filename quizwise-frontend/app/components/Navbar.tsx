@@ -37,7 +37,8 @@ export default function Navbar() {
   const { t } = useTranslation();
   const {
     user,
-    isLoading: isAuthLoading,
+    isAuthReady,
+    hasEntered,
     isGuest,
     enterGuestMode,
     logout,
@@ -45,7 +46,6 @@ export default function Navbar() {
     setIsAuthModalOpen,
     authModalTab,
     openAuthModal,
-    isWelcomeModalOpen,
   } = useAuth();
   const {
     userProfile,
@@ -506,12 +506,14 @@ export default function Navbar() {
       </header>
 
       {/* Global Modallar */}
-      <WelcomeVoyageModal
-        isOpen={!isAuthLoading && !user && !isGuest && isWelcomeModalOpen && !isAuthModalOpen}
-        onSkip={enterGuestMode}
-        onOpenRegister={() => openAuthModal("register")}
-        onOpenLogin={() => openAuthModal("login")}
-      />
+      {!isAuthReady ? null : !hasEntered && !isAuthModalOpen ? (
+        <WelcomeVoyageModal
+          isOpen={true}
+          onSkip={enterGuestMode}
+          onOpenRegister={() => openAuthModal("register")}
+          onOpenLogin={() => openAuthModal("login")}
+        />
+      ) : null}
 
       <AuthModal
         isOpen={isAuthModalOpen}
