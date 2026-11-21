@@ -272,25 +272,17 @@ export default function Navbar() {
               {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR, IT, RU) */}
               <LanguageSelector align="right" />
 
-              {/* OTURUM YOKSA: Misafir Etiketi + Ücretsiz Kayıt Ol / Giriş Yap — OTURUM VARSA: Kullanıcı Kapsülü */}
+              {/* OTURUM YOKSA: Misafir Etiketi / Giriş Yap — OTURUM VARSA: Kullanıcı Kapsülü */}
               {!user ? (
                 isGuest ? (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      data-testid="navbar-guest-badge"
-                      className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-[11px] font-bold text-slate-300 whitespace-nowrap"
-                    >
-                      🧭 Misafir
-                    </span>
-                    <button
-                      type="button"
-                      data-testid="navbar-guest-register-btn"
-                      onClick={() => openAuthModal("register")}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 text-xs font-black shadow-lg shadow-emerald-500/20 transition active:scale-95 cursor-pointer whitespace-nowrap"
-                    >
-                      <span>🚀 Ücretsiz Kayıt Ol</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    data-testid="navbar-guest-badge"
+                    onClick={() => openAuthModal("login")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-200 transition cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    🧭 Misafir
+                  </button>
                 ) : (
                   <button
                     type="button"
