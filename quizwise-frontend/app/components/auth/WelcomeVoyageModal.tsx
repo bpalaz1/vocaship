@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ArrowRight, Coins, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { VocaShipLogo } from "../brand/VocaShipLogo";
 
 export interface WelcomeVoyageModalProps {
@@ -54,20 +54,22 @@ const MODULES = [
   },
 ];
 
-const SPARKLES = [
-  { top: "14%", left: "34%", delay: "0s", size: "w-1.5 h-1.5" },
-  { top: "20%", left: "66%", delay: "0.9s", size: "w-2 h-2" },
-  { top: "62%", left: "36%", delay: "1.6s", size: "w-1 h-1" },
-  { top: "58%", left: "65%", delay: "2.2s", size: "w-1.5 h-1.5" },
-  { top: "12%", left: "50%", delay: "1.2s", size: "w-1 h-1" },
+const STARS = [
+  { top: "10%", left: "12%", delay: "0s", size: "w-1.5 h-1.5", color: "bg-amber-300" },
+  { top: "18%", left: "24%", delay: "0.7s", size: "w-1 h-1", color: "bg-teal-300" },
+  { top: "14%", left: "78%", delay: "1.3s", size: "w-1.5 h-1.5", color: "bg-amber-200" },
+  { top: "24%", left: "88%", delay: "0.4s", size: "w-1 h-1", color: "bg-emerald-300" },
+  { top: "30%", left: "16%", delay: "1.9s", size: "w-1.5 h-1.5", color: "bg-sky-300" },
+  { top: "12%", left: "62%", delay: "2.3s", size: "w-1 h-1", color: "bg-amber-300" },
+  { top: "28%", left: "72%", delay: "1.0s", size: "w-1.5 h-1.5", color: "bg-teal-200" },
+  { top: "8%", left: "38%", delay: "1.6s", size: "w-1 h-1", color: "bg-emerald-200" },
 ];
 
-const WAVE_BARS = [
-  { height: "45%", delay: "0s" },
-  { height: "85%", delay: "0.15s" },
-  { height: "100%", delay: "0.3s" },
-  { height: "70%", delay: "0.45s" },
-  { height: "50%", delay: "0.6s" },
+const TRAIL_TOKENS = [
+  { emoji: "✨", left: "14%", bottom: "40%", delay: "0s", ring: "border-amber-400/40 bg-amber-500/10" },
+  { emoji: "📖", left: "24%", bottom: "48%", delay: "0.6s", ring: "border-sky-400/40 bg-sky-500/10" },
+  { emoji: "💬", left: "35%", bottom: "43%", delay: "1.2s", ring: "border-indigo-400/40 bg-indigo-500/10" },
+  { emoji: "🎙️", left: "45%", bottom: "35%", delay: "1.8s", ring: "border-emerald-400/40 bg-emerald-500/10" },
 ];
 
 export default function WelcomeVoyageModal({
@@ -84,36 +86,28 @@ export default function WelcomeVoyageModal({
       className="fixed inset-0 z-[110] h-dvh w-screen overflow-hidden bg-[#070B14] flex flex-col items-center justify-between px-4 py-3 sm:py-4 text-slate-100 animate-in fade-in duration-300"
     >
       <style>{`
-        @keyframes float {
+        @keyframes shipFloat {
           0%, 100% {
-            transform: translateY(0px) rotate(-1.2deg);
+            transform: translateY(0px) rotate(-1.6deg);
           }
           50% {
-            transform: translateY(-8px) rotate(1.2deg);
+            transform: translateY(-9px) rotate(1.6deg);
           }
         }
-        @keyframes cardFloatA {
+        @keyframes tokenBob {
           0%, 100% {
-            transform: translateY(0px);
+            transform: translateY(0px) scale(1);
           }
           50% {
-            transform: translateY(-6px);
+            transform: translateY(-7px) scale(1.06);
           }
         }
-        @keyframes cardFloatB {
-          0%, 100% {
-            transform: translateY(-4px);
+        @keyframes trailDash {
+          0% {
+            stroke-dashoffset: 0;
           }
-          50% {
-            transform: translateY(4px);
-          }
-        }
-        @keyframes waveBar {
-          0%, 100% {
-            transform: scaleY(0.45);
-          }
-          50% {
-            transform: scaleY(1);
+          100% {
+            stroke-dashoffset: -48;
           }
         }
         @keyframes waveFlowA {
@@ -132,45 +126,43 @@ export default function WelcomeVoyageModal({
             transform: translateX(0);
           }
         }
-        @keyframes sparklePulse {
+        @keyframes starTwinkle {
           0%, 100% {
-            opacity: 0.2;
-            transform: scale(0.8);
+            opacity: 0.25;
+            transform: scale(0.85);
           }
           50% {
-            opacity: 0.95;
+            opacity: 1;
             transform: scale(1.35);
           }
         }
-        .sail-float {
-          animation: float 4s ease-in-out infinite;
+        .ship-voyage {
+          animation: shipFloat 4s ease-in-out infinite;
         }
-        .card-float-a {
-          animation: cardFloatA 4.8s ease-in-out infinite;
+        .trail-token {
+          animation: tokenBob 3.6s ease-in-out infinite;
         }
-        .card-float-b {
-          animation: cardFloatB 5.2s ease-in-out infinite;
-        }
-        .speak-bar {
-          transform-origin: bottom;
-          animation: waveBar 1.1s ease-in-out infinite;
+        .trail-path {
+          animation: trailDash 3s linear infinite;
         }
         .wave-a {
-          animation: waveFlowA 8s linear infinite;
+          animation: waveFlowA 9s linear infinite;
         }
         .wave-b {
-          animation: waveFlowB 11s linear infinite;
+          animation: waveFlowB 12s linear infinite;
         }
-        .sparkle-dot {
-          animation: sparklePulse 3.2s ease-in-out infinite;
+        .star-twinkle {
+          animation: starTwinkle 3s ease-in-out infinite;
         }
       `}</style>
 
-      {/* 1. ÜST BAR (Kayıt Ol • Giriş Yap • Atla) */}
+      {/* 1. ÜST BAR (Sade İkon Rozeti + Giriş Yap • Kayıt Ol • Atla) */}
       <header className="w-full max-w-5xl flex items-center justify-between py-2 gap-2 shrink-0">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-slate-300 text-[11px] font-bold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span className="truncate">Yeni Nesil Dil Öğrenme Platformu</span>
+        <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-800/90">
+          <VocaShipLogo variant="icon" className="w-6 h-6" />
+          <span className="hidden sm:inline text-[11px] font-bold text-slate-300 tracking-wide">
+            Yeni Nesil Dil Platformu
+          </span>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
@@ -204,109 +196,138 @@ export default function WelcomeVoyageModal({
         </div>
       </header>
 
-      {/* 2. MERKEZİ SAHNE KUTUSU (Yüzen Mini Ürün Vitrini + Canlı Yelkenli) */}
-      <div className="w-full max-w-5xl flex-1 max-h-[54vh] my-1.5 rounded-3xl border border-slate-800/80 bg-gradient-to-b from-[#0B1222] via-[#091526] to-[#081C24] relative overflow-hidden flex items-center justify-center shadow-[0_0_60px_rgba(16,185,129,0.10)]">
-        {/* Arka Plan Atmosferik Işık & Parıltılar */}
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 w-72 h-44 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute top-12 left-1/3 w-52 h-36 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
-        {SPARKLES.map((sp, i) => (
+      {/* 2. MERKEZİ SAHNE KUTUSU (Ufka İlerleyen VocaShip Gemisi & Keşif Rotası) */}
+      <div className="w-full max-w-5xl flex-1 max-h-[54vh] my-1.5 rounded-3xl border border-slate-800/80 bg-gradient-to-b from-[#070D1A] via-[#0B162C] to-[#081F26] relative overflow-hidden flex flex-col items-center justify-between pt-5 sm:pt-6 pb-0 shadow-[0_0_60px_rgba(16,185,129,0.10)]">
+        {/* Gökyüzü Aurora Işığı & Yıldızlar */}
+        <div className="absolute -top-6 left-1/3 w-72 h-44 rounded-full bg-indigo-600/20 blur-3xl pointer-events-none" />
+        <div className="absolute top-4 right-1/4 w-64 h-40 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
+        {STARS.map((star, idx) => (
           <span
-            key={i}
-            style={{ top: sp.top, left: sp.left, animationDelay: sp.delay }}
-            className={`sparkle-dot absolute ${sp.size} rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.9)] pointer-events-none`}
+            key={idx}
+            style={{ top: star.top, left: star.left, animationDelay: star.delay }}
+            className={`star-twinkle absolute ${star.size} ${star.color} rounded-full shadow-[0_0_8px_rgba(255,255,255,0.6)] pointer-events-none`}
           />
         ))}
 
-        {/* SOL ÜST YÜZEN KART: SM-2 Akıllı Kart */}
-        <div className="hidden md:flex flex-col gap-1.5 absolute top-5 left-5 lg:left-7 z-10 w-56 p-3.5 rounded-2xl bg-slate-950/75 border border-indigo-500/30 backdrop-blur-md shadow-xl card-float-a pointer-events-none">
-          <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-extrabold text-indigo-300">
-            🃏 SM-2 Kart
-          </span>
-          <div className="flex items-baseline justify-between gap-2 mt-0.5">
-            <span className="text-base font-black text-white tracking-tight">resilient</span>
-            <span className="text-[11px] font-mono text-indigo-300">/rɪˈzɪliənt/</span>
-          </div>
-          <p className="text-xs text-slate-300 font-medium">
-            dirençli, çabuk toparlanan
-          </p>
-        </div>
-
-        {/* SOL ALT YÜZEN KART: AI Speaking & Ses Dalgası */}
-        <div className="hidden md:flex flex-col gap-2 absolute bottom-12 left-5 lg:left-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-950/75 border border-emerald-500/30 backdrop-blur-md shadow-xl card-float-b pointer-events-none">
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-[10px] font-extrabold text-violet-300">
-              🎙️ Speaking Studio
-            </span>
-            <div className="flex items-end gap-1 h-4">
-              {WAVE_BARS.map((bar, idx) => (
-                <span
-                  key={idx}
-                  style={{ height: bar.height, animationDelay: bar.delay }}
-                  className="speak-bar w-1 rounded-full bg-emerald-400"
-                />
-              ))}
-            </div>
-          </div>
-          <div className="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 text-[11px] font-bold text-emerald-300">
-            Great pronunciation! +25 XP
-          </div>
-        </div>
-
-        {/* MERKEZ ODAK: Kurumsal V + Kitap Yelkeni & Tek Marka */}
-        <div className="relative z-10 flex flex-col items-center text-center px-4 pb-6 sm:pb-8">
-          <div className="sail-float mb-2.5 p-3 rounded-3xl bg-slate-900/55 border border-emerald-400/25 shadow-[0_12px_35px_rgba(16,185,129,0.22)]">
-            <VocaShipLogo
-              variant="icon"
-              className="w-16 h-16 sm:w-20 sm:h-20"
-            />
-          </div>
+        {/* Üst Marka & Slogan Odağı (Tek Marka Adı) */}
+        <div className="relative z-20 flex flex-col items-center text-center px-4">
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-none">
-            Voca<span className="text-emerald-400">Ship</span>
+            Voca<span className="text-[#10B981]">Ship</span>
           </h1>
-          <p className="mt-1.5 text-sm sm:text-lg font-extrabold bg-gradient-to-r from-emerald-300 via-sky-300 to-indigo-300 bg-clip-text text-transparent tracking-wide">
+          <p className="mt-1.5 text-sm sm:text-lg font-extrabold bg-gradient-to-r from-emerald-300 via-teal-200 to-sky-300 bg-clip-text text-transparent tracking-wide">
             Sail to Fluency.
           </p>
         </div>
 
-        {/* SAĞ ÜST YÜZEN KART: Okuma Odası İnteraktif Metin */}
-        <div className="hidden md:flex flex-col gap-1.5 absolute top-5 right-5 lg:right-7 z-10 w-60 p-3.5 rounded-2xl bg-slate-950/75 border border-sky-500/30 backdrop-blur-md shadow-xl card-float-b pointer-events-none">
-          <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-[10px] font-extrabold text-sky-300">
-            📖 Reading Room
-          </span>
-          <p className="text-xs text-slate-200 leading-relaxed">
-            &ldquo;She delivered an{" "}
-            <span className="px-1.5 py-0.5 rounded bg-sky-500/25 border border-sky-400/40 text-sky-200 font-bold">
-              eloquent
-            </span>{" "}
-            speech.&rdquo;
-          </p>
-          <div className="px-2.5 py-1 rounded-lg bg-slate-900/95 border border-slate-700/80 text-[11px] font-semibold text-amber-300">
-            💬 akıcı ve etkileyici
+        {/* Orta-Alt Alan: Keşif Rotası İzleri + Süzülen VocaShip Gemisi */}
+        <div className="relative z-10 w-full flex-1 flex items-end justify-center overflow-hidden">
+          {/* Kavisli Keşif Rotası SVG (Kesikli Parlayan Işık İzi) */}
+          <svg
+            viewBox="0 0 900 220"
+            preserveAspectRatio="none"
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          >
+            <defs>
+              <linearGradient id="voyageTrailGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#6366F1" stopOpacity="0.15" />
+                <stop offset="45%" stopColor="#2DD4BF" stopOpacity="0.65" />
+                <stop offset="100%" stopColor="#10B981" stopOpacity="0.95" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M 60 155 Q 240 60 470 135 T 580 140"
+              fill="none"
+              stroke="url(#voyageTrailGrad)"
+              strokeWidth="2.5"
+              strokeDasharray="8 8"
+              strokeLinecap="round"
+              className="trail-path"
+            />
+          </svg>
+
+          {/* Keşif Rotası Boyunca Süzülen Mini Öğrenme İkonları */}
+          {TRAIL_TOKENS.map((item, idx) => (
+            <div
+              key={idx}
+              style={{ left: item.left, bottom: item.bottom, animationDelay: item.delay }}
+              className={`trail-token hidden sm:flex absolute w-9 h-9 rounded-2xl border backdrop-blur-md items-center justify-center text-base shadow-lg pointer-events-none ${item.ring}`}
+            >
+              <span>{item.emoji}</span>
+            </div>
+          ))}
+
+          {/* Ufka İlerleyen Işıklı VocaShip Yelkenli / Keşif Gemisi */}
+          <div className="ship-voyage relative z-20 mb-7 sm:mb-9 sm:ml-24 flex flex-col items-center pointer-events-none">
+            {/* Gemi Arkası Aura */}
+            <div className="absolute -inset-4 rounded-full bg-emerald-400/15 blur-2xl" />
+            <svg
+              viewBox="0 0 220 150"
+              className="w-40 h-28 sm:w-52 sm:h-36 drop-shadow-[0_12px_24px_rgba(16,185,129,0.28)]"
+              fill="none"
+            >
+              <defs>
+                <linearGradient id="hullGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#4F46E5" />
+                  <stop offset="55%" stopColor="#0EA5E9" />
+                  <stop offset="100%" stopColor="#10B981" />
+                </linearGradient>
+                <linearGradient id="mainSailGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#34D399" />
+                  <stop offset="55%" stopColor="#2DD4BF" />
+                  <stop offset="100%" stopColor="#0284C7" />
+                </linearGradient>
+                <linearGradient id="foreSailGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#818CF8" />
+                  <stop offset="100%" stopColor="#38BDF8" />
+                </linearGradient>
+              </defs>
+
+              {/* Ana Direk */}
+              <line x1="110" y1="16" x2="110" y2="112" stroke="#E2E8F0" strokeWidth="3" strokeLinecap="round" />
+
+              {/* Arka/Sol Yelken (Açılan Kitap Kanadı Formu - İndigo/Sky) */}
+              <path
+                d="M104 26 C74 44, 52 72, 48 104 L104 104 Z"
+                fill="url(#foreSailGrad)"
+                opacity="0.92"
+              />
+              {/* Ön/Sağ Ana Yelken (Zümrüt-Turkuaz Geçiş) */}
+              <path
+                d="M116 18 C154 40, 174 72, 178 104 L116 104 Z"
+                fill="url(#mainSailGrad)"
+              />
+              {/* Direk Tepesi Altın Yıldız/Fener */}
+              <circle cx="110" cy="14" r="4" fill="#FBBF24" />
+
+              {/* Geometrik Gemi Gövdesi (Sol Pruva İndigo -> Sağ Zümrüt) */}
+              <path
+                d="M32 108 L194 108 L172 134 C166 138, 156 140, 142 140 L72 140 C58 140, 48 136, 42 128 Z"
+                fill="url(#hullGrad)"
+              />
+              {/* Güverte Işık Çizgisi */}
+              <path
+                d="M44 114 L182 114"
+                stroke="#E0F2FE"
+                strokeWidth="2"
+                strokeOpacity="0.65"
+                strokeLinecap="round"
+              />
+              {/* Lomboz Işıkları */}
+              <circle cx="84" cy="125" r="3" fill="#FEF08A" />
+              <circle cx="108" cy="125" r="3" fill="#FEF08A" />
+              <circle cx="132" cy="125" r="3" fill="#FEF08A" />
+            </svg>
+            {/* Su Üzerindeki Işık Yansıması */}
+            <div className="w-36 h-2.5 -mt-2 rounded-full bg-gradient-to-r from-indigo-500/30 via-emerald-400/50 to-teal-300/30 blur-sm" />
           </div>
         </div>
 
-        {/* SAĞ ALT YÜZEN KART: Oyun Arenası & Sınıfım */}
-        <div className="hidden md:flex flex-col gap-2 absolute bottom-12 right-5 lg:right-7 z-10 w-56 p-3.5 rounded-2xl bg-slate-950/75 border border-amber-500/30 backdrop-blur-md shadow-xl card-float-a pointer-events-none">
-          <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[10px] font-extrabold text-amber-300">
-            🏆 Arena &amp; Sınıfım
-          </span>
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1 text-xs font-black text-amber-300">
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              +120 Altın
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-[10px] font-bold text-emerald-300">
-              ● Canlı Sınıf
-            </span>
-          </div>
-        </div>
-
-        {/* Alt Kenarda Çift Katmanlı Zümrüt-Turkuaz Dalga Ufku */}
-        <div className="absolute bottom-0 left-0 right-0 h-14 sm:h-16 overflow-hidden pointer-events-none">
+        {/* Alt Kenarda Derinlikli İki Katmanlı Zümrüt-Turkuaz Deniz Ufku */}
+        <div className="absolute bottom-0 left-0 right-0 h-14 sm:h-16 overflow-hidden pointer-events-none z-20">
           <svg
             viewBox="0 0 1200 100"
             preserveAspectRatio="none"
-            className="wave-a absolute bottom-0 left-0 w-[200%] h-14 opacity-45"
+            className="wave-a absolute bottom-0 left-0 w-[200%] h-14 opacity-50"
           >
             <path
               d="M0,45 C150,88 300,6 450,45 C600,88 750,6 900,45 C1050,88 1125,22 1200,45 L1200,100 L0,100 Z"
@@ -316,7 +337,7 @@ export default function WelcomeVoyageModal({
           <svg
             viewBox="0 0 1200 100"
             preserveAspectRatio="none"
-            className="wave-b absolute bottom-0 left-0 w-[200%] h-10 opacity-70"
+            className="wave-b absolute bottom-0 left-0 w-[200%] h-10 opacity-75"
           >
             <path
               d="M0,55 C180,15 320,90 500,50 C680,10 820,85 1000,48 C1100,28 1150,65 1200,55 L1200,100 L0,100 Z"
