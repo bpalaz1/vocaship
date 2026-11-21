@@ -326,14 +326,9 @@ export default function Navbar() {
                       )}
                     </div>
 
-                    {/* Yanında kullanıcı adı (PRO ise sade (PRO) etiketi) */}
-                    <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate flex items-center gap-1">
-                      <span>{currentUsername.replace(/^@+/, "")}</span>
-                      {isPro && (
-                        <span className="hidden sm:inline text-[10px] font-black text-amber-300">
-                          (PRO)
-                        </span>
-                      )}
+                    {/* Yanında yalnızca kullanıcı adı */}
+                    <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate">
+                      {currentUsername.replace(/^@+/, "")}
                     </span>
 
                     <ChevronDown
@@ -381,6 +376,9 @@ export default function Navbar() {
                           </div>
                           <p className="text-[11px] text-slate-400 truncate font-mono">
                             {currentUsername.replace(/^@+/, "")}
+                          </p>
+                          <p className={`text-[10px] font-semibold mt-0.5 ${planTier === "pro" ? "text-amber-300" : "text-slate-400"}`}>
+                            {planTier === "pro" ? "VocaShip PRO" : "Ücretsiz Plan"}
                           </p>
                         </div>
                       </div>
