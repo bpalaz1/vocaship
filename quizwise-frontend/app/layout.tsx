@@ -5,6 +5,7 @@ import Navbar from "./components/Navbar";
 import FloatingXP from "./components/FloatingXP";
 import ActiveClassBanner from "./components/classroom/ActiveClassBanner";
 import MainContentWrapper from "./components/MainContentWrapper";
+import PaddleCheckoutListener from "./components/payments/PaddleCheckoutListener";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ExperienceProvider } from "./context/ExperienceContext";
 import { PersonaProvider } from "./context/PersonaContext";
@@ -75,6 +76,9 @@ export default function RootLayout({
                 <ExperienceProvider>
                   <PersonaProvider>
                     <UserStoriesProvider>
+                      {/* Global Paddle.js ?_ptxn= Overlay Checkout Dinleyicisi */}
+                      <PaddleCheckoutListener />
+
                       {/* Global Floating XP Bildirimi */}
                       <FloatingXP />
 

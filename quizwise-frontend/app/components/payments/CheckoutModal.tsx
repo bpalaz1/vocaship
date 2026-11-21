@@ -19,38 +19,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import { API_BASE } from "../../config";
-
-let paddleSingletonPromise: Promise<Paddle | undefined> | null = null;
-let autoOpenedPtxn: string | null = null;
-
-function getOrInitPaddle(): Promise<Paddle | undefined> {
-  if (typeof window === "undefined") return Promise.resolve(undefined);
-  if (!paddleSingletonPromise) {
-    const environment: "production" | "sandbox" =
-      process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "production"
-        ? "production"
-        : "sandbox";
-    const token =
-      process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "test_placeholder";
-
-    paddleSingletonPromise = initializePaddle({
-      environment,
-      token,
-      eventCallback: (event) => {
-        if (event?.name === "checkout.completed") {
-          window.dispatchEvent(
-            new CustomEvent("vocaship_paddle_checkout_completed")
-          );
-        }
-      },
-    }).catch((err) => {
-      console.warn("[Paddle] initializePaddle hatası:", err);
-      paddleSingletonPromise = null;
-      return undefined;
-    });
-  }
-  return paddleSingletonPromise;
-}
+import { getOrInitPaddle, getPaddleEnvironment } from "./PaddleCheckoutListener";
 
 function extractTransactionId(data: any): string | null {
   const directId =
@@ -117,7 +86,7 @@ export default function CheckoutModal({
 }: CheckoutModalProps) {
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { userProfile, refreshProfile } = useProfile();
+  const { userProfile } = useProfile();
   const paddleRef = useRef<Paddle | undefined>(undefined);
   const [proBillingCycle, setProBillingCycle] = useState<"monthly" | "yearly">(
     "yearly"
@@ -132,44 +101,18 @@ export default function CheckoutModal({
 
   const effectiveProcessing = isProcessing || internalProcessing;
 
-  // Paddle.js başlatma & URL'de ?_ptxn= varsa otomatik Overlay Checkout açma
+  // Paddle.js ön-başlatma
   useEffect(() => {
     let active = true;
-
     getOrInitPaddle().then((paddleInstance) => {
-      if (!active || !paddleInstance) return;
-      paddleRef.current = paddleInstance;
-
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const ptxn = params.get("_ptxn")?.trim();
-        if (ptxn && autoOpenedPtxn !== ptxn) {
-          autoOpenedPtxn = ptxn;
-          try {
-            paddleInstance.Checkout.open({ transactionId: ptxn });
-          } catch (err) {
-            console.warn("[Paddle] _ptxn otomatik checkout açma hatası:", err);
-          }
-        }
+      if (active && paddleInstance) {
+        paddleRef.current = paddleInstance;
       }
     });
-
-    const handlePaddleCompleted = () => {
-      refreshProfile?.();
-    };
-    window.addEventListener(
-      "vocaship_paddle_checkout_completed",
-      handlePaddleCompleted
-    );
-
     return () => {
       active = false;
-      window.removeEventListener(
-        "vocaship_paddle_checkout_completed",
-        handlePaddleCompleted
-      );
     };
-  }, [refreshProfile]);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -239,33 +182,33 @@ export default function CheckoutModal({
       }
 
       const transactionId = extractTransactionId(data);
-      const checkoutUrl = data?.checkout_url || data?.checkout?.url;
 
-      if (!transactionId && !checkoutUrl) {
+      if (!transactionId) {
         setPaddleError("Paddle işlem bilgisi (transaction_id) alınamadı.");
         return;
       }
 
-      const paddle = paddleRef.current || (await getOrInitPaddle());
-      if (paddle && transactionId) {
-        paddleRef.current = paddle;
-        if (onConfirmProCheckout) {
-          await onConfirmProCheckout(proBillingCycle);
-        }
-        onClose();
-        paddle.Checkout.open({ transactionId });
+      let paddle = paddleRef.current || (await getOrInitPaddle());
+      if (!paddle) {
+        paddle = await initializePaddle({
+          environment: getPaddleEnvironment(),
+          token: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "",
+        }).catch(() => undefined);
+      }
+
+      if (!paddle) {
+        setPaddleError(
+          "Paddle ödeme penceresi başlatılamadı. Lütfen NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ayarını kontrol edin."
+        );
         return;
       }
 
-      if (checkoutUrl) {
-        if (onConfirmProCheckout) {
-          await onConfirmProCheckout(proBillingCycle);
-        }
-        window.location.href = checkoutUrl;
-        return;
+      paddleRef.current = paddle;
+      if (onConfirmProCheckout) {
+        await onConfirmProCheckout(proBillingCycle);
       }
-
-      setPaddleError("Paddle ödeme penceresi başlatılamadı. Lütfen tekrar deneyin.");
+      onClose();
+      paddle.Checkout.open({ transactionId });
     } catch (err: any) {
       setPaddleError(
         err?.message || "Paddle ödeme sunucusuna bağlanılamadı."
