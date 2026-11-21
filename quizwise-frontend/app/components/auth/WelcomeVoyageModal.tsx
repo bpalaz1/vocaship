@@ -179,7 +179,7 @@ export default function WelcomeVoyageModal({
           <div className="hidden md:flex md:col-span-3 lg:col-span-4 flex-col justify-between gap-2.5 h-full py-4 pointer-events-none">
             <div className="flex flex-col gap-1 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/70 shadow-xl card-float-a">
               <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-extrabold text-indigo-300">
-                {t("welcome_card_sm2_badge", "🃏 Akıllı Tekrar Kartı")}
+                🃏 {t("welcome_mod_wordpool_title", "Kelime Havuzu")}
               </span>
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-sm sm:text-base font-black text-white tracking-tight">resilient</span>
@@ -326,18 +326,15 @@ export default function WelcomeVoyageModal({
         </div>
       </div>
 
-      {/* 2. ALT BÖLÜM: 5 MODÜL ŞERİDİ */}
+      {/* 2. ALT BÖLÜM: 5 MODÜL ŞERİDİ (Sade İkon + Başlık Hapları) */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full max-w-5xl shrink-0">
         {modules.map((mod) => (
           <div
             key={mod.id}
-            className={`${mod.spanClass} flex items-center gap-2 px-2.5 py-2 rounded-xl border ${mod.accent}`}
+            className={`${mod.spanClass} flex items-center justify-center gap-2.5 py-2.5 px-3 rounded-xl border ${mod.accent}`}
           >
-            <span className="text-base sm:text-lg leading-none shrink-0">{mod.emoji}</span>
-            <div className="min-w-0 leading-tight">
-              <div className="text-[11px] font-black truncate">{mod.title}</div>
-              <div className="text-[9.5px] opacity-80 truncate">{mod.subtitle}</div>
-            </div>
+            <span className="text-base leading-none shrink-0">{mod.emoji}</span>
+            <span className="text-xs font-black truncate">{mod.title}</span>
           </div>
         ))}
       </div>
