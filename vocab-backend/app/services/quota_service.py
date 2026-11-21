@@ -20,16 +20,10 @@ MAX_DAILY_SPEAKING_SESSIONS = 1
 MAX_FLASHCARD_POOL = 50
 
 PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
-    "basic": {
+    "free": {
         "max_daily_texts": 1,
         "max_daily_speaking": 1,
         "max_flashcards": 50,
-        "allow_classroom": False,
-    },
-    "plus": {
-        "max_daily_texts": 5,
-        "max_daily_speaking": 3,
-        "max_flashcards": 500,
         "allow_classroom": False,
     },
     "pro": {
@@ -47,7 +41,7 @@ class QuotaExceededException(HTTPException):
     def __init__(
         self,
         quota_type: Literal["text", "speaking", "flashcards"],
-        tier: str = "basic",
+        tier: str = "free",
         limit: int = 1,
     ):
         payload = {
@@ -208,7 +202,7 @@ def evaluate_user_trial_and_plan(user_row: Dict[str, Any]) -> Dict[str, Any]:
         if ends_dt and ends_dt <= now_utc:
             downgrade_updates = {
                 "is_pro": False,
-                "plan_tier": "basic",
+                "plan_tier": "free",
                 "subscription_status": "expired",
             }
             user_id = str(user_row.get("id") or "").strip()
@@ -233,7 +227,7 @@ def evaluate_user_trial_and_plan(user_row: Dict[str, Any]) -> Dict[str, Any]:
         return {
             **user_row,
             "is_pro": False,
-            "plan_tier": "basic",
+            "plan_tier": "free",
             "subscription_status": "expired",
             "trial_days_left": 0,
         }
@@ -255,6 +249,7 @@ def reset_daily_quota_if_needed(user_row: Dict[str, Any]) -> Dict[str, Any]:
     if not last_reset or last_reset < today_str:
         updates = {
             "daily_custom_texts_used": 0,
+            "daily_ai_stories_used": 0,
             "daily_speaking_sessions_used": 0,
             "last_quota_reset_date": today_str,
         }
@@ -276,16 +271,20 @@ def get_user_plan_tier(request: Request, user_row: Optional[Dict[str, Any]] = No
         if str(user_row.get("role")) == "admin":
             return "pro"
         if sub_status == "expired":
-            return "basic"
+            return "free"
         if sub_status in ("trial", "active") or bool(user_row.get("is_pro")):
             return "pro"
         u_tier = str(user_row.get("plan_tier") or "").lower().strip()
-        if u_tier in ("basic", "plus", "pro"):
-            return u_tier
+        if u_tier == "pro":
+            return "pro"
+        if u_tier in ("free", "basic", "plus"):
+            return "free"
 
     header_tier = (request.headers.get("X-Plan-Tier") or "").lower().strip()
-    if header_tier in ("basic", "plus", "pro"):
-        return header_tier
+    if header_tier == "pro":
+        return "pro"
+    if header_tier in ("free", "basic", "plus"):
+        return "free"
 
     header_pro = (request.headers.get("X-Is-Pro") or "").lower().strip()
     if header_pro in ("true", "1", "yes"):
@@ -296,10 +295,12 @@ def get_user_plan_tier(request: Request, user_row: Optional[Dict[str, Any]] = No
         if token_data.get("role") == "admin" or bool(token_data.get("is_pro")):
             return "pro"
         t_tier = str(token_data.get("plan_tier") or "").lower().strip()
-        if t_tier in ("basic", "plus", "pro"):
-            return t_tier
+        if t_tier == "pro":
+            return "pro"
+        if t_tier in ("free", "basic", "plus"):
+            return "free"
 
-    return "basic"
+    return "free"
 
 
 def is_user_pro_or_admin(request: Request, user_row: Optional[Dict[str, Any]] = None) -> bool:
@@ -312,10 +313,9 @@ def check_and_consume_quota(
     increment: bool = True,
 ) -> None:
     """
-    Kullanıcının günlük kotasını plan_tier ('basic', 'plus', 'pro') bazında kontrol eder:
-    - basic: 1 AI hikaye, 1 Speaking seansı, maks. 50 kart
-    - plus: 5 AI hikaye, 3 Speaking seansı, maks. 500 kart
-    - pro: Sınırsız (aktif abonelik veya süresi dolmamış 30 günlük deneme)
+    Kullanıcının günlük kotasını plan_tier ('free', 'pro') bazında kontrol eder:
+    - free: 1 AI hikaye/metin, 1 Speaking seansı, maks. 50 kart
+    - pro: Sınırsız (aktif abonelik, admin veya süresi dolmamış 30 günlük deneme)
     """
     user_row = get_user_record_from_request(request)
     if not user_row:
@@ -329,7 +329,7 @@ def check_and_consume_quota(
     if tier == "pro" or str(user_row.get("role")) == "admin":
         return
 
-    limits = PLAN_LIMITS.get(tier, PLAN_LIMITS["basic"])
+    limits = PLAN_LIMITS.get(tier, PLAN_LIMITS["free"])
     user_id = str(user_row.get("id") or "")
 
     if quota_type == "text":

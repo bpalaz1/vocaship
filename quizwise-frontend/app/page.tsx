@@ -2547,6 +2547,9 @@ export default function Home() {
         handleSaveCard={addWordCtrl.handleSaveCard}
         isSavingCard={addWordCtrl.isSavingCard}
         lastAutoWordRef={addWordCtrl.lastAutoWordRef}
+        isProUpgradeOpen={addWordCtrl.isProUpgradeOpen}
+        setIsProUpgradeOpen={addWordCtrl.setIsProUpgradeOpen}
+        proUpgradeReason={addWordCtrl.proUpgradeReason}
       />
 
       {/* 4. Zayıf Nokta Kurtarma Modalı */}

@@ -84,8 +84,8 @@ function ClassroomContent() {
     userProfile?.plan_tier === "pro" ||
     Boolean(user?.isPro) ||
     (Boolean(userProfile?.is_pro) &&
-      userProfile?.plan_tier !== "basic" &&
-      userProfile?.planTier !== "basic");
+      userProfile?.plan_tier !== "free" &&
+      userProfile?.planTier !== "free");
 
   const [showProModal, setShowProModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);

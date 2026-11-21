@@ -34,6 +34,7 @@ import {
 } from "../utils/activeDeckStore";
 import { saveSpeakingArchiveSession } from "../actions/speakingArchive";
 import { resilientFetch } from "../config";
+import CheckoutModal from "../components/payments/CheckoutModal";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -182,6 +183,29 @@ function SpeakingContent() {
   const { t, language } = useLanguage();
 
   const isAlex = selectedCharacter === "alex_adult";
+  const isPro = Boolean(
+    user &&
+      (user.isPro ||
+        user.planTier === "pro" ||
+        user.role === "admin" ||
+        userProfile?.is_pro ||
+        userProfile?.planTier === "pro" ||
+        userProfile?.plan_tier === "pro")
+  );
+  const [dailySpeakingUsed, setDailySpeakingUsed] = useState<number>(0);
+  const [isProCheckoutOpen, setIsProCheckoutOpen] = useState<boolean>(false);
+  const [proCheckoutReason, setProCheckoutReason] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const val = Number(localStorage.getItem(`vocaship_speaking_daily_${today}`) || "0");
+      setDailySpeakingUsed(Number.isFinite(val) ? val : 0);
+    } catch {
+      setDailySpeakingUsed(0);
+    }
+  }, [user]);
 
   // Evrensel Profil Senkronizasyonu (Seviyeden Bağımsız Görsel Kimlik)
   const [syncedProfile, setSyncedProfile] = useState<{
@@ -606,14 +630,26 @@ function SpeakingContent() {
     [aiMessage, openingGreeting]
   );
 
-  // Oturum Süresi Sayacı
+  // Oturum Süresi Sayacı (Ücretsiz üyeler için maks. 3 dakika = 180 sn)
   useEffect(() => {
     if (sessionState !== "active") return;
     const timer = setInterval(() => {
-      setSessionSeconds((prev) => prev + 1);
+      setSessionSeconds((prev) => {
+        const next = prev + 1;
+        if (user && !isPro && next >= 180) {
+          setProCheckoutReason(
+            "Ücretsiz planda Speaking Studio seansları maksimum 3 dakika ile sınırlıdır. PRO'ya geçerek sınırsız konuşma pratiği yapabilirsiniz."
+          );
+          setIsProCheckoutOpen(true);
+          setTimeout(() => {
+            void handleEndChat();
+          }, 0);
+        }
+        return next;
+      });
     }, 1000);
     return () => clearInterval(timer);
-  }, [sessionState]);
+  }, [sessionState, user, isPro]);
 
   const formatDuration = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);
@@ -1435,6 +1471,13 @@ function SpeakingContent() {
       openRegistrationGate("AI Speaking Studio ile canlı konuşma pratiği yapmak için ücretsiz hesabını oluştur.");
       return;
     }
+    if (user && !isPro && dailySpeakingUsed >= 1) {
+      setProCheckoutReason(
+        "Ücretsiz planda günlük 1 Speaking Studio seansı hakkınızı kullandınız. PRO'ya geçerek sınırsız pratik yapabilirsiniz."
+      );
+      setIsProCheckoutOpen(true);
+      return;
+    }
     setMicError(null);
     isAiSpeakingRef.current = false;
     isThinkingRef.current = false;
@@ -1446,6 +1489,17 @@ function SpeakingContent() {
     } catch {
       setMicError(t("speak_mic_denied", "Mikrofon erişimi engellendi, lütfen tarayıcı iznini açın."));
       return;
+    }
+
+    if (user && !isPro) {
+      const nextCount = dailySpeakingUsed + 1;
+      setDailySpeakingUsed(nextCount);
+      if (typeof window !== "undefined") {
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+          localStorage.setItem(`vocaship_speaking_daily_${today}`, String(nextCount));
+        } catch {}
+      }
     }
 
     setSessionState("active");
@@ -1857,6 +1911,23 @@ function SpeakingContent() {
           <History className={`w-3.5 h-3.5 ${isDark ? "text-indigo-400" : "text-indigo-700"}`} />
           <span>{t("speak_history", "📜 Geçmiş")}</span>
         </button>
+
+        {user && (
+          <span
+            data-testid="speaking-quota-badge"
+            className={`px-3 py-1.5 rounded-full border text-[11px] font-bold backdrop-blur-md shadow-sm flex items-center gap-1 ${
+              isPro
+                ? "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                : isDark
+                ? "bg-slate-900/85 border-slate-700/70 text-slate-300"
+                : "bg-white/90 border-slate-200/80 text-slate-800"
+            }`}
+          >
+            {isPro
+              ? "👑 PRO • Sınırsız"
+              : `🆓 ${Math.max(0, 1 - dailySpeakingUsed)}/1 Seans • Maks. 3 dk`}
+          </span>
+        )}
 
         {activeStoryTitle && (
           <div
@@ -2402,6 +2473,13 @@ function SpeakingContent() {
           </div>
         </div>
       )}
+
+      <CheckoutModal
+        isOpen={isProCheckoutOpen}
+        onClose={() => setIsProCheckoutOpen(false)}
+        mode="pro_plan"
+        reasonMessage={proCheckoutReason}
+      />
     </div>
   );
 }

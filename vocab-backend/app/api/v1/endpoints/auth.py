@@ -72,7 +72,7 @@ def create_access_token(
     role: str,
     is_pro: bool = False,
     email: Optional[str] = None,
-    plan_tier: str = "basic",
+    plan_tier: str = "free",
 ) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS)
     payload = {
@@ -119,13 +119,12 @@ def get_current_user(request: Request) -> Dict[str, Any]:
             trial_ends_at = user_row.get("trial_ends_at")
             trial_days_left = user_row.get("trial_days_left")
             if str(sub_status or "").lower() == "expired":
-                p_tier = "basic"
+                p_tier = "free"
                 is_pro_flag = False
             else:
-                p_tier = str(user_row.get("plan_tier") or payload.get("plan_tier") or ("pro" if (payload.get("is_pro") or user_row.get("is_pro")) else "basic")).lower().strip()
-                if p_tier not in ("basic", "plus", "pro"):
-                    p_tier = "basic"
-                is_pro_flag = bool(user_row.get("is_pro") if "is_pro" in user_row else (payload.get("is_pro") or p_tier == "pro"))
+                raw_tier = str(user_row.get("plan_tier") or payload.get("plan_tier") or ("pro" if (payload.get("is_pro") or user_row.get("is_pro")) else "free")).lower().strip()
+                is_pro_flag = bool(user_row.get("is_pro") if "is_pro" in user_row else (payload.get("is_pro") or raw_tier == "pro")) or str(payload.get("role") or user_row.get("role") or "") == "admin"
+                p_tier = "pro" if is_pro_flag else "free"
             return {
                 "id": str(user_id),
                 "username": payload.get("username") or user_row.get("username") or "",
@@ -156,13 +155,12 @@ def get_current_user(request: Request) -> Dict[str, Any]:
                 trial_ends_at = user_row.get("trial_ends_at")
                 trial_days_left = user_row.get("trial_days_left")
                 if str(sub_status or "").lower() == "expired":
-                    p_tier = "basic"
+                    p_tier = "free"
                     is_pro_flag = False
                 else:
-                    p_tier = str(user_row.get("plan_tier") or meta.get("plan_tier") or ("pro" if (meta.get("is_pro") or user_row.get("is_pro")) else "basic")).lower().strip()
-                    if p_tier not in ("basic", "plus", "pro"):
-                        p_tier = "basic"
-                    is_pro_flag = bool(user_row.get("is_pro") if "is_pro" in user_row else (meta.get("is_pro") or p_tier == "pro"))
+                    raw_tier = str(user_row.get("plan_tier") or meta.get("plan_tier") or ("pro" if (meta.get("is_pro") or user_row.get("is_pro")) else "free")).lower().strip()
+                    is_pro_flag = bool(user_row.get("is_pro") if "is_pro" in user_row else (meta.get("is_pro") or raw_tier == "pro")) or str(meta.get("role") or user_row.get("role") or "") == "admin"
+                    p_tier = "pro" if is_pro_flag else "free"
                 return {
                     "id": user_id,
                     "username": meta.get("username") or user_row.get("username") or "",
@@ -264,7 +262,7 @@ def _find_user_by_username(username: str) -> Optional[Dict[str, Any]]:
 def register_user(payload: RegisterRequest) -> AuthResponse:
     """
     Sade kayıt akışı: Yalnızca Ad Soyad, Kullanıcı Adı, E-posta ve Şifre alır.
-    Tüm yeni kullanıcılar otomatik plan_tier='basic', is_pro=False, email_verified=False
+    Tüm yeni kullanıcılar otomatik plan_tier='free', is_pro=False, email_verified=False
     olarak oluşturulur ve 6 haneli e-posta doğrulama kodu üretilir.
     """
     clean_username = payload.username.strip()
@@ -287,7 +285,7 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
             detail="Şifre en az 3 karakter olmalıdır.",
         )
 
-    plan_tier = "basic"
+    plan_tier = "free"
     is_pro_val = False
     verification_code = _generate_verification_code()
     _PENDING_VERIFICATION_CODES[clean_email] = verification_code
@@ -406,6 +404,7 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         "email_verified": 0,
         "verification_code": verification_code,
         "daily_custom_texts_used": 0,
+        "daily_ai_stories_used": 0,
         "daily_speaking_sessions_used": 0,
         "last_quota_reset_date": today_str,
     }
@@ -547,11 +546,9 @@ def verify_email_code(payload: VerifyEmailRequest) -> AuthResponse:
     final_username = str(evaluated.get("username") or clean_email.split("@")[0])
     final_full_name = str(evaluated.get("full_name") or final_username)
     final_role = str(evaluated.get("role") or "user")
-    final_is_pro = bool(evaluated.get("is_pro", False))
+    final_is_pro = bool(evaluated.get("is_pro", False)) or final_role == "admin"
     final_is_educator = bool(evaluated.get("is_educator", False))
-    final_plan_tier = str(evaluated.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower().strip()
-    if final_plan_tier not in ("basic", "plus", "pro"):
-        final_plan_tier = "basic"
+    final_plan_tier = "pro" if final_is_pro else "free"
 
     token = create_access_token(
         user_id=user_id,
@@ -722,11 +719,7 @@ def login_user(payload: LoginRequest) -> AuthResponse:
     final_trial_days_left = user_row.get("trial_days_left")
     if final_trial_days_left is None and final_sub_status:
         final_trial_days_left = compute_trial_days_left(final_sub_status, final_trial_ends_at)
-    final_plan_tier = str(user_row.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower().strip()
-    if final_plan_tier not in ("basic", "plus", "pro"):
-        final_plan_tier = "basic"
-    if final_is_pro and final_plan_tier != "pro":
-        final_plan_tier = "pro"
+    final_plan_tier = "pro" if (final_is_pro or final_role == "admin") else "free"
 
     token = create_access_token(
         user_id=final_user_id,
@@ -1005,7 +998,7 @@ def update_user_profile(
     if final_trial_days_left is None and final_sub_status:
         final_trial_days_left = compute_trial_days_left(final_sub_status, final_trial_ends_at)
 
-    p_tier = str(update_data.get("plan_tier") or updated_user.get("plan_tier") or current_user.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower()
+    p_tier = "pro" if (final_is_pro or final_role == "admin") else "free"
 
     return UserResponse(
         id=user_id,
@@ -1038,8 +1031,8 @@ def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_user)) -
     final_trial_days_left = user_row.get("trial_days_left")
     if final_trial_days_left is None and final_sub_status:
         final_trial_days_left = compute_trial_days_left(final_sub_status, final_trial_ends_at)
-    final_is_pro = bool(user_row.get("is_pro", current_user.get("is_pro", False)))
-    p_tier = str(user_row.get("plan_tier") or current_user.get("plan_tier") or ("pro" if final_is_pro else "basic")).lower()
+    final_is_pro = bool(user_row.get("is_pro", current_user.get("is_pro", False))) or str(user_row.get("role") or current_user.get("role") or "") == "admin"
+    p_tier = "pro" if final_is_pro else "free"
     return UserResponse(
         id=user_id,
         full_name=str(user_row.get("full_name") or current_user.get("full_name") or ""),

@@ -18,8 +18,8 @@ export interface UserProfile {
   email: string;
   avatar_url: string;
   is_pro: boolean;
-  plan_tier?: "basic" | "plus" | "pro";
-  planTier?: "basic" | "plus" | "pro";
+  plan_tier?: "free" | "pro";
+  planTier?: "free" | "pro";
   subscription_status?: string | null;
   trial_ends_at?: string | null;
   trial_days_left?: number | null;
@@ -50,8 +50,8 @@ const DEFAULT_PROFILE: UserProfile = {
   email: "",
   avatar_url: "",
   is_pro: false,
-  plan_tier: "basic",
-  planTier: "basic",
+  plan_tier: "free",
+  planTier: "free",
   study_level: "B1",
   daily_goal: 20,
   tts_voice: "en-US-JennyNeural",
@@ -149,7 +149,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const tier = user.planTier || (user.isPro ? "pro" : "basic");
+    const tier: "free" | "pro" = user.isPro || user.planTier === "pro" ? "pro" : "free";
     setUserProfile((prev) => {
       const updated: UserProfile = {
         ...prev,
@@ -193,7 +193,10 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         if (data && data.username) {
-          const tier = (data.plan_tier as "basic" | "plus" | "pro") || (data.is_pro ? "pro" : "basic");
+          const tier: "free" | "pro" =
+            data.is_pro || String(data.plan_tier || "").toLowerCase() === "pro"
+              ? "pro"
+              : "free";
           let localStored: Partial<UserProfile> = {};
           try {
             const rawLocal = localStorage.getItem(STORAGE_KEY);

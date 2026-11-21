@@ -119,12 +119,16 @@ export default function Navbar() {
   ];
 
   const currentUsername = user ? (userProfile.username || user.username || "") : "";
-  const planTier: "basic" | "plus" | "pro" =
-    user?.planTier ||
-    userProfile.planTier ||
-    userProfile.plan_tier ||
-    (user?.isPro ? "pro" : "basic");
-  const isPro = Boolean(user) && planTier === "pro";
+  const isPro = Boolean(
+    user &&
+      (user.isPro ||
+        user.planTier === "pro" ||
+        user.role === "admin" ||
+        userProfile.is_pro ||
+        userProfile.planTier === "pro" ||
+        userProfile.plan_tier === "pro")
+  );
+  const planTier: "free" | "pro" = isPro ? "pro" : "free";
   const avatarUrl = user ? (userProfile.avatar_url || "🦊") : "";
 
   const rawSubscriptionStatus = (
@@ -158,7 +162,7 @@ export default function Navbar() {
   const isTrialExpired =
     rawSubscriptionStatus === "expired" ||
     (rawSubscriptionStatus === "trial" && computedTrialDaysLeft === 0);
-  const showUpgradeCta = isTrialExpired || rawSubscriptionStatus === "canceled";
+  const showUpgradeCta = Boolean(user) && !isPro && (!isTrialActive || isTrialExpired);
 
   // Akıllı tahta sayfasında genel site üst menüsünü (Navbar) gizle; yalnızca tahtanın kendi çubuğu görünsün
   if (pathname?.startsWith("/classroom/board")) {
@@ -242,15 +246,23 @@ export default function Navbar() {
               )}
 
               {user && showUpgradeCta && (
-                <button
-                  type="button"
-                  data-testid="navbar-upgrade-pro-btn"
-                  onClick={() => setIsProCheckoutOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-[11px] font-black shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 whitespace-nowrap"
-                >
-                  <Crown className="w-3.5 h-3.5" />
-                  <span>PRO&apos;ya Geç</span>
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    data-testid="navbar-free-badge"
+                    className="hidden md:inline-flex items-center px-2 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-[10px] font-extrabold text-slate-300 tracking-wide whitespace-nowrap select-none"
+                  >
+                    ÜCRETSİZ
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="navbar-upgrade-pro-btn"
+                    onClick={() => setIsProCheckoutOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-[11px] font-black shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 whitespace-nowrap"
+                  >
+                    <Crown className="w-3.5 h-3.5" />
+                    <span>PRO&apos;ya Geç</span>
+                  </button>
+                </div>
               )}
 
               {/* Dil Seçici (🇹🇷 TR, EN, DE, ES, FR, IT, RU) */}
@@ -308,9 +320,15 @@ export default function Navbar() {
                       )}
                     </div>
 
-                    {/* Yanında yalnızca kullanıcının kendi kullanıcı adı */}
-                    <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate">
-                      {currentUsername.replace(/^@+/, "")}
+                    {/* Yanında kullanıcı adı (PRO ise taç & PRO etiketi) */}
+                    <span className="text-xs font-bold text-slate-100 tracking-tight max-w-[140px] sm:max-w-[180px] truncate flex items-center gap-1">
+                      {isPro && <span className="text-amber-400">👑</span>}
+                      <span>@{currentUsername.replace(/^@+/, "")}</span>
+                      {isPro && (
+                        <span className="hidden sm:inline text-[10px] font-black text-amber-300">
+                          (PRO)
+                        </span>
+                      )}
                     </span>
 
                     <ChevronDown
@@ -348,13 +366,9 @@ export default function Navbar() {
                               <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[9px] leading-none shrink-0">
                                 👑 PRO
                               </span>
-                            ) : planTier === "plus" ? (
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold text-[9px] leading-none shrink-0">
-                                ⚡ PLUS
-                              </span>
                             ) : (
-                              <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-extrabold text-[9px] leading-none shrink-0">
-                                BASIC
+                              <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-extrabold text-[9px] leading-none shrink-0">
+                                ÜCRETSİZ
                               </span>
                             )}
                           </div>

@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Sparkles, RotateCw, Volume2, Check, Languages, Zap, Database } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
+import CheckoutModal from "./payments/CheckoutModal";
 import { API_BASE } from "../config";
 import {
   GUEST_MAX_WORDS,
@@ -50,6 +51,8 @@ export function useAddWordController({
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [isManualMode, setIsManualMode] = useState(false);
   const [enrichedData, setEnrichedData] = useState<EnrichedData | null>(null);
+  const [isProUpgradeOpen, setIsProUpgradeOpen] = useState(false);
+  const [proUpgradeReason, setProUpgradeReason] = useState<string | undefined>(undefined);
 
   const lastAutoWordRef = useRef("");
   const autoLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -531,6 +534,18 @@ export function useAddWordController({
         if (onSaved) {
           await onSaved(targetDeck);
         }
+      } else if (res.status === 403) {
+        try {
+          const errData = await res.json();
+          const errStr = JSON.stringify(errData || {});
+          if (errStr.includes("QUOTA_EXCEEDED")) {
+            setProUpgradeReason(
+              "Ücretsiz planda 50 kalıcı kelime kartı sınırına ulaştınız. PRO'ya geçerek sınırsız kelime ve deste oluşturabilirsiniz."
+            );
+            setIsProUpgradeOpen(true);
+            setIsOpen(false);
+          }
+        } catch {}
       }
     } finally {
       setIsSavingCard(false);
@@ -561,6 +576,9 @@ export function useAddWordController({
     handleSaveCard,
     isSavingCard,
     lastAutoWordRef,
+    isProUpgradeOpen,
+    setIsProUpgradeOpen,
+    proUpgradeReason,
   };
 }
 
@@ -614,6 +632,9 @@ export interface AddWordModalProps {
   isSavingCard?: boolean;
   lastAutoWordRef?: React.MutableRefObject<string>;
   activeDeckId?: string | null;
+  isProUpgradeOpen?: boolean;
+  setIsProUpgradeOpen?: (open: boolean) => void;
+  proUpgradeReason?: string;
 }
 
 export default function AddWordModal({
@@ -643,10 +664,22 @@ export default function AddWordModal({
   isSavingCard,
   lastAutoWordRef,
   activeDeckId,
+  isProUpgradeOpen = false,
+  setIsProUpgradeOpen,
+  proUpgradeReason,
 }: AddWordModalProps) {
   const { t } = useLanguage();
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return isProUpgradeOpen ? (
+      <CheckoutModal
+        isOpen={isProUpgradeOpen}
+        onClose={() => setIsProUpgradeOpen?.(false)}
+        mode="pro_plan"
+        reasonMessage={proUpgradeReason}
+      />
+    ) : null;
+  }
 
   const isSelectingActiveDeck = Boolean(
     activeDeckId && selectedDeckForWord === activeDeckId

@@ -44,7 +44,7 @@ class UserResponse(BaseModel):
     email: str
     role: Union[Literal["user", "admin"], str] = "user"
     is_pro: bool = False
-    plan_tier: str = "basic"
+    plan_tier: str = "free"
     email_verified: bool = True
     subscription_status: Optional[str] = None
     trial_ends_at: Optional[str] = None
@@ -68,7 +68,7 @@ class AuthResponse(BaseModel):
     role: Union[Literal["user", "admin"], str] = "user"
     is_pro: bool = False
     is_educator: bool = False
-    plan_tier: str = "basic"
+    plan_tier: str = "free"
     email_verified: bool = True
     requires_email_verification: bool = False
     verification_sent: bool = False

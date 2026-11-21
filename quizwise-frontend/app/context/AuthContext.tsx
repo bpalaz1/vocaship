@@ -3,7 +3,13 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { API_BASE } from "../config";
 
-export type PlanTier = "basic" | "plus" | "pro";
+export type PlanTier = "free" | "pro";
+
+function normalizePlanTier(raw?: unknown, isPro?: boolean, role?: unknown): PlanTier {
+  if (isPro || String(role || "").toLowerCase() === "admin") return "pro";
+  const s = String(raw || "").toLowerCase().trim();
+  return s === "pro" ? "pro" : "free";
+}
 
 export interface AuthUser {
   id: string;
@@ -158,10 +164,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (savedToken && savedUserRaw) {
         const parsedUser = JSON.parse(savedUserRaw) as AuthUser;
         if (parsedUser && parsedUser.id && parsedUser.username) {
-          const tier: PlanTier =
-            (parsedUser.planTier as PlanTier) ||
-            (parsedUser.isPro ? "pro" : "basic");
-          const normalizedUser: AuthUser = { ...parsedUser, planTier: tier };
+          const tier = normalizePlanTier(parsedUser.planTier, parsedUser.isPro, parsedUser.role);
+          const normalizedUser: AuthUser = { ...parsedUser, planTier: tier, isPro: tier === "pro" };
           setToken(savedToken);
           setUser(normalizedUser);
           setIsGuest(false);
@@ -249,9 +253,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fallbackUsername = "",
     fallbackEmail?: string
   ): AuthUser => {
-    const tier: PlanTier =
-      (data.plan_tier as PlanTier) ||
-      (Boolean(data.is_pro ?? data.isPro) ? "pro" : "basic");
+    const tier = normalizePlanTier(
+      data.plan_tier,
+      Boolean(data.is_pro ?? data.isPro),
+      data.role
+    );
     return {
       id: String(data.user_id || data.id || ""),
       username: String(data.username || fallbackUsername),

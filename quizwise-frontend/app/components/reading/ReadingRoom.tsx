@@ -32,7 +32,9 @@ import {
   Trash2,
   Layers,
   Filter,
+  Lock,
 } from "lucide-react";
+import CheckoutModal from "../payments/CheckoutModal";
 
 interface Deck {
   id: string;
@@ -223,6 +225,7 @@ interface StoryCardProps {
   isInProgress?: boolean;
   onDelete?: () => void;
   isUserStory?: boolean;
+  isLocked?: boolean;
 }
 
 function StoryCardItem({
@@ -232,6 +235,7 @@ function StoryCardItem({
   isInProgress,
   onDelete,
   isUserStory,
+  isLocked,
 }: StoryCardProps) {
   const { t } = useLanguage();
   const { isDark } = useAppTheme();
@@ -308,6 +312,17 @@ function StoryCardItem({
 
         {/* Görsel Üzeri Hafif Karartma */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-black/30 pointer-events-none" />
+
+        {isLocked && (
+          <div className="absolute inset-0 z-30 bg-slate-950/70 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1.5 p-3 text-center">
+            <div className="w-10 h-10 rounded-full bg-slate-900/95 border border-amber-400/50 flex items-center justify-center shadow-lg">
+              <Lock className="w-4 h-4 text-amber-300" />
+            </div>
+            <span className="text-[11px] font-black text-white tracking-wide">
+              Ücretsiz Kayıt Ol &amp; Aç
+            </span>
+          </div>
+        )}
 
         {/* Sol Üst: Seviye Rozeti */}
         <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-20">
@@ -447,11 +462,44 @@ export default function ReadingRoom({
   const { user, isGuest, openRegistrationGate } = useAuth();
   const { userProfile } = useProfile();
 
-  const planTier: "basic" | "plus" | "pro" =
-    user?.planTier ||
-    userProfile?.planTier ||
-    userProfile?.plan_tier ||
-    (user?.isPro ? "pro" : "basic");
+  const isPro = Boolean(
+    user &&
+      (user.isPro ||
+        user.planTier === "pro" ||
+        user.role === "admin" ||
+        userProfile?.is_pro ||
+        userProfile?.planTier === "pro" ||
+        userProfile?.plan_tier === "pro")
+  );
+  const planTier: "free" | "pro" = isPro ? "pro" : "free";
+
+  const [isProCheckoutOpen, setIsProCheckoutOpen] = useState(false);
+  const [proCheckoutReason, setProCheckoutReason] = useState<string | undefined>(undefined);
+  const [dailyAiUsed, setDailyAiUsed] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `vocaship_reading_daily_${today}`;
+    try {
+      const val = Number(localStorage.getItem(key) || "0");
+      setDailyAiUsed(Number.isFinite(val) ? val : 0);
+    } catch {
+      setDailyAiUsed(0);
+    }
+  }, [user]);
+
+  const consumeDailyAiQuota = () => {
+    if (isPro || (!user && isGuest)) return;
+    const next = dailyAiUsed + 1;
+    setDailyAiUsed(next);
+    if (typeof window !== "undefined") {
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        localStorage.setItem(`vocaship_reading_daily_${today}`, String(next));
+      } catch {}
+    }
+  };
 
   // 1. KÜTÜPHANE 3 ANA SEKME STATE'İ: 'explore' | 'in_progress' | 'completed'
   const [activeTab, setActiveTab] = useState<"explore" | "in_progress" | "completed">("explore");
@@ -682,6 +730,9 @@ export default function ReadingRoom({
     setPasteText("");
     setPasteTitle("");
     setIsPasteModalOpen(false);
+    if (!text) {
+      consumeDailyAiQuota();
+    }
     setStory(customStory);
   };
 
@@ -709,17 +760,17 @@ export default function ReadingRoom({
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 {allAvailableStories.length} {t("read_story_unit", "Hikaye")}
               </span>
-              {planTier === "pro" ? (
+              {!user && isGuest ? (
+                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
+                  🧭 Misafir • 3 Vitrin Hikayesi
+                </span>
+              ) : planTier === "pro" ? (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] flex items-center gap-1 shadow-sm">
                   👑 {t("read_plan_pro", "PRO • Sınırsız AI")}
                 </span>
-              ) : planTier === "plus" ? (
-                <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold text-[11px] flex items-center gap-1 shadow-sm">
-                  ⚡ {t("read_plan_plus", "Plus • Günlük 5/5 AI")}
-                </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
-                  🆓 {t("read_plan_basic", "Basic • Günlük 1/1 AI")}
+                  🆓 {t("read_plan_free", `ÜCRETSİZ • Günlük ${Math.max(0, 1 - dailyAiUsed)}/1 AI`)}
                 </span>
               )}
             </div>
@@ -813,6 +864,11 @@ export default function ReadingRoom({
                       openRegistrationGate("Yapay zekâ ile özel hikaye üretmek için ücretsiz hesabını oluştur.");
                       return;
                     }
+                    if (!isPro && dailyAiUsed >= 1) {
+                      setProCheckoutReason("Ücretsiz planda günlük 1 AI hikaye üretme hakkınızı kullandınız. PRO'ya geçerek sınırsız hikaye üretebilirsiniz.");
+                      setIsProCheckoutOpen(true);
+                      return;
+                    }
                     setIsGeneratorModalOpen(true);
                   }}
                   className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-amber-500 hover:from-indigo-500 hover:to-amber-400 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition active:scale-95 cursor-pointer shrink-0"
@@ -824,7 +880,18 @@ export default function ReadingRoom({
 
                 <button
                   type="button"
-                  onClick={() => setIsPasteModalOpen(true)}
+                  onClick={() => {
+                    if (!user && isGuest) {
+                      openRegistrationGate("Kendi metinlerinizi yapıştırıp analiz etmek için ücretsiz hesabını oluştur.");
+                      return;
+                    }
+                    if (!isPro && dailyAiUsed >= 1) {
+                      setProCheckoutReason("Ücretsiz planda günlük 1 metin analizi hakkınızı kullandınız. PRO'ya geçerek sınırsız analiz yapabilirsiniz.");
+                      setIsProCheckoutOpen(true);
+                      return;
+                    }
+                    setIsPasteModalOpen(true);
+                  }}
                   className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 hover:text-white font-bold text-xs transition active:scale-95 cursor-pointer shrink-0"
                 >
                   <span>📋</span>
@@ -1192,11 +1259,19 @@ export default function ReadingRoom({
                       {/* Hikaye Kartları */}
                       {filteredStories.map((storyItem, index) => {
                         const isCustom = !!storyItem.isUserStory;
+                        const isLocked = Boolean(!user && isGuest && index >= 3);
                         return (
                           <StoryCardItem
                             key={`${storyItem.id}-${storyItem.isUserStory ? 'custom' : 'default'}-${index}`}
                             story={storyItem}
-                            onSelect={handleSelectStory}
+                            isLocked={isLocked}
+                            onSelect={(selectedItem) => {
+                              if (isLocked) {
+                                openRegistrationGate("Tüm kütüphaneyi ücretsiz açmak için kayıt olun");
+                                return;
+                              }
+                              handleSelectStory(selectedItem);
+                            }}
                             isCompleted={completedStories.some((c) => c.storyKey === storyItem.id)}
                             isInProgress={inProgressStories.some((p) => p.storyKey === storyItem.id)}
                             isUserStory={isCustom}
@@ -1515,9 +1590,17 @@ export default function ReadingRoom({
         isOpen={isGeneratorModalOpen}
         onClose={() => setIsGeneratorModalOpen(false)}
         onStoryGenerated={(newStory) => {
+          consumeDailyAiQuota();
           setStory(newStory);
         }}
         decks={decks}
+      />
+
+      <CheckoutModal
+        isOpen={isProCheckoutOpen}
+        onClose={() => setIsProCheckoutOpen(false)}
+        mode="pro_plan"
+        reasonMessage={proCheckoutReason}
       />
 
       {/* PAYLAŞIM MODALI */}

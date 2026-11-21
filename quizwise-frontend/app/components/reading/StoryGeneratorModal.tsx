@@ -82,11 +82,15 @@ export default function StoryGeneratorModal({
   const { user } = useAuth();
   const { userProfile } = useProfile();
 
-  const planTier: "basic" | "plus" | "pro" =
-    user?.planTier ||
-    userProfile?.planTier ||
-    userProfile?.plan_tier ||
-    (user?.isPro ? "pro" : "basic");
+  const planTier: "free" | "pro" =
+    user?.isPro ||
+    user?.planTier === "pro" ||
+    user?.role === "admin" ||
+    userProfile?.is_pro ||
+    userProfile?.planTier === "pro" ||
+    userProfile?.plan_tier === "pro"
+      ? "pro"
+      : "free";
 
   // 1. Kelime Kaynağı Sekmesi
   const [sourceTab, setSourceTab] = useState<SourceTab>("decks");
@@ -500,13 +504,9 @@ export default function StoryGeneratorModal({
                   <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[11px] font-black tracking-wide flex items-center gap-1 shadow-sm">
                     👑 {t("read_plan_pro", "PRO • Sınırsız")}
                   </span>
-                ) : planTier === "plus" ? (
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[11px] font-bold tracking-wide flex items-center gap-1">
-                    ⚡ {t("read_plan_plus", "Plus • Günlük 5/5")}
-                  </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold tracking-wide flex items-center gap-1">
-                    🆓 {t("read_plan_basic", "Basic • Günlük 1/1")}
+                    🆓 {t("read_plan_free_short", "ÜCRETSİZ • Günlük 1/1")}
                   </span>
                 )}
               </div>
