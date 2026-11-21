@@ -371,9 +371,10 @@ export function awardGamificationReward(
 
   if (totalGold > 0) {
     try {
-      const curGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
+      const { readUserRewardNumber, writeUserRewardNumber } = require("./rewardsStorage");
+      const curGold = readUserRewardNumber("gold", 0);
       const newGold = curGold + totalGold;
-      localStorage.setItem("vocaship_gold", String(newGold));
+      writeUserRewardNumber("gold", newGold);
       window.dispatchEvent(
         new CustomEvent("vocaship_gold_updated", { detail: { gold: newGold, added: totalGold } })
       );

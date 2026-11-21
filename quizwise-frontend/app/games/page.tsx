@@ -250,7 +250,7 @@ export default function GamesPage() {
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isClassLeaderboardOpen, setIsClassLeaderboardOpen] = useState(false);
   const [isChestModalOpen, setIsChestModalOpen] = useState(false);
-  const [learnedWordsCount, setLearnedWordsCount] = useState(145);
+  const [learnedWordsCount, setLearnedWordsCount] = useState(0);
 
   // İntikam Arenası ve Grandmaster
   const [mistakesCount, setMistakesCount] = useState(0);
@@ -263,9 +263,9 @@ export default function GamesPage() {
     xp: number;
     streak: number;
   }>({
-    gold: 240,
-    xp: 450,
-    streak: 5,
+    gold: 0,
+    xp: 0,
+    streak: 0,
   });
 
   // Sessiz Altın Köprüsü Karşılama Bildirimi
@@ -294,33 +294,28 @@ export default function GamesPage() {
 
   // Kullanıcı Profil Bilgisini Yükle ve Sessiz Altınları Teslim Et
   const fetchUserProfile = async () => {
-    let currentGold = 240;
-    let currentXP = 450;
-    let currentStreak = 5;
+    const { readUserRewardNumber, writeUserRewardNumber } = await import("../utils/rewardsStorage");
+    let currentGold = 0;
+    let currentXP = 0;
+    let currentStreak = 0;
 
     try {
       const res = await fetch(`${API_BASE}/api/v1/gamification/profile`);
       if (res.ok) {
         const data = await res.json();
-        currentGold = data.total_gold ?? 240;
-        currentXP = data.total_xp ?? 450;
-        currentStreak = data.streak_days ?? 5;
+        currentGold = data.total_gold ?? 0;
+        currentXP = data.total_xp ?? 0;
+        currentStreak = data.streak_days ?? 0;
       } else if (typeof window !== "undefined") {
-        const savedGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
-        const savedXP = parseInt(localStorage.getItem("vocaship_xp") || "450", 10);
-        const savedStreak = parseInt(localStorage.getItem("vocaship_streak") || "5", 10);
-        currentGold = isNaN(savedGold) ? 240 : savedGold;
-        currentXP = isNaN(savedXP) ? 450 : savedXP;
-        currentStreak = isNaN(savedStreak) ? 5 : savedStreak;
+        currentGold = readUserRewardNumber("gold", 0);
+        currentXP = readUserRewardNumber("xp", 0);
+        currentStreak = readUserRewardNumber("streak", 0);
       }
     } catch {
       if (typeof window !== "undefined") {
-        const savedGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
-        const savedXP = parseInt(localStorage.getItem("vocaship_xp") || "450", 10);
-        const savedStreak = parseInt(localStorage.getItem("vocaship_streak") || "5", 10);
-        currentGold = isNaN(savedGold) ? 240 : savedGold;
-        currentXP = isNaN(savedXP) ? 450 : savedXP;
-        currentStreak = isNaN(savedStreak) ? 5 : savedStreak;
+        currentGold = readUserRewardNumber("gold", 0);
+        currentXP = readUserRewardNumber("xp", 0);
+        currentStreak = readUserRewardNumber("streak", 0);
       }
     }
 
@@ -330,7 +325,7 @@ export default function GamesPage() {
       setClaimedRewardBanner(claimed);
       currentGold += claimed.total;
       if (typeof window !== "undefined") {
-        localStorage.setItem("vocaship_gold", currentGold.toString());
+        writeUserRewardNumber("gold", currentGold);
       }
     }
 

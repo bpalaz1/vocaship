@@ -40,6 +40,11 @@ import {
   getUnifiedAchievementStats,
   UnifiedAchievementStats,
 } from "../../utils/rewardEngine";
+import {
+  readUserRewardJson,
+  writeUserRewardJson,
+  writeUserRewardNumber,
+} from "../../utils/rewardsStorage";
 import MuseumArtwork from "./MuseumArtwork";
 
 export interface ChestOpenModalProps {
@@ -90,7 +95,7 @@ export default function ChestOpenModal({
   isOpen,
   onClose,
   userGold,
-  userLearnedWords = 145,
+  userLearnedWords = 0,
   onGoldChange,
   onAvatarEquipped,
 }: ChestOpenModalProps) {
@@ -115,10 +120,7 @@ export default function ChestOpenModal({
     readingCompletedStories: 0,
     speakingCompletedSessions: 0,
   });
-  const [unlockedItemIds, setUnlockedItemIds] = useState<string[]>([
-    "fox_sparky",
-    "wooden_dict_pen",
-  ]);
+  const [unlockedItemIds, setUnlockedItemIds] = useState<string[]>([]);
   const [claimedTierIds, setClaimedTierIds] = useState<number[]>([]);
   const [selectedAvatarItemId, setSelectedAvatarItemId] = useState<string>("");
   const [noticeBanner, setNoticeBanner] = useState<string | null>(null);
@@ -149,29 +151,24 @@ export default function ChestOpenModal({
       });
 
       try {
-        const savedChest = localStorage.getItem("vocaship_unlocked_chest_items");
-        const savedMuseum = localStorage.getItem("vocaship_unlocked_museum_items");
-        const chestArr = savedChest ? JSON.parse(savedChest) : [];
-        const museumArr = savedMuseum ? JSON.parse(savedMuseum) : [];
+        const chestArr = readUserRewardJson<string[]>("chest_items", []);
+        const museumArr = readUserRewardJson<string[]>("museum_items", []);
         const combined = Array.from(
           new Set([
-            "fox_sparky",
-            "wooden_dict_pen",
             ...(Array.isArray(chestArr) ? chestArr : []),
             ...(Array.isArray(museumArr) ? museumArr : []),
           ])
         );
         setUnlockedItemIds(combined);
 
-        const savedClaimed = localStorage.getItem(CLAIMED_TIERS_STORAGE_KEY);
-        const claimedArr = savedClaimed ? JSON.parse(savedClaimed) : [];
+        const claimedArr = readUserRewardJson<number[]>("claimed_tiers", []);
         if (Array.isArray(claimedArr)) {
           setClaimedTierIds(
             claimedArr.map((v) => Number(v)).filter((n) => !Number.isNaN(n))
           );
         }
 
-        const savedAvatarId = localStorage.getItem("vocaship_selected_avatar_id") || "";
+        const savedAvatarId = readUserRewardJson<string>("selected_avatar_id", "");
         setSelectedAvatarItemId(savedAvatarId);
       } catch {}
     };
@@ -259,7 +256,7 @@ export default function ChestOpenModal({
     setGold(nextGold);
     if (onGoldChange) onGoldChange(nextGold);
     try {
-      localStorage.setItem("vocaship_gold", nextGold.toString());
+      writeUserRewardNumber("gold", nextGold);
       window.dispatchEvent(
         new CustomEvent("vocaship_gold_updated", {
           detail: { gold: nextGold, added: -currentChest.costGold },
@@ -274,10 +271,7 @@ export default function ChestOpenModal({
       const nextUnlocked = Array.from(new Set([...unlockedItemIds, drawnItem.id]));
       setUnlockedItemIds(nextUnlocked);
       try {
-        localStorage.setItem(
-          "vocaship_unlocked_chest_items",
-          JSON.stringify(nextUnlocked)
-        );
+        writeUserRewardJson("chest_items", nextUnlocked);
       } catch {}
 
       setRevealedItem(drawnItem);
@@ -728,7 +722,7 @@ export default function ChestOpenModal({
                   <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden border border-slate-300">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-emerald-500 transition-all duration-500"
-                      style={{ width: `${Math.max(4, collectionPercent)}%` }}
+                      style={{ width: `${collectionPercent}%` }}
                     />
                   </div>
 

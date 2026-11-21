@@ -34,8 +34,8 @@ const HONEYCOMB_TIERS: HexCellConfig[] = [
 
 export default function VocabHoneycombWidget({
   learnedWordsCount,
-  readingStoriesCount = 12,
-  speakingTurnsCount = 45,
+  readingStoriesCount = 0,
+  speakingTurnsCount = 0,
 }: VocabHoneycombWidgetProps) {
   const { currentLang, t } = useLanguage();
   // Renge Dönüşüm Kuralı:

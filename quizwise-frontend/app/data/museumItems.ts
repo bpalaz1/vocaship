@@ -1211,28 +1211,23 @@ export const MUSEUM_ITEMS: MuseumItem[] = [
   },
 ];
 
+import { readUserRewardJson, writeUserRewardJson } from "../utils/rewardsStorage";
+
 /**
- * Kullanıcının açtığı müze eserlerini yerel hafızadan okur.
+ * Kullanıcının açtığı müze eserlerini kullanıcıya özel yerel hafızadan okur.
  */
 export function getUnlockedMuseumItemIds(): string[] {
-  if (typeof window === "undefined") return ["hero_01"];
+  if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem("vocaship_unlocked_museum_items");
-    if (!raw) {
-      // Varsayılan olarak hero_01 (Tilki Sparky) açık
-      const initial = ["hero_01"];
-      localStorage.setItem("vocaship_unlocked_museum_items", JSON.stringify(initial));
-      return initial;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : ["hero_01"];
+    const parsed = readUserRewardJson<string[]>("museum_items", []);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return ["hero_01"];
+    return [];
   }
 }
 
 /**
- * Yeni bir eserin kilidini açar ve kaydeder.
+ * Yeni bir eserin kilidini açar ve kullanıcıya özel anahtara kaydeder.
  */
 export function unlockMuseumItem(itemId: string): string[] {
   if (typeof window === "undefined") return [itemId];
@@ -1240,7 +1235,7 @@ export function unlockMuseumItem(itemId: string): string[] {
     const current = getUnlockedMuseumItemIds();
     if (!current.includes(itemId)) {
       const updated = [...current, itemId];
-      localStorage.setItem("vocaship_unlocked_museum_items", JSON.stringify(updated));
+      writeUserRewardJson("museum_items", updated);
       window.dispatchEvent(
         new CustomEvent("vocaship_museum_unlocked", { detail: { itemId, unlocked: updated } })
       );

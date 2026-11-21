@@ -7,6 +7,7 @@
 import { API_BASE } from "../config";
 import { addPendingGold, claimPendingGold } from "./pendingGold";
 import { pickUiText, formatUiText } from "./uiLocale";
+import { readUserRewardJson, writeUserRewardJson } from "./rewardsStorage";
 
 export interface UnifiedAchievementStats {
   sm2LearnedWords: number;
@@ -16,7 +17,6 @@ export interface UnifiedAchievementStats {
   speakingCompletedSessions: number;
 }
 
-const STATS_STORAGE_KEY = "vocaship_unified_stats";
 const SM2_DAILY_CARDS_PREFIX = "vocaship_sm2_daily_cards_";
 const COMPLETED_STORIES_KEY = "vocaship_rewarded_stories";
 
@@ -29,7 +29,7 @@ function getTodayDateStr(): string {
 
 export function getUnifiedAchievementStats(): UnifiedAchievementStats {
   const defaults: UnifiedAchievementStats = {
-    sm2LearnedWords: 145,
+    sm2LearnedWords: 0,
     arenaVictories: 0,
     arenaBestStreak: 0,
     readingCompletedStories: 0,
@@ -38,22 +38,10 @@ export function getUnifiedAchievementStats(): UnifiedAchievementStats {
   if (typeof window === "undefined") return defaults;
 
   try {
-    const raw = localStorage.getItem(STATS_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    const learnedFallback = parseInt(
-      localStorage.getItem("vocaship_learned_words_count") ||
-        localStorage.getItem("vocaship_learned_words") ||
-        "145",
-      10
-    );
-
+    const parsed = readUserRewardJson<Partial<UnifiedAchievementStats>>("stats", {});
     return {
       sm2LearnedWords:
-        typeof parsed.sm2LearnedWords === "number"
-          ? parsed.sm2LearnedWords
-          : isNaN(learnedFallback)
-          ? 145
-          : learnedFallback,
+        typeof parsed.sm2LearnedWords === "number" ? parsed.sm2LearnedWords : 0,
       arenaVictories: Number(parsed.arenaVictories) || 0,
       arenaBestStreak: Number(parsed.arenaBestStreak) || 0,
       readingCompletedStories: Number(parsed.readingCompletedStories) || 0,
@@ -69,9 +57,7 @@ function saveUnifiedStats(updater: (prev: UnifiedAchievementStats) => UnifiedAch
   const next = updater(prev);
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(next));
-      localStorage.setItem("vocaship_learned_words_count", String(next.sm2LearnedWords));
-      localStorage.setItem("vocaship_learned_words", String(next.sm2LearnedWords));
+      writeUserRewardJson("stats", next);
       window.dispatchEvent(
         new CustomEvent("vocaship_unified_stats_updated", { detail: next })
       );

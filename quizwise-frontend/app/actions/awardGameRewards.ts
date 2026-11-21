@@ -1,5 +1,6 @@
 import { API_BASE } from "../config";
 import { pickUiText, formatUiText } from "../utils/uiLocale";
+import { readUserRewardNumber, writeUserRewardNumber } from "../utils/rewardsStorage";
 
 export interface AwardGameRewardsParams {
   sessionId: string;
@@ -105,12 +106,12 @@ export async function awardGameRewards({
           );
 
           // Altın Bakiyesi Artışı
-          const curGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
-          localStorage.setItem("vocaship_gold", String(curGold + result.awardedGold));
+          const curGold = readUserRewardNumber("gold", 0);
+          writeUserRewardNumber("gold", curGold + result.awardedGold);
 
           // XP Bakiyesi Artışı
-          const curXP = parseInt(localStorage.getItem("vocaship_xp") || "450", 10);
-          localStorage.setItem("vocaship_xp", String(curXP + result.awardedXP));
+          const curXP = readUserRewardNumber("xp", 0);
+          writeUserRewardNumber("xp", curXP + result.awardedXP);
 
           // Sandık Anahtarı Envanteri
           if (result.awardedKey) {
@@ -164,8 +165,8 @@ export async function awardGameRewards({
       })
     );
 
-    const curGold = parseInt(localStorage.getItem("vocaship_gold") || "240", 10);
-    localStorage.setItem("vocaship_gold", String(curGold + rule.coins));
+    const curGold = readUserRewardNumber("gold", 0);
+    writeUserRewardNumber("gold", curGold + rule.coins);
   }
 
   return offlineResult;
