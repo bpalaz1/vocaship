@@ -208,8 +208,11 @@ export default function WelcomeVoyageModal({
 
           {/* MERKEZ SÜTUN: Taç Rozet + VocaShip Logosu & Sloganı */}
           <div className="md:col-span-4 flex flex-col items-center justify-center text-center px-2">
-            <span className="px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 mb-3.5 shadow-sm">
-              {t("welcome_badge", "✨ Yeni Nesil Akıllı Dil Platformu")}
+            <span className="-mt-4 sm:-mt-6 mb-7 sm:mb-9 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm sm:text-base font-bold tracking-wide bg-emerald-950/70 border border-emerald-400/40 text-emerald-300 shadow-lg shadow-emerald-500/10">
+              <span className="text-base sm:text-lg leading-none">✨</span>
+              <span>
+                {t("welcome_badge", "✨ Yeni Nesil Akıllı Dil Platformu").replace(/^✨\s*/, "")}
+              </span>
             </span>
 
             <div className="sail-float mb-3 p-3.5 rounded-3xl bg-slate-900/65 border border-emerald-400/30 shadow-[0_14px_40px_rgba(16,185,129,0.28)]">
