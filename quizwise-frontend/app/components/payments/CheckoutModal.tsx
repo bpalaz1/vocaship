@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { initializePaddle, type Paddle } from "@paddle/paddle-js";
 import {
   X,
   Ticket,
@@ -18,6 +19,64 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import { API_BASE } from "../../config";
+
+let paddleSingletonPromise: Promise<Paddle | undefined> | null = null;
+let autoOpenedPtxn: string | null = null;
+
+function getOrInitPaddle(): Promise<Paddle | undefined> {
+  if (typeof window === "undefined") return Promise.resolve(undefined);
+  if (!paddleSingletonPromise) {
+    const environment: "production" | "sandbox" =
+      process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "production"
+        ? "production"
+        : "sandbox";
+    const token =
+      process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "test_placeholder";
+
+    paddleSingletonPromise = initializePaddle({
+      environment,
+      token,
+      eventCallback: (event) => {
+        if (event?.name === "checkout.completed") {
+          window.dispatchEvent(
+            new CustomEvent("vocaship_paddle_checkout_completed")
+          );
+        }
+      },
+    }).catch((err) => {
+      console.warn("[Paddle] initializePaddle hatası:", err);
+      paddleSingletonPromise = null;
+      return undefined;
+    });
+  }
+  return paddleSingletonPromise;
+}
+
+function extractTransactionId(data: any): string | null {
+  const directId =
+    typeof data?.transaction_id === "string" && data.transaction_id.trim()
+      ? data.transaction_id.trim()
+      : typeof data?.data?.id === "string" && data.data.id.trim()
+      ? data.data.id.trim()
+      : null;
+  if (directId) return directId;
+
+  const checkoutUrl = data?.checkout_url || data?.checkout?.url;
+  if (typeof checkoutUrl === "string" && checkoutUrl.trim()) {
+    try {
+      const parsed = new URL(
+        checkoutUrl,
+        typeof window !== "undefined" ? window.location.origin : "https://vocaship.com"
+      );
+      const ptxn = parsed.searchParams.get("_ptxn");
+      if (ptxn && ptxn.trim()) return ptxn.trim();
+    } catch {
+      const match = checkoutUrl.match(/[?&]_ptxn=([^&#]+)/);
+      if (match?.[1]) return decodeURIComponent(match[1]);
+    }
+  }
+  return null;
+}
 
 export interface ClassTicketCheckoutInfo {
   className: string;
@@ -58,7 +117,8 @@ export default function CheckoutModal({
 }: CheckoutModalProps) {
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { userProfile } = useProfile();
+  const { userProfile, refreshProfile } = useProfile();
+  const paddleRef = useRef<Paddle | undefined>(undefined);
   const [proBillingCycle, setProBillingCycle] = useState<"monthly" | "yearly">(
     "yearly"
   );
@@ -71,6 +131,45 @@ export default function CheckoutModal({
   const [internalProcessing, setInternalProcessing] = useState(false);
 
   const effectiveProcessing = isProcessing || internalProcessing;
+
+  // Paddle.js başlatma & URL'de ?_ptxn= varsa otomatik Overlay Checkout açma
+  useEffect(() => {
+    let active = true;
+
+    getOrInitPaddle().then((paddleInstance) => {
+      if (!active || !paddleInstance) return;
+      paddleRef.current = paddleInstance;
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const ptxn = params.get("_ptxn")?.trim();
+        if (ptxn && autoOpenedPtxn !== ptxn) {
+          autoOpenedPtxn = ptxn;
+          try {
+            paddleInstance.Checkout.open({ transactionId: ptxn });
+          } catch (err) {
+            console.warn("[Paddle] _ptxn otomatik checkout açma hatası:", err);
+          }
+        }
+      }
+    });
+
+    const handlePaddleCompleted = () => {
+      refreshProfile?.();
+    };
+    window.addEventListener(
+      "vocaship_paddle_checkout_completed",
+      handlePaddleCompleted
+    );
+
+    return () => {
+      active = false;
+      window.removeEventListener(
+        "vocaship_paddle_checkout_completed",
+        handlePaddleCompleted
+      );
+    };
+  }, [refreshProfile]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -139,17 +238,34 @@ export default function CheckoutModal({
         return;
       }
 
+      const transactionId = extractTransactionId(data);
       const checkoutUrl = data?.checkout_url || data?.checkout?.url;
-      if (!checkoutUrl) {
-        setPaddleError("Paddle ödeme bağlantısı alınamadı.");
+
+      if (!transactionId && !checkoutUrl) {
+        setPaddleError("Paddle işlem bilgisi (transaction_id) alınamadı.");
         return;
       }
 
-      if (onConfirmProCheckout) {
-        await onConfirmProCheckout(proBillingCycle);
+      const paddle = paddleRef.current || (await getOrInitPaddle());
+      if (paddle && transactionId) {
+        paddleRef.current = paddle;
+        if (onConfirmProCheckout) {
+          await onConfirmProCheckout(proBillingCycle);
+        }
+        onClose();
+        paddle.Checkout.open({ transactionId });
+        return;
       }
 
-      window.location.href = checkoutUrl;
+      if (checkoutUrl) {
+        if (onConfirmProCheckout) {
+          await onConfirmProCheckout(proBillingCycle);
+        }
+        window.location.href = checkoutUrl;
+        return;
+      }
+
+      setPaddleError("Paddle ödeme penceresi başlatılamadı. Lütfen tekrar deneyin.");
     } catch (err: any) {
       setPaddleError(
         err?.message || "Paddle ödeme sunucusuna bağlanılamadı."
