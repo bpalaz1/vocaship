@@ -208,7 +208,7 @@ export default function Navbar() {
 
             {/* SAĞ: DENEME ROZETİ, DİL SEÇİCİ & SADE KULLANICI KAPSÜLÜ */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0 overflow-visible">
-              {/* 30 Günlük PRO Deneme Sayacı veya PRO'ya Geç Butonu */}
+              {/* 30 Günlük PRO Deneme Sayacı, Aktif 👑 PRO Rozeti veya PRO'ya Geç Butonu */}
               {isTrialActive && (
                 <button
                   type="button"
@@ -218,6 +218,15 @@ export default function Navbar() {
                 >
                   <span>🎁 {computedTrialDaysLeft ?? 30} Gün PRO Deneme</span>
                 </button>
+              )}
+
+              {!isTrialActive && !showUpgradeCta && (rawSubscriptionStatus === "active" || isPro) && (
+                <span
+                  data-testid="navbar-pro-badge"
+                  className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/15 border border-amber-400/50 text-[11px] font-black text-amber-300 shadow-sm whitespace-nowrap select-none"
+                >
+                  <span>👑 PRO</span>
+                </span>
               )}
 
               {showUpgradeCta && (

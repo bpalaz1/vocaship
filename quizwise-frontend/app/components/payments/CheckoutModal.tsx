@@ -19,7 +19,11 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import { API_BASE } from "../../config";
-import { getOrInitPaddle, getPaddleEnvironment } from "./PaddleCheckoutListener";
+import {
+  getOrInitPaddle,
+  getPaddleEnvironment,
+  createPaddleEventCallback,
+} from "./PaddleCheckoutListener";
 
 function extractTransactionId(data: any): string | null {
   const directId =
@@ -101,7 +105,7 @@ export default function CheckoutModal({
 
   const effectiveProcessing = isProcessing || internalProcessing;
 
-  // Paddle.js ön-başlatma
+  // Paddle.js ön-başlatma & ödeme tamamlandığında modalı kapatma
   useEffect(() => {
     let active = true;
     getOrInitPaddle().then((paddleInstance) => {
@@ -109,10 +113,21 @@ export default function CheckoutModal({
         paddleRef.current = paddleInstance;
       }
     });
+    const handleCompletedClose = () => {
+      onClose();
+    };
+    window.addEventListener(
+      "vocaship_paddle_checkout_completed",
+      handleCompletedClose
+    );
     return () => {
       active = false;
+      window.removeEventListener(
+        "vocaship_paddle_checkout_completed",
+        handleCompletedClose
+      );
     };
-  }, []);
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -193,6 +208,7 @@ export default function CheckoutModal({
         paddle = await initializePaddle({
           environment: getPaddleEnvironment(),
           token: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "",
+          eventCallback: createPaddleEventCallback(),
         }).catch(() => undefined);
       }
 

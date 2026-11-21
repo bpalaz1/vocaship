@@ -398,6 +398,11 @@ class PaddleCheckoutRequest(BaseModel):
     plan_period: Literal["monthly", "yearly"] = "monthly"
 
 
+class PaddleConfirmClientRequest(BaseModel):
+    user_id: str
+    transaction_id: str
+
+
 def _get_paddle_api_base() -> tuple[str, str]:
     env = (os.getenv("PADDLE_ENVIRONMENT") or "sandbox").strip().lower()
     if env == "production":
@@ -558,6 +563,113 @@ def create_paddle_checkout_endpoint(payload: PaddleCheckoutRequest):
         "plan_period": payload.plan_period,
         "checkout_url": checkout_url,
         "checkout": {"url": checkout_url},
+    }
+
+
+@router.post("/paddle/confirm-client", status_code=status.HTTP_200_OK)
+def confirm_paddle_client_endpoint(
+    payload: PaddleConfirmClientRequest,
+    db: Client = Depends(get_db),
+):
+    """
+    Paddle.js Overlay Checkout 'checkout.completed' sonrasında client tarafından çağrılır.
+    Paddle API üzerinden transaction_id durumunu (completed / paid) sunucu tarafında doğrular
+    ve hem Supabase hem SQLite (local_db) users tablosunda kullanıcıyı anında PRO yapar.
+    """
+    user_id = payload.user_id.strip()
+    transaction_id = payload.transaction_id.strip()
+    if not user_id or not transaction_id:
+        raise HTTPException(
+            status_code=400,
+            detail="user_id ve transaction_id alanları zorunludur.",
+        )
+
+    api_key = (os.getenv("PADDLE_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Paddle ödeme altyapısı henüz yapılandırılmadı (PADDLE_API_KEY eksik).",
+        )
+
+    env, base_url = _get_paddle_api_base()
+    url = f"{base_url}/transactions/{transaction_id}"
+    req = urllib.request.Request(
+        url,
+        method="GET",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            resp_data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as http_err:
+        err_text = http_err.read().decode("utf-8", errors="ignore")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Paddle işlem doğrulama hatası ({http_err.code}): {err_text or http_err.reason}",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Paddle API bağlantı hatası: {exc}",
+        )
+
+    tx_data = resp_data.get("data") or {}
+    tx_status = str(tx_data.get("status") or "").lower().strip()
+    payments_list = tx_data.get("payments") or []
+    has_captured_payment = any(
+        str(p.get("status") or "").lower().strip() in ("captured", "authorized")
+        for p in payments_list
+        if isinstance(p, dict)
+    )
+
+    if tx_status not in ("completed", "paid") and not (tx_status == "billed" and has_captured_payment):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"İşlem henüz tamamlanmamış (status={tx_status or 'unknown'}).",
+        )
+
+    custom_data = tx_data.get("custom_data") or {}
+    tx_custom_user_id = str(custom_data.get("user_id") or "").strip()
+    if tx_custom_user_id and tx_custom_user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu işlem başka bir kullanıcı hesabına aittir.",
+        )
+
+    target_user_id = tx_custom_user_id or user_id
+    customer_id = tx_data.get("customer_id")
+    subscription_id = tx_data.get("subscription_id") or transaction_id
+
+    updates: Dict[str, Any] = {
+        "is_pro": True,
+        "is_educator": True,
+        "plan_tier": "pro",
+        "subscription_status": "active",
+        "lemon_customer_id": customer_id,
+        "lemon_subscription_id": subscription_id,
+    }
+    _update_user_subscription(
+        db=db,
+        updates=updates,
+        user_id=target_user_id,
+        subscription_id=subscription_id,
+    )
+
+    return {
+        "success": True,
+        "environment": env,
+        "user_id": target_user_id,
+        "transaction_id": transaction_id,
+        "transaction_status": tx_status,
+        "plan_tier": "pro",
+        "is_pro": True,
+        "subscription_status": "active",
+        "customer_id": customer_id,
+        "subscription_id": subscription_id,
     }
 
 

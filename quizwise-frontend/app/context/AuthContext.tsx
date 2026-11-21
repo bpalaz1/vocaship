@@ -77,6 +77,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+
+    const handleProActivated = () => {
+      setUser((prev) => {
+        if (!prev) return prev;
+        const upgraded: AuthUser = {
+          ...prev,
+          isPro: true,
+          isEducator: true,
+          planTier: "pro",
+          subscriptionStatus: "active",
+          trialDaysLeft: null,
+        };
+        try {
+          localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(upgraded));
+          localStorage.setItem("vocaship_plan_tier", "pro");
+        } catch {}
+        return upgraded;
+      });
+    };
+
+    window.addEventListener("vocaship_pro_activated", handleProActivated);
+    return () => {
+      window.removeEventListener("vocaship_pro_activated", handleProActivated);
+    };
   }, []);
 
   const persistSession = (authUser: AuthUser, authToken: string) => {
