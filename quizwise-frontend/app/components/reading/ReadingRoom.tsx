@@ -842,11 +842,7 @@ export default function ReadingRoom({
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] flex items-center gap-1 shadow-sm">
                   👑 {t("read_plan_pro", "PRO • Sınırsız AI")}
                 </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
-                  🆓 {t("read_plan_free", `ÜCRETSİZ • Günlük ${Math.max(0, 1 - dailyAiUsed)}/1 AI`)}
-                </span>
-              )}
+              ) : null}
             </div>
 
             {/* Orta/Sağ: Arama + Seviye Filtre Hapları + Eylem Butonları */}

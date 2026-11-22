@@ -519,13 +519,9 @@ export default function StoryGeneratorModal({
                 <h3 className="text-lg sm:text-xl font-black text-white">
                   {t("read_gen_title", "Yapay Zekâ ile Özgün Hikaye Üret")}
                 </h3>
-                {planTier === "pro" ? (
+                {planTier === "pro" && (
                   <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[11px] font-black tracking-wide flex items-center gap-1 shadow-sm">
                     👑 {t("read_plan_pro", "PRO • Sınırsız")}
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold tracking-wide flex items-center gap-1">
-                    🆓 {t("read_plan_free_short", "ÜCRETSİZ • Günlük 1/1")}
                   </span>
                 )}
               </div>
