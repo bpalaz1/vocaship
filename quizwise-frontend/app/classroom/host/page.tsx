@@ -43,25 +43,6 @@ interface ConnectedStudent {
   status: "ready" | "in_game";
 }
 
-const INITIAL_STUDENTS: ConnectedStudent[] = [
-  { id: "s1", name: "Ahmet Kaya", avatar: "🦊", status: "ready" },
-  { id: "s2", name: "Selin Yılmaz", avatar: "🦁", status: "ready" },
-  { id: "s3", name: "Kaan Arslan", avatar: "🦉", status: "ready" },
-  { id: "s4", name: "Elif Demir", avatar: "🐼", status: "ready" },
-  { id: "s5", name: "Mert Öztürk", avatar: "🐱", status: "ready" },
-  { id: "s6", name: "Zeynep Kaya", avatar: "🐻", status: "ready" },
-  { id: "s7", name: "Caner Aydın", avatar: "🐯", status: "ready" },
-  { id: "s8", name: "Deniz Kurt", avatar: "🦅", status: "ready" },
-  { id: "s9", name: "Ayşe Çelik", avatar: "🦄", status: "ready" },
-  { id: "s10", name: "Oğuzhan T.", avatar: "🦫", status: "ready" },
-  { id: "s11", name: "İrem Yıldız", avatar: "🐸", status: "ready" },
-  { id: "s12", name: "Tolga Erdem", avatar: "🥷", status: "ready" },
-  { id: "s13", name: "Burak Vural", avatar: "🤖", status: "ready" },
-  { id: "s14", name: "Melis Aktaş", avatar: "👩‍🚀", status: "ready" },
-  { id: "s15", name: "Ceren Güneş", avatar: "⚡", status: "ready" },
-  { id: "s16", name: "Barış Çetin", avatar: "🧙‍♂️", status: "ready" },
-];
-
 function HostConsoleContent() {
   const { t } = useLanguage();
   const router = useRouter();
@@ -82,8 +63,8 @@ function HostConsoleContent() {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [copiedPin, setCopiedPin] = useState<boolean>(false);
 
-  // Öğrenciler
-  const [students, setStudents] = useState<ConnectedStudent[]>(INITIAL_STUDENTS);
+  // Gerçek katılımcı listesi (0 oyuncu ile başlar)
+  const [students, setStudents] = useState<ConnectedStudent[]>([]);
   const [showPodium, setShowPodium] = useState<boolean>(false);
   const [showWeakWords, setShowWeakWords] = useState<boolean>(false);
 
@@ -92,33 +73,6 @@ function HostConsoleContent() {
       setOrigin(window.location.origin);
     }
   }, []);
-
-  // Yeni Öğrenci Bağlanma Simülasyonu
-  useEffect(() => {
-    if (gameStatus !== "lobby") return;
-
-    const interval = setInterval(() => {
-      setStudents((prev) => {
-        if (prev.length >= 24) return prev;
-        const newStudentNames = ["Hakan Özkan", "Ezgi Bulut", "Serkan Polat", "Volkan Sezer", "Ece Acar", "Pınar Yaman"];
-        const avatars = ["🐢", "🐐", "🐪", "🦾", "🛸", "✨"];
-        const nextIdx = prev.length - INITIAL_STUDENTS.length;
-        if (nextIdx >= newStudentNames.length) return prev;
-
-        return [
-          ...prev,
-          {
-            id: `s-${Date.now()}`,
-            name: newStudentNames[nextIdx],
-            avatar: avatars[nextIdx % avatars.length],
-            status: "ready",
-          },
-        ];
-      });
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, [gameStatus]);
 
   // Tam Ekran Aç/Kapat
   const toggleFullscreen = () => {
@@ -527,30 +481,69 @@ function HostConsoleContent() {
               </span>
             </div>
 
-            {/* Oyuncu Avatar Rozetleri */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 max-h-48 overflow-y-auto pr-1">
-              {students.map((st) => (
-                <div
-                  key={st.id}
-                  className="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs"
-                >
-                  <span className="text-lg">{st.avatar}</span>
-                  <span className="font-bold text-white truncate max-w-[90px]">
-                    {st.name}
+            {/* Oyuncu Avatar Rozetleri veya Şık Canlı Bekleme Sahnesi */}
+            {students.length === 0 ? (
+              <div className="py-8 px-6 rounded-2xl bg-slate-950/70 border border-dashed border-slate-800 flex flex-col items-center justify-center text-center space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
                   </span>
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner">
+                    <Users className="w-5 h-5" />
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-1 max-w-md">
+                  <p className="text-sm sm:text-base font-bold text-white">
+                    {t("brd_host_waiting_title", "Oyuncuların katılması bekleniyor...")}
+                  </p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {t(
+                      "brd_host_waiting_sub",
+                      "Yukarıdaki Oda Kodunu (PIN) paylaşın; katılan oyuncular kendi avatarlarıyla anında burada görünecek."
+                    )}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 max-h-48 overflow-y-auto pr-1">
+                {students.map((st) => (
+                  <div
+                    key={st.id}
+                    className="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs animate-in fade-in duration-300"
+                  >
+                    <span className="text-lg">{st.avatar}</span>
+                    <span className="font-bold text-white truncate max-w-[90px]">
+                      {st.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* D) DOKUNMATİK DEV OYUNU BAŞLAT BUTONU (~56px) */}
           <button
             type="button"
+            disabled={students.length === 0}
             onClick={handleStartGame}
-            className="w-full h-16 rounded-3xl bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-slate-950 font-black text-base sm:text-lg flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/25 transition active:scale-98 cursor-pointer tracking-wide"
+            className={`w-full h-16 rounded-3xl font-black text-base sm:text-lg flex items-center justify-center gap-3 transition tracking-wide ${
+              students.length === 0
+                ? "bg-slate-800 border border-slate-700 text-slate-300 opacity-60 cursor-not-allowed"
+                : "bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-slate-950 shadow-xl shadow-emerald-500/25 active:scale-98 cursor-pointer"
+            }`}
           >
-            <Play className="w-6 h-6 fill-slate-950" />
-            <span>{t("brd_host_start", "▶️ CANLI OYUNU BAŞLAT")}</span>
+            {students.length === 0 ? (
+              <>
+                <Radio className="w-5 h-5 text-emerald-400 animate-pulse" />
+                <span>{t("brd_host_waiting_btn", "Waiting for Players...")}</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-6 h-6 fill-slate-950" />
+                <span>{t("brd_host_start", "▶️ CANLI OYUNU BAŞLAT")}</span>
+              </>
+            )}
           </button>
         </section>
       </main>
