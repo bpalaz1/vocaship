@@ -1469,12 +1469,12 @@ export default function StoryReader({
                     cardBg: "bg-[#fbf0d9] border-[#ecdcc0] text-[#382e25] shadow-2xl shadow-amber-900/10",
                     subText: "text-[#7d6b58]",
                     divider: "border-[#ecdcc0]",
-                    activeSentenceHighlight: "bg-amber-500/15 rounded-lg px-1.5 py-0.5 transition-colors",
+                    activeSentenceHighlight: "bg-sky-100/90 text-slate-900 rounded-lg px-1.5 py-0.5 transition-colors duration-200",
                     hoverSentence: "hover:bg-[#f3e4c8]/60 rounded px-1",
-                    wordSaved: "bg-emerald-600/20 text-emerald-800 border-b-2 border-emerald-600 font-semibold",
+                    wordSaved: "bg-emerald-100/90 text-emerald-950 border-b-2 border-emerald-500 font-semibold rounded px-1 transition-colors duration-200",
                     wordTarget:
-                        "bg-amber-400/35 text-amber-950 border-b-2 border-amber-600 font-semibold shadow-[0_0_10px_rgba(217,119,6,0.25)] hover:bg-amber-400/50 transition-all duration-200",
-                    wordHover: "hover:bg-amber-300/40 hover:text-amber-950",
+                        "bg-indigo-100/80 text-indigo-950 border-b-2 border-indigo-400/80 hover:bg-indigo-200/80 font-medium rounded px-1 transition-colors duration-200",
+                    wordHover: "hover:bg-slate-200/70 rounded px-0.5 cursor-pointer",
                     navBtn: "bg-[#eddaba] text-[#382e25] hover:bg-[#e4cead] border-[#dac3a0]",
                     counterBadge: "bg-[#f3e3ca] text-[#5c4a38] border-[#dfccaF]",
                 };
@@ -1483,12 +1483,12 @@ export default function StoryReader({
                     cardBg: "bg-white border-slate-200 text-slate-800 shadow-2xl shadow-slate-200/60",
                     subText: "text-slate-500",
                     divider: "border-slate-200",
-                    activeSentenceHighlight: "bg-indigo-500/10 rounded-lg px-1.5 py-0.5 transition-colors",
+                    activeSentenceHighlight: "bg-sky-100/90 text-slate-900 rounded-lg px-1.5 py-0.5 transition-colors duration-200",
                     hoverSentence: "hover:bg-slate-50 rounded px-1",
-                    wordSaved: "bg-emerald-500/15 text-emerald-700 border-b-2 border-emerald-500 font-semibold",
+                    wordSaved: "bg-emerald-100/90 text-emerald-950 border-b-2 border-emerald-500 font-semibold rounded px-1 transition-colors duration-200",
                     wordTarget:
-                        "bg-amber-400/25 text-amber-950 border-b-2 border-amber-500 font-semibold shadow-[0_0_10px_rgba(245,158,11,0.25)] hover:bg-amber-400/40 transition-all duration-200",
-                    wordHover: "hover:bg-indigo-50 hover:text-indigo-900",
+                        "bg-indigo-100/80 text-indigo-950 border-b-2 border-indigo-400/80 hover:bg-indigo-200/80 font-medium rounded px-1 transition-colors duration-200",
+                    wordHover: "hover:bg-slate-200/70 rounded px-0.5 cursor-pointer",
                     navBtn: "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300",
                     counterBadge: "bg-slate-100 text-slate-600 border-slate-200",
                 };
@@ -1498,12 +1498,12 @@ export default function StoryReader({
                     cardBg: "bg-slate-900/90 border-slate-800 text-slate-200 shadow-2xl",
                     subText: "text-slate-400",
                     divider: "border-slate-800",
-                    activeSentenceHighlight: "bg-indigo-500/10 rounded-lg px-1.5 py-0.5 transition-colors",
+                    activeSentenceHighlight: "bg-sky-500/15 text-sky-100 rounded-lg px-1.5 py-0.5 transition-colors duration-200",
                     hoverSentence: "hover:bg-slate-800/40 rounded px-1",
-                    wordSaved: "bg-emerald-500/20 text-emerald-300 border-b-2 border-emerald-400 font-semibold",
+                    wordSaved: "bg-emerald-500/20 text-emerald-200 border-b-2 border-emerald-400 font-semibold rounded px-1 transition-colors duration-200",
                     wordTarget:
-                        "bg-amber-500/20 text-amber-200 border-b border-amber-400 font-semibold shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:bg-amber-500/30 transition-all duration-200",
-                    wordHover: "hover:bg-indigo-500/20 hover:text-indigo-200",
+                        "bg-indigo-500/20 text-indigo-200 border-b-2 border-indigo-400/70 hover:bg-indigo-500/30 font-medium rounded px-1 transition-colors duration-200",
+                    wordHover: "hover:bg-slate-800 rounded px-0.5 cursor-pointer",
                     navBtn: "bg-slate-800 text-slate-200 hover:bg-slate-700 border-slate-700",
                     counterBadge: "bg-slate-800/80 text-slate-300 border-slate-700/80",
                 };
@@ -1858,20 +1858,19 @@ export default function StoryReader({
 
                                 <div className={`${fontSizeClass} space-y-4`}>
                                     {pages[currentPage]?.sentences.map((sent) => {
-                                        const isSpeaking = activeSentenceIdx === sent.globalIndex && isPlaying;
+                                        const isSpeaking = isPlaying && activeSentenceIdx === sent.globalIndex;
 
                                         return (
                                             <span
                                                 key={sent.globalIndex}
                                                 data-sentence-index={sent.globalIndex}
                                                 className={`transition-colors duration-200 inline mr-1.5 ${
-                                                    isSpeaking ? "bg-indigo-500/10 rounded-lg px-1.5 py-0.5" : ""
+                                                    isSpeaking ? themeStyles.activeSentenceHighlight : ""
                                                 }`}
                                             >
                                                 {sent.tokens.map((token, wIdx) => {
                                                     const cleaned = cleanWord(token).toLowerCase();
                                                     const isSavedWord = savedWords.has(cleaned);
-                                                    const isActiveSpokenWord = isSpeaking && activeWordIndex === wIdx;
                                                     const isTargetVocab =
                                                         story.target_vocabulary?.some(
                                                             (v) => (typeof v === "string" ? v : v.word).toLowerCase() === cleaned
@@ -1902,14 +1901,12 @@ export default function StoryReader({
                                                             className={`inline rounded px-0.5 transition-colors ${
                                                                 isClickableWord ? "cursor-pointer " : ""
                                                             }${
-                                                                isActiveSpokenWord
-                                                                    ? "bg-amber-400/25 text-amber-200 rounded px-1 ring-1 ring-amber-400/40"
-                                                                    : isSavedWord
+                                                                isSavedWord
                                                                     ? themeStyles.wordSaved
                                                                     : isTargetVocab
                                                                     ? themeStyles.wordTarget
                                                                     : isClickableWord
-                                                                    ? "hover:bg-indigo-500/20 hover:text-indigo-600 dark:hover:text-indigo-300"
+                                                                    ? themeStyles.wordHover
                                                                     : ""
                                                             }`}
                                                         >
@@ -1993,7 +1990,6 @@ export default function StoryReader({
                         <div className="space-y-6">
                             {paragraphs.map((para, pIdx) => {
                                 const paraSentences = allSentences.filter((s) => s.paragraphIndex === pIdx);
-                                const isCurrentBookmark = lastReadParagraph === pIdx;
 
                                 return (
                                     <p
@@ -2002,27 +1998,22 @@ export default function StoryReader({
                                             paragraphRefs.current[pIdx] = el;
                                         }}
                                         onClick={() => handleParagraphClick(pIdx)}
-                                        className={`${fontSizeClass} transition-all p-3 rounded-2xl cursor-pointer ${
-                                            isCurrentBookmark
-                                                ? "bg-indigo-950/20 border border-indigo-500/20 shadow-inner"
-                                                : ""
-                                        }`}
+                                        className={`${fontSizeClass} transition-all p-3 rounded-2xl cursor-pointer`}
                                     >
                                         {paraSentences.map((sent) => {
-                                            const isSpeaking = activeSentenceIdx === sent.globalIndex && isPlaying;
+                                            const isSpeaking = isPlaying && activeSentenceIdx === sent.globalIndex;
 
                                             return (
                                                 <span
                                                     key={sent.globalIndex}
                                                     data-sentence-index={sent.globalIndex}
                                                     className={`transition-colors duration-200 inline mr-1.5 ${
-                                                        isSpeaking ? "bg-indigo-500/10 rounded-lg px-1.5 py-0.5" : ""
+                                                        isSpeaking ? themeStyles.activeSentenceHighlight : ""
                                                     }`}
                                                 >
                                                     {sent.tokens.map((token, wIdx) => {
                                                         const cleaned = cleanWord(token).toLowerCase();
                                                         const isSavedWord = savedWords.has(cleaned);
-                                                        const isActiveSpokenWord = isSpeaking && activeWordIndex === wIdx;
                                                         const isTargetVocab =
                                                             story.target_vocabulary?.some(
                                                                 (v) => (typeof v === "string" ? v : v.word).toLowerCase() === cleaned
@@ -2053,14 +2044,12 @@ export default function StoryReader({
                                                                 className={`inline rounded px-0.5 transition-colors ${
                                                                     isClickableWord ? "cursor-pointer " : ""
                                                                 }${
-                                                                    isActiveSpokenWord
-                                                                        ? "bg-amber-400/25 text-amber-200 rounded px-1 ring-1 ring-amber-400/40"
-                                                                        : isSavedWord
+                                                                    isSavedWord
                                                                         ? themeStyles.wordSaved
                                                                         : isTargetVocab
                                                                         ? themeStyles.wordTarget
                                                                         : isClickableWord
-                                                                        ? "hover:bg-indigo-500/20 hover:text-indigo-600 dark:hover:text-indigo-300"
+                                                                        ? themeStyles.wordHover
                                                                         : ""
                                                                 }`}
                                                             >
