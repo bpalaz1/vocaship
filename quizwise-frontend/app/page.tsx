@@ -28,7 +28,7 @@ import {
   CornerDownRight,
 } from "lucide-react";
 import { API_BASE } from "./config";
-import { useAuth } from "./context/AuthContext";
+import { useAuth, getAuthToken } from "./context/AuthContext";
 import { useProfile } from "./context/ProfileContext";
 // guestShowcase seed removed; empty library zero-state is enforced
 import { useAppTheme } from "./context/ThemeContext";
@@ -529,17 +529,23 @@ export default function Home() {
     if (!newFolderName.trim() || isCreatingFolder) return;
     setIsCreatingFolder(true);
     try {
+      const authToken = getAuthToken();
+      const targetParent = normalizeFolderId(newFolderParentId);
       const res = await fetch(`${API_BASE}/api/v1/folders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({
           name: newFolderName.trim(),
           color: newFolderColor || "#f59e0b",
+          parent_id: targetParent || null,
+          ...(user?.id ? { user_id: user.id } : {}),
         }),
       });
       if (res.ok) {
         const created = await res.json().catch(() => null);
-        const targetParent = normalizeFolderId(newFolderParentId);
         if (created?.id && targetParent) {
           setFolderParentInHierarchy(String(created.id).trim(), targetParent);
           setExpandedFolderIds((prev) =>
@@ -658,9 +664,13 @@ export default function Home() {
 
     setIsCreatingDeck(true);
     try {
+      const authToken = getAuthToken();
       const res = await fetch(`${API_BASE}/api/v1/decks`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({
           title: newTitle.trim(),
           description: newDescription.trim(),

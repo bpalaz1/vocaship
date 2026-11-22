@@ -82,6 +82,21 @@ const WELCOME_SKIPPED_KEY = "vocaship_welcome_skipped";
 const LOGGED_OUT_KEY = "vocaship_logged_out";
 const GUEST_MODE_KEY = "vocaship_guest";
 
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return (
+      localStorage.getItem("vocaship_token") ||
+      localStorage.getItem("access_token") ||
+      localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) ||
+      localStorage.getItem("token") ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getAuthEndpoint(
@@ -160,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let restored = false;
     try {
-      const savedToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+      const savedToken = getAuthToken();
       const savedUserRaw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
       if (savedToken && savedUserRaw) {
         const parsedUser = JSON.parse(savedUserRaw) as AuthUser;
@@ -242,6 +257,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(GUEST_MODE_KEY);
       localStorage.setItem(ENTERED_STORAGE_KEY, "true");
       localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
+      localStorage.setItem("vocaship_token", authToken);
+      localStorage.setItem("access_token", authToken);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(authUser));
       localStorage.setItem("vocaship_plan_tier", authUser.planTier);
     } catch (err) {
@@ -500,6 +517,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthModalOpen(false);
     try {
       localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+      localStorage.removeItem("vocaship_token");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("token");
       localStorage.removeItem(AUTH_USER_STORAGE_KEY);
       localStorage.removeItem("vocaship_plan_tier");
       localStorage.removeItem("vocaship_profile");

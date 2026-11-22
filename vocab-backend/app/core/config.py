@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200  # 30 gün kalıcı oturum
 
 settings = Settings()
 

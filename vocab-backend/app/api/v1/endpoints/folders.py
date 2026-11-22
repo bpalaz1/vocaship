@@ -43,12 +43,19 @@ async def list_folders(
 async def create_folder(folder_in: FolderCreate, request: Request, db: Client = Depends(get_db)):
     """Yeni bir klasör (örn: Kuzey, Animals) oluşturur."""
     data = folder_in.model_dump()
-    if not data.get("user_id"):
-        token_data = _extract_token_payload(request)
-        if token_data and token_data.get("sub"):
-            data["user_id"] = str(token_data["sub"]).strip()
-        else:
-            raise HTTPException(status_code=401, detail="Klasör oluşturmak için oturum açmalısınız.")
+    raw_parent = str(data.get("parent_id") or "").strip()
+    if not raw_parent or raw_parent.lower() == "root directory":
+        data["parent_id"] = None
+    else:
+        data["parent_id"] = raw_parent
+    if data.get("parent_id") is None:
+        data.pop("parent_id", None)
+
+    token_data = _extract_token_payload(request)
+    if token_data and token_data.get("sub"):
+        data["user_id"] = str(token_data["sub"]).strip()
+    elif not data.get("user_id"):
+        raise HTTPException(status_code=401, detail="Klasör oluşturmak için oturum açmalısınız.")
 
     res = db.table("folders").insert(data).execute()
     if not res.data:

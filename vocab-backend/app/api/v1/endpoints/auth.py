@@ -10,6 +10,7 @@ import jwt
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from supabase_auth.errors import AuthApiError
 
+from app.core.config import settings
 from app.core.database import get_db, get_supabase_client
 from app.core.local_db import LocalDatabaseClient
 from app.services.quota_service import evaluate_user_trial_and_plan, compute_trial_days_left
@@ -32,7 +33,7 @@ router = APIRouter()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "vorego-super-secret-jwt-key-2026")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 43200)
 
 # In-memory / Local fallback cache in case remote Supabase schema lacks new columns or is offline
 _local_auth_db = LocalDatabaseClient()
@@ -74,7 +75,7 @@ def create_access_token(
     email: Optional[str] = None,
     plan_tier: str = "free",
 ) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": user_id,
         "username": username,
