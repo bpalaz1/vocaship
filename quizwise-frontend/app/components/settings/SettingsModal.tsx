@@ -467,7 +467,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
                     <Globe className="w-3.5 h-3.5 text-indigo-400" />
                     <span>{t("ui_language")}</span>
                   </label>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {AVAILABLE_LANGUAGES.map((lang) => {
                       const isSelected = selectedLang === lang.code;
                       return (
@@ -481,8 +481,10 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
                               : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                           }`}
                         >
-                          <span className="text-xl leading-none">{lang.flag}</span>
-                          <span className="text-[10px] truncate max-w-full font-semibold">{lang.code.toUpperCase()}</span>
+                          <span className="text-base font-extrabold tracking-wide leading-none">{lang.code.toUpperCase()}</span>
+                          <span className={`text-xs font-medium truncate max-w-full ${isSelected ? "text-indigo-200" : "text-slate-300"}`}>
+                            {lang.nativeLabel}
+                          </span>
                         </button>
                       );
                     })}
