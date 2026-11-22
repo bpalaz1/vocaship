@@ -118,6 +118,29 @@ export function getLocalizedNeuralVoice(v: NeuralVoiceOption, lang: Language) {
 export const DEFAULT_NEURAL_VOICE = "en-US-JennyNeural";
 export const NEURAL_VOICE_STORAGE_KEY = "vocaship_neural_voice";
 
+const NEURAL_VOICE_SHORT_NAMES: Record<string, string> = {
+  "en-US-JennyNeural": "Jenny",
+  "en-US-AriaNeural": "Aria",
+  "en-US-GuyNeural": "Guy",
+  "en-GB-RyanNeural": "Ryan",
+  "en-US-AnaNeural": "Ana",
+  "en-GB-MaisieNeural": "Oliver",
+};
+
+/**
+ * Verilen nöral ses ID'si için kısa konuşmacı adını döndürür (örn. Jenny, Aria, Guy, Ryan, Ana, Oliver).
+ */
+export function getNeuralVoiceShortName(voiceId?: string | null): string {
+  if (voiceId && NEURAL_VOICE_SHORT_NAMES[voiceId]) {
+    return NEURAL_VOICE_SHORT_NAMES[voiceId];
+  }
+  const found = NEURAL_VOICES.find((v) => v.id === voiceId);
+  if (found) {
+    return found.name.split(/[\s/(]/)[0] || "Jenny";
+  }
+  return "Jenny";
+}
+
 /**
  * LocalStorage'dan aktif nöral sesi okur.
  */

@@ -37,7 +37,12 @@ import {
     Lightbulb,
 } from "lucide-react";
 import { API_BASE } from "../../config";
-import { NEURAL_VOICES, setStoredNeuralVoice } from "../../utils/ttsVoices";
+import {
+    NEURAL_VOICES,
+    getNeuralVoiceShortName,
+    getStoredNeuralVoice,
+    setStoredNeuralVoice,
+} from "../../utils/ttsVoices";
 import {
     rewardReadingStoryComplete,
     rewardReadingQuestionCorrect,
@@ -289,6 +294,7 @@ export default function StoryReader({
         }
         return personaDefaultVoice;
     });
+    const activeVoiceName = getNeuralVoiceShortName(selectedVoice);
 
     useEffect(() => {
         const syncVoice = () => {
@@ -626,6 +632,8 @@ export default function StoryReader({
             const storyLevel = (story as any).cefr || story.level || "B1";
             const storySnippet = (story.content || "").slice(0, 450);
 
+            const activeVoiceId = selectedVoiceRef.current || selectedVoice || getStoredNeuralVoice();
+
             const storyContext = {
                 storyId: story.id,
                 title: story.title,
@@ -636,13 +644,17 @@ export default function StoryReader({
                 targetWords: vocabList,
                 topic: story.topic || "",
                 full_vocabulary: story.target_vocabulary || [],
+                voiceId: activeVoiceId,
             };
 
             sessionStorage.setItem("vocaship_active_story_context", JSON.stringify(storyContext));
             sessionStorage.setItem("active_story_context", JSON.stringify(storyContext));
-            router.push(`/speaking?mode=story_debate&storyId=${encodeURIComponent(story.id || "")}`);
+            sessionStorage.setItem("vocaship_neural_voice", activeVoiceId);
+            router.push(
+                `/speaking?mode=story_debate&storyId=${encodeURIComponent(story.id || "")}&voice=${encodeURIComponent(activeVoiceId)}`
+            );
         }
-    }, [stopAudio, story, router]);
+    }, [stopAudio, story, router, selectedVoice]);
 
     const playSentenceAudioRef = useRef<(index: number) => void>(() => {});
 
@@ -1769,15 +1781,15 @@ export default function StoryReader({
                         )}
                     </div>
 
-                    {/* Bu Hikayeyi Gemini ile Tartış (Hızlı Erişim) */}
+                    {/* Bu Hikayeyi Aktif Nöral Konuşmacı ile Tartış (Hızlı Erişim) */}
                     <button
                         type="button"
                         onClick={handleDebateStory}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-sm shadow-indigo-600/30 transition cursor-pointer"
-                        title={t("read_debate_title", "Bu metni Gemini ile sesli tartış")}
+                        title={t("read_debate_title", "Bu metni {name} ile sesli tartış", { name: activeVoiceName })}
                     >
                         <Mic className="w-3.5 h-3.5 text-violet-200" />
-                        <span className="hidden sm:inline">🎙️ {t("read_debate_btn", "Gemini ile Tartış")}</span>
+                        <span className="hidden sm:inline">🎙️ {t("read_debate_btn", "{name} ile Tartış", { name: activeVoiceName })}</span>
                     </button>
 
                     {/* [ 💾 Kütüphaneme Ekle ] Butonu */}
@@ -2316,10 +2328,10 @@ export default function StoryReader({
                                             type="button"
                                             onClick={handleDebateStory}
                                             className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-indigo-600/25 transition active:scale-95 cursor-pointer"
-                                            title={t("read_debate_title", "Bu hikayeyi Gemini ile sesli tartış")}
+                                            title={t("read_debate_title", "Bu metni {name} ile sesli tartış", { name: activeVoiceName })}
                                         >
                                             <Mic className="w-4 h-4 text-violet-200" />
-                                            <span>🎙️ {t("read_quiz_debate_story", "Bu Hikayeyi Gemini ile Tartış")}</span>
+                                            <span>🎙️ {t("read_quiz_debate_story", "Bu Hikayeyi {name} ile Tartış", { name: activeVoiceName })}</span>
                                         </button>
 
                                         <button
@@ -2372,15 +2384,15 @@ export default function StoryReader({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                    {/* [ 🎙️ Bu Hikayeyi Gemini ile Tartış ] */}
+                    {/* [ 🎙️ Bu Hikayeyi Aktif Konuşmacı ile Tartış ] */}
                     <button
                         type="button"
                         onClick={handleDebateStory}
                         className="flex items-center space-x-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition hover:scale-[1.02] active:scale-95 cursor-pointer ring-1 ring-violet-400/40"
-                        title={t("read_debate_title", "Bu metni ve temalarını Gemini ile sesli tartış")}
+                        title={t("read_debate_title", "Bu metni {name} ile sesli tartış", { name: activeVoiceName })}
                     >
                         <Mic className="w-4 h-4 text-violet-200" />
-                        <span>🎙️ {t("read_debate_with_char", "Bu Hikayeyi Karakterle Tartış")}</span>
+                        <span>🎙️ {t("read_quiz_debate_story", "Bu Hikayeyi {name} ile Tartış", { name: activeVoiceName })}</span>
                     </button>
 
                     {!isCompleted ? (

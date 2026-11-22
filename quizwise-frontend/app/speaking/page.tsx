@@ -35,6 +35,12 @@ import {
 import { saveSpeakingArchiveSession } from "../actions/speakingArchive";
 import { resilientFetch } from "../config";
 import CheckoutModal from "../components/payments/CheckoutModal";
+import {
+  NEURAL_VOICES,
+  getNeuralVoiceShortName,
+  getStoredNeuralVoice,
+  setStoredNeuralVoice,
+} from "../utils/ttsVoices";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -183,6 +189,41 @@ function SpeakingContent() {
   const { t, language } = useLanguage();
 
   const isAlex = selectedCharacter === "alex_adult";
+  const [activeVoiceId, setActiveVoiceId] = useState<string>(() => {
+    const paramVoice = searchParams.get("voice");
+    if (paramVoice && NEURAL_VOICES.some((v) => v.id === paramVoice)) {
+      return paramVoice;
+    }
+    return getStoredNeuralVoice();
+  });
+
+  useEffect(() => {
+    const paramVoice = searchParams.get("voice");
+    if (paramVoice && NEURAL_VOICES.some((v) => v.id === paramVoice)) {
+      setActiveVoiceId(paramVoice);
+      setStoredNeuralVoice(paramVoice);
+    } else if (typeof window !== "undefined") {
+      try {
+        const ssVoice = sessionStorage.getItem("vocaship_neural_voice");
+        if (ssVoice && NEURAL_VOICES.some((v) => v.id === ssVoice)) {
+          setActiveVoiceId(ssVoice);
+          setStoredNeuralVoice(ssVoice);
+        }
+      } catch {}
+    }
+
+    const syncVoice = () => {
+      setActiveVoiceId(getStoredNeuralVoice());
+    };
+    window.addEventListener("vocaship-voice-change", syncVoice);
+    window.addEventListener("storage", syncVoice);
+    return () => {
+      window.removeEventListener("vocaship-voice-change", syncVoice);
+      window.removeEventListener("storage", syncVoice);
+    };
+  }, [searchParams]);
+
+  const activeVoiceName = getNeuralVoiceShortName(activeVoiceId);
   const isPro = Boolean(
     user &&
       (user.isPro ||
@@ -1568,7 +1609,7 @@ function SpeakingContent() {
           id: Date.now().toString(),
           title: activeStoryTitle
             ? t("speak_story_discussion_title", "Hikaye Tartışması: {title}", { title: activeStoryTitle })
-            : "Gemini Speaking",
+            : `${activeVoiceName} Speaking`,
           created_at: new Date().toISOString(),
           turns: turnsToSave,
         };
@@ -1583,7 +1624,7 @@ function SpeakingContent() {
       user_id: user?.id,
       session_title: activeStoryTitle
         ? t("speak_story_discussion_title", "Hikaye Tartışması: {title}", { title: activeStoryTitle })
-        : "Gemini Speaking",
+        : `${activeVoiceName} Speaking`,
       transcript: dialogueRef.current.map((d) => ({
         sender: d.role === "assistant" ? ("ai" as const) : ("user" as const),
         text: d.message,
@@ -1929,6 +1970,18 @@ function SpeakingContent() {
           </span>
         )}
 
+        <span
+          className={`px-3 py-1.5 rounded-full border text-[11px] font-bold backdrop-blur-md shadow-sm flex items-center gap-1.5 ${
+            isDark
+              ? "bg-indigo-950/75 border-indigo-500/35 text-indigo-200"
+              : "bg-white/90 border-indigo-200 text-indigo-800"
+          }`}
+        >
+          {activeStoryTitle
+            ? `📖 ${t("speak_story_badge", "{name} ile Hikaye Tartışması", { name: activeVoiceName })}`
+            : `✨ ${t("speak_live_badge", "{name} ile Canlı Sohbet", { name: activeVoiceName })}`}
+        </span>
+
         {activeStoryTitle && (
           <div
             className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium backdrop-blur-md shadow-sm ${
@@ -1981,6 +2034,9 @@ function SpeakingContent() {
                   : "bg-[#f8fafc] border-slate-300 text-slate-900 shadow-md"
               }`}
             >
+              <span className={`text-xs font-bold uppercase tracking-wider mr-2 ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>
+                {activeVoiceName}:
+              </span>
               &ldquo;{aiMessage || openingGreeting}&rdquo;
             </p>
             {sessionState === "active" && (
@@ -2031,7 +2087,7 @@ function SpeakingContent() {
             >
               <Mic className="w-8 h-8 mb-1.5 text-white animate-bounce" />
               <span className="text-xs sm:text-sm font-bold text-white tracking-wide px-2 leading-tight">
-                {t("speak_start_chat", "🎙️ Sohbete Başla")}
+                🎙️ {t("speak_start_chat_named", "{name} ile Konuşmaya Başla", { name: activeVoiceName })}
               </span>
             </button>
           ) : (
@@ -2079,7 +2135,7 @@ function SpeakingContent() {
                   <div className="flex flex-col items-center justify-center p-2">
                     <Volume2 className="w-7 h-7 mb-1 text-white animate-pulse" />
                     <span className="whitespace-normal text-center leading-tight px-2 text-xs font-semibold text-white">
-                      {t("speak_ai_speaking", "🔊 Konuşuyor...")}
+                      🔊 {t("speak_ai_speaking_named", "{name} Konuşuyor...", { name: activeVoiceName })}
                     </span>
                     <span className="text-[10px] text-indigo-200 mt-0.5">
                       {t("speak_tap_interrupt", "(Söz kesmek için dokun)")}
@@ -2279,7 +2335,7 @@ function SpeakingContent() {
                               turn.speaker === "AI" ? "text-indigo-400" : "text-emerald-400"
                             }`}
                           >
-                            {turn.speaker === "AI" ? t("speak_ai_prefix", "AI:") : t("speak_user_prefix", "Sen:")}
+                            {turn.speaker === "AI" ? `${activeVoiceName}:` : t("speak_user_prefix", "Sen:")}
                           </span>
                           <span>{turn.text}</span>
                         </p>
