@@ -34,7 +34,9 @@ import {
   Layers,
   Filter,
   Lock,
+  Loader2,
 } from "lucide-react";
+import { API_BASE } from "../../config";
 import CheckoutModal from "../payments/CheckoutModal";
 
 interface Deck {
@@ -518,6 +520,7 @@ export default function ReadingRoom({
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pasteTitle, setPasteTitle] = useState("");
+  const [isAnalyzingPaste, setIsAnalyzingPaste] = useState(false);
 
   // Yapay Zekâ ile Hikaye Üret Modalı State'i
   const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
@@ -681,53 +684,121 @@ export default function ReadingRoom({
     }
   };
 
+  // Yapıştırılan metnin kendi cümle ve kelimelerinden dinamik İngilizce anlama soruları üretir (fallback)
+  const buildDynamicEnglishQuestions = (content: string, title: string, keywords: string[]) => {
+    const sentences = (content.match(/[^.!?]+[.!?]+/g) || [content])
+      .map((s) => s.trim())
+      .filter((s) => s.length > 15);
+    const firstSentence = sentences[0] || content.slice(0, 120);
+    const detailSentence = sentences[1] || firstSentence;
+    const clip = (s: string) => (s.length > 105 ? `${s.slice(0, 105)}...` : s);
+    const keyTerm = (keywords[0] || "context").toLowerCase();
+
+    return [
+      {
+        question: "What is the main focus of this passage?",
+        options: [
+          `It discusses the central idea in "${title}": "${clip(firstSentence)}"`,
+          "It presents an unrelated fictional conversation with no central theme.",
+          "It lists only numerical formulas without any written explanation.",
+          "It argues that written analysis has no practical purpose.",
+        ],
+        correct_answer_index: 0,
+      },
+      {
+        question: "Which statement is directly supported by the passage?",
+        options: [
+          "The passage deliberately avoids giving any specific examples.",
+          `The text explains: "${clip(detailSentence)}"`,
+          "The author concludes that the subject is completely irrelevant.",
+          "None of the sentences in the text relate to the title.",
+        ],
+        correct_answer_index: 1,
+      },
+      {
+        question: "Which of the following key terms appears in the passage?",
+        options: [
+          keyTerm === "photosynthesis" ? "astronomy" : "photosynthesis",
+          keyTerm === "microprocessor" ? "typography" : "microprocessor",
+          keyTerm,
+          keyTerm === "archaeology" ? "meteorology" : "archaeology",
+        ],
+        correct_answer_index: 2,
+      },
+    ];
+  };
+
   // Kendi metnini yapıştırıp açma
-  const handleLaunchCustomReader = (text?: string, title?: string) => {
+  const handleLaunchCustomReader = async (text?: string, title?: string) => {
     const finalContent = (text || pasteText).trim();
-    const finalTitle = (title || pasteTitle).trim() || "Özel Çözümlenen Metin";
+    const finalTitle = (title || pasteTitle).trim() || "Custom Reading Passage";
     if (!finalContent) return;
 
-    const sampleTokens = finalContent
-      .split(/\s+/)
-      .map((w) => w.replace(/[^a-zA-Z]/g, ""))
-      .filter((w) => w.length >= 6)
-      .slice(0, 4);
+    const sampleTokens = Array.from(
+      new Set(
+        finalContent
+          .split(/\s+/)
+          .map((w) => w.replace(/[^a-zA-Z]/g, ""))
+          .filter((w) => w.length >= 6)
+      )
+    ).slice(0, 5);
 
     const autoCoverImg = autoAssignCover({
       title: finalTitle,
-      topic: "Özel Analiz",
+      topic: "Custom Analysis",
       content: finalContent,
     });
+
+    let analyzedVocab = sampleTokens.slice(0, 4).map((w) => ({
+      word: w.toLowerCase(),
+      phonetic: "",
+      turkish_meaning: "Detay görmek için tıklayın",
+    }));
+    let analyzedQuestions = buildDynamicEnglishQuestions(finalContent, finalTitle, sampleTokens);
+
+    if (!text && finalContent.length >= 20) {
+      setIsAnalyzingPaste(true);
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 14000);
+        const res = await fetch(`${API_BASE}/api/v1/reading/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: finalTitle, content: finalContent }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.target_vocabulary) && data.target_vocabulary.length > 0) {
+            analyzedVocab = data.target_vocabulary;
+          }
+          if (Array.isArray(data?.comprehension_questions) && data.comprehension_questions.length > 0) {
+            analyzedQuestions = data.comprehension_questions;
+          }
+        }
+      } catch (err) {
+        console.warn("[ReadingRoom] Custom analyze fallback used:", err);
+      } finally {
+        setIsAnalyzingPaste(false);
+      }
+    }
 
     const customStory = {
       id: `custom_${Date.now()}`,
       title: finalTitle,
-      level: "Advanced",
-      cefr: "C1 Serbest",
-      topic: "Özel Analiz",
+      level: "Intermediate",
+      cefr: "B2-C1",
+      topic: "Custom Analysis",
       desc: finalContent.slice(0, 120) + "...",
       wordCount: `~${finalContent.split(/\s+/).length} Kelime`,
       target_words: sampleTokens,
       content: finalContent,
       coverImage: autoCoverImg || CATEGORY_DEFAULT_COVERS.user_custom,
       isUserStory: true,
-      target_vocabulary: sampleTokens.map((w) => ({
-        word: w.toLowerCase(),
-        phonetic: "",
-        turkish_meaning: "Detay görmek için tıklayın",
-      })),
-      comprehension_questions: [
-        {
-          question: "Bu metnin ana düşüncesi nedir?",
-          options: [
-            "A) Metinde aktarılan temel argüman ve çözümlemeler",
-            "B) Konuyla ilgisiz ikincil bir gözlem",
-            "C) Yalnızca teknik bir detay",
-            "D) Karşıt bir hipotez",
-          ],
-          correct_answer_index: 0,
-        },
-      ],
+      target_vocabulary: analyzedVocab,
+      comprehension_questions: analyzedQuestions,
     };
 
     setPasteText("");
@@ -1577,11 +1648,12 @@ export default function ReadingRoom({
               </button>
               <button
                 type="button"
-                disabled={!pasteText.trim()}
+                disabled={!pasteText.trim() || isAnalyzingPaste}
                 onClick={() => handleLaunchCustomReader(pasteText, pasteTitle)}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer"
               >
-                {t("read_analyze_read_btn", "Metni Çözümle & Oku ➔")}
+                {isAnalyzingPaste && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>{t("read_analyze_read_btn", "Metni Çözümle & Oku ➔")}</span>
               </button>
             </div>
           </div>

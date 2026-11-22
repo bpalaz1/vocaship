@@ -364,6 +364,58 @@ async def async_generate_reading_story(
     """
     return await async_call_gemini_with_fallback(prompt, temperature=0.3)
 
+
+async def async_analyze_reading_text(
+    title: str = "Custom Reading Passage",
+    content: str = "",
+) -> dict:
+    """Kullanıcının yapıştırdığı metni analiz eder; 4-6 hedef kelime ve 3 adet İngilizce anlama sorusu üretir."""
+    clipped_content = (content or "").strip()[:4000]
+    prompt = f"""
+    You are an expert English reading comprehension instructor.
+    Title: {title or 'Custom Reading Passage'}
+    Passage:
+    \"\"\"
+    {clipped_content}
+    \"\"\"
+
+    Task:
+    1. Analyze the passage above. Keep the original passage text as "content".
+    2. Extract 4-6 key vocabulary words from the passage with phonetic transcription, Turkish meaning, and the exact context sentence from the passage.
+    3. Write EXACTLY 3 multiple-choice reading comprehension questions based strictly on the passage.
+       CRITICAL LANGUAGE RULE: All 3 questions and ALL 4 answer options for each question MUST be written in natural English, regardless of the user's UI language.
+       Randomize the correct_answer_index (0 to 3).
+
+    Return ONLY a valid compact JSON:
+    {{
+      "title": "{title or 'Custom Reading Passage'}",
+      "level": "Intermediate",
+      "topic": "Custom Analysis",
+      "content": "",
+      "target_vocabulary": [
+        {{
+          "word": "word",
+          "phonetic": "/phonetic/",
+          "turkish_meaning": "Türkçe anlam",
+          "context_sentence": "sentence from passage"
+        }}
+      ],
+      "comprehension_questions": [
+        {{
+          "question": "English comprehension question?",
+          "options": ["Option A", "Option B", "Option C", "Option D"],
+          "correct_answer_index": 0
+        }}
+      ]
+    }}
+    """
+    result = await async_call_gemini_with_fallback(prompt, temperature=0.2)
+    if isinstance(result, dict):
+        result["content"] = content.strip()
+        if not result.get("title"):
+            result["title"] = title or "Custom Reading Passage"
+    return result
+
 def generate_reading_story(
     level: str = "Intermediate",
     topic: Optional[str] = "Mystery",

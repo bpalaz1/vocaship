@@ -7,6 +7,11 @@ class StoryGenerateRequest(BaseModel):
     target_words: Optional[List[str]] = Field(default=None, description="Hikayede geçmesi zorunlu kelimeler")
     length_words: Optional[int] = Field(default=250, description="Kelime uzunluğu")
 
+
+class TextAnalyzeRequest(BaseModel):
+    title: Optional[str] = Field(default="Custom Reading Passage", description="Metin başlığı")
+    content: str = Field(..., min_length=10, description="Analiz edilecek metin içeriği")
+
 class VocabularyItem(BaseModel):
     word: str
     phonetic: Optional[str] = ""
