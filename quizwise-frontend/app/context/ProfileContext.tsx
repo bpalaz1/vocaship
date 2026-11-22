@@ -45,6 +45,22 @@ export interface ProfileContextType {
 
 const STORAGE_KEY = "vocaship_profile";
 
+function getUserProfileStorageKey(userId?: string | null): string {
+  return userId ? `${STORAGE_KEY}_${userId}` : STORAGE_KEY;
+}
+
+function getAuthUserIdFromStorage(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const rawUser = localStorage.getItem("vorego_auth_user");
+    if (!rawUser) return null;
+    const parsed = JSON.parse(rawUser);
+    return parsed?.id ? String(parsed.id) : null;
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULT_PROFILE: UserProfile = {
   full_name: "",
   username: "",
@@ -85,7 +101,10 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const authUserId = getAuthUserIdFromStorage();
+        const scopedKey = getUserProfileStorageKey(authUserId);
+        const stored = localStorage.getItem(scopedKey) || localStorage.getItem(STORAGE_KEY);
+        const legacyCustomAvatar = localStorage.getItem("vocaship_custom_avatar") || "";
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed === "object") {
@@ -95,17 +114,27 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
               String(cleanProfile.email || "").toLowerCase() === "ogrenci@vocaship.com"
             ) {
               localStorage.removeItem(STORAGE_KEY);
+              if (authUserId) localStorage.removeItem(scopedKey);
               setUserProfile(DEFAULT_PROFILE);
               return;
             }
+            if (!cleanProfile.avatar_url && legacyCustomAvatar) {
+              cleanProfile.avatar_url = legacyCustomAvatar;
+            }
             if (_removed !== undefined) {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanProfile));
+              if (authUserId) localStorage.setItem(scopedKey, JSON.stringify(cleanProfile));
             }
             setUserProfile((prev) => ({
               ...prev,
               ...cleanProfile,
             }));
           }
+        } else if (legacyCustomAvatar) {
+          setUserProfile((prev) => ({
+            ...prev,
+            avatar_url: legacyCustomAvatar,
+          }));
         }
       } catch (err) {
         console.warn("[ProfileContext] localStorage profil okuma hatası:", err);
@@ -151,14 +180,23 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     }
 
     const tier: "free" | "pro" = user.isPro || user.planTier === "pro" ? "pro" : "free";
+    let storedForUser: Partial<UserProfile> = {};
+    try {
+      const rawScoped = localStorage.getItem(getUserProfileStorageKey(user.id)) || localStorage.getItem(STORAGE_KEY);
+      if (rawScoped) storedForUser = JSON.parse(rawScoped) || {};
+    } catch {}
+    const legacyAvatar = typeof window !== "undefined" ? (localStorage.getItem("vocaship_custom_avatar") || "") : "";
+
     setUserProfile((prev) => {
       const updated: UserProfile = {
         ...prev,
+        ...storedForUser,
         id: user.id || prev.id,
         user_id: user.id || prev.user_id,
-        full_name: user.fullName || prev.full_name,
-        username: user.username || prev.username,
-        email: user.email || prev.email,
+        full_name: storedForUser.full_name || user.fullName || prev.full_name,
+        username: storedForUser.username || user.username || prev.username,
+        email: storedForUser.email || user.email || prev.email,
+        avatar_url: storedForUser.avatar_url || prev.avatar_url || legacyAvatar || "",
         is_pro: user.isPro ?? prev.is_pro,
         plan_tier: tier,
         planTier: tier,
@@ -175,6 +213,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        if (user.id) {
+          localStorage.setItem(getUserProfileStorageKey(user.id), JSON.stringify(updated));
+        }
       } catch {}
       return updated;
     });
@@ -200,9 +241,11 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
               : "free";
           let localStored: Partial<UserProfile> = {};
           try {
-            const rawLocal = localStorage.getItem(STORAGE_KEY);
+            const scopedKey = getUserProfileStorageKey(data.id || user?.id);
+            const rawLocal = localStorage.getItem(scopedKey) || localStorage.getItem(STORAGE_KEY);
             if (rawLocal) localStored = JSON.parse(rawLocal) || {};
           } catch {}
+          const legacyAvatar = typeof window !== "undefined" ? (localStorage.getItem("vocaship_custom_avatar") || "") : "";
 
           const incomingEmail = String(data.email || "");
           const preservedEmail =
@@ -222,7 +265,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
                 preservedEmail
               ),
               email: preservedEmail,
-              avatar_url: localStored.avatar_url ?? data.avatar_url ?? prev.avatar_url ?? "",
+              avatar_url: localStored.avatar_url || data.avatar_url || prev.avatar_url || legacyAvatar || "",
               is_pro: Boolean(data.is_pro),
               plan_tier: tier,
               planTier: tier,
@@ -235,6 +278,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             };
             try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(synced));
+              if (synced.id) {
+                localStorage.setItem(getUserProfileStorageKey(synced.id), JSON.stringify(synced));
+              }
             } catch {}
             return synced;
           });
@@ -259,7 +305,18 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     };
     setUserProfile(updated);
     try {
+      const activeUserId = updated.id || user?.id || getAuthUserIdFromStorage();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      if (activeUserId) {
+        localStorage.setItem(getUserProfileStorageKey(activeUserId), JSON.stringify(updated));
+      }
+      if (updates.avatar_url !== undefined) {
+        if (updates.avatar_url) {
+          localStorage.setItem("vocaship_custom_avatar", updates.avatar_url);
+        } else {
+          localStorage.removeItem("vocaship_custom_avatar");
+        }
+      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("vocaship_profile_updated", { detail: updated })

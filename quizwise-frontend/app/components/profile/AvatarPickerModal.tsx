@@ -18,6 +18,7 @@ import { useLanguage } from "../../context/LanguageContext";
 export interface AvatarPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSelectAvatar?: (avatarUrl: string) => void;
 }
 
 // 10 Standart İsimsiz Avatar (5 Kadın, 5 Erkek/Karakter)
@@ -38,6 +39,7 @@ const STANDARD_AVATARS = [
 export default function AvatarPickerModal({
   isOpen,
   onClose,
+  onSelectAvatar,
 }: AvatarPickerModalProps) {
   const { userProfile, updateAvatar } = useProfile();
   const { t } = useLanguage();
@@ -189,6 +191,7 @@ export default function AvatarPickerModal({
     setIsSaving(true);
     try {
       await updateAvatar(selectedAvatar);
+      onSelectAvatar?.(selectedAvatar);
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);

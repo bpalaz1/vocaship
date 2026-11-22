@@ -18,6 +18,7 @@ import {
 import confetti from "canvas-confetti";
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
+import { useProfile } from "../../context/ProfileContext";
 
 export interface AvatarStudioModalProps {
   isOpen: boolean;
@@ -97,6 +98,7 @@ export default function AvatarStudioModal({
   onAvatarChanged,
 }: AvatarStudioModalProps) {
   const { t } = useLanguage();
+  const { updateAvatar } = useProfile();
   const [activeTab, setActiveTab] = useState<"preset" | "ai_custom">("preset");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("leo");
 
@@ -280,6 +282,8 @@ export default function AvatarStudioModal({
     } catch (e) {
       console.warn("Could not save to localStorage:", e);
     }
+
+    void updateAvatar(urlToApply);
 
     if (onAvatarChanged) {
       onAvatarChanged(urlToApply);

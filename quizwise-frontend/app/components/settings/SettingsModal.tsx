@@ -87,7 +87,8 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
       let storedProfile: Record<string, any> = {};
       if (typeof window !== "undefined") {
         try {
-          const raw = localStorage.getItem("vocaship_profile");
+          const scopedKey = userProfile.id ? `vocaship_profile_${userProfile.id}` : null;
+          const raw = (scopedKey ? localStorage.getItem(scopedKey) : null) || localStorage.getItem("vocaship_profile");
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === "object") {
@@ -105,7 +106,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
       setUsername(resolvedUsername);
       setEmail(resolvedEmail);
       setEmailError(null);
-      setSelectedAvatar(storedProfile.avatar_url ?? userProfile.avatar_url ?? "");
+      setSelectedAvatar(userProfile.avatar_url || storedProfile.avatar_url || "");
       setSelectedLang(language || "tr");
       setStudyLevel(storedProfile.study_level || userProfile.study_level || "B1");
       setDailyGoal(storedProfile.daily_goal || userProfile.daily_goal || 20);
@@ -126,6 +127,13 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialTab]);
+
+  // Avatar seçiciden veya başka bir kaynaktan userProfile.avatar_url güncellendiğinde yerel state'i senkronize tut
+  useEffect(() => {
+    if (isOpen && userProfile.avatar_url) {
+      setSelectedAvatar(userProfile.avatar_url);
+    }
+  }, [isOpen, userProfile.avatar_url]);
 
   if (!isOpen) return null;
 
@@ -718,6 +726,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
       <AvatarPickerModal
         isOpen={isAvatarPickerOpen}
         onClose={() => setIsAvatarPickerOpen(false)}
+        onSelectAvatar={(url) => setSelectedAvatar(url)}
       />
     </>
   );
