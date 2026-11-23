@@ -132,10 +132,15 @@ export default function GoldQuestGame({
   const [maxStreak, setMaxStreak] = useState(0);
   const [personalBestGold, setPersonalBestGold] = useState<number>(() => {
     if (typeof window !== "undefined") {
-      const saved = parseInt(localStorage.getItem("vocaship_gold_quest_best") || "150", 10);
-      return isNaN(saved) ? 150 : saved;
+      try {
+        const { getScopedKey } = require("../../utils/userStorage");
+        const saved = parseInt(localStorage.getItem(getScopedKey("vocaship_gold_quest_best")) || "0", 10);
+        return isNaN(saved) ? 0 : saved;
+      } catch {
+        return 0;
+      }
     }
-    return 150;
+    return 0;
   });
   const [sessionMistakes, setSessionMistakes] = useState<GameMistakeItem[]>([]);
   const [compensatedWords, setCompensatedWords] = useState<Record<string, boolean>>({});
@@ -602,7 +607,8 @@ export default function GoldQuestGame({
           setPersonalBestGold(nextGold);
           if (typeof window !== "undefined") {
             try {
-              localStorage.setItem("vocaship_gold_quest_best", String(nextGold));
+              const { getScopedKey } = require("../../utils/userStorage");
+              localStorage.setItem(getScopedKey("vocaship_gold_quest_best"), String(nextGold));
             } catch {}
           }
         }

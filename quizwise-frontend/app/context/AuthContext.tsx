@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { API_BASE } from "../config";
 import { sanitizeUsername } from "../utils/avatarHelper";
+import { clearLegacySharedCaches } from "../utils/userStorage";
 
 export type PlanTier = "free" | "pro";
 
@@ -164,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const openWelcomeModal = () => {
     try {
+      clearLegacySharedCaches();
       sessionStorage.removeItem(LOGGED_OUT_KEY);
       sessionStorage.removeItem(WELCOME_SKIPPED_KEY);
     } catch {}
@@ -252,6 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setGateReason(null);
     setIsWelcomeModalOpen(false);
     try {
+      clearLegacySharedCaches();
       sessionStorage.removeItem(LOGGED_OUT_KEY);
       sessionStorage.removeItem(GUEST_MODE_KEY);
       localStorage.removeItem(GUEST_MODE_KEY);
@@ -516,6 +519,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setGateReason(null);
     setIsAuthModalOpen(false);
     try {
+      clearLegacySharedCaches();
       localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
       localStorage.removeItem("vocaship_token");
       localStorage.removeItem("access_token");

@@ -34,6 +34,7 @@ import {
 } from "../utils/activeDeckStore";
 import { saveSpeakingArchiveSession } from "../actions/speakingArchive";
 import { resilientFetch } from "../config";
+import { getScopedKey } from "../utils/userStorage";
 import CheckoutModal from "../components/payments/CheckoutModal";
 import {
   NEURAL_VOICES,
@@ -356,13 +357,14 @@ function SpeakingContent() {
   const loadSavedArchives = useCallback(() => {
     if (typeof window === "undefined") return;
     try {
-      const raw = localStorage.getItem("vocaship_speaking_archives");
+      const archiveKey = getScopedKey("vocaship_speaking_archives", user?.id);
+      const raw = localStorage.getItem(archiveKey);
       const parsed = raw ? JSON.parse(raw) : [];
       setSavedArchives(Array.isArray(parsed) ? parsed : []);
     } catch {
       setSavedArchives([]);
     }
-  }, []);
+  }, [user?.id]);
 
   // Okuma Odasından Gelindiğinde Hikaye Bağlamı (?mode=story_debate veya ?mode=story)
   const urlMode = searchParams.get("mode");
@@ -723,12 +725,12 @@ function SpeakingContent() {
       sessionArchiveRef.current = updated;
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("vocaship_speaking_archives", JSON.stringify(updated));
+          localStorage.setItem(getScopedKey("vocaship_speaking_archives", user?.id), JSON.stringify(updated));
         } catch {}
       }
       return updated;
     });
-  }, []);
+  }, [user?.id]);
 
   // ---------------------------------------------------------------------------
   // 🎙️ KESİNTİSİZ SPEECH RECOGNITION & 1.5SN AKILLI GÖNDERİM
@@ -1603,7 +1605,8 @@ function SpeakingContent() {
 
     if (typeof window !== "undefined" && turnsToSave.length > 0) {
       try {
-        const existingRaw = localStorage.getItem("vocaship_speaking_archives");
+        const archiveKey = getScopedKey("vocaship_speaking_archives", user?.id);
+        const existingRaw = localStorage.getItem(archiveKey);
         const existing = existingRaw ? JSON.parse(existingRaw) : [];
         const newEntry = {
           id: Date.now().toString(),
@@ -1614,7 +1617,7 @@ function SpeakingContent() {
           turns: turnsToSave,
         };
         localStorage.setItem(
-          "vocaship_speaking_archives",
+          archiveKey,
           JSON.stringify([newEntry, ...(Array.isArray(existing) ? existing : [])])
         );
       } catch {}

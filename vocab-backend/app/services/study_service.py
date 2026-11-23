@@ -180,28 +180,51 @@ def process_card_review(card_id: str, rating: Optional[int] = None, is_correct: 
     return process_card_review_result(card_id=card_id, is_correct=is_correct, rating=rating)
 
 
-def get_weak_spot_cards(deck_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-    """needs_review == True olan zayıf kelimeleri en çok hata yapılandan başlayarak listeler."""
+def _get_user_deck_ids(db, user_id: Optional[str]) -> Optional[List[str]]:
+    clean_uid = str(user_id or "").strip()
+    if not clean_uid:
+        return []
+    try:
+        res = db.table("decks").select("id").eq("user_id", clean_uid).execute()
+        return [str(d["id"]) for d in (res.data or []) if d.get("id")]
+    except Exception:
+        return []
+
+
+def get_weak_spot_cards(deck_id: Optional[str] = None, limit: int = 50, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """needs_review == True olan zayıf kelimeleri yalnızca ilgili kullanıcıya/desteye aitse listeler."""
     db = get_db()
-    query = db.table("flashcards").select("*").eq("needs_review", True)
-    if deck_id:
-        query = query.eq("deck_id", deck_id)
+    if not deck_id:
+        allowed_decks = _get_user_deck_ids(db, user_id)
+        if not allowed_decks:
+            return []
+        query = db.table("flashcards").select("*").eq("needs_review", True).in_("deck_id", allowed_decks)
+    else:
+        query = db.table("flashcards").select("*").eq("needs_review", True).eq("deck_id", deck_id)
     res = query.order("mistake_count", desc=True).limit(limit).execute()
     return res.data or []
 
 
-def get_due_flashcards(deck_id: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+def get_due_flashcards(deck_id: Optional[str] = None, limit: int = 20, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Günlük tekrar havuzu:
+    Günlük tekrar havuzu (kullanıcı bazlı izole):
     needs_review == True olan zayıf kelimeler havuzun en başına serpiştirilir.
     """
     db = get_db()
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    allowed_decks: Optional[List[str]] = None
+    if not deck_id:
+        allowed_decks = _get_user_deck_ids(db, user_id)
+        if not allowed_decks:
+            return []
+
     # 1. Zayıf kelimeleri (needs_review=True) öncelikli olarak çek
     query_weak = db.table("flashcards").select("*").eq("needs_review", True)
     if deck_id:
         query_weak = query_weak.eq("deck_id", deck_id)
+    elif allowed_decks:
+        query_weak = query_weak.in_("deck_id", allowed_decks)
     weak_res = query_weak.order("mistake_count", desc=True).limit(limit).execute()
     weak_cards = weak_res.data or []
 
@@ -212,6 +235,8 @@ def get_due_flashcards(deck_id: Optional[str] = None, limit: int = 20) -> List[D
         query_due = db.table("flashcards").select("*").lte("next_review_date", now_iso)
         if deck_id:
             query_due = query_due.eq("deck_id", deck_id)
+        elif allowed_decks:
+            query_due = query_due.in_("deck_id", allowed_decks)
         due_res = query_due.order("next_review_date", desc=False).limit(limit).execute()
 
         weak_ids = {c.get("id") for c in weak_cards}

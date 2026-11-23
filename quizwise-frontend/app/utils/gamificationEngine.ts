@@ -351,10 +351,11 @@ export function awardGamificationReward(
       })
     );
 
-    // 2. LocalStorage XP
+    // 2. LocalStorage XP (Kullanıcı bazlı izole)
     try {
-      const curXP = parseInt(localStorage.getItem("vocaship_xp") || "450", 10);
-      localStorage.setItem("vocaship_xp", String(curXP + totalXP));
+      const { readUserRewardNumber, writeUserRewardNumber } = require("./rewardsStorage");
+      const curXP = readUserRewardNumber("xp", 0);
+      writeUserRewardNumber("xp", curXP + totalXP);
     } catch {}
 
     // 3. API Sync (Arka planda sessiz)

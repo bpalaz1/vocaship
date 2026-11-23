@@ -1766,10 +1766,31 @@ async def create_speaking_archive(payload: SpeakingArchiveCreate, db: Any = Depe
 
 
 @router.get("/archives", response_model=List[SpeakingArchiveResponse])
-async def list_speaking_archives(user_id: Optional[str] = None, db: Any = Depends(get_db)):
-    """Kullanıcının geçmiş konuşma oturumu arşivlerini tarihe göre azalan sırada listeler."""
+async def list_speaking_archives(
+    request: Request,
+    user_id: Optional[str] = None,
+    db: Any = Depends(get_db),
+):
+    """Yalnızca aktif kullanıcının geçmiş konuşma oturumu arşivlerini tarihe göre azalan sırada listeler."""
+    effective_user_id = (user_id or "").strip()
+    if not effective_user_id:
+        try:
+            from app.services.quota_service import _extract_token_payload
+            token_data = _extract_token_payload(request)
+            if token_data and token_data.get("sub"):
+                effective_user_id = str(token_data["sub"]).strip()
+        except Exception:
+            pass
+    if not effective_user_id:
+        return []
+
     try:
-        query = db.table("speaking_archives").select("*").order("created_at", desc=True)
+        query = (
+            db.table("speaking_archives")
+            .select("*")
+            .eq("user_id", effective_user_id)
+            .order("created_at", desc=True)
+        )
         res = query.execute()
         raw_items = res.data or []
     except Exception as err:

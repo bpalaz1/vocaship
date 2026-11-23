@@ -1,5 +1,6 @@
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from app.services.quota_service import _extract_token_payload
 from app.schemas.study import (
     ReviewCardRequest,
     ReviewCardResponse,
@@ -37,15 +38,21 @@ async def review_card(payload: ReviewCardRequest):
 
 @router.get("/due-cards")
 async def list_due_cards(
+    request: Request,
     deck_id: Optional[str] = Query(None, description="Opsiyonel deste UUID'si"),
+    user_id: Optional[str] = Query(None, description="Kullanıcı UUID'si"),
     limit: int = Query(20, ge=1, le=100, description="Getirilecek maksimum kart sayısı")
 ):
     """
-    Bugün tekrar edilmesi gereken kelime kartlarını listeler.
-    Zayıf kelimeler (needs_review=True) havuzun en başına serpiştirilir.
+    Bugün tekrar edilmesi gereken kelime kartlarını yalnızca aktif kullanıcı için listeler.
     """
+    effective_user_id = (user_id or "").strip() or None
+    if not effective_user_id:
+        token_data = _extract_token_payload(request)
+        if token_data and token_data.get("sub"):
+            effective_user_id = str(token_data["sub"]).strip()
     try:
-        cards = get_due_flashcards(deck_id=deck_id, limit=limit)
+        cards = get_due_flashcards(deck_id=deck_id, limit=limit, user_id=effective_user_id)
         return {"total": len(cards), "cards": cards}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Kartlar getirilemedi: {str(e)}")
@@ -53,12 +60,19 @@ async def list_due_cards(
 
 @router.get("/weak-spots", response_model=WeakSpotsResponse)
 async def list_study_weak_spots(
+    request: Request,
     deck_id: Optional[str] = Query(None, description="Opsiyonel deste filtresi"),
+    user_id: Optional[str] = Query(None, description="Kullanıcı UUID'si"),
     limit: int = Query(50, ge=1, le=100, description="Getirilecek maksimum zayıf kart sayısı")
 ):
-    """Zayıf Nokta Avcısı: Sadece needs_review == true olan kartları listeler."""
+    """Zayıf Nokta Avcısı: Yalnızca aktif kullanıcının needs_review == true olan kartlarını listeler."""
+    effective_user_id = (user_id or "").strip() or None
+    if not effective_user_id:
+        token_data = _extract_token_payload(request)
+        if token_data and token_data.get("sub"):
+            effective_user_id = str(token_data["sub"]).strip()
     try:
-        cards = get_weak_spot_cards(deck_id=deck_id, limit=limit)
+        cards = get_weak_spot_cards(deck_id=deck_id, limit=limit, user_id=effective_user_id)
         return {"total": len(cards), "cards": cards}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Zayıf noktalar getirilemedi: {str(e)}")

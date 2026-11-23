@@ -224,7 +224,7 @@ export default function ChestOpenModal({
 
     try {
       localStorage.setItem(CLAIMED_TIERS_STORAGE_KEY, JSON.stringify(nextClaimed));
-      localStorage.setItem("vocaship_gold", nextGold.toString());
+      writeUserRewardNumber("gold", nextGold);
       window.dispatchEvent(
         new CustomEvent("vocaship_gold_updated", {
           detail: { gold: nextGold, added: cell.rewardGold },

@@ -160,8 +160,8 @@ def get_user_profile(user_id: Optional[str] = None) -> UserProfileResponse:
     user = get_or_create_user(db, user_id)
 
     curr_xp = int(user.get("total_xp") or 0)
-    curr_coins = int(user.get("coins") if user.get("coins") is not None else 300)
-    curr_streak = int(user.get("streak_days") or 1)
+    curr_coins = int(user.get("coins") if user.get("coins") is not None else 0)
+    curr_streak = int(user.get("streak_days") or 0)
     last_active = user.get("last_active_date")
     active_avatar = str(user.get("active_avatar") or "🌟")
     active_avatar_id = str(user.get("active_avatar_id") or "char_default")
