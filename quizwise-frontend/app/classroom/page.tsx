@@ -392,19 +392,19 @@ function ClassroomContent() {
       {/* ========================================================================= */}
       {/* 2. ANA İÇERİK ALANI                                                       */}
       {/* ========================================================================= */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full flex flex-col justify-start">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex-1 w-full flex flex-col justify-between lg:max-h-[calc(100vh-8.5rem)]">
         {/* ======================================================================= */}
         {/* TAB 1: SINIFLARIM / ODALAR                                              */}
         {/* ======================================================================= */}
         {activeTab === "classes" && (
           <>
             {classrooms.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center py-8 sm:py-12 animate-in fade-in zoom-in-95 duration-300">
-                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex-1 flex items-center justify-center py-2 animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* SOL KART: Öğrenci Olarak Katıl (Ücretsiz) */}
                   <div
                     data-testid="classroom-zero-student-card"
-                    className={`rounded-3xl border p-6 sm:p-8 flex flex-col justify-between gap-6 shadow-xl transition ${
+                    className={`rounded-3xl border p-5 flex flex-col justify-between gap-4 shadow-xl transition ${
                       isDark
                         ? "bg-slate-900/80 border-emerald-500/30 hover:border-emerald-400/50"
                         : "bg-white border-emerald-200 hover:border-emerald-400"
@@ -533,25 +533,25 @@ function ClassroomContent() {
             )}
 
             {/* 3 KARTLI CANLI STÜDYO & ÜRÜN TANITIM VİTRİNİ */}
-            <section className="mt-8 space-y-5">
+            <section className="mt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2.5 shadow-xl">
+                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2 shadow-xl">
                   <div className="text-xl">🖥️</div>
                   <h3 className="text-sm font-bold text-white">
                     {t(
                       "cls_studio_card1_t",
-                      "İnteraktif Akıllı Tahta & PDF Stüdyosu"
+                      "İnteraktif Akıllı Tahta & Doküman Stüdyosu"
                     )}
                   </h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     {t(
                       "cls_studio_card1_d",
-                      "Her branşa uygun nötr akıllı tahtada PDF yansıtın, fosforlu kalemle çizin ve dersi tek tıkla AI özetine dönüştürün."
+                      "PDF, Word, Excel dosyalarınızı veya ekranınızı tahtaya yansıtın; fosforlu kalem, şekil ve lazer işaretçiyle canlı ders anlatın."
                     )}
                   </p>
                 </div>
 
-                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2.5 shadow-xl">
+                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2 shadow-xl">
                   <div className="text-xl">🎟️</div>
                   <h3 className="text-sm font-bold text-white">
                     {t(
@@ -567,7 +567,7 @@ function ClassroomContent() {
                   </p>
                 </div>
 
-                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2.5 shadow-xl">
+                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2 shadow-xl">
                   <div className="text-xl">⚡</div>
                   <h3 className="text-sm font-bold text-white">
                     {t(
@@ -582,27 +582,6 @@ function ClassroomContent() {
                     )}
                   </p>
                 </div>
-              </div>
-
-              {/* Zarif Aksiyon Satırı */}
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={handleOpenCreateClass}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition active:scale-95 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{t("cls_studio_cta_create", "Kendi Sınıfını Oluştur")}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleOpenJoinPin}
-                  className="px-5 py-2.5 rounded-xl bg-[#111827]/90 hover:bg-slate-800 border border-slate-700/80 text-slate-200 text-xs sm:text-sm font-bold flex items-center gap-2 transition active:scale-95 cursor-pointer"
-                >
-                  <KeyRound className="w-4 h-4 text-indigo-400" />
-                  <span>{t("cls_studio_cta_pin", "Davet Kodu (PIN) Gir")}</span>
-                </button>
               </div>
             </section>
           </>
