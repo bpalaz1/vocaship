@@ -192,7 +192,7 @@ class ClassCreateRequest(BaseModel):
     duration_minutes: int = Field(default=60, description="Ders süresi (dakika)")
     monthly_credits: int = Field(default=0, description="Aylık abonelik kredi hakkı")
     visibility: Literal["public", "invite_only"] = Field(default="invite_only", description="'public' | 'invite_only'")
-    category: Literal["english", "exam", "stem", "software", "other"] = Field(default="english", description="Ders kategorisi")
+    category: Literal["speaking", "exam", "business", "reading", "english", "other"] = Field(default="speaking", description="İngilizce oda kategorisi")
     teaching_lang: Literal["TR", "EN", "DE", "OTHER"] = Field(default="TR", description="Anlatım dili")
     description: Optional[str] = Field(default=None, description="Ders açıklaması")
     target_audience: Optional[str] = Field(default=None, description="Hedef kitle")

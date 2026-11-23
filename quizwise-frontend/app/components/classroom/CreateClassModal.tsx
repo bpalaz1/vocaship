@@ -70,7 +70,7 @@ export default function CreateClassModal({
 
   // Vitrin, Branş, Anlatım Dili & Açıklama
   const [visibility, setVisibility] = useState<"public" | "invite_only">("invite_only");
-  const [category, setCategory] = useState<"english" | "exam" | "stem" | "software" | "other">("english");
+  const [category, setCategory] = useState<"speaking" | "exam" | "business" | "reading">("speaking");
   const [teachingLang, setTeachingLang] = useState<"TR" | "EN" | "DE" | "OTHER">("TR");
   const [description, setDescription] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
@@ -106,7 +106,7 @@ export default function CreateClassModal({
       setCurrency("TRY");
       setBillingType("one_time");
       setVisibility("invite_only");
-      setCategory("english");
+      setCategory("speaking");
       setTeachingLang("TR");
       setDescription("");
       setTargetAudience("");
@@ -517,17 +517,16 @@ export default function CreateClassModal({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-300">Branş / Kategori</label>
+                  <label className="text-[11px] font-bold text-slate-300">Oda Kategorisi</label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as any)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="english">İngilizce</option>
-                    <option value="exam">Sınav (YDS/IELTS)</option>
-                    <option value="stem">Matematik & Fen</option>
-                    <option value="software">Yazılım</option>
-                    <option value="other">Diğer</option>
+                    <option value="speaking">Speaking Kulübü</option>
+                    <option value="exam">YDS / IELTS / TOEFL</option>
+                    <option value="business">İş İngilizcesi</option>
+                    <option value="reading">Okuma & Kelime</option>
                   </select>
                 </div>
 
