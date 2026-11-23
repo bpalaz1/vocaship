@@ -462,10 +462,12 @@ class LocalDatabaseClient:
             CREATE TABLE IF NOT EXISTS payout_profiles (
                 id TEXT PRIMARY KEY,
                 user_id TEXT UNIQUE NOT NULL,
+                country TEXT DEFAULT 'TR',
+                full_name TEXT DEFAULT '',
                 account_type TEXT DEFAULT 'individual',
-                legal_full_name TEXT NOT NULL,
-                identity_number TEXT NOT NULL,
-                iban TEXT NOT NULL,
+                legal_full_name TEXT DEFAULT '',
+                identity_number TEXT DEFAULT '',
+                iban TEXT DEFAULT '',
                 created_at TEXT,
                 updated_at TEXT
             );
@@ -483,6 +485,13 @@ class LocalDatabaseClient:
                 invite_slug TEXT UNIQUE NOT NULL,
                 code TEXT,
                 student_count INTEGER DEFAULT 0,
+                visibility TEXT DEFAULT 'invite_only',
+                category TEXT DEFAULT 'english',
+                teaching_lang TEXT DEFAULT 'TR',
+                description TEXT DEFAULT '',
+                target_audience TEXT DEFAULT '',
+                report_count INTEGER DEFAULT 0,
+                is_hidden INTEGER DEFAULT 0,
                 created_at TEXT
             );
 
@@ -550,6 +559,21 @@ class LocalDatabaseClient:
             _safe_add_columns("class_sessions", [
                 ("join_code", "TEXT"),
                 ("notes", "TEXT"),
+            ])
+
+            _safe_add_columns("payout_profiles", [
+                ("country", "TEXT DEFAULT 'TR'"),
+                ("full_name", "TEXT DEFAULT ''"),
+            ])
+
+            _safe_add_columns("classes", [
+                ("visibility", "TEXT DEFAULT 'invite_only'"),
+                ("category", "TEXT DEFAULT 'english'"),
+                ("teaching_lang", "TEXT DEFAULT 'TR'"),
+                ("description", "TEXT DEFAULT ''"),
+                ("target_audience", "TEXT DEFAULT ''"),
+                ("report_count", "INTEGER DEFAULT 0"),
+                ("is_hidden", "INTEGER DEFAULT 0"),
             ])
 
             # Ensure default user exists

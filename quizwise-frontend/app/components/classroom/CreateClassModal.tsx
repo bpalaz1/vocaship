@@ -68,6 +68,13 @@ export default function CreateClassModal({
   const [currency, setCurrency] = useState<"TRY" | "USD" | "EUR">("TRY");
   const [billingType, setBillingType] = useState<"one_time" | "monthly">("one_time");
 
+  // Vitrin, Branş, Anlatım Dili & Açıklama
+  const [visibility, setVisibility] = useState<"public" | "invite_only">("invite_only");
+  const [category, setCategory] = useState<"english" | "exam" | "stem" | "software" | "other">("english");
+  const [teachingLang, setTeachingLang] = useState<"TR" | "EN" | "DE" | "OTHER">("TR");
+  const [description, setDescription] = useState("");
+  const [targetAudience, setTargetAudience] = useState("");
+
   // İhtiyaç Anında IBAN Kontrolü (Lazy Onboarding)
   const [hasIban, setHasIban] = useState<boolean | null>(null);
   const [maskedIban, setMaskedIban] = useState<string | null>(null);
@@ -98,6 +105,11 @@ export default function CreateClassModal({
       setPrice(250);
       setCurrency("TRY");
       setBillingType("one_time");
+      setVisibility("invite_only");
+      setCategory("english");
+      setTeachingLang("TR");
+      setDescription("");
+      setTargetAudience("");
       setHasIban(null);
       setMaskedIban(null);
       setHasAutoPromptedPayout(false);
@@ -206,6 +218,11 @@ export default function CreateClassModal({
           scheduled_dates_utc: scheduledDatesUtc,
           duration_minutes: Number(durationMinutes),
           monthly_credits: billingType === "monthly" ? 4 : 0,
+          visibility,
+          category,
+          teaching_lang: teachingLang,
+          description: description.trim() || null,
+          target_audience: targetAudience.trim() || null,
         }),
       });
 
@@ -466,6 +483,90 @@ export default function CreateClassModal({
                   {t("cls_cm_flex_note", "📅 Öğrencileriniz ders biletini aldıktan sonra takviminizdeki açık saatlerden uygun olanı seçecektir.")}
                 </div>
               )}
+            </div>
+
+            {/* 2.5 Vitrin Görünürlüğü, Branş, Dil ve İçerik */}
+            <div className="space-y-3 p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Görünürlük</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("public")}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer text-xs font-bold ${
+                      visibility === "public"
+                        ? "bg-emerald-600/20 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/40"
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    🌍 Herkese Açık Vitrin Dersi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("invite_only")}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer text-xs font-bold ${
+                      visibility === "invite_only"
+                        ? "bg-indigo-600/20 border-indigo-500 text-indigo-200 ring-1 ring-indigo-500/40"
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    🔒 Sadece Davet Linki
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-300">Branş / Kategori</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as any)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="english">İngilizce</option>
+                    <option value="exam">Sınav (YDS/IELTS)</option>
+                    <option value="stem">Matematik & Fen</option>
+                    <option value="software">Yazılım</option>
+                    <option value="other">Diğer</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-300">Dersin Anlatım Dili</label>
+                  <select
+                    value={teachingLang}
+                    onChange={(e) => setTeachingLang(e.target.value as any)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="TR">Türkçe (TR)</option>
+                    <option value="EN">İngilizce (EN)</option>
+                    <option value="DE">Almanca (DE)</option>
+                    <option value="OTHER">Diğer</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-300">Kısa Ders İçeriği</label>
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Bu derste hangi konuları işleyeceksiniz?"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-300">Kimler Katılmalı</label>
+                <input
+                  type="text"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  placeholder="Örn: B1-B2 seviyesinde konuşma pratiği yapmak isteyenler"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
 
             {/* 3. Katılım Modeli (Tek Karar Anahtarı: Ücretsiz vs Ücretli) */}

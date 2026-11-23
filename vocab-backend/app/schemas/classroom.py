@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, Field
 
 # =========================================================================
@@ -174,10 +174,11 @@ class BoardSummaryResponse(BaseModel):
 
 class PayoutProfileUpsert(BaseModel):
     user_id: str = Field(..., description="Kullanıcı benzersiz ID'si")
-    account_type: str = Field(default="individual", description="'individual' | 'company'")
-    legal_full_name: str = Field(..., description="Yasal Ad Soyad veya Şirket Ünvanı")
-    identity_number: str = Field(..., description="T.C. Kimlik No veya Vergi Kimlik No")
-    iban: str = Field(..., description="TR ile başlayan IBAN numarası")
+    country: Literal["TR", "GLOBAL"] = Field(default="TR", description="'TR' | 'GLOBAL'")
+    full_name: Optional[str] = Field(default=None, description="Hesap sahibi Ad Soyad")
+    legal_full_name: Optional[str] = Field(default=None, description="Geriye dönük uyumluluk için Ad Soyad")
+    account_type: Optional[str] = Field(default="individual", description="'individual' | 'company'")
+    iban: Optional[str] = Field(default="", description="Türkiye için TR IBAN, Global için opsiyonel Stripe/Wise hesabı")
 
 
 class ClassCreateRequest(BaseModel):
@@ -190,6 +191,11 @@ class ClassCreateRequest(BaseModel):
     scheduled_dates_utc: List[str] = Field(default=[], description="ISO-8601 UTC tarih-saat listesi (Örn: ['2026-11-18T17:00:00Z'])")
     duration_minutes: int = Field(default=60, description="Ders süresi (dakika)")
     monthly_credits: int = Field(default=0, description="Aylık abonelik kredi hakkı")
+    visibility: Literal["public", "invite_only"] = Field(default="invite_only", description="'public' | 'invite_only'")
+    category: Literal["english", "exam", "stem", "software", "other"] = Field(default="english", description="Ders kategorisi")
+    teaching_lang: Literal["TR", "EN", "DE", "OTHER"] = Field(default="TR", description="Anlatım dili")
+    description: Optional[str] = Field(default=None, description="Ders açıklaması")
+    target_audience: Optional[str] = Field(default=None, description="Hedef kitle")
 
 
 class JoinClassRequest(BaseModel):

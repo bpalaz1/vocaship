@@ -22,6 +22,8 @@ import {
   Send,
   Video,
   ExternalLink,
+  Globe,
+  ArrowRight,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import ClassCard, { ClassroomItem } from "../components/classroom/ClassCard";
@@ -111,10 +113,26 @@ function ClassroomContent() {
     setShowJoinPinModal(true);
   };
 
-  // Aktif Sekme: 'classes' | 'calendar'
+  // Aktif Sekme: 'showcase' | 'classes' | 'calendar'
   const paramTab = searchParams.get("tab");
-  const initialTab = paramTab === "calendar" || paramTab === "archive" ? "calendar" : "classes";
-  const [activeTab, setActiveTab] = useState<"classes" | "calendar">(initialTab);
+  const initialTab: "showcase" | "classes" | "calendar" =
+    paramTab === "calendar" || paramTab === "archive"
+      ? "calendar"
+      : paramTab === "classes"
+      ? "classes"
+      : !user
+      ? "showcase"
+      : "showcase";
+  const [activeTab, setActiveTab] = useState<"showcase" | "classes" | "calendar">(initialTab);
+
+  // Açık Dersler (Vitrin) State'leri
+  const [showcaseClasses, setShowcaseClasses] = useState<any[]>([]);
+  const [showcaseLoading, setShowcaseLoading] = useState<boolean>(false);
+  const [showcaseSearch, setShowcaseSearch] = useState<string>("");
+  const [showcaseCategory, setShowcaseCategory] = useState<string>("all");
+  const [showcaseLang, setShowcaseLang] = useState<string>("ALL");
+  const [showcaseDateFilter, setShowcaseDateFilter] = useState<"all" | "today" | "week">("all");
+  const [showcaseFreeOnly, setShowcaseFreeOnly] = useState<boolean>(false);
 
   // Sınıf Listesi
   const [classrooms, setClassrooms] = useState<ClassroomItem[]>([]);
@@ -250,6 +268,32 @@ function ClassroomContent() {
     fetchTimeline();
   }, [currentUserId, user, isGuest]);
 
+  // Açık Dersler Vitrini (Public Showcase) Verisini Çek
+  const fetchPublicShowcase = async () => {
+    setShowcaseLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (showcaseCategory !== "all") qs.set("category", showcaseCategory);
+      if (showcaseLang !== "ALL") qs.set("teaching_lang", showcaseLang);
+      if (showcaseSearch.trim()) qs.set("search", showcaseSearch.trim());
+      if (showcaseFreeOnly) qs.set("free_only", "true");
+      const res = await fetch(`${apiUrl}/api/v1/classroom/public-showcase?${qs.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setShowcaseClasses(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.warn("Public showcase fetch error:", err);
+    } finally {
+      setShowcaseLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPublicShowcase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiUrl, showcaseCategory, showcaseLang, showcaseSearch, showcaseFreeOnly]);
+
   // 2. Sınıf Silme
   const handleDeleteClass = (id: string) => {
     const updated = classrooms.filter((c) => c.id !== id);
@@ -325,8 +369,24 @@ function ClassroomContent() {
               </div>
             </div>
 
-            {/* İki Ana Görünüm Sekmesi */}
-            <div className="flex items-center p-1 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-bold">
+            {/* Üç Ana Görünüm Sekmesi */}
+            <div className="flex items-center p-1 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-bold flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("showcase");
+                  fetchPublicShowcase();
+                }}
+                className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "showcase"
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>🌍 Açık Dersler (Vitrin)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setActiveTab("classes")}
@@ -336,7 +396,7 @@ function ClassroomContent() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <span>{t("cls_tab_rooms", "🏫 Sınıflarım / Odalar")}</span>
+                <span>{t("cls_tab_rooms", "🏫 Sınıflarım")}</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">
                   {classrooms.length}
                 </span>
@@ -355,7 +415,7 @@ function ClassroomContent() {
                 }`}
               >
                 <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{t("cls_tab_cal", "📅 Takvim & Geçmiş Arşiv")}</span>
+                <span>{t("cls_tab_cal", "📅 Takvim & Arşiv")}</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">
                   {upcomingSessions.length + completedSessions.length}
                 </span>
@@ -390,6 +450,211 @@ function ClassroomContent() {
       {/* 2. ANA İÇERİK ALANI                                                       */}
       {/* ========================================================================= */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full flex flex-col justify-start">
+        {/* ======================================================================= */}
+        {/* TAB 0: 🌍 AÇIK DERSLER (VİTRİN) — MİSAFİRLERE DE AÇIK                    */}
+        {/* ======================================================================= */}
+        {activeTab === "showcase" && (() => {
+          const now = new Date();
+          const endOfToday = new Date(now);
+          endOfToday.setHours(23, 59, 59, 999);
+          const endOfWeek = new Date(now);
+          endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+          const displayedShowcase = showcaseClasses.filter((cls) => {
+            if (showcaseDateFilter === "all") return true;
+            const dtStr = cls.next_session_utc || cls.created_at;
+            if (!dtStr) return true;
+            const dt = new Date(dtStr);
+            if (showcaseDateFilter === "today") return dt <= endOfToday;
+            if (showcaseDateFilter === "week") return dt <= endOfWeek;
+            return true;
+          });
+
+          return (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Vitrin Üst Filtre Çubuğu */}
+              <div className={`p-4 sm:p-5 rounded-3xl border space-y-4 ${isDark ? "bg-slate-900/90 border-slate-800 shadow-lg" : "bg-[#f8fafc] border-slate-300 shadow-sm"}`}>
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                  {/* Arama Kutusu */}
+                  <div className="relative flex-1 min-w-[220px]">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={showcaseSearch}
+                      onChange={(e) => setShowcaseSearch(e.target.value)}
+                      placeholder="Ders veya konu ara..."
+                      className={`w-full border rounded-xl pl-10 pr-3.5 py-2.5 text-xs focus:outline-none focus:border-indigo-500 ${isDark ? "bg-slate-950 border-slate-800 text-white placeholder-slate-500" : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"}`}
+                    />
+                  </div>
+
+                  {/* Anlatım Dili & Tarih / Ücret Filtreleri */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={showcaseLang}
+                      onChange={(e) => setShowcaseLang(e.target.value)}
+                      className={`border rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-indigo-500 ${isDark ? "bg-slate-950 border-slate-800 text-slate-200" : "bg-white border-slate-300 text-slate-800"}`}
+                    >
+                      <option value="ALL">🌐 Ders Dili: Tümü</option>
+                      <option value="TR">🇹🇷 Türkçe (TR)</option>
+                      <option value="EN">🇬🇧 İngilizce (EN)</option>
+                      <option value="DE">🇩🇪 Almanca (DE)</option>
+                      <option value="OTHER">🌍 Diğer</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowcaseDateFilter((p) => (p === "today" ? "all" : "today"))}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        showcaseDateFilter === "today"
+                          ? "bg-indigo-600 text-white border-indigo-500"
+                          : isDark
+                          ? "bg-slate-950 border-slate-800 text-slate-300 hover:text-white"
+                          : "bg-white border-slate-300 text-slate-700"
+                      }`}
+                    >
+                      Bugün
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowcaseDateFilter((p) => (p === "week" ? "all" : "week"))}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        showcaseDateFilter === "week"
+                          ? "bg-indigo-600 text-white border-indigo-500"
+                          : isDark
+                          ? "bg-slate-950 border-slate-800 text-slate-300 hover:text-white"
+                          : "bg-white border-slate-300 text-slate-700"
+                      }`}
+                    >
+                      Bu Hafta
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowcaseFreeOnly((p) => !p)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        showcaseFreeOnly
+                          ? "bg-emerald-600 text-white border-emerald-500"
+                          : isDark
+                          ? "bg-slate-950 border-slate-800 text-emerald-400 hover:border-emerald-500/50"
+                          : "bg-white border-slate-300 text-emerald-700"
+                      }`}
+                    >
+                      🟢 Sadece Ücretsiz
+                    </button>
+                  </div>
+                </div>
+
+                {/* Kategori Sekmeleri */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {[
+                    { id: "all", label: "Tümü" },
+                    { id: "english", label: "İngilizce" },
+                    { id: "exam", label: "Sınav" },
+                    { id: "stem", label: "Matematik & Fen" },
+                    { id: "software", label: "Yazılım" },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setShowcaseCategory(cat.id)}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer ${
+                        showcaseCategory === cat.id
+                          ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
+                          : isDark
+                          ? "bg-slate-950/80 border-slate-800 text-slate-400 hover:text-white"
+                          : "bg-white border-slate-300 text-slate-700 hover:text-slate-900"
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Ders Kartları (3 Sütunlu Grid) */}
+              {showcaseLoading ? (
+                <div className={`p-12 rounded-3xl border flex items-center justify-center gap-3 text-sm ${isDark ? "bg-slate-900/40 border-slate-800 text-slate-400" : "bg-[#f8fafc] border-slate-300 text-slate-600"}`}>
+                  <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  <span>Açık dersler yükleniyor...</span>
+                </div>
+              ) : displayedShowcase.length === 0 ? (
+                <div className={`p-10 rounded-3xl border text-center space-y-2 ${isDark ? "bg-slate-900/40 border-slate-800 text-slate-400" : "bg-[#f8fafc] border-slate-300 text-slate-600"}`}>
+                  <Globe className="w-8 h-8 mx-auto text-emerald-400 opacity-80" />
+                  <p className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Seçili filtrelere uygun açık vitrin dersi bulunamadı
+                  </p>
+                  <p className="text-xs">Filtreleri temizleyebilir veya yeni bir herkese açık ders oluşturabilirsiniz.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {displayedShowcase.map((cls) => {
+                    const formattedDate = cls.next_session_utc
+                      ? new Intl.DateTimeFormat(undefined, {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(new Date(cls.next_session_utc))
+                      : "Esnek Takvim";
+                    const slugOrCode = cls.invite_slug || cls.code || cls.id;
+                    return (
+                      <div
+                        key={cls.id}
+                        className={`rounded-3xl border p-5 flex flex-col justify-between gap-4 transition hover:border-indigo-500/60 shadow-lg ${
+                          isDark ? "bg-slate-900/90 border-slate-800" : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <div className="space-y-3">
+                          {/* 1. Yerel Saat Diliminde Tarih/Saat */}
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-semibold">
+                              <Clock className="w-3 h-3" />
+                              <span>{formattedDate}</span>
+                            </span>
+                            {/* 4. Ücret */}
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-black ${
+                                Number(cls.price || 0) > 0
+                                  ? "bg-amber-500/15 border border-amber-500/30 text-amber-300"
+                                  : "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+                              }`}
+                            >
+                              {Number(cls.price || 0) > 0 ? `${cls.price} ${cls.currency || "TRY"}` : "🟢 ÜCRETSİZ"}
+                            </span>
+                          </div>
+
+                          {/* 2. Ders Başlığı */}
+                          <h3 className={`text-base font-black leading-snug line-clamp-2 ${isDark ? "text-white" : "text-slate-900"}`}>
+                            {cls.name}
+                          </h3>
+
+                          {/* 3. Eğitmen & Katılımcı Sayısı */}
+                          <div className="flex items-center justify-between text-xs text-slate-400">
+                            <span className="truncate max-w-[160px]">👨‍🏫 {cls.teacher_name || "VocaShip Eğitmeni"}</span>
+                            <span className="font-semibold text-slate-300 shrink-0">
+                              👥 {cls.attendee_count ?? 0} Katılımcı
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 5. İncele & Katıl Butonu */}
+                        <Link
+                          href={`/join/${encodeURIComponent(slugOrCode)}`}
+                          className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition active:scale-95"
+                        >
+                          <span>İncele & Katıl</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ======================================================================= */}
         {/* TAB 1: SINIFLARIM / ODALAR                                              */}
         {/* ======================================================================= */}

@@ -1372,6 +1372,53 @@ def generate_invite_slug(db=None) -> str:
     return f"{uuid.uuid4().hex[:3].upper()}-{uuid.uuid4().hex[3:6].upper()}"
 
 
+_MODERATION_BLOCKLIST = re.compile(
+    r"\b(orospu|piç|siktir|amına|göt|yarrak|fuck|shit|bitch|porn|xxx|sex\s*cam|escort|kumar|bahis|betting|crypto\s*giveaway|bedava\s*para|kolay\s*para|dolandır)\b",
+    re.IGNORECASE,
+)
+
+
+async def moderate_public_class_content(
+    title: str,
+    description: Optional[str] = None,
+    target_audience: Optional[str] = None,
+) -> bool:
+    """
+    Açık vitrin (public) dersleri için 2 saniyelik Gemini + yerel kural tabanlı içerik moderasyonu.
+    Uygunsuz içerik (küfür, argo, dolandırıcılık, cinsel içerik, spam) varsa False döner.
+    """
+    combined = " | ".join(
+        p.strip() for p in [title or "", description or "", target_audience or ""] if p and p.strip()
+    )
+    if not combined:
+        return True
+
+    if _MODERATION_BLOCKLIST.search(combined):
+        return False
+
+    prompt = (
+        "You are a strict community safety moderator for an educational platform.\n"
+        "Inspect the following public class listing (title, description, target audience) for:\n"
+        "- profanity, slurs, or hate speech\n"
+        "- scams, fraud, financial schemes, or gambling\n"
+        "- sexual or adult/inappropriate content\n"
+        "- obvious spam or gibberish\n\n"
+        f"Content:\n{combined[:1200]}\n\n"
+        'Return ONLY valid JSON: {"safe": true} or {"safe": false}.'
+    )
+    try:
+        res = await asyncio.wait_for(
+            async_call_gemini_with_fallback(prompt, temperature=0.0),
+            timeout=2.0,
+        )
+        if isinstance(res, dict) and res.get("safe") is False:
+            return False
+    except Exception:
+        # 2 saniye zaman aşımı veya ağ hatasında yerel filtreyi koruyarak akışı kilitleme
+        pass
+    return True
+
+
 def create_faz2_class(
     teacher_id: str,
     name: str,
@@ -1382,28 +1429,33 @@ def create_faz2_class(
     scheduled_dates_utc: Optional[List[str]] = None,
     duration_minutes: int = 60,
     monthly_credits: int = 0,
+    visibility: str = "invite_only",
+    category: str = "english",
+    teaching_lang: str = "TR",
+    description: Optional[str] = None,
+    target_audience: Optional[str] = None,
     db=None
 ) -> Dict[str, Any]:
     """
     Yeni tekil sınıf açar.
-    Eğer price > 0 ise payout_profiles tablosunda IBAN doğrulaması yapar.
+    Eğer price > 0 ise payout_profiles tablosunda IBAN/ödeme profili doğrulaması yapar.
     Oturumları class_sessions tablosuna status='scheduled' olarak ekler.
     """
     from app.api.v1.endpoints.payments import has_payout_profile
 
-    # Ücretli ders ise IBAN zorunluluğu kontrolü
+    # Ücretli ders ise ödeme profili kontrolü
     if price > 0:
         if not has_payout_profile(teacher_id, db=db):
             return {
                 "error": "IBAN_REQUIRED",
-                "message": "Ücretli ders açmak için önce IBAN bilgilerinizi tanımlamalısınız."
+                "message": "Ücretli ders açmak için önce IBAN / ödeme bilgilerinizi tanımlamalısınız."
             }
 
     class_id = str(uuid.uuid4())
     invite_slug = generate_invite_slug(db=db)
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    class_record = {
+    core_record = {
         "id": class_id,
         "teacher_id": teacher_id,
         "name": name.strip(),
@@ -1416,14 +1468,29 @@ def create_faz2_class(
         "invite_slug": invite_slug,
         "code": invite_slug,
         "student_count": 0,
-        "created_at": now_iso
+        "created_at": now_iso,
+    }
+
+    class_record = {
+        **core_record,
+        "visibility": visibility or "invite_only",
+        "category": category or "english",
+        "teaching_lang": teaching_lang or "TR",
+        "description": (description or "").strip(),
+        "target_audience": (target_audience or "").strip(),
+        "report_count": 0,
+        "is_hidden": False,
     }
 
     if db:
         try:
             db.table("classes").insert(class_record).execute()
         except Exception as e:
-            print(f"[DB classes Insert Error]: {e}")
+            print(f"[DB classes Insert Fallback]: {e}")
+            try:
+                db.table("classes").insert(core_record).execute()
+            except Exception as e2:
+                print(f"[DB classes Core Insert Error]: {e2}")
 
     IN_MEMORY_CLASSES_V2.insert(0, class_record)
 
@@ -1461,10 +1528,200 @@ def create_faz2_class(
         "schedule_mode": class_record["schedule_mode"],
         "duration_minutes": class_record["duration_minutes"],
         "monthly_credits": class_record["monthly_credits"],
+        "visibility": class_record["visibility"],
+        "category": class_record["category"],
+        "teaching_lang": class_record["teaching_lang"],
+        "description": class_record["description"],
+        "target_audience": class_record["target_audience"],
+        "report_count": class_record["report_count"],
+        "is_hidden": class_record["is_hidden"],
         "invite_slug": invite_slug,
         "code": invite_slug,
         "sessions": created_sessions,
         "created_at": now_iso
+    }
+
+
+def _parse_iso_utc(date_str: Optional[str]) -> Optional[datetime]:
+    if not date_str:
+        return None
+    try:
+        cleaned = str(date_str).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def get_public_showcase_classes(
+    category: Optional[str] = None,
+    teaching_lang: Optional[str] = None,
+    search: Optional[str] = None,
+    free_only: bool = False,
+    db=None,
+) -> List[Dict[str, Any]]:
+    """
+    Açık Dersler Vitrini (Public Showcase):
+    visibility == 'public', is_hidden == False olan ve yaklaşan/aktif dersleri
+    tarih sırasıyla döndürür; attendee_count ve teacher_name ekler.
+    """
+    now_utc = datetime.now(timezone.utc)
+    merged: Dict[str, Dict[str, Any]] = {}
+
+    for c in IN_MEMORY_CLASSES_V2:
+        if c.get("id"):
+            merged[str(c["id"])] = dict(c)
+
+    all_sessions: List[Dict[str, Any]] = list(IN_MEMORY_CLASS_SESSIONS)
+    attendee_counts: Dict[str, int] = {}
+    teacher_names: Dict[str, str] = {}
+
+    if db:
+        try:
+            db_classes = db.table("classes").select("*").execute().data or []
+            for row in db_classes:
+                cid = str(row.get("id") or "")
+                if not cid:
+                    continue
+                mem = merged.get(cid, {})
+                merged[cid] = {**mem, **row}
+        except Exception as e:
+            print(f"[Public Showcase Classes Query Error]: {e}")
+
+        try:
+            db_sessions = db.table("class_sessions").select("*").execute().data or []
+            seen_sids = {str(s.get("id")) for s in all_sessions if s.get("id")}
+            for s in db_sessions:
+                if str(s.get("id")) not in seen_sids:
+                    all_sessions.append(s)
+        except Exception:
+            pass
+
+        try:
+            db_att = db.table("session_attendees").select("class_id").execute().data or []
+            for a in db_att:
+                cid = str(a.get("class_id") or "")
+                if cid:
+                    attendee_counts[cid] = attendee_counts.get(cid, 0) + 1
+        except Exception:
+            pass
+
+        try:
+            teacher_ids = list({str(c.get("teacher_id") or "") for c in merged.values() if c.get("teacher_id")})
+            if teacher_ids:
+                users_res = db.table("users").select("id, full_name, username").execute().data or []
+                for u in users_res:
+                    uid = str(u.get("id") or "")
+                    if uid:
+                        teacher_names[uid] = (u.get("full_name") or u.get("username") or "Eğitmen").strip()
+        except Exception:
+            pass
+
+    results: List[Dict[str, Any]] = []
+    search_q = (search or "").strip().lower()
+    cat_filter = (category or "").strip().lower()
+    lang_filter = (teaching_lang or "").strip().upper()
+
+    for cid, cls in merged.items():
+        if str(cls.get("visibility") or "invite_only").lower() != "public":
+            continue
+        if bool(cls.get("is_hidden")) or int(cls.get("report_count") or 0) >= 3:
+            continue
+
+        if cat_filter and cat_filter != "all" and str(cls.get("category") or "english").lower() != cat_filter:
+            continue
+        if lang_filter and lang_filter != "ALL" and str(cls.get("teaching_lang") or "TR").upper() != lang_filter:
+            continue
+        if free_only and float(cls.get("price") or 0.0) > 0:
+            continue
+
+        title_text = str(cls.get("name") or "")
+        desc_text = str(cls.get("description") or "")
+        if search_q and search_q not in title_text.lower() and search_q not in desc_text.lower():
+            continue
+
+        class_sessions = [s for s in all_sessions if str(s.get("class_id") or "") == cid]
+        upcoming_sessions = []
+        for s in class_sessions:
+            if str(s.get("status") or "scheduled") == "completed":
+                continue
+            dt = _parse_iso_utc(s.get("session_date_utc"))
+            if dt is None or dt >= now_utc:
+                upcoming_sessions.append((dt or now_utc, s))
+
+        # Eğer sınıfa bağlı oturumlar varsa ve hepsi geçmişte kalmışsa vitrinde gösterme
+        if class_sessions and not upcoming_sessions:
+            continue
+
+        upcoming_sessions.sort(key=lambda item: item[0])
+        next_session_dt = upcoming_sessions[0][0] if upcoming_sessions else (_parse_iso_utc(cls.get("created_at")) or now_utc)
+        next_session_utc = upcoming_sessions[0][1].get("session_date_utc") if upcoming_sessions else cls.get("created_at")
+
+        tid = str(cls.get("teacher_id") or "")
+        results.append({
+            **cls,
+            "attendee_count": max(attendee_counts.get(cid, 0), int(cls.get("student_count") or 0)),
+            "teacher_name": teacher_names.get(tid) or "VocaShip Eğitmeni",
+            "next_session_utc": next_session_utc,
+            "sessions": [s for _, s in upcoming_sessions],
+            "_sort_dt": next_session_dt,
+        })
+
+    results.sort(key=lambda item: item["_sort_dt"])
+    for item in results:
+        item.pop("_sort_dt", None)
+    return results
+
+
+def report_public_class(class_id: str, db=None) -> Optional[Dict[str, Any]]:
+    """
+    Vitrin dersini şikayet eder; report_count'u 1 artırır ve 3'e ulaşınca is_hidden = True yapar.
+    """
+    target: Optional[Dict[str, Any]] = None
+    for c in IN_MEMORY_CLASSES_V2:
+        if str(c.get("id") or "") == class_id:
+            target = c
+            break
+
+    db_row: Optional[Dict[str, Any]] = None
+    if db:
+        try:
+            res = db.table("classes").select("*").eq("id", class_id).execute()
+            if res.data and len(res.data) > 0:
+                db_row = res.data[0]
+        except Exception as e:
+            print(f"[Report Class DB Lookup Error]: {e}")
+
+    if not target and not db_row:
+        return None
+
+    current_count = int((target or db_row or {}).get("report_count") or 0)
+    if db_row and int(db_row.get("report_count") or 0) > current_count:
+        current_count = int(db_row.get("report_count") or 0)
+
+    new_count = current_count + 1
+    is_hidden = new_count >= 3
+
+    if target:
+        target["report_count"] = new_count
+        target["is_hidden"] = is_hidden
+
+    if db:
+        try:
+            db.table("classes").update({
+                "report_count": new_count,
+                "is_hidden": is_hidden,
+            }).eq("id", class_id).execute()
+        except Exception as e:
+            print(f"[Report Class DB Update Error]: {e}")
+
+    return {
+        "success": True,
+        "class_id": class_id,
+        "report_count": new_count,
+        "is_hidden": is_hidden,
     }
 
 

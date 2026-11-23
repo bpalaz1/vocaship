@@ -42,11 +42,14 @@ def get_user_payout_profile(user_id: str, db: Optional[Client] = None) -> Option
 
 
 def has_payout_profile(user_id: str, db: Optional[Client] = None) -> bool:
-    """Kullanıcının geçerli bir IBAN profili olup olmadığını kontrol eder."""
+    """Kullanıcının geçerli bir ödeme / hakediş profili olup olmadığını kontrol eder."""
     profile = get_user_payout_profile(user_id, db=db)
-    if profile and profile.get("iban"):
-        return True
-    return False
+    if not profile:
+        return False
+    country = str(profile.get("country") or "TR").upper()
+    if country == "GLOBAL":
+        return bool(profile.get("full_name") or profile.get("legal_full_name"))
+    return bool(profile.get("iban"))
 
 
 @router.get("/payout-profile", status_code=status.HTTP_200_OK)
@@ -79,25 +82,26 @@ def upsert_payout_profile_endpoint(
     db: Client = Depends(get_db)
 ):
     """
-    IBAN, Yasal Ad Soyad ve T.C. / Vergi Kimlik No alanlarını payout_profiles tablosuna upsert eder.
-    IBAN içerisindeki boşlukları temizler ve büyük harfe çevirir.
+    Kimlik numarası (TCKN/VKN) olmadan ülke ('TR' | 'GLOBAL'), Ad Soyad ve IBAN / Global hesap
+    bilgilerini payout_profiles tablosuna upsert eder.
     """
     user_id = payload.user_id.strip()
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id zorunludur.")
 
-    # IBAN temizleme ve büyük harfe çevirme
-    clean_iban = payload.iban.replace(" ", "").upper()
-    if not clean_iban:
-        raise HTTPException(status_code=400, detail="Geçerli bir IBAN girilmelidir.")
+    country = (payload.country or "TR").strip().upper()
+    if country not in ("TR", "GLOBAL"):
+        raise HTTPException(status_code=400, detail="Ülke seçimi 'TR' veya 'GLOBAL' olmalıdır.")
 
-    legal_name = payload.legal_full_name.strip()
-    if not legal_name:
-        raise HTTPException(status_code=400, detail="Yasal isim alanı zorunludur.")
+    full_name = (payload.full_name or payload.legal_full_name or "").strip()
+    if not full_name:
+        raise HTTPException(status_code=400, detail="Hesap sahibi Ad Soyad alanı zorunludur.")
 
-    identity_num = payload.identity_number.strip()
-    if not identity_num:
-        raise HTTPException(status_code=400, detail="Kimlik numarası zorunludur.")
+    raw_iban = (payload.iban or "").strip()
+    clean_iban = raw_iban.replace(" ", "").upper() if country == "TR" else raw_iban
+    if country == "TR":
+        if not clean_iban or not clean_iban.startswith("TR") or len(clean_iban) < 16:
+            raise HTTPException(status_code=400, detail="Türkiye için geçerli bir TR IBAN numarası girilmelidir.")
 
     account_type = (payload.account_type or "individual").strip().lower()
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -107,9 +111,10 @@ def upsert_payout_profile_endpoint(
     if existing:
         profile_id = existing.get("id") or str(uuid.uuid4())
         update_data = {
+            "country": country,
+            "full_name": full_name,
             "account_type": account_type,
-            "legal_full_name": legal_name,
-            "identity_number": identity_num,
+            "legal_full_name": full_name,
             "iban": clean_iban,
             "updated_at": now_iso
         }
@@ -124,9 +129,11 @@ def upsert_payout_profile_endpoint(
         insert_data = {
             "id": profile_id,
             "user_id": user_id,
+            "country": country,
+            "full_name": full_name,
             "account_type": account_type,
-            "legal_full_name": legal_name,
-            "identity_number": identity_num,
+            "legal_full_name": full_name,
+            "identity_number": "",
             "iban": clean_iban,
             "created_at": now_iso,
             "updated_at": now_iso

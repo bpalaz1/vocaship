@@ -14,6 +14,11 @@ import {
   Loader2,
   ArrowLeft,
   Globe,
+  Users,
+  Flag,
+  ClipboardList,
+  Target,
+  CreditCard,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useAuth } from "../../context/AuthContext";
@@ -26,7 +31,7 @@ export default function InviteJoinPage() {
   const params = useParams();
   const router = useRouter();
   const slug = (params?.slug as string) || "";
-  const { user, setIsAuthModalOpen } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const { t, currentLang } = useLanguage();
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -37,12 +42,14 @@ export default function InviteJoinPage() {
   const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
   const [teacher, setTeacher] = useState<{ id: string; name: string } | null>(null);
 
-  // Katılım ve Ödeme Durumları
+  // Katılım, Ödeme ve Şikayet Durumları
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const [joinResult, setJoinResult] = useState<any | null>(null);
   const [showPaymentCard, setShowPaymentCard] = useState<boolean>(false);
   const [isSimulatingPayment, setIsSimulatingPayment] = useState<boolean>(false);
   const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
+  const [pendingAutoJoin, setPendingAutoJoin] = useState<boolean>(false);
+  const [reportStatus, setReportStatus] = useState<"idle" | "sending" | "sent">("idle");
 
   // Kullanıcının Yerel Saat Dilimi
   const userTimezone =
@@ -114,7 +121,8 @@ export default function InviteJoinPage() {
   // Derse Katıl / Bilet Kontrolü
   const handleJoinOrRegister = async () => {
     if (!user) {
-      setIsAuthModalOpen(true);
+      setPendingAutoJoin(true);
+      openAuthModal("register");
       return;
     }
 
@@ -153,10 +161,34 @@ export default function InviteJoinPage() {
     }
   };
 
+  // 10 Saniyelik Hızlı Kayıt Köprüsü: Ziyaretçi kayıt olduğu anda kaldığı yerden bilet/katılım adımına devam etsin
+  useEffect(() => {
+    if (user && pendingAutoJoin && classData && !isJoining && !paymentSuccess) {
+      setPendingAutoJoin(false);
+      void handleJoinOrRegister();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, pendingAutoJoin, classData]);
+
+  // Dersi Bildir
+  const handleReportClass = async () => {
+    if (!classData?.id || reportStatus !== "idle") return;
+    setReportStatus("sending");
+    try {
+      await fetch(`${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classData.id)}/report`, {
+        method: "POST",
+      });
+      setReportStatus("sent");
+    } catch {
+      setReportStatus("idle");
+    }
+  };
+
   // Faz 5 Ödeme Oturumu Başlat ve Webhook ile Bilet Tanımla
   const handleProcessCheckout = async () => {
     if (!user) {
-      setIsAuthModalOpen(true);
+      setPendingAutoJoin(true);
+      openAuthModal("register");
       return;
     }
 
@@ -232,7 +264,7 @@ export default function InviteJoinPage() {
           ) : (
             <button
               type="button"
-              onClick={() => setIsAuthModalOpen(true)}
+              onClick={() => openAuthModal("login")}
               className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-md shadow-indigo-600/30 cursor-pointer"
             >
               {t("auth_login_btn", "Giriş Yap")}
@@ -276,117 +308,190 @@ export default function InviteJoinPage() {
           </div>
         ) : (
           /* ========================================================================= */
-          /* NORMAL GİRİŞ KAPISI: SINIF ÖN İZLEME VE KATIL BUTONU                     */
+          /* DERS TANITIM & 10 SANİYELİK KAYIT SAYFASI (2 KOLONLU DÜZEN)               */
           /* ========================================================================= */
-          <div className="max-w-lg w-full p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-6">
-            <div className="space-y-2 text-center">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{t("join_slug_invite_badge", "Canlı Sınıf Daveti")}</span>
+          <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+            {/* SOL KOLON: DERS TANITIMI */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-6">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-bold">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{t("join_slug_invite_badge", "Canlı Ders Programı")}</span>
+                  </span>
+                  {classData.category && (
+                    <span className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold uppercase">
+                      {classData.category}
+                    </span>
+                  )}
+                  {classData.teaching_lang && (
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+                      🌐 {classData.teaching_lang}
+                    </span>
+                  )}
+                </div>
+
+                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                  {classData.name}
+                </h1>
+
+                <p className="text-xs sm:text-sm text-slate-300 flex items-center gap-2">
+                  <span>👨‍🏫 {t("join_slug_teacher_lbl", "Eğitmen:")}</span>
+                  <span className="font-bold text-white">{teacher?.name || t("join_slug_teacher_def", "VocaShip Eğitmeni")}</span>
+                </p>
               </div>
 
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                {classData.name}
-              </h1>
-
-              <p className="text-xs sm:text-sm text-slate-300 flex items-center justify-center gap-2">
-                <span>👨‍🏫 {t("join_slug_teacher_lbl", "Eğitmen:")}</span>
-                <span className="font-bold text-white">{teacher?.name || t("join_slug_teacher_def", "VocaShip Eğitmeni")}</span>
-              </p>
-            </div>
-
-            {/* Bilet / Fiyat Rozeti */}
-            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block">
-                  {t("join_slug_access_type", "Katılım Türü")}
-                </span>
-                <span className="text-xs font-bold text-white">
-                  {classData.price > 0 ? t("join_slug_paid_ticket", "Ücretli Biletli Ders") : t("join_slug_open_class", "Açık Topluluk Sınıfı")}
-                </span>
+              {/* 📋 Bu Derste Neler Yapacağız? */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-indigo-400" />
+                  <span>📋 Bu Derste Neler Yapacağız?</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-line">
+                  {classData.description ||
+                    "Etkileşimli canlı tahta üzerinde pratik alıştırmalar, gerçek zamanlı soru-cevap ve kişiselleştirilmiş kelime/konu pekiştirmesi yapılacaktır."}
+                </p>
               </div>
 
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block">
-                  {t("join_slug_fee_lbl", "Ücret")}
+              {/* 🎯 Kimler Katılmalı? */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Target className="w-4 h-4 text-emerald-400" />
+                  <span>🎯 Kimler Katılmalı?</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  {classData.target_audience ||
+                    "Konuyu temelden pekiştirmek veya pratik yaparak akıcılık kazanmak isteyen tüm katılımcılar."}
+                </p>
+              </div>
+
+              {/* ⚠️ Dersi Bildir */}
+              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                <span className="text-[11px] text-slate-500">
+                  Topluluk kurallarına aykırı bir içerik mi gördünüz?
                 </span>
-                <span
-                  className={`text-sm sm:text-base font-black font-mono ${
-                    classData.price > 0 ? "text-amber-400" : "text-emerald-400"
-                  }`}
+                <button
+                  type="button"
+                  onClick={handleReportClass}
+                  disabled={reportStatus !== "idle"}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-slate-400 hover:text-rose-300 text-xs font-semibold transition cursor-pointer disabled:opacity-60"
                 >
-                  {classData.price > 0 ? `${classData.price} ${classData.currency}` : t("join_slug_free_badge", "🟢 ÜCRETSİZ")}
-                </span>
+                  <Flag className="w-3.5 h-3.5" />
+                  <span>
+                    {reportStatus === "sent"
+                      ? "Bildiriminiz Alındı ✓"
+                      : reportStatus === "sending"
+                      ? "Gönderiliyor..."
+                      : "⚠️ Dersi Bildir"}
+                  </span>
+                </button>
               </div>
             </div>
 
-            {/* Yaklaşan Oturumlar (Yerel Saat Dilimiyle) */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-300 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{t("join_slug_schedule", "Ders Takvimi")}</span>
-                </span>
-                <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <Globe className="w-3 h-3 text-slate-500" />
-                  <span>{t("join_slug_tz", "Saat Diliminiz:")} {userTimezone}</span>
-                </span>
+            {/* SAĞ KOLON: SABİT BİLET KARTI */}
+            <div className="p-6 rounded-3xl bg-slate-900/95 border border-indigo-500/30 shadow-2xl space-y-5 lg:sticky lg:top-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div>
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block">
+                    {t("join_slug_fee_lbl", "Katılım Ücreti")}
+                  </span>
+                  <span
+                    className={`text-xl font-black font-mono ${
+                      classData.price > 0 ? "text-amber-400" : "text-emerald-400"
+                    }`}
+                  >
+                    {classData.price > 0 ? `${classData.price} ${classData.currency}` : "🟢 ÜCRETSİZ"}
+                  </span>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block">
+                    Katılımcılar
+                  </span>
+                  <span className="text-xs font-bold text-slate-200 inline-flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{classData.student_count ?? classData.attendee_count ?? 0} Kişi</span>
+                  </span>
+                </div>
               </div>
 
-              {upcomingSessions.length > 0 ? (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {upcomingSessions.map((session, idx) => {
-                    const formatted = formatSessionDate(session.session_date_utc);
-                    return (
-                      <div
-                        key={session.id || idx}
-                        className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between text-xs"
-                      >
-                        <div className="space-y-0.5">
-                          <span className="font-bold text-white block">{formatted.datePart}</span>
-                          <span className="text-[11px] text-indigo-300 font-mono">
-                            {formatted.timePart} ({t("join_slug_dur", "Süre:")} {session.duration_minutes || 60} {t("unit_min_short", "Dk")})
+              {/* Yerel Saat Dilimiyle Yaklaşan Oturumlar */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{t("join_slug_schedule", "Ders Takvimi")}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Globe className="w-3 h-3 text-slate-500" />
+                    <span>{userTimezone}</span>
+                  </span>
+                </div>
+
+                {upcomingSessions.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {upcomingSessions.map((session, idx) => {
+                      const formatted = formatSessionDate(session.session_date_utc);
+                      return (
+                        <div
+                          key={session.id || idx}
+                          className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between text-xs"
+                        >
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-white block">{formatted.datePart}</span>
+                            <span className="text-[11px] text-indigo-300 font-mono">
+                              {formatted.timePart} ({session.duration_minutes || 60} {t("unit_min_short", "Dk")})
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 text-[10px] font-bold border border-indigo-500/30">
+                            {idx === 0 ? t("join_slug_first_sess", "İlk Oturum") : `${idx + 1}. Oturum`}
                           </span>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 text-[10px] font-bold border border-indigo-500/30">
-                          {idx === 0 ? t("join_slug_first_sess", "İlk Oturum") : `${t("join_slug_sess_n", "Oturum")} ${idx + 1}`}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/60 text-xs text-slate-400 text-center">
-                  {t("join_slug_flex_note", "📅 Bu sınıf için esnek slot rezervasyonu uygulanacaktır.")}
-                </div>
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/60 text-xs text-slate-400 text-center">
+                    {t("join_slug_flex_note", "📅 Esnek oturum takvimi uygulanacaktır.")}
+                  </div>
+                )}
+              </div>
 
-            {/* Aksiyon Butonu */}
-            <div className="pt-2">
+              {/* Büyük Aksiyon Butonu */}
               <button
                 type="button"
                 onClick={handleJoinOrRegister}
                 disabled={isJoining}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-40 text-white font-black text-xs sm:text-sm shadow-xl shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className={`w-full py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-40 ${
+                  classData.price > 0
+                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-indigo-600/30"
+                    : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30"
+                }`}
               >
                 {isJoining ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>{t("game_join_checking", "Kontrol Ediliyor...")}</span>
                   </>
-                ) : user ? (
+                ) : classData.price > 0 ? (
                   <>
-                    <span>{classData.price > 0 ? t("join_slug_buy_btn", "Derse Kayıt Ol & Bilet Al") : t("join_slug_join_now", "Derse Hemen Katıl")}</span>
+                    <CreditCard className="w-4 h-4" />
+                    <span>💳 Dersi Satın Al ve Katıl</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 ) : (
                   <>
-                    <Lock className="w-4 h-4" />
-                    <span>{t("join_slug_login_join", "Giriş Yap ve Derse Katıl")}</span>
+                    <span>🟢 Ücretsiz Derse Katıl</span>
+                    <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
+
+              {!user && (
+                <p className="text-[11px] text-center text-slate-400">
+                  Henüz hesabınız yoksa tıkladığınızda 10 saniyede hızlıca kayıt olup derse katılabilirsiniz.
+                </p>
+              )}
             </div>
           </div>
         )}

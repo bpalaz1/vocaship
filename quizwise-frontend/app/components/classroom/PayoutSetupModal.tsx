@@ -6,8 +6,7 @@ import {
   Check,
   Loader2,
   Shield,
-  User,
-  Building2,
+  Globe,
   CreditCard,
   CheckCircle2,
   AlertCircle,
@@ -41,14 +40,14 @@ export interface PayoutSetupModalProps {
   onClose: () => void;
   onSaved?: (maskedSummary: {
     maskedIban: string;
-    maskedIdentity: string;
+    maskedIdentity?: string;
   }) => void;
 }
 
 interface MaskedPayoutSummary {
-  accountType: "individual" | "company";
+  country: "TR" | "GLOBAL";
+  fullName: string;
   maskedIban: string;
-  maskedIdentity: string;
 }
 
 export default function PayoutSetupModal({
@@ -60,11 +59,8 @@ export default function PayoutSetupModal({
   const { userProfile } = useProfile();
   const { t } = useLanguage();
 
-  const [accountType, setAccountType] = useState<"individual" | "company">(
-    "individual"
-  );
-  const [legalFullName, setLegalFullName] = useState("");
-  const [identityNumber, setIdentityNumber] = useState("");
+  const [country, setCountry] = useState<"TR" | "GLOBAL">("TR");
+  const [fullName, setFullName] = useState("");
   const [iban, setIban] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
@@ -82,9 +78,8 @@ export default function PayoutSetupModal({
   } | null>(null);
 
   const wipeSensitiveFields = useCallback(() => {
-    setAccountType("individual");
-    setLegalFullName("");
-    setIdentityNumber("");
+    setCountry("TR");
+    setFullName("");
     setIban("");
   }, []);
 
@@ -137,13 +132,19 @@ export default function PayoutSetupModal({
 
         if (profileRes.ok) {
           const data = await profileRes.json();
-          if (data.has_profile && data.profile?.iban) {
+          if (data.has_profile && data.profile) {
+            const profCountry =
+              String(data.profile.country || "TR").toUpperCase() === "GLOBAL"
+                ? "GLOBAL"
+                : "TR";
             setSavedMaskedSummary({
-              accountType: data.profile.account_type || "individual",
-              maskedIban: maskIban(data.profile.iban),
-              maskedIdentity: maskIdentityNumber(
-                data.profile.identity_number || ""
-              ),
+              country: profCountry,
+              fullName: data.profile.full_name || data.profile.legal_full_name || "",
+              maskedIban: data.profile.iban
+                ? profCountry === "TR"
+                  ? maskIban(data.profile.iban)
+                  : data.profile.iban
+                : "Stripe / Wise",
             });
           } else {
             setSavedMaskedSummary(null);
@@ -174,32 +175,23 @@ export default function PayoutSetupModal({
     e.preventDefault();
     setToast(null);
 
-    const cleanIban = iban.replace(/\s+/g, "").toUpperCase();
-    if (!cleanIban.startsWith("TR") || cleanIban.length !== 26) {
+    if (!fullName.trim()) {
+      setToast({
+        type: "error",
+        text: t("cls_pay_err_name", "Hesap sahibi Ad Soyad alanı zorunludur."),
+      });
+      return;
+    }
+
+    const cleanIban =
+      country === "TR"
+        ? iban.replace(/\s+/g, "").toUpperCase()
+        : iban.trim();
+
+    if (country === "TR" && (!cleanIban.startsWith("TR") || cleanIban.length !== 26)) {
       setToast({
         type: "error",
         text: t("cls_pay_err_iban", "Lütfen 26 haneli geçerli bir TR IBAN numarası girin (Örn: TR12 3456...)"),
-      });
-      return;
-    }
-
-    if (!legalFullName.trim()) {
-      setToast({ type: "error", text: t("cls_pay_err_name", "Yasal Ad Soyad alanı zorunludur.") });
-      return;
-    }
-
-    const cleanId = identityNumber.replace(/\D/g, "");
-    if (accountType === "individual" && cleanId.length !== 11) {
-      setToast({
-        type: "error",
-        text: t("cls_pay_err_tckn", "T.C. Kimlik Numarası 11 haneli olmalıdır."),
-      });
-      return;
-    }
-    if (accountType === "company" && cleanId.length !== 10) {
-      setToast({
-        type: "error",
-        text: t("cls_pay_err_vkn", "Vergi Kimlik Numarası 10 haneli olmalıdır."),
       });
       return;
     }
@@ -216,23 +208,23 @@ export default function PayoutSetupModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: userId,
-          account_type: accountType,
-          legal_full_name: legalFullName.trim(),
-          identity_number: cleanId,
+          country,
+          full_name: fullName.trim(),
           iban: cleanIban,
         }),
       });
 
       if (res.ok) {
+        const displayIban =
+          country === "TR" ? maskIban(cleanIban) : cleanIban || "Stripe / Wise";
         const maskedSummary = {
-          maskedIban: maskIban(cleanIban),
-          maskedIdentity: maskIdentityNumber(cleanId),
+          maskedIban: displayIban,
         };
         setSavedMaskedSummary({
-          accountType,
-          ...maskedSummary,
+          country,
+          fullName: fullName.trim(),
+          maskedIban: displayIban,
         });
-        // Kayıt sonrasında hassas alanları hemen bellekten temizle
         wipeSensitiveFields();
         setToast({
           type: "success",
@@ -320,20 +312,20 @@ export default function PayoutSetupModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
                     <span className="text-[10px] text-slate-400 block">
-                      {t("cls_pay_active_iban", "Aktif IBAN")}
+                      {savedMaskedSummary.country === "TR"
+                        ? t("cls_pay_active_iban", "Aktif IBAN (TR)")
+                        : "Global Hesap (USD/EUR)"}
                     </span>
-                    <span className="font-mono font-bold text-emerald-300 tracking-wider">
+                    <span className="font-mono font-bold text-emerald-300 tracking-wider truncate block">
                       {savedMaskedSummary.maskedIban}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
                     <span className="text-[10px] text-slate-400 block">
-                      {savedMaskedSummary.accountType === "individual"
-                        ? t("cls_pay_tckn_saved", "Kayıtlı TCKN")
-                        : t("cls_pay_vkn_saved", "Kayıtlı VKN")}
+                      Hesap Sahibi
                     </span>
-                    <span className="font-mono font-bold text-indigo-300 tracking-wider">
-                      {savedMaskedSummary.maskedIdentity}
+                    <span className="font-bold text-indigo-300 truncate block">
+                      {savedMaskedSummary.fullName || "—"}
                     </span>
                   </div>
                 </div>
@@ -341,119 +333,110 @@ export default function PayoutSetupModal({
             )
           )}
 
-          {/* Hesap Türü */}
+          {/* Bölge Seçimi */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{t("cls_pay_tax_type", "Vergi Mükellefiyeti / Hesap Türü")}</span>
+              <Globe className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Bölge Seçimi</span>
             </label>
             <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
-                onClick={() => setAccountType("individual")}
+                onClick={() => {
+                  setCountry("TR");
+                  setIban("");
+                }}
                 className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center gap-2.5 ${
-                  accountType === "individual"
+                  country === "TR"
                     ? "bg-indigo-600/20 border-indigo-500 text-indigo-200 ring-2 ring-indigo-500/40"
                     : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
                 }`}
               >
-                <User className="w-4 h-4 text-indigo-400" />
+                <span className="text-lg">🇹🇷</span>
                 <div>
-                  <div className="text-xs font-bold">{t("cls_pay_indiv_title", "Bireysel (TCKN)")}</div>
-                  <div className="text-[10px] opacity-75">{t("cls_pay_indiv", "Şahıs Eğitmen")}</div>
+                  <div className="text-xs font-bold">Türkiye (TRY - IBAN)</div>
+                  <div className="text-[10px] opacity-75">Ad Soyad & TR IBAN</div>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => setAccountType("company")}
+                onClick={() => {
+                  setCountry("GLOBAL");
+                  setIban("");
+                }}
                 className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center gap-2.5 ${
-                  accountType === "company"
+                  country === "GLOBAL"
                     ? "bg-indigo-600/20 border-indigo-500 text-indigo-200 ring-2 ring-indigo-500/40"
                     : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
                 }`}
               >
-                <Building2 className="w-4 h-4 text-indigo-400" />
+                <span className="text-lg">🌍</span>
                 <div>
-                  <div className="text-xs font-bold">{t("cls_pay_corp", "Şirket (VKN)")}</div>
-                  <div className="text-[10px] opacity-75">{t("cls_pay_corp_sub", "Tüzel Kişilik")}</div>
+                  <div className="text-xs font-bold">Yurt Dışı / Global</div>
+                  <div className="text-[10px] opacity-75">USD/EUR • Stripe / Wise</div>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* Yasal Ad Soyad */}
+          {/* Hesap Sahibi Ad Soyad */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-              <span>
-                {accountType === "individual"
-                  ? t("cls_pay_legal_name", "Yasal Ad Soyad (Banka Hesabındaki Ad)")
-                  : t("cls_pay_corp_name", "Şirket / Kurum Resmi Ünvanı")}
-              </span>
+              <span>Hesap Sahibi Ad Soyad</span>
               <span className="text-[10px] font-normal text-amber-400">
-                {t("cls_pay_iban_match", "IBAN ile eşleşmelidir")}
+                Kimlik no gerekmez
               </span>
             </label>
             <input
               type="text"
               required
               autoComplete="off"
-              value={legalFullName}
-              onChange={(e) => setLegalFullName(e.target.value)}
-              placeholder={
-                accountType === "individual"
-                  ? t("cls_pay_name_ph", "Örn: Ahmet Yılmaz")
-                  : t("cls_pay_corp_ph", "Örn: ABC Eğitim A.Ş.")
-              }
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder={country === "TR" ? "Örn: Ahmet Yılmaz" : "Örn: Jane Doe"}
               className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
 
-          {/* TCKN / VKN */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">
-              {accountType === "individual"
-                ? t("cls_pay_tckn_lbl", "T.C. Kimlik Numarası (11 Hane)")
-                : t("cls_pay_vkn_lbl", "Vergi Kimlik Numarası (10 Hane)")}
-            </label>
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="off"
-              required
-              maxLength={accountType === "individual" ? 11 : 10}
-              value={identityNumber}
-              onChange={(e) =>
-                setIdentityNumber(e.target.value.replace(/\D/g, ""))
-              }
-              placeholder={
-                accountType === "individual"
-                  ? t("cls_pay_tckn_ph", "11 haneli TCKN giriniz")
-                  : t("cls_pay_vkn_ph", "10 haneli VKN giriniz")
-              }
-              className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono tracking-wider"
-            />
-          </div>
-
-          {/* IBAN */}
+          {/* IBAN veya Stripe/Wise */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-              <span>{t("cls_pay_iban_lbl", "Banka IBAN Numarası")}</span>
+              <span>
+                {country === "TR"
+                  ? t("cls_pay_iban_lbl", "TR IBAN Numarası")
+                  : "Stripe / Wise Hesap E-postası veya Kodu"}
+              </span>
               <span className="text-[10px] font-normal text-slate-400">
-                {t("cls_pay_iban_hint", "TR ile başlar (26 Karakter)")}
+                {country === "TR"
+                  ? t("cls_pay_iban_hint", "TR ile başlar (26 Karakter)")
+                  : "Opsiyonel"}
               </span>
             </label>
             <div className="relative">
               <input
                 type="text"
                 autoComplete="off"
-                required
+                required={country === "TR"}
                 value={iban}
-                onChange={(e) => setIban(formatIbanInput(e.target.value))}
-                placeholder="TR00 0000 0000 0000 0000 0000 00"
-                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-emerald-300 font-mono tracking-widest placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 uppercase"
+                onChange={(e) =>
+                  setIban(
+                    country === "TR"
+                      ? formatIbanInput(e.target.value)
+                      : e.target.value
+                  )
+                }
+                placeholder={
+                  country === "TR"
+                    ? "TR00 0000 0000 0000 0000 0000 00"
+                    : "payout@example.com veya acct_..."
+                }
+                className={`w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-emerald-300 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                  country === "TR" ? "font-mono tracking-widest uppercase" : ""
+                }`}
               />
-              {iban.replace(/\s+/g, "").length === 26 &&
+              {country === "TR" &&
+                iban.replace(/\s+/g, "").length === 26 &&
                 iban.startsWith("TR") && (
                   <span className="absolute right-3 top-2.5 text-emerald-400 flex items-center gap-1 text-[11px] font-bold font-sans">
                     <CheckCircle2 className="w-4 h-4" />
@@ -466,7 +449,7 @@ export default function PayoutSetupModal({
           <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center gap-2.5 text-[11px] text-slate-400">
             <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>
-              {t("cls_pay_privacy", "Kayıt sonrasında TCKN/VKN ve IBAN yalnızca maskeli son 4 hanesiyle gösterilir; form kapatıldığında hassas veriler bellekten temizlenir.")}
+              Kimlik numarası (TCKN/VKN) istenmez; yalnızca ödeme aktarımı için Ad Soyad ve IBAN / Global hesap bilgisi şifreli olarak saklanır.
             </span>
           </div>
 
@@ -500,9 +483,8 @@ export default function PayoutSetupModal({
               type="submit"
               disabled={
                 isSaving ||
-                !iban.trim() ||
-                !legalFullName.trim() ||
-                !identityNumber.trim()
+                !fullName.trim() ||
+                (country === "TR" && !iban.trim())
               }
               className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer active:scale-95"
             >

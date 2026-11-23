@@ -37,19 +37,32 @@ router = APIRouter()
 # =========================================================================
 
 @router.post("/classes", status_code=status.HTTP_201_CREATED)
-def create_class(
+async def create_class(
     payload: Union[ClassCreateRequest, ClassroomCreateRequest],
     request: Request,
     db: Client = Depends(get_db),
 ):
     """
     Yeni sınıf açar:
-    1. Faz 2: Tekil kullanıcı sınıfı, ücretli/ücretsiz biletleme, UTC takvim oturumları ve IBAN kontrolü.
+    1. Faz 2: Tekil kullanıcı sınıfı, ücretli/ücretsiz biletleme, UTC takvim oturumları, IBAN kontrolü ve Public vitrin moderasyonu.
     2. Geriye dönük uyumluluk: Klasik VRG-XXXX sınıf oluşturma.
     """
     if isinstance(payload, ClassCreateRequest):
         if not payload.name.strip():
             raise HTTPException(status_code=400, detail="Sınıf adı zorunludur.")
+
+        if payload.visibility == "public":
+            is_safe = await classroom_service.moderate_public_class_content(
+                title=payload.name,
+                description=payload.description,
+                target_audience=payload.target_audience,
+            )
+            if not is_safe:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Ders açıklaması topluluk kurallarına uygun bulunmadı. Lütfen düzenleyip tekrar deneyin.",
+                )
+
         result = classroom_service.create_faz2_class(
             teacher_id=payload.teacher_id,
             name=payload.name,
@@ -60,6 +73,11 @@ def create_class(
             scheduled_dates_utc=payload.scheduled_dates_utc,
             duration_minutes=payload.duration_minutes,
             monthly_credits=payload.monthly_credits,
+            visibility=payload.visibility,
+            category=payload.category,
+            teaching_lang=payload.teaching_lang,
+            description=payload.description,
+            target_audience=payload.target_audience,
             db=db
         )
         if "error" in result and result["error"] == "IBAN_REQUIRED":
@@ -101,6 +119,38 @@ def get_classes(request: Request, user_id: Optional[str] = None, db: Client = De
     if not effective_user_id:
         return []
     return classroom_service.list_classrooms(db=db, user_id=effective_user_id)
+
+
+@router.get("/public-showcase", status_code=status.HTTP_200_OK)
+def get_public_showcase(
+    category: Optional[str] = None,
+    teaching_lang: Optional[str] = None,
+    search: Optional[str] = None,
+    free_only: bool = False,
+    db: Client = Depends(get_db),
+):
+    """
+    Açık Dersler Vitrini (Public Showcase) — giriş yapmamış misafirlere de açıktır.
+    visibility == 'public' ve is_hidden == False olan yaklaşan dersleri döndürür.
+    """
+    return classroom_service.get_public_showcase_classes(
+        category=category,
+        teaching_lang=teaching_lang,
+        search=search,
+        free_only=free_only,
+        db=db,
+    )
+
+
+@router.post("/classes/{class_id}/report", status_code=status.HTTP_200_OK)
+def report_class_endpoint(class_id: str, db: Client = Depends(get_db)):
+    """
+    Vitrin dersini şikayet eder; report_count >= 3 olduğunda is_hidden = True yapar.
+    """
+    result = classroom_service.report_public_class(class_id=class_id, db=db)
+    if not result:
+        raise HTTPException(status_code=404, detail="Sınıf bulunamadı.")
+    return result
 
 # =========================================================================
 # 2. AI İLE OTOMATİK METİN ANALİZİ VE ÖDEV ÇIKARTMA
