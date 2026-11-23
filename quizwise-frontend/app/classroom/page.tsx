@@ -322,9 +322,6 @@ function ClassroomContent() {
                 <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
                   <span>{t("cls_header_title", "Canlı Sınıflar & Konuşma Odaları")}</span>
                 </h1>
-                <p className="text-xs text-slate-400 hidden sm:block">
-                  {t("cls_timezone_lbl", "Saat Dilimi:")} <span className="text-indigo-300 font-mono">{getUserTimeZone()}</span>
-                </p>
               </div>
             </div>
 
@@ -401,29 +398,22 @@ function ClassroomContent() {
             {classrooms.length === 0 ? (
               <div className="flex-1 flex items-center justify-center py-2 animate-in fade-in zoom-in-95 duration-300">
                 <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* SOL KART: Öğrenci Olarak Katıl (Ücretsiz) */}
+                  {/* SOL KART: Öğrenci Olarak Katıl */}
                   <div
                     data-testid="classroom-zero-student-card"
-                    className={`rounded-3xl border p-5 flex flex-col justify-between gap-4 shadow-xl transition ${
-                      isDark
-                        ? "bg-slate-900/80 border-emerald-500/30 hover:border-emerald-400/50"
-                        : "bg-white border-emerald-200 hover:border-emerald-400"
-                    }`}
+                    className="rounded-3xl border p-5 flex flex-col justify-between gap-4 shadow-xl transition bg-[#111827]/90 border-slate-800/80 hover:border-emerald-500/40 text-slate-100"
                   >
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-3xl">🎒</span>
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-black text-emerald-400 tracking-wide">
-                          {t("classroom_zero_student_badge", "ÜCRETSİZ")}
-                        </span>
                       </div>
-                      <h2 className={`text-xl font-black tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                      <h2 className="text-xl font-black tracking-tight text-white">
                         {t("classroom_zero_student_title", "Bir Derse mi Katılıyorsun?")}
                       </h2>
-                      <p className={`text-sm leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                      <p className="text-sm leading-relaxed text-slate-400">
                         {t(
-                          "classroom_zero_student_desc",
-                          "Eğitmeninden aldığın 6 haneli sınıf kodunu (PIN) veya davet linkini kullanarak ücretsiz derse katıl."
+                          "classroom_zero_student_desc_neutral",
+                          "Eğitmeninden aldığın 6 haneli sınıf kodunu (PIN) veya davet linkini kullanarak derse katıl."
                         )}
                       </p>
                     </div>
@@ -442,11 +432,7 @@ function ClassroomContent() {
                   {/* SAĞ KART: Eğitmen Olarak Sınıf Aç (PRO) */}
                   <div
                     data-testid="classroom-zero-teacher-card"
-                    className={`rounded-3xl border p-6 sm:p-8 flex flex-col justify-between gap-6 shadow-xl transition ${
-                      isDark
-                        ? "bg-slate-900/80 border-indigo-500/35 hover:border-indigo-400/60"
-                        : "bg-white border-indigo-200 hover:border-indigo-400"
-                    }`}
+                    className="rounded-3xl border p-5 flex flex-col justify-between gap-4 shadow-xl transition bg-[#111827]/90 border-slate-800/80 hover:border-indigo-500/50 text-slate-100"
                   >
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
@@ -455,10 +441,10 @@ function ClassroomContent() {
                           {t("classroom_zero_teacher_badge", "PRO")}
                         </span>
                       </div>
-                      <h2 className={`text-xl font-black tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                      <h2 className="text-xl font-black tracking-tight text-white">
                         {t("classroom_zero_teacher_title", "Kendi Sınıfını Yönet")}
                       </h2>
-                      <ul className={`space-y-1.5 text-sm font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                      <ul className="space-y-1.5 text-sm font-medium text-slate-300">
                         <li>{t("classroom_zero_step_1", "1. Sınıfını oluştur")}</li>
                         <li>{t("classroom_zero_step_2", "2. Öğrencilerini davet et")}</li>
                         <li>{t("classroom_zero_step_3", "3. Akıllı tahtada dersi başlat")}</li>
