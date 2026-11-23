@@ -35,6 +35,11 @@ import {
   Ruler,
   ChevronDown,
   Power,
+  ArrowUpRight,
+  Type,
+  Columns2,
+  Camera,
+  Crosshair,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import BoardTimer from "./components/BoardTimer";
@@ -52,7 +57,10 @@ export type BoardDrawingTool =
   | "eraser"
   | "line"
   | "circle"
-  | "rect";
+  | "rect"
+  | "arrow"
+  | "laser"
+  | "text";
 
 export interface BoardTerm {
   id?: string;
@@ -111,6 +119,24 @@ function SmartBoardConsoleContent() {
 
   // 5. Araç Durumu & 🖐️ Gezin (Pan / Grab & Drag) Referansları
   const [activeTool, setActiveTool] = useState<BoardDrawingTool>("pan");
+  const [isSplitBoard, setIsSplitBoard] = useState(false);
+  const splitCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingSplitRef = useRef(false);
+  const lastSplitCoordRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Lazer İşaretçi (1.2 saniye sonra kaybolan iz)
+  const [laserTrail, setLaserTrail] = useState<Array<{ x: number; y: number; ts: number }>>([]);
+  const isLaserDownRef = useRef(false);
+
+  // Tahta Metin Kutusu
+  const [textInputBox, setTextInputBox] = useState<{
+    screenX: number;
+    screenY: number;
+    canvasX: number;
+    canvasY: number;
+    value: string;
+  } | null>(null);
+
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{
@@ -644,23 +670,32 @@ function SmartBoardConsoleContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isCameraFullscreen]);
 
-  // 3. Ekran Paylaşımı Başlat / Durdur
+  // 3. Ekran / Word / Excel / Pencere Paylaşımı Başlat / Durdur
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach((t) => t.stop());
         screenStreamRef.current = null;
       }
+      if (screenVideoRef.current) {
+        screenVideoRef.current.srcObject = null;
+      }
       setIsScreenSharing(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false,
+        });
         screenStreamRef.current = stream;
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
           videoTrack.onended = () => {
             setIsScreenSharing(false);
             screenStreamRef.current = null;
+            if (screenVideoRef.current) {
+              screenVideoRef.current.srcObject = null;
+            }
           };
         }
         setIsScreenSharing(true);
@@ -671,6 +706,24 @@ function SmartBoardConsoleContent() {
       }
     }
   };
+
+  useEffect(() => {
+    if (isScreenSharing && screenStreamRef.current && screenVideoRef.current) {
+      if (screenVideoRef.current.srcObject !== screenStreamRef.current) {
+        screenVideoRef.current.srcObject = screenStreamRef.current;
+      }
+    }
+  }, [isScreenSharing, isSplitBoard]);
+
+  // Lazer izini 1.2 saniye sonra otomatik temizle
+  useEffect(() => {
+    if (laserTrail.length === 0) return;
+    const timer = setInterval(() => {
+      const cutoff = Date.now() - 1200;
+      setLaserTrail((prev) => prev.filter((p) => p.ts >= cutoff));
+    }, 80);
+    return () => clearInterval(timer);
+  }, [laserTrail.length]);
 
   // Fullscreen Kontrolü
   const toggleFullscreen = () => {
@@ -891,7 +944,7 @@ function SmartBoardConsoleContent() {
       ctx.lineWidth = 32;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-    } else if (tool === "line" || tool === "circle" || tool === "rect") {
+    } else if (tool === "line" || tool === "circle" || tool === "rect" || tool === "arrow") {
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 0.9;
       ctx.lineWidth = 3;
@@ -901,19 +954,85 @@ function SmartBoardConsoleContent() {
     }
   };
 
+  const commitTextToCanvas = () => {
+    if (!textInputBox) return;
+    const text = textInputBox.value.trim();
+    if (text && canvasRef.current) {
+      const ctx = canvasRef.current.getContext("2d");
+      if (ctx) {
+        ctx.save();
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1.0;
+        ctx.font = "bold 24px Inter, system-ui, sans-serif";
+        ctx.fillStyle = shapeColor || "#f8fafc";
+        ctx.fillText(text, textInputBox.canvasX, textInputBox.canvasY);
+        ctx.restore();
+      }
+    }
+    setTextInputBox(null);
+  };
+
+  const handleSnapshot = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      const link = document.createElement("a");
+      link.download = "vocaship-board-snapshot.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.warn("Snapshot alınamadı:", err);
+    }
+  };
+
+  const pushLaserPoint = (clientX: number, clientY: number) => {
+    const ws = workspaceRef.current;
+    if (!ws) return;
+    const rect = ws.getBoundingClientRect();
+    setLaserTrail((prev) => [
+      ...prev.slice(-18),
+      { x: clientX - rect.left, y: clientY - rect.top, ts: Date.now() },
+    ]);
+  };
+
   // Mouse & Touch Çizim Olayları (Canlı Önizleme / Snapshot Buffer destekli)
   const startDrawing = (clientX: number, clientY: number) => {
     if (activeTool === "none" || activeTool === "pan") return;
+
+    if (activeTool === "laser") {
+      isLaserDownRef.current = true;
+      pushLaserPoint(clientX, clientY);
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const coords = getCanvasCoords(clientX, clientY);
+
+    if (activeTool === "text") {
+      const ws = workspaceRef.current;
+      const wsRect = ws?.getBoundingClientRect();
+      setTextInputBox({
+        screenX: wsRect ? Math.max(12, Math.min(wsRect.width - 220, clientX - wsRect.left)) : 40,
+        screenY: wsRect ? Math.max(12, Math.min(wsRect.height - 60, clientY - wsRect.top)) : 40,
+        canvasX: coords.x,
+        canvasY: coords.y,
+        value: "",
+      });
+      return;
+    }
+
     startCoordRef.current = coords;
     isDrawingRef.current = true;
 
-    const isShapeTool = activeTool === "line" || activeTool === "circle" || activeTool === "rect";
+    const isShapeTool =
+      activeTool === "line" ||
+      activeTool === "circle" ||
+      activeTool === "rect" ||
+      activeTool === "arrow";
     if (isShapeTool) {
       try {
         shapeSnapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -931,14 +1050,22 @@ function SmartBoardConsoleContent() {
   };
 
   const drawMove = (clientX: number, clientY: number) => {
-    if (!isDrawingRef.current || activeTool === "none" || activeTool === "pan") return;
+    if (activeTool === "laser") {
+      pushLaserPoint(clientX, clientY);
+      return;
+    }
+    if (!isDrawingRef.current || activeTool === "none" || activeTool === "pan" || activeTool === "text") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const coords = getCanvasCoords(clientX, clientY);
-    const isShapeTool = activeTool === "line" || activeTool === "circle" || activeTool === "rect";
+    const isShapeTool =
+      activeTool === "line" ||
+      activeTool === "circle" ||
+      activeTool === "rect" ||
+      activeTool === "arrow";
 
     if (isShapeTool) {
       if (!startCoordRef.current) return;
@@ -969,6 +1096,16 @@ function SmartBoardConsoleContent() {
       } else if (activeTool === "rect") {
         ctx.beginPath();
         ctx.strokeRect(startX, startY, currX - startX, currY - startY);
+      } else if (activeTool === "arrow") {
+        const headLen = 16;
+        const angle = Math.atan2(currY - startY, currX - startX);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(currX, currY);
+        ctx.lineTo(currX - headLen * Math.cos(angle - Math.PI / 6), currY - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(currX, currY);
+        ctx.lineTo(currX - headLen * Math.cos(angle + Math.PI / 6), currY - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
       } else if (activeTool === "circle") {
         const radiusX = Math.abs(currX - startX) / 2;
         const radiusY = Math.abs(currY - startY) / 2;
@@ -1066,41 +1203,56 @@ function SmartBoardConsoleContent() {
           {isScreenSharing ? (
             <div className="flex items-center gap-1.5 bg-indigo-950/90 border border-indigo-500/50 py-1.5 px-3 rounded-xl text-xs text-indigo-200">
               <MonitorUp className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
-              <span className="font-bold hidden sm:inline">{t("brd_screen_badge", "🖥️ Ekran Paylaşımı")}</span>
+              <span className="font-bold hidden sm:inline">🖥️ Canlı Pencere Yansıtılıyor</span>
               <button
                 type="button"
                 onClick={toggleScreenShare}
-                className="ml-1 text-[11px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                className="ml-1.5 px-2 py-0.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-[11px] font-bold text-rose-300 hover:text-white hover:bg-rose-600 transition cursor-pointer"
               >
-                {t("brd_stop_btn", "Durdur")}
-              </button>
-            </div>
-          ) : pdfFileName ? (
-            <div className="flex items-center gap-1.5 bg-slate-950/90 border border-slate-800 py-1.5 px-3 rounded-xl text-xs">
-              <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span className="text-white font-medium truncate max-w-[110px] sm:max-w-[180px]">
-                {pdfFileName}
-              </span>
-              <button
-                type="button"
-                onClick={handleClearPdf}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-                title={t("brd_close_mat_tip", "Materyali Kapat")}
-              >
-                <X className="w-3 h-3" />
+                ⏹️ Paylaşımı Bitir
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-              title={t("brd_upload_pdf_tip", "PDF veya Ders Materyali Yükle")}
-            >
-              <Upload className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">{t("brd_upload_pdf", "📤 Ders Materyali / PDF Yükle")}</span>
-              <span className="sm:hidden">{t("brd_upload_pdf_short", "📤 PDF Yükle")}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {pdfFileName ? (
+                <div className="flex items-center gap-1.5 bg-slate-950/90 border border-slate-800 py-1.5 px-3 rounded-xl text-xs">
+                  <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="text-white font-medium truncate max-w-[110px] sm:max-w-[160px]">
+                    {pdfFileName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearPdf}
+                    className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                    title={t("brd_close_mat_tip", "Materyali Kapat")}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
+                  title={t("brd_upload_pdf_tip", "PDF Aç")}
+                >
+                  <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="hidden sm:inline">📄 PDF Aç</span>
+                  <span className="sm:hidden">📄 PDF</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={toggleScreenShare}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500/50 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
+                title="Word, Excel, PowerPoint veya herhangi bir pencereyi tahtaya yansıt"
+              >
+                <MonitorUp className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden md:inline">🖥️ Word / Excel / Pencere Yansıt</span>
+                <span className="md:hidden">🖥️ Yansıt</span>
+              </button>
+            </div>
           )}
 
           {/* Materyal Gönder Butonu */}
@@ -1147,11 +1299,74 @@ function SmartBoardConsoleContent() {
       {/* 2. ANA ÇALIŞMA ALANI (PDF VEYA EKRAN PAYLAŞIMI + ŞEFFAF CANVAS) & SAĞ PANEL */}
       {/* ========================================================================= */}
       <main className="flex-1 flex overflow-hidden relative w-full h-[calc(100vh-56px)]">
-        {/* SOL: DERS ÇALIŞMA SAHNESİ (flex-1 min-w-0 TAM GENİŞLİK) */}
+        {/* SOL: DERS ÇALIŞMA SAHNESİ (Split-Board aktifse %65 sol dosya + %35 sağ karalama alanı) */}
         <section
           ref={workspaceRef}
-          className="flex-1 min-w-0 bg-slate-950 flex flex-col relative overflow-hidden p-2 select-none"
+          className="flex-1 min-w-0 bg-slate-950 flex flex-row relative overflow-hidden p-2 gap-2 select-none"
         >
+          <div className={`${isSplitBoard ? "w-[65%]" : "w-full"} h-full flex flex-col relative min-w-0`}>
+            {/* 🔴 Lazer İşaretçi Katmanı */}
+            {laserTrail.length > 0 && (
+              <svg className="pointer-events-none absolute inset-0 w-full h-full z-30">
+                {laserTrail.map((pt, i) => {
+                  const age = (Date.now() - pt.ts) / 1200;
+                  const opacity = Math.max(0, 1 - age);
+                  const isHead = i === laserTrail.length - 1;
+                  return (
+                    <circle
+                      key={`${pt.ts}-${i}`}
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isHead ? 7 : Math.max(2, 5 * opacity)}
+                      fill={`rgba(244, 63, 94, ${opacity})`}
+                      style={isHead ? { filter: "drop-shadow(0 0 10px rgba(244,63,94,0.95))" } : undefined}
+                    />
+                  );
+                })}
+              </svg>
+            )}
+
+            {/* 🔤 Tahta Metin Kutusu */}
+            {textInputBox && (
+              <div
+                style={{ left: textInputBox.screenX, top: textInputBox.screenY }}
+                className="absolute z-40 flex items-center gap-1.5 bg-slate-900/95 border border-indigo-500 rounded-xl p-1.5 shadow-2xl"
+              >
+                <input
+                  type="text"
+                  autoFocus
+                  value={textInputBox.value}
+                  onChange={(e) =>
+                    setTextInputBox((prev) => (prev ? { ...prev, value: e.target.value } : null))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitTextToCanvas();
+                    } else if (e.key === "Escape") {
+                      setTextInputBox(null);
+                    }
+                  }}
+                  placeholder="Metin yazın..."
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none w-44"
+                />
+                <button
+                  type="button"
+                  onClick={commitTextToCanvas}
+                  className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTextInputBox(null)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
           {isScreenSharing ? (
             <div
               ref={scrollContainerRef}
@@ -1216,7 +1431,7 @@ function SmartBoardConsoleContent() {
                     }
                   }}
                   onTouchEnd={stopDrawing}
-                  className={`absolute inset-0 w-full h-full z-10 mix-blend-multiply ${
+                  className={`absolute inset-0 w-full h-full z-10 mix-blend-normal ${
                     activeTool === "none" || activeTool === "pan"
                       ? "pointer-events-none"
                       : "pointer-events-auto cursor-crosshair"
@@ -1311,7 +1526,7 @@ function SmartBoardConsoleContent() {
                     }
                   }}
                   onTouchEnd={stopDrawing}
-                  className={`absolute inset-0 w-full h-full z-10 mix-blend-multiply ${
+                  className={`absolute inset-0 w-full h-full z-10 mix-blend-normal ${
                     activeTool === "none" || activeTool === "pan"
                       ? "pointer-events-none"
                       : "pointer-events-auto cursor-crosshair"
@@ -1320,29 +1535,107 @@ function SmartBoardConsoleContent() {
               </div>
             </div>
           ) : (
-            /* Boş Çalışma Alanı / PDF Yükleme Çağrısı */
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-full rounded-3xl border-2 border-dashed border-slate-800 hover:border-indigo-500/50 bg-slate-900/30 hover:bg-slate-900/50 transition-all flex flex-col items-center justify-center p-8 text-center cursor-pointer group"
-            >
-              <div className="w-20 h-20 rounded-3xl bg-indigo-600/10 group-hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mb-4 transition-transform group-hover:scale-105 shadow-inner">
+            /* Boş Çalışma Alanı / PDF veya Pencere Yansıtma Çağrısı */
+            <div className="w-full h-full rounded-3xl border-2 border-dashed border-slate-800 bg-slate-900/30 flex flex-col items-center justify-center p-8 text-center">
+              <div className="w-20 h-20 rounded-3xl bg-indigo-600/10 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mb-4 shadow-inner">
                 <FileText className="w-10 h-10" />
               </div>
 
-              <h2 className="text-xl sm:text-2xl font-black text-white group-hover:text-indigo-300 transition">
-                {t("brd_empty_title", "PDF veya Ders Materyali Yükle")}
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                {t("brd_empty_title", "PDF Aç veya Pencere Yansıt")}
               </h2>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mt-2">
-                {t("brd_empty_desc", "Bilgisayarınızdan bir ders sunumu veya okuma parçası seçin. Pinch-to-zoom ve fosforlu çizim araçlarıyla tahtada işleyin.")}
+                {t("brd_empty_desc", "PDF dosyanızı açın ya da bilgisayarınızdaki Word, Excel veya PowerPoint penceresini tahtaya yansıtıp üzerine çizim yapın.")}
               </p>
 
-              <button
-                type="button"
-                className="mt-6 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 pointer-events-none"
-              >
-                <Upload className="w-4 h-4" />
-                <span>{t("brd_choose_file", "Dosya Seç ➔")}</span>
-              </button>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>📄 PDF Aç</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleScreenShare}
+                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs shadow-lg transition flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <MonitorUp className="w-4 h-4 text-emerald-400" />
+                  <span>🖥️ Word / Excel / Pencere Yansıt</span>
+                </button>
+              </div>
+            </div>
+          )}
+          </div>
+
+          {/* BÖLÜNMÜŞ KARALAMA TAHTASI (%35 SAĞ ÇİZİM VE ÇÖZÜM ALANI) */}
+          {isSplitBoard && (
+            <div className="w-[35%] h-full rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col overflow-hidden relative shadow-2xl">
+              <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between text-xs bg-slate-900/90">
+                <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                  <Columns2 className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Not & Çözüm Tahtası</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sc = splitCanvasRef.current;
+                    const ctx = sc?.getContext("2d");
+                    if (sc && ctx) ctx.clearRect(0, 0, sc.width, sc.height);
+                  }}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-rose-400 cursor-pointer"
+                >
+                  Temizle
+                </button>
+              </div>
+              <canvas
+                ref={splitCanvasRef}
+                width={600}
+                height={1000}
+                onMouseDown={(e) => {
+                  const sc = splitCanvasRef.current;
+                  const ctx = sc?.getContext("2d");
+                  if (!sc || !ctx) return;
+                  const r = sc.getBoundingClientRect();
+                  const x = (e.clientX - r.left) * (sc.width / r.width);
+                  const y = (e.clientY - r.top) * (sc.height / r.height);
+                  isDrawingSplitRef.current = true;
+                  lastSplitCoordRef.current = { x, y };
+                  ctx.strokeStyle = activeTool === "pen_red" ? "#ef4444" : activeTool === "highlighter" ? "#facc15" : "#38bdf8";
+                  ctx.lineWidth = activeTool === "eraser" ? 28 : activeTool === "highlighter" ? 16 : 4;
+                  ctx.globalCompositeOperation = activeTool === "eraser" ? "destination-out" : "source-over";
+                  ctx.lineCap = "round";
+                  ctx.beginPath();
+                  ctx.moveTo(x, y);
+                  ctx.lineTo(x, y);
+                  ctx.stroke();
+                }}
+                onMouseMove={(e) => {
+                  if (!isDrawingSplitRef.current) return;
+                  const sc = splitCanvasRef.current;
+                  const ctx = sc?.getContext("2d");
+                  if (!sc || !ctx || !lastSplitCoordRef.current) return;
+                  const r = sc.getBoundingClientRect();
+                  const x = (e.clientX - r.left) * (sc.width / r.width);
+                  const y = (e.clientY - r.top) * (sc.height / r.height);
+                  ctx.beginPath();
+                  ctx.moveTo(lastSplitCoordRef.current.x, lastSplitCoordRef.current.y);
+                  ctx.lineTo(x, y);
+                  ctx.stroke();
+                  lastSplitCoordRef.current = { x, y };
+                }}
+                onMouseUp={() => {
+                  isDrawingSplitRef.current = false;
+                  lastSplitCoordRef.current = null;
+                }}
+                onMouseLeave={() => {
+                  isDrawingSplitRef.current = false;
+                  lastSplitCoordRef.current = null;
+                }}
+                className="flex-1 w-full h-full cursor-crosshair"
+              />
             </div>
           )}
         </section>
@@ -1814,7 +2107,7 @@ function SmartBoardConsoleContent() {
         <button
           type="button"
           onClick={() => setActiveTool("rect")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
+          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
             activeTool === "rect"
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
               : "text-slate-400 hover:text-white hover:bg-slate-800"
@@ -1825,8 +2118,53 @@ function SmartBoardConsoleContent() {
           <span className="hidden xl:inline">{t("brd_tool_rect_lbl", "Kare")}</span>
         </button>
 
+        {/* ↗️ Ok Çizici */}
+        <button
+          type="button"
+          onClick={() => setActiveTool("arrow")}
+          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
+            activeTool === "arrow"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
+              : "text-slate-400 hover:text-white hover:bg-slate-800"
+          }`}
+          title="↗️ Ok Çizici"
+        >
+          <ArrowUpRight className="w-4 h-4" />
+          <span className="hidden xl:inline">Ok</span>
+        </button>
+
+        {/* 🔴 Lazer İşaretçi */}
+        <button
+          type="button"
+          onClick={() => setActiveTool("laser")}
+          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
+            activeTool === "laser"
+              ? "bg-rose-600/25 text-rose-300 border border-rose-500/50 shadow-md ring-2 ring-rose-500/30"
+              : "text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+          }`}
+          title="🔴 Lazer İşaretçi (1.2 sn sonra kaybolur)"
+        >
+          <Crosshair className="w-4 h-4 text-rose-400" />
+          <span className="hidden xl:inline">Lazer</span>
+        </button>
+
+        {/* 🔤 Tahta Metin Kutusu */}
+        <button
+          type="button"
+          onClick={() => setActiveTool("text")}
+          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
+            activeTool === "text"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
+              : "text-slate-400 hover:text-white hover:bg-slate-800"
+          }`}
+          title="🔤 Tahta Metin Kutusu"
+        >
+          <Type className="w-4 h-4" />
+          <span className="hidden xl:inline">Metin</span>
+        </button>
+
         {/* Şekil Renk Paleti (Kırmızı, Mavi, Zümrüt Yeşili, Sarı) */}
-        {(activeTool === "line" || activeTool === "circle" || activeTool === "rect") && (
+        {(activeTool === "line" || activeTool === "circle" || activeTool === "rect" || activeTool === "arrow" || activeTool === "text") && (
           <div className="flex items-center gap-1 px-1.5 py-1 rounded-xl bg-slate-800/80 border border-slate-700/60 animate-in fade-in zoom-in-95">
             {[
               { color: "#ef4444", label: t("brd_tool_red_lbl", "Kırmızı"), bg: "bg-rose-500" },
@@ -1868,10 +2206,36 @@ function SmartBoardConsoleContent() {
         <button
           type="button"
           onClick={handleClearCanvas}
-          className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+          className="min-h-[44px] px-2.5 py-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
           title={t("brd_clear_draw_tip", "🗑️ Tüm Çizimleri Temizle")}
         >
           <Trash2 className="w-4 h-4" />
+        </button>
+
+        {/* ◫ Bölünmüş Tahta (Split-Board) */}
+        <button
+          type="button"
+          onClick={() => setIsSplitBoard((prev) => !prev)}
+          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
+            isSplitBoard
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+              : "text-slate-400 hover:text-white hover:bg-slate-800"
+          }`}
+          title="Bölünmüş Karalama Tahtası (%65 Dosya / %35 Not Alanı)"
+        >
+          <Columns2 className="w-4 h-4" />
+          <span className="hidden lg:inline">Split-Board</span>
+        </button>
+
+        {/* 📸 Snapshot (PNG İndir) */}
+        <button
+          type="button"
+          onClick={handleSnapshot}
+          className="min-h-[44px] px-2.5 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+          title="📸 Tahta Görüntüsünü PNG Olarak İndir"
+        >
+          <Camera className="w-4 h-4 text-emerald-400" />
+          <span className="hidden lg:inline">Snapshot</span>
         </button>
 
         <div className="w-px h-5 bg-slate-700 mx-0.5" />
