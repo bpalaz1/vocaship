@@ -49,10 +49,50 @@ body {
 html[data-theme="light"] [data-theme-preserve="dark"],
 html[data-theme="light"] header.bg-slate-900,
 html[data-theme="light"] nav.bg-slate-900 {
-  background-color: #0f172a;
-  color: #ffffff;
+  background-color: #0f172a !important;
+  color: #ffffff !important;
 }
 
+/* Açık Mod: Parlama yapmayan soft taş grisi zemin (5 ana sayfa dahil) */
+html[data-theme="light"] body,
+html[data-theme="light"] main,
+html[data-theme="light"] :is(div, section, main):not([data-theme-preserve="dark"]):not([data-theme-preserve="dark"] *):not(header):not(header *):not(nav):not(nav *):is(
+  .bg-\[\#0B0F19\],
+  .bg-slate-950,
+  [class*="bg-[#0B0F19]"],
+  [class*="bg-slate-950/"]
+) {
+  background-color: #dce3ec !important;
+  color: #0f172a !important;
+}
+
+/* Açık Mod: İçerik kartları (bg-slate-900/90, bg-[#111827]/90 vb.) */
+html[data-theme="light"] :is(div, section, article, aside):not([data-theme-preserve="dark"]):not([data-theme-preserve="dark"] *):not(header):not(header *):not(nav):not(nav *):is(
+  [class*="bg-slate-900"],
+  [class*="bg-[#111827]"]
+) {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Açık Mod: Açık kartların içindeki beyaz/açık metinleri koyu laciverte çevir */
+html[data-theme="light"] main :not([data-theme-preserve="dark"]):not([data-theme-preserve="dark"] *):not(button):not(button *):not(a[class*="bg-"]):not(a[class*="bg-"] *):is(
+  .text-white,
+  .text-slate-100,
+  .text-slate-200
+) {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] main :not([data-theme-preserve="dark"]):not([data-theme-preserve="dark"] *):not(button):not(button *):not(a[class*="bg-"]):not(a[class*="bg-"] *):is(
+  .text-slate-300,
+  .text-slate-400
+) {
+  color: #334155 !important;
+}
+
+/* Açık Mod: Renkli ve koyu butonlarda beyaz yazı kontrastını koru */
 html[data-theme="light"] :is(button, a):is(
   [class*="bg-slate-900"],
   [class*="bg-indigo-600"],
@@ -61,7 +101,7 @@ html[data-theme="light"] :is(button, a):is(
   [class*="bg-emerald-600"],
   [class*="bg-rose-600"]
 ):not([class*="text-slate-9"]):not([class*="from-amber-"]) {
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 @keyframes damageFloat {
