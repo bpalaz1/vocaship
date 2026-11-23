@@ -577,87 +577,77 @@ function ClassroomContent() {
         {/* TAB 2: BİRLEŞİK TAKVİM & GEÇMİŞ DERS ARŞİVİ                            */}
         {/* ======================================================================= */}
         {activeTab === "calendar" && (
-          <div className="space-y-8 animate-in fade-in duration-200">
-            {/* Üst Bilgi ve Arama Barı */}
-            <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 rounded-3xl border ${isDark ? "bg-slate-900/90 border-slate-800 shadow-lg" : "bg-[#f8fafc] border-slate-300 shadow-sm"}`}>
-              <div>
-                <h2 className={`text-lg font-bold flex items-center gap-2 ${isDark ? "text-white" : "text-slate-900"}`}>
-                  <Calendar className={`w-5 h-5 ${isDark ? "text-indigo-400" : "text-indigo-600"}`} />
-                  <span>{t("cls_cal_hdr", "Ders Takvimi & Zaman Tüneli")}</span>
-                </h2>
-                <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-                  {t("cls_cal_sub_1", "Tüm saatler yerel saat diliminizde (")}<span className={`font-mono ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>{getUserTimeZone()}</span>{t("cls_cal_sub_2", ") otomatik olarak senkronize edilir.")}
-                </p>
-              </div>
-
-              <div className="relative w-full sm:w-72">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder={t("cls_cal_search_ph", "Ders, eğitmen veya öğrenci ara...")}
-                  value={timelineSearch}
-                  onChange={(e) => setTimelineSearch(e.target.value)}
-                  className={`w-full border rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-indigo-500 ${isDark ? "bg-slate-950 border-slate-800 text-white placeholder-slate-500" : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"}`}
-                />
-              </div>
-            </div>
-
+          <div className="flex-1 min-h-0 animate-in fade-in duration-200">
             {timelineLoading ? (
-              <div className={`p-12 rounded-3xl border flex items-center justify-center gap-3 text-sm ${isDark ? "bg-slate-900/40 border-slate-800 text-slate-400" : "bg-[#f8fafc] border-slate-300 text-slate-600"}`}>
+              <div className="p-10 rounded-3xl border bg-[#111827]/90 border-slate-800/80 text-slate-300 flex items-center justify-center gap-3 text-sm">
                 <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                 <span>{t("cls_cal_syncing", "Ders takvimi senkronize ediliyor...")}</span>
               </div>
             ) : (
-              <>
-                {/* 1. YAKLAŞAN DERSLER (UPCOMING SESSIONS) */}
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? "text-white" : "text-slate-900"}`}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:h-[calc(100vh-140px)] lg:max-h-[calc(100vh-140px)]">
+                {/* SOL SÜTUN: 🔜 YAKLAŞAN DERSLER */}
+                <section className="flex flex-col min-h-0 rounded-3xl bg-[#111827]/90 border border-slate-800/80 p-4 gap-3 shadow-xl text-slate-100">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80 shrink-0">
+                    <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                       <span>{t("cls_upcoming_hdr", "🔜 Yaklaşan Dersler")}</span>
-                      <span className={`text-xs font-mono px-2 py-0.5 rounded-full border ${isDark ? "bg-indigo-500/15 text-indigo-300 border-indigo-500/30" : "bg-indigo-100 text-indigo-800 border-indigo-200"}`}>
-                        {upcomingSessions.length} {t("cls_lessons_unit", "Ders")}
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                        {upcomingSessions.length}
                       </span>
                     </h3>
+
+                    <div className="relative w-full sm:w-52">
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder={t("cls_cal_search_ph", "Ders veya eğitmen ara...")}
+                        value={timelineSearch}
+                        onChange={(e) => setTimelineSearch(e.target.value)}
+                        className="w-full bg-slate-950/90 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
 
-                  {upcomingSessions.length === 0 ? (
-                    <div className={`p-8 rounded-3xl border text-center space-y-2 shadow-sm ${isDark ? "bg-slate-900/40 border-slate-800/80" : "bg-[#f8fafc] border-slate-300"}`}>
-                      <Clock className={`w-8 h-8 mx-auto ${isDark ? "text-slate-600" : "text-slate-400"}`} />
-                      <p className={`text-sm font-semibold ${isDark ? "text-slate-300" : "text-slate-800"}`}>{t("cls_upcoming_empty_t", "Planlanmış Yaklaşan Ders Bulunmuyor")}</p>
-                      <p className={`text-xs ${isDark ? "text-slate-500" : "text-slate-600"}`}>
-                        {t("cls_upcoming_empty_d", "Yeni bir sabit tarihli veya slotlu ders açtığınızda takviminizde burada listelenecektir.")}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {upcomingSessions.map((session) => {
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
+                    {upcomingSessions.length === 0 ? (
+                      <div className="p-8 rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 text-center space-y-2">
+                        <Clock className="w-7 h-7 mx-auto text-slate-500" />
+                        <p className="text-sm font-semibold text-slate-200">
+                          {t("cls_upcoming_empty_t", "Planlanmış Yaklaşan Ders Bulunmuyor")}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {t("cls_upcoming_empty_d", "Yeni bir sabit tarihli veya slotlu ders açtığınızda takviminizde burada listelenecektir.")}
+                        </p>
+                      </div>
+                    ) : (
+                      upcomingSessions.map((session) => {
                         const isTeacher = session.role === "teacher";
-                        const joinUrl = typeof window !== "undefined"
-                          ? `${window.location.origin}/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&className=${encodeURIComponent(session.class_name)}`
-                          : "";
+                        const joinUrl =
+                          typeof window !== "undefined"
+                            ? `${window.location.origin}/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&className=${encodeURIComponent(session.class_name)}`
+                            : "";
 
                         return (
                           <div
                             key={session.session_id}
-                            className={`p-5 rounded-3xl border space-y-4 transition ${isDark ? "bg-slate-900/90 border-slate-800 hover:border-slate-700 shadow-xl" : "bg-[#f8fafc] border-slate-300 hover:border-indigo-400 shadow-sm"}`}
+                            className="p-4 rounded-2xl border bg-slate-950/80 border-slate-800 hover:border-indigo-500/40 space-y-3 transition"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                   {isTeacher ? (
-                                    <span className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${isDark ? "bg-blue-500/15 border-blue-500/30 text-blue-400" : "bg-blue-100 border-blue-300 text-blue-800"}`}>
+                                    <span className="px-2 py-0.5 rounded-full border bg-blue-500/15 border-blue-500/30 text-blue-300 text-[10px] font-bold">
                                       {t("cls_role_teacher", "👨‍🏫 Eğitmen")}
                                     </span>
                                   ) : (
-                                    <span className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${isDark ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : "bg-emerald-100 border-emerald-300 text-emerald-800"}`}>
+                                    <span className="px-2 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
                                       {t("cls_role_student", "🎓 Katılımcı")}
                                     </span>
                                   )}
-                                  <span className={`text-[11px] font-mono ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                                  <span className="text-[11px] font-mono text-slate-400">
                                     {session.duration_minutes || 60} {t("cls_min_short", "dk")}
                                   </span>
                                 </div>
-                                <h4 className={`text-base font-bold pt-1 ${isDark ? "text-white" : "text-slate-900"}`}>
+                                <h4 className="text-sm font-bold text-white">
                                   {session.class_name}
                                 </h4>
                               </div>
@@ -672,56 +662,50 @@ function ClassroomContent() {
                                     joinUrl
                                   )
                                 }
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${isDark ? "bg-slate-800 hover:bg-slate-700 border-slate-700 text-indigo-300" : "bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700"}`}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-xl border bg-slate-900 hover:bg-slate-800 border-slate-700 text-indigo-300 text-[11px] font-semibold transition cursor-pointer shrink-0"
                                 title={t("cls_add_cal_tip", "Takvimime Ekle (.ics)")}
                               >
-                                <Download className={`w-3.5 h-3.5 ${isDark ? "text-indigo-400" : "text-indigo-600"}`} />
-                                <span>{t("cls_ics_btn", ".ics İndir")}</span>
+                                <Download className="w-3 h-3 text-indigo-400" />
+                                <span>{t("cls_ics_btn", ".ics")}</span>
                               </button>
                             </div>
 
-                            <div className={`p-3 rounded-2xl border text-xs space-y-1.5 ${isDark ? "bg-slate-950/70 border-slate-800/80" : "bg-slate-100 border-slate-300"}`}>
-                              <div className={`flex items-center gap-2 font-medium ${isDark ? "text-indigo-300" : "text-indigo-800"}`}>
-                                <Calendar className={`w-3.5 h-3.5 shrink-0 ${isDark ? "text-indigo-400" : "text-indigo-600"}`} />
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+                              <span className="inline-flex items-center gap-1.5 text-indigo-300 font-medium">
+                                <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                                 <span>{formatLocalSessionTime(session.session_date_utc)}</span>
-                              </div>
-                              <div className={`flex items-center gap-2 text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
                                 <Users className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                 {isTeacher ? (
                                   <span>
-                                    {session.attendees_count || session.attendee_names?.length || 0} {t("cls_reg_participants", "Kayıtlı Katılımcı")}
-                                    {session.attendee_names && session.attendee_names.length > 0 && (
-                                      <span className="text-slate-500 ml-1">
-                                        ({session.attendee_names.slice(0, 3).join(", ")}
-                                        {session.attendee_names.length > 3 ? "..." : ""})
-                                      </span>
-                                    )}
+                                    {session.attendees_count || session.attendee_names?.length || 0} {t("cls_reg_participants", "Katılımcı")}
                                   </span>
                                 ) : (
-                                  <span>{t("cls_teacher_lbl", "Eğitmen:")} {session.teacher_name || t("cls_teacher_default", "Eğitmen")}</span>
+                                  <span>{session.teacher_name || t("cls_teacher_default", "Eğitmen")}</span>
                                 )}
-                              </div>
+                              </span>
                             </div>
 
-                            <div className="pt-1 flex items-center justify-end">
+                            <div>
                               {isTeacher ? (
                                 <Link
                                   href={`/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&live=1&className=${encodeURIComponent(session.class_name)}`}
-                                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/25 transition active:scale-95"
+                                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-95"
                                 >
-                                  <Video className="w-4 h-4" />
+                                  <Video className="w-3.5 h-3.5" />
                                   <span>{t("cls_start_live", "🔴 Canlı Dersi Başlat")}</span>
                                 </Link>
                               ) : (
                                 <Link
                                   href={`/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&className=${encodeURIComponent(session.class_name)}`}
-                                  className={`w-full py-2.5 px-4 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95 ${
+                                  className={`w-full py-2 px-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-95 ${
                                     session.status === "live"
-                                      ? "bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 shadow-rose-600/25"
-                                      : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/25"
+                                      ? "bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500"
+                                      : "bg-indigo-600 hover:bg-indigo-500"
                                   }`}
                                 >
-                                  <Tv className="w-4 h-4" />
+                                  <Tv className="w-3.5 h-3.5" />
                                   <span>
                                     {session.status === "live"
                                       ? t("cls_live_started_join", "🔴 Canlı Ders Başladı — Derse Gir")
@@ -732,64 +716,61 @@ function ClassroomContent() {
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
-                  )}
+                      })
+                    )}
+                  </div>
                 </section>
 
-                {/* 2. GEÇMİŞ DERSLER ARŞİVİ (COMPLETED SESSIONS) */}
-                <section className={`space-y-4 pt-6 border-t ${isDark ? "border-slate-800" : "border-slate-300"}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? "text-white" : "text-slate-900"}`}>
-                        <Archive className={`w-4 h-4 ${isDark ? "text-indigo-400" : "text-indigo-600"}`} />
-                        <span>{t("cls_past_hdr", "🗂️ Geçmiş Dersler Arşivi")}</span>
-                        <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${isDark ? "bg-slate-800 text-slate-300" : "bg-slate-200 text-slate-800"}`}>
-                          {t("cls_past_cnt", "{count} Tamamlanan", { count: completedSessions.length })}
-                        </span>
-                      </h3>
-                      <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-                        {t("cls_past_sub", "Tamamlanan dersler ve katılımcı kayıtları")}
-                      </p>
-                    </div>
+                {/* SAĞ SÜTUN: 📁 GEÇMİŞ DERSLER ARŞİVİ */}
+                <section className="flex flex-col min-h-0 rounded-3xl bg-[#111827]/90 border border-slate-800/80 p-4 gap-3 shadow-xl text-slate-100">
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/80 shrink-0">
+                    <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                      <Archive className="w-4 h-4 text-indigo-400" />
+                      <span>{t("cls_past_hdr", "📁 Geçmiş Dersler Arşivi")}</span>
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                        {completedSessions.length}
+                      </span>
+                    </h3>
                   </div>
 
-                  {completedSessions.length === 0 ? (
-                    <div className={`p-8 rounded-3xl border text-center space-y-2 shadow-sm ${isDark ? "bg-slate-900/40 border-slate-800/80" : "bg-[#f8fafc] border-slate-300"}`}>
-                      <Archive className={`w-8 h-8 mx-auto ${isDark ? "text-slate-600" : "text-slate-400"}`} />
-                      <p className={`text-sm font-semibold ${isDark ? "text-slate-300" : "text-slate-800"}`}>{t("cls_past_empty_t", "Henüz Tamamlanmış Bir Ders Bulunmuyor")}</p>
-                      <p className={`text-xs ${isDark ? "text-slate-500" : "text-slate-600"}`}>
-                        {t("cls_past_empty_d", "Tahtada dersi tamamladığınızda ders kaydı otomatik olarak buraya arşivlenir.")}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {completedSessions.map((session) => {
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
+                    {completedSessions.length === 0 ? (
+                      <div className="p-8 rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 text-center space-y-2">
+                        <Archive className="w-7 h-7 mx-auto text-slate-500" />
+                        <p className="text-sm font-semibold text-slate-200">
+                          {t("cls_past_empty_t", "Henüz Tamamlanmış Bir Ders Bulunmuyor")}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {t("cls_past_empty_d", "Tahtada dersi tamamladığınızda ders kaydı otomatik olarak buraya arşivlenir.")}
+                        </p>
+                      </div>
+                    ) : (
+                      completedSessions.map((session) => {
                         const isTeacher = session.role === "teacher";
                         return (
                           <div
                             key={session.session_id}
-                            className={`p-5 rounded-3xl border space-y-3 ${isDark ? "bg-slate-900/90 border-slate-800 hover:border-slate-700 shadow-md" : "bg-[#f8fafc] border-slate-300 hover:border-indigo-400 shadow-sm"}`}
+                            className="p-4 rounded-2xl border bg-slate-950/80 border-slate-800 hover:border-slate-700 space-y-2 transition"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${isDark ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-800 border-slate-300"}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border bg-slate-900 text-slate-300 border-slate-700">
                                 {formatLocalSessionTime(session.session_date_utc)}
                               </span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${isDark ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-100 text-emerald-800 border-emerald-300"}`}>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex items-center gap-1">
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>{t("cls_status_done", "Tamamlandı")}</span>
                               </span>
                             </div>
 
                             <div>
-                              <h4 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                              <h4 className="text-sm font-bold text-white">
                                 {session.class_name}
                               </h4>
-                              <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                              <p className="text-xs mt-1 text-slate-400">
                                 {isTeacher ? (
                                   <span>
                                     {t("cls_participants_lbl", "Katılımcılar:")}{" "}
-                                    <span className={`font-medium ${isDark ? "text-slate-300" : "text-slate-800"}`}>
+                                    <span className="font-medium text-slate-300">
                                       {session.attendee_names && session.attendee_names.length > 0
                                         ? session.attendee_names.join(", ")
                                         : `${session.attendees_count || 0} ${t("cls_students_unit", "Öğrenci")}`}
@@ -797,18 +778,21 @@ function ClassroomContent() {
                                   </span>
                                 ) : (
                                   <span>
-                                    {t("cls_teacher_lbl", "Eğitmen:")} <span className={`font-medium ${isDark ? "text-slate-300" : "text-slate-800"}`}>{session.teacher_name || t("cls_teacher_default", "Eğitmen")}</span>
+                                    {t("cls_teacher_lbl", "Eğitmen:")}{" "}
+                                    <span className="font-medium text-slate-300">
+                                      {session.teacher_name || t("cls_teacher_default", "Eğitmen")}
+                                    </span>
                                   </span>
                                 )}
                               </p>
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
-                  )}
+                      })
+                    )}
+                  </div>
                 </section>
-              </>
+              </div>
             )}
           </div>
         )}
