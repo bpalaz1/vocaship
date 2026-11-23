@@ -37,7 +37,6 @@ import {
   Power,
   ArrowUpRight,
   Type,
-  Columns2,
   Camera,
   Crosshair,
 } from "lucide-react";
@@ -119,10 +118,6 @@ function SmartBoardConsoleContent() {
 
   // 5. Araç Durumu & 🖐️ Gezin (Pan / Grab & Drag) Referansları
   const [activeTool, setActiveTool] = useState<BoardDrawingTool>("pan");
-  const [isSplitBoard, setIsSplitBoard] = useState(false);
-  const splitCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const isDrawingSplitRef = useRef(false);
-  const lastSplitCoordRef = useRef<{ x: number; y: number } | null>(null);
 
   // Lazer İşaretçi (1.2 saniye sonra kaybolan iz)
   const [laserTrail, setLaserTrail] = useState<Array<{ x: number; y: number; ts: number }>>([]);
@@ -713,7 +708,7 @@ function SmartBoardConsoleContent() {
         screenVideoRef.current.srcObject = screenStreamRef.current;
       }
     }
-  }, [isScreenSharing, isSplitBoard]);
+  }, [isScreenSharing]);
 
   // Lazer izini 1.2 saniye sonra otomatik temizle
   useEffect(() => {
@@ -973,12 +968,55 @@ function SmartBoardConsoleContent() {
   };
 
   const handleSnapshot = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const drawingCanvas = canvasRef.current;
+    const w = drawingCanvas?.width || 1280;
+    const h = drawingCanvas?.height || 720;
+
     try {
+      const compositeCanvas = document.createElement("canvas");
+      compositeCanvas.width = w;
+      compositeCanvas.height = h;
+      const ctx = compositeCanvas.getContext("2d");
+      if (!ctx) return;
+
+      // 1. Katman (Zemin)
+      ctx.fillStyle = pdfUrl ? "#ffffff" : "#0f172a";
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Katman (Arka Plan İçeriği: Canlı Video veya PDF Canvas/Sayfaları)
+      if (isScreenSharing && screenVideoRef.current && screenVideoRef.current.readyState >= 2) {
+        ctx.drawImage(screenVideoRef.current, 0, 0, w, h);
+      } else if (pdfUrl && pdfWrapperRef.current) {
+        const wrapperRect = pdfWrapperRef.current.getBoundingClientRect();
+        const mediaNodes = pdfWrapperRef.current.querySelectorAll("img, canvas");
+        mediaNodes.forEach((node) => {
+          const el = node as HTMLImageElement | HTMLCanvasElement;
+          const r = el.getBoundingClientRect();
+          if (wrapperRect.width > 0 && wrapperRect.height > 0 && r.width > 0 && r.height > 0) {
+            const dx = ((r.left - wrapperRect.left) / wrapperRect.width) * w;
+            const dy = ((r.top - wrapperRect.top) / wrapperRect.height) * h;
+            const dw = (r.width / wrapperRect.width) * w;
+            const dh = (r.height / wrapperRect.height) * h;
+            try {
+              ctx.drawImage(el, dx, dy, dw, dh);
+            } catch {}
+          }
+        });
+      }
+
+      // 3. Katman (Çizimler)
+      if (drawingCanvas) {
+        ctx.drawImage(drawingCanvas, 0, 0, w, h);
+      }
+
+      const dataUrl = compositeCanvas.toDataURL("image/png");
+      try {
+        sessionStorage.setItem("vocaship_last_board_snapshot", dataUrl);
+      } catch {}
+
       const link = document.createElement("a");
       link.download = "vocaship-board-snapshot.png";
-      link.href = canvas.toDataURL("image/png");
+      link.href = dataUrl;
       link.click();
     } catch (err) {
       console.warn("Snapshot alınamadı:", err);
@@ -1299,12 +1337,12 @@ function SmartBoardConsoleContent() {
       {/* 2. ANA ÇALIŞMA ALANI (PDF VEYA EKRAN PAYLAŞIMI + ŞEFFAF CANVAS) & SAĞ PANEL */}
       {/* ========================================================================= */}
       <main className="flex-1 flex overflow-hidden relative w-full h-[calc(100vh-56px)]">
-        {/* SOL: DERS ÇALIŞMA SAHNESİ (Split-Board aktifse %65 sol dosya + %35 sağ karalama alanı) */}
+        {/* SOL: DERS ÇALIŞMA SAHNESİ */}
         <section
           ref={workspaceRef}
-          className="flex-1 min-w-0 bg-slate-950 flex flex-row relative overflow-hidden p-2 gap-2 select-none"
+          className="flex-1 min-w-0 bg-slate-950 flex flex-col relative overflow-hidden p-2 select-none"
         >
-          <div className={`${isSplitBoard ? "w-[65%]" : "w-full"} h-full flex flex-col relative min-w-0`}>
+          <div className="w-full h-full flex flex-col relative min-w-0">
             {/* 🔴 Lazer İşaretçi Katmanı */}
             {laserTrail.length > 0 && (
               <svg className="pointer-events-none absolute inset-0 w-full h-full z-30">
@@ -1569,75 +1607,6 @@ function SmartBoardConsoleContent() {
             </div>
           )}
           </div>
-
-          {/* BÖLÜNMÜŞ KARALAMA TAHTASI (%35 SAĞ ÇİZİM VE ÇÖZÜM ALANI) */}
-          {isSplitBoard && (
-            <div className="w-[35%] h-full rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col overflow-hidden relative shadow-2xl">
-              <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between text-xs bg-slate-900/90">
-                <span className="font-bold text-slate-200 flex items-center gap-1.5">
-                  <Columns2 className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Not & Çözüm Tahtası</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const sc = splitCanvasRef.current;
-                    const ctx = sc?.getContext("2d");
-                    if (sc && ctx) ctx.clearRect(0, 0, sc.width, sc.height);
-                  }}
-                  className="text-[11px] font-semibold text-slate-400 hover:text-rose-400 cursor-pointer"
-                >
-                  Temizle
-                </button>
-              </div>
-              <canvas
-                ref={splitCanvasRef}
-                width={600}
-                height={1000}
-                onMouseDown={(e) => {
-                  const sc = splitCanvasRef.current;
-                  const ctx = sc?.getContext("2d");
-                  if (!sc || !ctx) return;
-                  const r = sc.getBoundingClientRect();
-                  const x = (e.clientX - r.left) * (sc.width / r.width);
-                  const y = (e.clientY - r.top) * (sc.height / r.height);
-                  isDrawingSplitRef.current = true;
-                  lastSplitCoordRef.current = { x, y };
-                  ctx.strokeStyle = activeTool === "pen_red" ? "#ef4444" : activeTool === "highlighter" ? "#facc15" : "#38bdf8";
-                  ctx.lineWidth = activeTool === "eraser" ? 28 : activeTool === "highlighter" ? 16 : 4;
-                  ctx.globalCompositeOperation = activeTool === "eraser" ? "destination-out" : "source-over";
-                  ctx.lineCap = "round";
-                  ctx.beginPath();
-                  ctx.moveTo(x, y);
-                  ctx.lineTo(x, y);
-                  ctx.stroke();
-                }}
-                onMouseMove={(e) => {
-                  if (!isDrawingSplitRef.current) return;
-                  const sc = splitCanvasRef.current;
-                  const ctx = sc?.getContext("2d");
-                  if (!sc || !ctx || !lastSplitCoordRef.current) return;
-                  const r = sc.getBoundingClientRect();
-                  const x = (e.clientX - r.left) * (sc.width / r.width);
-                  const y = (e.clientY - r.top) * (sc.height / r.height);
-                  ctx.beginPath();
-                  ctx.moveTo(lastSplitCoordRef.current.x, lastSplitCoordRef.current.y);
-                  ctx.lineTo(x, y);
-                  ctx.stroke();
-                  lastSplitCoordRef.current = { x, y };
-                }}
-                onMouseUp={() => {
-                  isDrawingSplitRef.current = false;
-                  lastSplitCoordRef.current = null;
-                }}
-                onMouseLeave={() => {
-                  isDrawingSplitRef.current = false;
-                  lastSplitCoordRef.current = null;
-                }}
-                className="flex-1 w-full h-full cursor-crosshair"
-              />
-            </div>
-          )}
         </section>
 
         {/* SAĞ: ÖĞRETMEN YALIN KONTROL KONSOLU (TEK DİKEY SÜTUN - ÇAKIŞMASIZ) */}
@@ -2210,21 +2179,6 @@ function SmartBoardConsoleContent() {
           title={t("brd_clear_draw_tip", "🗑️ Tüm Çizimleri Temizle")}
         >
           <Trash2 className="w-4 h-4" />
-        </button>
-
-        {/* ◫ Bölünmüş Tahta (Split-Board) */}
-        <button
-          type="button"
-          onClick={() => setIsSplitBoard((prev) => !prev)}
-          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            isSplitBoard
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title="Bölünmüş Karalama Tahtası (%65 Dosya / %35 Not Alanı)"
-        >
-          <Columns2 className="w-4 h-4" />
-          <span className="hidden lg:inline">Split-Board</span>
         </button>
 
         {/* 📸 Snapshot (PNG İndir) */}

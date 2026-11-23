@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Send, FileText, CheckCircle2, AlertCircle, X, Paperclip } from "lucide-react";
+import { Send, CheckCircle2, AlertCircle, X, Download } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
 interface SendMaterialModalProps {
@@ -22,12 +22,34 @@ export default function SendMaterialModal({
   const { t } = useLanguage();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [attachmentUrl, setAttachmentUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<{ sentCount: number } | null>(null);
 
   if (!isOpen) return null;
+
+  const handleDownloadNote = () => {
+    const title = subject.trim() || "ders-notu";
+    const body = message.trim();
+    const content = `Sınıf: ${className}\nKonu: ${title}\n\n${body}\n`;
+    try {
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title.toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/gi, "-")}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const lastSnap = sessionStorage.getItem("vocaship_last_board_snapshot");
+      if (lastSnap) {
+        const imgLink = document.createElement("a");
+        imgLink.href = lastSnap;
+        imgLink.download = "vocaship-board-snapshot.png";
+        imgLink.click();
+      }
+    } catch {}
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +77,6 @@ export default function SendMaterialModal({
           class_id: classId,
           subject: subject.trim(),
           message_body: message.trim(),
-          attachment_url: attachmentUrl.trim() || null,
         }),
       });
 
@@ -68,7 +89,6 @@ export default function SendMaterialModal({
       setSuccessInfo({ sentCount: data.sent_count ?? 0 });
       setSubject("");
       setMessage("");
-      setAttachmentUrl("");
     } catch (err: any) {
       setErrorMsg(err.message || "İşlem sırasında bir hata oluştu.");
     } finally {
@@ -154,32 +174,19 @@ export default function SendMaterialModal({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <Paperclip className="w-3.5 h-3.5 text-slate-400" />
-                PDF / Link <span className="text-slate-500 font-normal">(Opt.)</span>
-              </label>
-              <input
-                type="url"
-                value={attachmentUrl}
-                onChange={(e) => setAttachmentUrl(e.target.value)}
-                placeholder={t("cls_mat_url_ph", "https://drive.google.com/... veya PDF bağlantısı")}
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
-              />
-            </div>
-
-            <div className="pt-2 flex items-center justify-end gap-3">
+            <div className="pt-2 flex flex-wrap items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm text-slate-400 hover:text-white rounded-xl transition"
+                onClick={handleDownloadNote}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-medium rounded-xl transition flex items-center gap-2 cursor-pointer"
               >
-                {t("cancel", "Vazgeç")}
+                <Download className="w-4 h-4 text-emerald-400" />
+                <span>📥 Notu İndir</span>
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white font-medium text-sm rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center gap-2"
+                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white font-medium text-sm rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center gap-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
@@ -189,7 +196,7 @@ export default function SendMaterialModal({
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>{t("cls_mat_send_btn", "📧 E-posta ile Öğrencilere Gönder")}</span>
+                    <span>{t("cls_mat_send_btn", "📧 Sınıf Öğrencilerine Gönder")}</span>
                   </>
                 )}
               </button>

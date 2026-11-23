@@ -88,47 +88,24 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-3 duration-200">
+    <div className="fixed bottom-20 right-6 z-40 animate-in slide-in-from-bottom-3 duration-200 max-w-[calc(100vw-2rem)]">
       <div
-        className={`rounded-3xl border-2 p-5 shadow-2xl backdrop-blur-xl transition-all duration-300 w-80 select-none ${
+        className={`px-3.5 py-2 rounded-2xl border shadow-xl backdrop-blur-md flex flex-wrap items-center gap-2.5 select-none transition-colors ${
           isOvertime
-            ? "bg-rose-950/90 border-rose-500 shadow-rose-950/60"
-            : "bg-slate-900/95 border-slate-700 shadow-slate-950/80"
+            ? "bg-rose-950/95 border-rose-500/70"
+            : "bg-slate-900/95 border-slate-700/80"
         }`}
       >
-        {/* Üst Bar: Başlık & Kapatma Butonu (✕) */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <Timer
-              className={`w-4 h-4 ${
-                isOvertime ? "text-rose-400 animate-spin" : "text-amber-400"
-              }`}
-            />
-            <span
-              className={`text-xs font-black uppercase tracking-wider ${
-                isOvertime ? "text-rose-300" : "text-white"
-              }`}
-            >
-              {isOvertime ? t("brd_timer_overtime", "Ek Süre Sayılıyor") : t("brd_timer_title", "Akıllı Sayaç")}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-            title={t("close", "Kapat")}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Büyük Zaman Göstergesi */}
-        <div className="py-4 text-center">
+        <div className="flex items-center gap-1.5">
+          <Timer
+            className={`w-4 h-4 shrink-0 ${
+              isOvertime ? "text-rose-400 animate-spin" : "text-amber-400"
+            }`}
+          />
           <span
-            className={`text-5xl font-black font-mono tracking-wider transition-colors ${
+            className={`text-lg font-mono font-bold tracking-tight ${
               isOvertime
-                ? "text-rose-400 drop-shadow-[0_0_20px_rgba(244,63,94,0.6)] animate-pulse"
+                ? "text-rose-300 animate-pulse"
                 : secondsRemaining <= 10 && secondsRemaining > 0
                 ? "text-amber-400 animate-pulse"
                 : "text-white"
@@ -136,67 +113,63 @@ export default function BoardTimer({ isOpen, onClose }: BoardTimerProps) {
           >
             {formatDisplayTime()}
           </span>
-          {isOvertime && (
-            <p className="text-[11px] text-rose-300 font-semibold mt-1">
-              {t("brd_timer_ended", "Süre doldu, ek süre devam ediyor")}
-            </p>
-          )}
         </div>
 
-        {/* 30s / 1dk / 3dk Seçenekleri */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="flex items-center gap-1">
           {[
             { label: "30s", val: 30 },
-            { label: `1 ${t("cls_min_short", "dk")}`, val: 60 },
-            { label: `3 ${t("cls_min_short", "dk")}`, val: 180 },
+            { label: "1m", val: 60 },
+            { label: "3m", val: 180 },
           ].map((preset) => (
             <button
               key={preset.val}
               type="button"
               onClick={() => handleStartPreset(preset.val)}
-              className={`py-1.5 rounded-xl text-xs font-bold font-mono transition cursor-pointer ${
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold font-mono transition cursor-pointer ${
                 selectedPreset === preset.val && !isOvertime
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : "bg-slate-950/80 hover:bg-slate-800 text-slate-300 border border-slate-800"
+                  ? "bg-indigo-600 text-white"
+                  : "bg-slate-800/90 hover:bg-slate-700 text-slate-300"
               }`}
             >
               {preset.label}
             </button>
           ))}
-        </div>
-
-        {/* Aksiyon Butonları: [ +1 Dk ] ve [ Başlat/Durdur / Sıfırla ] */}
-        <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
           <button
             type="button"
             onClick={handleAddOneMinute}
-            className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 text-xs font-bold flex items-center justify-center gap-1 border border-slate-700 transition cursor-pointer"
+            className="px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-emerald-300 text-[11px] font-bold font-mono transition cursor-pointer"
             title={t("brd_timer_add1m_tip", "1 Dakika Ek Süre Ver")}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+1 {t("cls_min_short", "dk")}</span>
+            +1m
           </button>
+        </div>
 
+        <div className="flex items-center gap-1 pl-1 border-l border-slate-700/80">
           <button
             type="button"
-            onClick={() => setIsRunning(!isRunning)}
-            className={`py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md ${
-              isRunning
-                ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
-                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
-            }`}
+            onClick={() => setIsRunning((prev) => !prev)}
+            className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition cursor-pointer"
+            title={isRunning ? t("brd_timer_pause", "Durdur") : t("brd_timer_start", "Başlat")}
           >
             {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-            <span>{isRunning ? t("brd_timer_pause", "Durdur") : t("brd_timer_start", "Başlat")}</span>
           </button>
 
           <button
             type="button"
             onClick={handleReset}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
             title={t("brd_timer_reset", "Sıfırla")}
           >
             <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            title={t("close", "Kapat")}
+          >
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
