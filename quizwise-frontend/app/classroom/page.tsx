@@ -113,26 +113,11 @@ function ClassroomContent() {
     setShowJoinPinModal(true);
   };
 
-  // Aktif Sekme: 'showcase' | 'classes' | 'calendar'
+  // Aktif Sekme: 'classes' | 'calendar'
   const paramTab = searchParams.get("tab");
-  const initialTab: "showcase" | "classes" | "calendar" =
-    paramTab === "calendar" || paramTab === "archive"
-      ? "calendar"
-      : paramTab === "classes"
-      ? "classes"
-      : !user
-      ? "showcase"
-      : "showcase";
-  const [activeTab, setActiveTab] = useState<"showcase" | "classes" | "calendar">(initialTab);
-
-  // Açık Dersler (Vitrin) State'leri
-  const [showcaseClasses, setShowcaseClasses] = useState<any[]>([]);
-  const [showcaseLoading, setShowcaseLoading] = useState<boolean>(false);
-  const [showcaseSearch, setShowcaseSearch] = useState<string>("");
-  const [showcaseCategory, setShowcaseCategory] = useState<string>("all");
-  const [showcaseLang, setShowcaseLang] = useState<string>("ALL");
-  const [showcaseDateFilter, setShowcaseDateFilter] = useState<"all" | "today" | "week">("all");
-  const [showcaseFreeOnly, setShowcaseFreeOnly] = useState<boolean>(false);
+  const initialTab: "classes" | "calendar" =
+    paramTab === "calendar" || paramTab === "archive" ? "calendar" : "classes";
+  const [activeTab, setActiveTab] = useState<"classes" | "calendar">(initialTab);
 
   // Sınıf Listesi
   const [classrooms, setClassrooms] = useState<ClassroomItem[]>([]);
@@ -268,32 +253,6 @@ function ClassroomContent() {
     fetchTimeline();
   }, [currentUserId, user, isGuest]);
 
-  // Açık Dersler Vitrini (Public Showcase) Verisini Çek
-  const fetchPublicShowcase = async () => {
-    setShowcaseLoading(true);
-    try {
-      const qs = new URLSearchParams();
-      if (showcaseCategory !== "all") qs.set("category", showcaseCategory);
-      if (showcaseLang !== "ALL") qs.set("teaching_lang", showcaseLang);
-      if (showcaseSearch.trim()) qs.set("search", showcaseSearch.trim());
-      if (showcaseFreeOnly) qs.set("free_only", "true");
-      const res = await fetch(`${apiUrl}/api/v1/classroom/public-showcase?${qs.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setShowcaseClasses(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.warn("Public showcase fetch error:", err);
-    } finally {
-      setShowcaseLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPublicShowcase();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiUrl, showcaseCategory, showcaseLang, showcaseSearch, showcaseFreeOnly]);
-
   // 2. Sınıf Silme
   const handleDeleteClass = (id: string) => {
     const updated = classrooms.filter((c) => c.id !== id);
@@ -369,24 +328,8 @@ function ClassroomContent() {
               </div>
             </div>
 
-            {/* Üç Ana Görünüm Sekmesi */}
+            {/* İki Ana Görünüm Sekmesi */}
             <div className="flex items-center p-1 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs font-bold flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab("showcase");
-                  fetchPublicShowcase();
-                }}
-                className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === "showcase"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>{t("cls_tab_showcase", "Açık Odalar")}</span>
-              </button>
-
               <button
                 type="button"
                 onClick={() => setActiveTab("classes")}
@@ -396,7 +339,7 @@ function ClassroomContent() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <span>{t("cls_tab_rooms", "Sınıflarım")}</span>
+                <span>{t("cls_tab_rooms", "🏫 Sınıflarım")}</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">
                   {classrooms.length}
                 </span>
@@ -450,183 +393,6 @@ function ClassroomContent() {
       {/* 2. ANA İÇERİK ALANI                                                       */}
       {/* ========================================================================= */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full flex flex-col justify-start">
-        {/* ======================================================================= */}
-        {/* TAB 0: 🌍 AÇIK DERSLER (VİTRİN) — MİSAFİRLERE DE AÇIK                    */}
-        {/* ======================================================================= */}
-        {activeTab === "showcase" && (() => {
-          const now = new Date();
-          const endOfToday = new Date(now);
-          endOfToday.setHours(23, 59, 59, 999);
-          const endOfWeek = new Date(now);
-          endOfWeek.setDate(endOfWeek.getDate() + 7);
-
-          const displayedShowcase = showcaseClasses.filter((cls) => {
-            if (showcaseDateFilter === "all") return true;
-            const dtStr = cls.next_session_utc || cls.created_at;
-            if (!dtStr) return true;
-            const dt = new Date(dtStr);
-            if (showcaseDateFilter === "today") return dt <= endOfToday;
-            if (showcaseDateFilter === "week") return dt <= endOfWeek;
-            return true;
-          });
-
-          return (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Tek Satırlık Zarif Koyu SaaS Filtre Barı */}
-              <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-[#111827]/90 border border-slate-800/80 backdrop-blur-md shadow-xl">
-                {/* Sol: Minimal Arama Kutusu */}
-                <div className="relative w-full lg:w-56 shrink-0">
-                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={showcaseSearch}
-                    onChange={(e) => setShowcaseSearch(e.target.value)}
-                    placeholder="Konu veya eğitmen ara..."
-                    className="w-full bg-slate-900/90 border border-slate-700/70 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                {/* Orta: 5 İnce Sekme Hapı (Yalnızca İngilizce Odaları) */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {[
-                    { id: "all", label: "Tümü" },
-                    { id: "speaking", label: "Speaking Kulübü" },
-                    { id: "exam", label: "YDS / IELTS" },
-                    { id: "business", label: "İş İngilizcesi" },
-                    { id: "reading", label: "Okuma & Kelime" },
-                  ].map((cat) => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setShowcaseCategory(cat.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ${
-                        showcaseCategory === cat.id
-                          ? "bg-indigo-600 text-white shadow-sm"
-                          : "bg-slate-800/70 text-slate-300 hover:bg-slate-800"
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Sağ: Kompakt Dil Seçici & Zarif Ücretsiz Anahtarı */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={showcaseLang}
-                    onChange={(e) => setShowcaseLang(e.target.value)}
-                    className="bg-slate-900/90 border border-slate-700/70 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
-                  >
-                    <option value="ALL">Tümü</option>
-                    <option value="TR">TR</option>
-                    <option value="EN">EN</option>
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowcaseFreeOnly((p) => !p)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                      showcaseFreeOnly
-                        ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
-                        : "border-slate-700/70 text-slate-300 bg-slate-800/70 hover:bg-slate-800"
-                    }`}
-                  >
-                    Ücretsiz
-                  </button>
-                </div>
-              </div>
-
-              {/* Ders Kartları (3 Sütunlu Grid) veya Koyu Cam Boş Durum */}
-              {showcaseLoading ? (
-                <div className="p-12 rounded-2xl bg-[#111827]/70 border border-slate-800/80 flex items-center justify-center gap-3 text-sm text-slate-400">
-                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                  <span>Açık odalar yükleniyor...</span>
-                </div>
-              ) : displayedShowcase.length === 0 ? (
-                <div className="bg-[#111827]/70 border border-dashed border-slate-800 rounded-2xl py-14 px-6 text-center flex flex-col items-center justify-center space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                    <Globe className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1 max-w-md">
-                    <p className="text-base font-bold text-white">
-                      Şu an açık canlı oda bulunmuyor
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      Kendi İngilizce konuşma veya sınav hazırlık odanızı açarak topluluğu davet edebilirsiniz.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateClass}
-                    className="mt-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/25 transition active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>İlk Canlı Odayı Aç</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {displayedShowcase.map((cls) => {
-                    const formattedDate = cls.next_session_utc
-                      ? new Intl.DateTimeFormat(undefined, {
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }).format(new Date(cls.next_session_utc))
-                      : "Esnek Takvim";
-                    const slugOrCode = cls.invite_slug || cls.code || cls.id;
-                    return (
-                      <div
-                        key={cls.id}
-                        className="rounded-3xl bg-[#111827]/90 border border-slate-800/80 backdrop-blur-md p-5 flex flex-col justify-between gap-4 transition hover:border-indigo-500/50 shadow-xl text-slate-100"
-                      >
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-semibold">
-                              <Clock className="w-3 h-3" />
-                              <span>{formattedDate}</span>
-                            </span>
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                                Number(cls.price || 0) > 0
-                                  ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
-                                  : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                              }`}
-                            >
-                              {Number(cls.price || 0) > 0 ? `${cls.price} ${cls.currency || "TRY"}` : "Ücretsiz"}
-                            </span>
-                          </div>
-
-                          <h3 className="text-base font-bold leading-snug line-clamp-2 text-white">
-                            {cls.name}
-                          </h3>
-
-                          <div className="flex items-center justify-between text-xs text-slate-400">
-                            <span className="truncate max-w-[160px]">{cls.teacher_name || "VocaShip Eğitmeni"}</span>
-                            <span className="font-semibold text-slate-300 shrink-0 inline-flex items-center gap-1">
-                              <Users className="w-3.5 h-3.5 text-indigo-400" />
-                              <span>{cls.attendee_count ?? 0} Katılımcı</span>
-                            </span>
-                          </div>
-                        </div>
-
-                        <Link
-                          href={`/join/${encodeURIComponent(slugOrCode)}`}
-                          className="w-full py-2.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition active:scale-95"
-                        >
-                          <span>İncele & Katıl</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
         {/* ======================================================================= */}
         {/* TAB 1: SINIFLARIM / ODALAR                                              */}
         {/* ======================================================================= */}
@@ -765,6 +531,80 @@ function ClassroomContent() {
                 </div>
               </div>
             )}
+
+            {/* 3 KARTLI CANLI STÜDYO & ÜRÜN TANITIM VİTRİNİ */}
+            <section className="mt-8 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2.5 shadow-xl">
+                  <div className="text-xl">🖥️</div>
+                  <h3 className="text-sm font-bold text-white">
+                    {t(
+                      "cls_studio_card1_t",
+                      "İnteraktif Akıllı Tahta & PDF Stüdyosu"
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {t(
+                      "cls_studio_card1_d",
+                      "Her branşa uygun nötr akıllı tahtada PDF yansıtın, fosforlu kalemle çizin ve dersi tek tıkla AI özetine dönüştürün."
+                    )}
+                  </p>
+                </div>
+
+                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2.5 shadow-xl">
+                  <div className="text-xl">🎟️</div>
+                  <h3 className="text-sm font-bold text-white">
+                    {t(
+                      "cls_studio_card2_t",
+                      "Tek Linkle Özel veya Grup Dersi"
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {t(
+                      "cls_studio_card2_d",
+                      "Kendi ücretinizi belirleyin (ücretsiz veya biletli), size özel davet linkini kendi kitlenizle paylaşın, katılımı tek ekrandan yönetin."
+                    )}
+                  </p>
+                </div>
+
+                <div className="bg-[#111827]/90 border border-slate-800/80 rounded-2xl p-5 space-y-2.5 shadow-xl">
+                  <div className="text-xl">⚡</div>
+                  <h3 className="text-sm font-bold text-white">
+                    {t(
+                      "cls_studio_card3_t",
+                      "Ders Sonu Otomatik Hafıza Döngüsü"
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {t(
+                      "cls_studio_card3_d",
+                      "Derste işlenen kritik kavramlar ve özet notlar oturum bittiği an öğrencilerinizin kişisel çalışma kuyruğuna aktarılır."
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Zarif Aksiyon Satırı */}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={handleOpenCreateClass}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{t("cls_studio_cta_create", "Kendi Sınıfını Oluştur")}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenJoinPin}
+                  className="px-5 py-2.5 rounded-xl bg-[#111827]/90 hover:bg-slate-800 border border-slate-700/80 text-slate-200 text-xs sm:text-sm font-bold flex items-center gap-2 transition active:scale-95 cursor-pointer"
+                >
+                  <KeyRound className="w-4 h-4 text-indigo-400" />
+                  <span>{t("cls_studio_cta_pin", "Davet Kodu (PIN) Gir")}</span>
+                </button>
+              </div>
+            </section>
           </>
         )}
 
