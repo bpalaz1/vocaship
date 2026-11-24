@@ -314,9 +314,27 @@ export async function syncUnifiedWeakSpots(): Promise<ArenaMistakeItem[]> {
     );
   }
 
-  // 2. Backend'deki güncel zayıf noktaları çek ve yerel havuzu birebir eşitle
+  // 2. Backend'deki güncel zayıf noktaları çek ve yerel havuz ile birleştirip tekilleştir
   try {
-    const res = await fetch(`${API_BASE}/api/v1/cards/weak-spots?limit=100`);
+    let uid = "";
+    const headers: Record<string, string> = {};
+    if (typeof window !== "undefined") {
+      try {
+        const rawUser = localStorage.getItem("vocaship_user");
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser);
+          if (parsed?.id) uid = String(parsed.id);
+        }
+        const token = localStorage.getItem("vocaship_access_token");
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+
+    const queryUrl = uid
+      ? `${API_BASE}/api/v1/study/weak-spots?user_id=${encodeURIComponent(uid)}&limit=100`
+      : `${API_BASE}/api/v1/study/weak-spots?limit=100`;
+
+    const res = await fetch(queryUrl, { headers });
     if (res.ok) {
       const data = await res.json();
       const backendCards = Array.isArray(data?.cards) ? data.cards : [];
@@ -328,7 +346,7 @@ export async function syncUnifiedWeakSpots(): Promise<ArenaMistakeItem[]> {
       const localMeaningMap = new Map(
         localList.map((m) => [m.word.toLowerCase(), m])
       );
-      const enriched = backendMistakes.map((bm: ArenaMistakeItem) => {
+      const enrichedBackend = backendMistakes.map((bm: ArenaMistakeItem) => {
         const localMatch = localMeaningMap.get(bm.word.toLowerCase());
         const bmMeaning = bm.meanings?.[0]?.translation || "";
         const localMeaning = localMatch?.meanings?.[0]?.translation || "";
@@ -346,7 +364,9 @@ export async function syncUnifiedWeakSpots(): Promise<ArenaMistakeItem[]> {
         return bm;
       });
 
-      return writeMistakesStorage(enriched);
+      // Backend + yerel vocaship_arena_mistakes içindeki hatalı kelimeleri birleştir ve tekilleştir
+      const merged = [...enrichedBackend, ...localList];
+      return writeMistakesStorage(merged);
     }
   } catch (err) {
     console.warn("[ArenaMistakes] Ortak zayıf nokta senkronizasyonu başarısız, yerel önbellek kullanılıyor:", err);

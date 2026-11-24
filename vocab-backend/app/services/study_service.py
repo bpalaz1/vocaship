@@ -116,7 +116,11 @@ def process_card_review_result(
     consecutive_correct = card.get("consecutive_correct") or 0
     old_needs_review = bool(card.get("needs_review") or False)
 
-    # Zayıf nokta sayaç mantığı
+    # Zayıf nokta sayaç mantığı: rating <= 3 (1 Forgot / 2 Hard) kesin olarak needs_review=True yapar;
+    # yalnızca rating >= 4 (3 Good / 4 Easy) veya force_clear=True olduğunda needs_review=False olur.
+    if rating is not None:
+        is_correct = rating >= 4
+
     if not is_correct:
         mistake_count += 1
         consecutive_correct = 0
@@ -124,8 +128,7 @@ def process_card_review_result(
         effective_rating = rating if rating is not None else 1
     else:
         consecutive_correct += 1
-        # Tek doğrulamayla zorla temizle (İntikam / Telafi) veya 2 kez üst üste doğru bilinince çıkar
-        if force_clear or consecutive_correct >= 2:
+        if force_clear or (rating is not None and rating >= 4) or consecutive_correct >= 2:
             needs_review = False
             consecutive_correct = max(consecutive_correct, 2)
         else:
@@ -174,9 +177,11 @@ def process_card_review_result(
 
 
 def process_card_review(card_id: str, rating: Optional[int] = None, is_correct: Optional[bool] = None) -> Dict[str, Any]:
-    """Geriye dönük uyumlu SM-2 değerlendirici."""
-    if is_correct is None:
-        is_correct = (rating >= 3) if rating is not None else True
+    """Geriye dönük uyumlu SM-2 değerlendirici (rating <= 3 -> needs_review=True, rating >= 4 -> needs_review=False)."""
+    if rating is not None:
+        is_correct = rating >= 4
+    elif is_correct is None:
+        is_correct = True
     return process_card_review_result(card_id=card_id, is_correct=is_correct, rating=rating)
 
 
