@@ -1531,7 +1531,7 @@ export default function StoryReader({
             : 0;
 
     return (
-        <div className="w-full max-w-4xl mx-auto space-y-6 pb-28 animate-in fade-in duration-200 relative">
+        <div className="w-full max-w-4xl mx-auto space-y-6 pb-36 animate-in fade-in duration-200 relative">
             {/* Yeşil Bildirim (Toast) */}
             {showSaveToast && (
                 <div className="fixed top-20 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-emerald-600 text-white shadow-2xl shadow-emerald-950/60 border border-emerald-400/40 animate-in fade-in slide-in-from-top-4 duration-300 font-bold text-xs sm:text-sm">
@@ -2407,7 +2407,7 @@ export default function StoryReader({
             </div>
 
             {/* ==================== 3. ALT SABİT SES OYNATICI (STICKY AUDIO PLAYER BAR) ==================== */}
-            <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-4 sm:px-8 py-3 shadow-2xl transition-all">
+            <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-4 sm:px-8 py-3 shadow-2xl transition-all">
                 <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
                     {/* Sol: Cümle Navigasyon & Oynat/Durdur */}
                     <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-start">

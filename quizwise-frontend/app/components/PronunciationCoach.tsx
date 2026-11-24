@@ -295,18 +295,14 @@ export default function PronunciationCoach({
       <button
         type="button"
         onClick={handleStart}
-        className={`group relative overflow-hidden flex items-center gap-2 rounded-2xl font-bold transition-all duration-200 cursor-pointer shadow-sm active:scale-95 ${
-          compact
-            ? "px-3 py-1.5 text-xs bg-indigo-100 hover:bg-indigo-200 border border-indigo-300 text-indigo-950 dark:bg-gradient-to-r dark:from-indigo-600/30 dark:to-violet-600/30 dark:hover:from-indigo-600/50 dark:hover:to-violet-600/50 dark:border-indigo-500/40 dark:text-indigo-300 dark:hover:text-white"
-            : "px-4 py-2 text-xs sm:text-sm bg-indigo-100 hover:bg-indigo-200 border border-indigo-300 text-indigo-950 dark:bg-gradient-to-r dark:from-indigo-600/25 dark:via-purple-600/25 dark:to-pink-600/25 dark:hover:from-indigo-600/40 dark:hover:via-purple-600/40 dark:hover:to-pink-600/40 dark:border-indigo-500/40 dark:hover:border-indigo-400/70 dark:text-indigo-200 dark:hover:text-white dark:shadow-indigo-950/50"
+        className={`group relative overflow-hidden flex items-center gap-2 rounded-2xl font-semibold transition-all duration-200 cursor-pointer shadow-sm active:scale-95 bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-500/20 dark:hover:bg-indigo-500/30 dark:border dark:border-indigo-400/40 dark:text-indigo-200 dark:hover:text-white ${
+          compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-xs sm:text-sm"
         }`}
         title={t("pron_cta_tip", "Mikrofon ile telaffuzunu test et ve anında kelime analizi al")}
       >
-        <span className="relative z-10 flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-200/80 text-indigo-700 dark:bg-indigo-500/20 dark:group-hover:bg-indigo-500/30 dark:text-indigo-300 dark:group-hover:text-white transition">
-          <Mic className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-        </span>
-        <span className="relative z-10 font-bold tracking-tight">
-          {t("btn_test_pronunciation", "Telaffuzunu Test Et")}
+        <Mic className="w-4 h-4 shrink-0 group-hover:scale-110 transition-transform" />
+        <span className="tracking-tight">
+          {t("btn_test_pronunciation", "Telaffuzunu Test Et").replace(/^\[\s*|\s*\]$/g, "")}
         </span>
       </button>
     </div>

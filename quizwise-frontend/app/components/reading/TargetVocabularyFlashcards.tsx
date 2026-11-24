@@ -116,10 +116,10 @@ function SingleFlashcard({
     >
       {/* Üst Kısım: Kelime, Fonetik, Telaffuz ve Desteye Ekle */}
       <div className="space-y-2 mb-3">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           {/* Kelime & Fonetik & Ses Butonu */}
-          <div className="flex items-center flex-wrap gap-2">
-            <h4 className="text-base sm:text-lg font-black text-white group-hover:text-indigo-200 transition tracking-wide">
+          <div className="flex items-center flex-wrap gap-1.5 min-w-0 flex-1">
+            <h4 className="text-base sm:text-lg font-black text-white group-hover:text-indigo-200 transition tracking-wide truncate max-w-full">
               {item.word}
             </h4>
 
@@ -133,7 +133,7 @@ function SingleFlashcard({
               type="button"
               onClick={handleSpeak}
               title={t("listen_pronunciation", "Telaffuzu Dinle")}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-indigo-600/20 transition cursor-pointer active:scale-95"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-indigo-600/20 transition cursor-pointer active:scale-95 shrink-0"
             >
               <Volume2 className="w-4 h-4" />
             </button>
@@ -144,7 +144,7 @@ function SingleFlashcard({
             type="button"
             onClick={handleAddToDeck}
             disabled={isSaved}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 ${
+            className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition shrink-0 whitespace-nowrap cursor-pointer active:scale-95 ${
               isSaved
                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default"
                 : "bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500/50 shadow-sm"
@@ -153,13 +153,14 @@ function SingleFlashcard({
           >
             {isSaved ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{t("added_to_deck_badge", "✓ Desteye Eklendi")}</span>
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="hidden sm:inline">{t("added_to_deck_badge", "Desteye Eklendi").replace(/^[✓✔]\s*/, "")}</span>
+                <span className="sm:hidden">{t("added_short_badge", "Eklendi")}</span>
               </>
             ) : (
               <>
-                <PlusCircle className="w-3.5 h-3.5 text-indigo-400 group-hover:text-white" />
-                <span>{t("add_to_deck", "+ Desteme Ekle")}</span>
+                <PlusCircle className="w-3.5 h-3.5 text-indigo-400 group-hover:text-white shrink-0" />
+                <span>{t("add_to_deck", "+ Desteme Ekle").replace(/^\+\s*/, "")}</span>
               </>
             )}
           </button>
@@ -171,8 +172,8 @@ function SingleFlashcard({
         {!displayedRevealed ? (
           /* GİZLİ CEVAP / ANLAMI GÖR BUTONU */
           <div className="w-full py-2.5 px-3 rounded-xl bg-slate-950/70 hover:bg-indigo-950/40 border border-indigo-500/25 hover:border-indigo-500/50 text-indigo-300 hover:text-indigo-200 text-xs font-semibold flex items-center justify-center gap-2 transition duration-200 shadow-inner group/btn">
-            <Eye className="w-3.5 h-3.5 text-indigo-400 group-hover/btn:scale-110 transition" />
-            <span>[ 👁️ {t("reveal_meaning", "Anlamı Gör")} ]</span>
+            <Eye className="w-3.5 h-3.5 text-indigo-400 group-hover/btn:scale-110 transition shrink-0" />
+            <span>{t("reveal_meaning", "Anlamı Gör").replace(/^\[\s*|\s*\]$/g, "").replace(/^👁️\s*/, "")}</span>
           </div>
         ) : (
           /* AÇILMIŞ CEVAP: Renkli Anlam Metni & Örnek Cümle */
