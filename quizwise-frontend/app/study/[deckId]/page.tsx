@@ -73,18 +73,19 @@ interface Deck {
 export default function DeckStudyPage() {
   const params = useParams();
   const deckId = params.deckId as string;
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
-  const sm2Buttons = useMemo(
-    () => [
+  const sm2Buttons = useMemo(() => {
+    const isTr = language === "tr";
+    return [
       {
         key: "1",
         rating: 1,
         isCorrect: false,
         label: t("study_rate_again"),
-        hint: t("study_rate_hard_hint"),
+        hint: isTr ? "< 10 dk" : "< 10m",
         className:
-          "bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/35 hover:border-rose-400 text-rose-200",
+          "bg-rose-100 hover:bg-rose-200 border-rose-300 text-rose-950 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 dark:border-rose-500/35 dark:hover:border-rose-400 dark:text-rose-200",
         badgeClass: "bg-rose-600 text-white",
       },
       {
@@ -92,9 +93,9 @@ export default function DeckStudyPage() {
         rating: 2,
         isCorrect: false,
         label: t("study_rate_hard"),
-        hint: t("study_rate_hard_hint"),
+        hint: isTr ? "1 gün" : "1d",
         className:
-          "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/35 hover:border-amber-400 text-amber-200",
+          "bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-950 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-500/35 dark:hover:border-amber-400 dark:text-amber-200",
         badgeClass: "bg-amber-500 text-slate-950",
       },
       {
@@ -102,9 +103,9 @@ export default function DeckStudyPage() {
         rating: 4,
         isCorrect: true,
         label: t("study_rate_good"),
-        hint: t("study_rate_good_hint"),
+        hint: isTr ? "3 gün" : "3d",
         className:
-          "bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/35 hover:border-emerald-400 text-emerald-200",
+          "bg-emerald-100 hover:bg-emerald-200 border-emerald-300 text-emerald-950 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 dark:border-emerald-500/35 dark:hover:border-emerald-400 dark:text-emerald-200",
         badgeClass: "bg-emerald-600 text-white",
       },
       {
@@ -112,14 +113,13 @@ export default function DeckStudyPage() {
         rating: 5,
         isCorrect: true,
         label: t("study_rate_easy"),
-        hint: t("study_rate_good_hint"),
+        hint: isTr ? "7 gün" : "7d",
         className:
-          "bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/35 hover:border-indigo-400 text-indigo-200",
+          "bg-indigo-100 hover:bg-indigo-200 border-indigo-300 text-indigo-950 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 dark:border-indigo-500/35 dark:hover:border-indigo-400 dark:text-indigo-200",
         badgeClass: "bg-indigo-600 text-white",
       },
-    ],
-    [t]
-  );
+    ];
+  }, [t, language]);
 
   const [deck, setDeck] = useState<Deck | null>(null);
   const [allDeckCards, setAllDeckCards] = useState<Card[]>([]);
@@ -908,13 +908,21 @@ export default function DeckStudyPage() {
             )}
           </div>
 
-          {/* Deste Kelime Listesi */}
-          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 px-1 shrink-0">
+          {/* Deste Kelime Listesi (Aktif kart çalışmasında mobilde gizlenir) */}
+          <div
+            className={`${
+              !sessionCompleted ? "hidden lg:flex" : "flex"
+            } items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 px-1 shrink-0`}
+          >
             <span>{t("lib_word_unit")}</span>
             <span className="font-mono">{cards.length} {t("lib_view_card")}</span>
           </div>
 
-          <div className="flex-1 min-h-0 max-h-[220px] lg:max-h-none overflow-y-auto space-y-1.5 pr-1">
+          <div
+            className={`${
+              !sessionCompleted ? "hidden lg:block" : "block"
+            } flex-1 min-h-0 max-h-[220px] lg:max-h-none overflow-y-auto space-y-1.5 pr-1`}
+          >
             {cards.map((card, idx) => {
               const isActive = !sessionCompleted && idx === currentIndex;
 
@@ -1024,9 +1032,9 @@ export default function DeckStudyPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-slate-400 shrink-0">
+                    <div className="hidden md:flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 shrink-0">
                       <span>{t("study_arrows_nav")}</span>
-                      <span className="text-indigo-400 font-semibold">
+                      <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
                         {t("study_see_meaning_arrow")}
                       </span>
                     </div>
@@ -1063,7 +1071,7 @@ export default function DeckStudyPage() {
 
                     <div className="text-center py-3 flex flex-col items-center justify-center my-auto w-full space-y-3">
                       <div className="flex items-center justify-center gap-3">
-                        <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-400 break-words">
+                        <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-700 dark:text-emerald-400 break-words">
                           {cardMeaning}
                         </h3>
                         <button
@@ -1071,7 +1079,7 @@ export default function DeckStudyPage() {
                           onClick={(e) =>
                             speakText(cardMeaning, deck?.native_lang || "tr", e)
                           }
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-emerald-600 text-emerald-300 hover:text-white transition cursor-pointer shrink-0"
+                          className="p-2 rounded-xl bg-emerald-100 hover:bg-emerald-600 text-emerald-700 hover:text-white dark:bg-slate-800 dark:text-emerald-300 transition cursor-pointer shrink-0"
                           title="Seslendir"
                         >
                           <Volume2 className="w-4 h-4" />
@@ -1079,18 +1087,37 @@ export default function DeckStudyPage() {
                       </div>
 
                       {cardExEn ? (
-                        <div className="w-full max-w-lg text-left bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                        <div className="w-full max-w-lg text-left bg-slate-50 dark:bg-slate-950/80 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                           <div>
-                            <p className="text-xs sm:text-sm text-slate-200 italic">
-                              &quot;{cardExEn}&quot;
+                            <p className="text-xs sm:text-sm text-slate-900 dark:text-slate-100 font-medium italic">
+                              &quot;
+                              {(() => {
+                                const trimmed = cardWord.trim();
+                                if (!trimmed) return cardExEn;
+                                const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                                const regex = new RegExp(`(\\b${escaped}\\w*\\b)`, "gi");
+                                return cardExEn.split(regex).map((part, idx) =>
+                                  regex.test(part) ? (
+                                    <span
+                                      key={idx}
+                                      className="font-bold text-indigo-700 dark:text-indigo-400 not-italic"
+                                    >
+                                      {part}
+                                    </span>
+                                  ) : (
+                                    <React.Fragment key={idx}>{part}</React.Fragment>
+                                  )
+                                );
+                              })()}
+                              &quot;
                             </p>
                             {cardExTr && (
-                              <p className="text-xs text-slate-400 mt-1">
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                 {cardExTr}
                               </p>
                             )}
                           </div>
-                          <div className="pt-1.5 border-t border-slate-800/80">
+                          <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800/80">
                             <PronunciationCoach
                               targetSentence={cardExEn}
                               lang={deck?.target_lang === "tr" ? "tr-TR" : "en-US"}
@@ -1107,9 +1134,9 @@ export default function DeckStudyPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-slate-400 shrink-0">
+                    <div className="hidden md:flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 shrink-0">
                       <span>{t("study_shortcuts_hint")}</span>
-                      <span className="text-indigo-400 font-semibold">
+                      <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
                         {t("study_rate_below")}
                       </span>
                     </div>

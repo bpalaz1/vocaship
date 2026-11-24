@@ -289,25 +289,24 @@ export default function PronunciationCoach({
     );
   }
 
-  // Idle Button Mode: "[ 🎙️ Telaffuzunu Test Et ]"
+  // Idle Button Mode: "Telaffuzunu Test Et"
   return (
     <div className={`inline-block ${className}`} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={handleStart}
-        className={`group relative overflow-hidden flex items-center gap-2 rounded-2xl font-bold transition-all duration-200 cursor-pointer shadow-lg active:scale-95 ${
+        className={`group relative overflow-hidden flex items-center gap-2 rounded-2xl font-bold transition-all duration-200 cursor-pointer shadow-sm active:scale-95 ${
           compact
-            ? "px-3 py-1.5 text-xs bg-gradient-to-r from-indigo-600/30 to-violet-600/30 hover:from-indigo-600/50 hover:to-violet-600/50 border border-indigo-500/40 text-indigo-300 hover:text-white"
-            : "px-4 py-2.5 text-xs sm:text-sm bg-gradient-to-r from-indigo-600/25 via-purple-600/25 to-pink-600/25 hover:from-indigo-600/40 hover:via-purple-600/40 hover:to-pink-600/40 border border-indigo-500/40 hover:border-indigo-400/70 text-indigo-200 hover:text-white shadow-indigo-950/50"
+            ? "px-3 py-1.5 text-xs bg-indigo-100 hover:bg-indigo-200 border border-indigo-300 text-indigo-950 dark:bg-gradient-to-r dark:from-indigo-600/30 dark:to-violet-600/30 dark:hover:from-indigo-600/50 dark:hover:to-violet-600/50 dark:border-indigo-500/40 dark:text-indigo-300 dark:hover:text-white"
+            : "px-4 py-2 text-xs sm:text-sm bg-indigo-100 hover:bg-indigo-200 border border-indigo-300 text-indigo-950 dark:bg-gradient-to-r dark:from-indigo-600/25 dark:via-purple-600/25 dark:to-pink-600/25 dark:hover:from-indigo-600/40 dark:hover:via-purple-600/40 dark:hover:to-pink-600/40 dark:border-indigo-500/40 dark:hover:border-indigo-400/70 dark:text-indigo-200 dark:hover:text-white dark:shadow-indigo-950/50"
         }`}
         title={t("pron_cta_tip", "Mikrofon ile telaffuzunu test et ve anında kelime analizi al")}
       >
-        <span className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-        <span className="relative z-10 flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-500/20 group-hover:bg-indigo-500/30 text-indigo-300 group-hover:text-white transition">
+        <span className="relative z-10 flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-200/80 text-indigo-700 dark:bg-indigo-500/20 dark:group-hover:bg-indigo-500/30 dark:text-indigo-300 dark:group-hover:text-white transition">
           <Mic className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
         </span>
         <span className="relative z-10 font-bold tracking-tight">
-          [ 🎙️ {t("btn_test_pronunciation", "Telaffuzunu Test Et")} ]
+          {t("btn_test_pronunciation", "Telaffuzunu Test Et")}
         </span>
       </button>
     </div>
