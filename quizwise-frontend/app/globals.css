@@ -104,6 +104,20 @@ html[data-theme="light"] :is(button, a):is(
   color: #ffffff !important;
 }
 
+/* Açık Mod: Modal ve sayfalardaki select / input / textarea kontrast güvencesi */
+html[data-theme="light"] select:not([data-theme-preserve="dark"] *),
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([data-theme-preserve="dark"] *),
+html[data-theme="light"] textarea:not([data-theme-preserve="dark"] *) {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] select:not([data-theme-preserve="dark"] *) option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
 @keyframes damageFloat {
   0% {
     opacity: 1;

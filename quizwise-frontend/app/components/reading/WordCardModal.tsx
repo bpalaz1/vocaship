@@ -501,10 +501,10 @@ export default function WordCardModal({
                     <select
                         value={nativeLang}
                         onChange={(e) => setNativeLang(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+                        className="bg-slate-100 border border-slate-300 text-slate-900 font-medium dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
                     >
                         {TRANSLATION_LANGUAGES.map((l) => (
-                            <option key={l.code} value={l.code}>
+                            <option key={l.code} value={l.code} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                                 {l.flag} {l.label}
                             </option>
                         ))}
@@ -574,12 +574,12 @@ export default function WordCardModal({
                         <select
                             value={selectedFolderId}
                             onChange={(e) => setSelectedFolderId(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                            className="w-full bg-slate-100 border border-slate-300 text-slate-900 font-medium dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
                         >
-                            <option value="all">{t("read_all_folders_opt", "Tüm Klasörler / Genel")}</option>
-                            <option value="none">{t("read_general_no_folder", "Genel (Klasörsüz)")}</option>
+                            <option value="all" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">{t("read_all_folders_opt", "Tüm Klasörler / Genel")}</option>
+                            <option value="none" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">{t("read_general_no_folder", "Genel (Klasörsüz)")}</option>
                             {folders.map((f) => (
-                                <option key={f.id} value={f.id}>
+                                <option key={f.id} value={f.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                                     📁 {f.name}
                                 </option>
                             ))}
@@ -587,14 +587,14 @@ export default function WordCardModal({
                     </div>
 
                     <div>
-                        <label className="text-xs text-slate-400 block mb-1.5">{t("label_target_deck", "Hedef Deste")}</label>
+                        <label className="text-xs text-slate-600 dark:text-slate-400 block mb-1.5">{t("label_target_deck", "Hedef Deste")}</label>
                         <select
                             value={targetDeck}
                             onChange={(e) => setTargetDeck(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                            className="w-full bg-slate-100 border border-slate-300 text-slate-900 font-medium dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
                         >
                             {filteredDecks.length === 0 ? (
-                                <option value="">{t("read_no_decks_in_folder", "Bu klasörde deste bulunamadı")}</option>
+                                <option value="" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">{t("read_no_decks_in_folder", "Bu klasörde deste bulunamadı")}</option>
                             ) : (
                                 filteredDecks.map((d) => {
                                     const fLabel =
@@ -602,7 +602,7 @@ export default function WordCardModal({
                                             ? `📁 ${folderNameById[d.folder_id]}`
                                             : t("read_general_badge", "Genel");
                                     return (
-                                        <option key={d.id} value={d.id}>
+                                        <option key={d.id} value={d.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                                             {d.title} ({fLabel})
                                         </option>
                                     );

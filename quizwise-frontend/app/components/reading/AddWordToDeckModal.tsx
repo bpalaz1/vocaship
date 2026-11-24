@@ -260,19 +260,19 @@ export default function AddWordToDeckModal({
           <div className="space-y-4">
             {/* 1. Klasör Seçimi (Opsiyonel Filtre) */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Folder className="w-3.5 h-3.5 text-amber-400" />
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Folder className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                 <span>{t("read_folder_filter_lbl", "1. Klasör Seçimi (Opsiyonel Filtre)")}</span>
               </label>
               <select
                 value={selectedFolderId}
                 onChange={(e) => setSelectedFolderId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 text-xs text-slate-100 focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-900 font-medium dark:bg-slate-950 dark:border-slate-800 dark:text-white focus:border-indigo-500 text-xs focus:outline-none"
               >
-                <option value="all">{t("read_all_folders_opt", "Tüm Klasörler / Genel")}</option>
-                <option value="none">{t("read_general_no_folder", "Genel (Klasörsüz)")}</option>
+                <option value="all" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">{t("read_all_folders_opt", "Tüm Klasörler / Genel")}</option>
+                <option value="none" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">{t("read_general_no_folder", "Genel (Klasörsüz)")}</option>
                 {folders.map((f) => (
-                  <option key={f.id} value={f.id}>
+                  <option key={f.id} value={f.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                     📁 {f.name}
                   </option>
                 ))}
@@ -282,27 +282,27 @@ export default function AddWordToDeckModal({
             {/* 2. Hedef Deste Seçimi + Mini Yeni Deste */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                   <span>{t("read_target_deck_lbl", "2. Hedef Deste Seçimi")}</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => setIsCreatingDeck((prev) => !prev)}
-                  className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition cursor-pointer"
+                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 flex items-center gap-1 transition cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
-                  <span>{t("read_quick_new_deck", "+ Yeni Deste")}</span>
+                  <span>{t("read_quick_new_deck", "+ Yeni Deste").replace(/^\+\s*/, "")}</span>
                 </button>
               </div>
 
               <select
                 value={selectedDeckId}
                 onChange={(e) => setSelectedDeckId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 text-xs text-slate-100 focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-900 font-medium dark:bg-slate-950 dark:border-slate-800 dark:text-white focus:border-indigo-500 text-xs focus:outline-none"
               >
                 {filteredDecks.length === 0 ? (
-                  <option value="">
+                  <option value="" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                     {t("read_no_decks_in_folder", "Bu klasörde deste bulunamadı")}
                   </option>
                 ) : (
@@ -312,7 +312,7 @@ export default function AddWordToDeckModal({
                         ? `📁 ${folderNameById[d.folder_id]}`
                         : t("read_general_badge", "Genel");
                     return (
-                      <option key={d.id} value={d.id}>
+                      <option key={d.id} value={d.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                         {d.title} ({folderLabel})
                       </option>
                     );
@@ -327,7 +327,7 @@ export default function AddWordToDeckModal({
                     value={newDeckTitle}
                     onChange={(e) => setNewDeckTitle(e.target.value)}
                     placeholder={t("read_new_deck_name_ph", "Yeni deste adı...")}
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-emerald-500/40 focus:border-emerald-400 text-xs text-white placeholder-slate-500 focus:outline-none"
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-100 border border-slate-300 text-slate-900 font-medium placeholder-slate-500 dark:bg-slate-950 dark:border-emerald-500/40 dark:text-white focus:border-emerald-400 text-xs focus:outline-none"
                   />
                   <button
                     type="button"
@@ -359,7 +359,7 @@ export default function AddWordToDeckModal({
             ) : (
               <Check className="w-4 h-4" />
             )}
-            <span>{t("read_save_to_selected_deck", "✓ Seçili Desteye Kaydet")}</span>
+            <span>{t("read_save_to_selected_deck", "✓ Seçili Desteye Kaydet").replace(/^✓\s*/, "")}</span>
           </button>
 
           <button
