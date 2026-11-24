@@ -85,7 +85,7 @@ export default function DeckStudyPage() {
         label: t("study_rate_again"),
         hint: isTr ? "< 10 dk" : "< 10m",
         className:
-          "bg-rose-100 hover:bg-rose-200 border-rose-300 text-rose-950 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 dark:border-rose-500/35 dark:hover:border-rose-400 dark:text-rose-200",
+          "bg-rose-100 hover:bg-rose-200 border-rose-300 text-rose-950 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 dark:border-rose-800 dark:text-rose-200",
         badgeClass: "bg-rose-600 text-white",
       },
       {
@@ -95,7 +95,7 @@ export default function DeckStudyPage() {
         label: t("study_rate_hard"),
         hint: isTr ? "1 gün" : "1d",
         className:
-          "bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-950 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-500/35 dark:hover:border-amber-400 dark:text-amber-200",
+          "bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-950 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 dark:border-amber-800 dark:text-amber-200",
         badgeClass: "bg-amber-500 text-slate-950",
       },
       {
@@ -105,7 +105,7 @@ export default function DeckStudyPage() {
         label: t("study_rate_good"),
         hint: isTr ? "3 gün" : "3d",
         className:
-          "bg-emerald-100 hover:bg-emerald-200 border-emerald-300 text-emerald-950 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 dark:border-emerald-500/35 dark:hover:border-emerald-400 dark:text-emerald-200",
+          "bg-emerald-100 hover:bg-emerald-200 border-emerald-300 text-emerald-950 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:border-emerald-800 dark:text-emerald-200",
         badgeClass: "bg-emerald-600 text-white",
       },
       {
@@ -115,7 +115,7 @@ export default function DeckStudyPage() {
         label: t("study_rate_easy"),
         hint: isTr ? "7 gün" : "7d",
         className:
-          "bg-indigo-100 hover:bg-indigo-200 border-indigo-300 text-indigo-950 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 dark:border-indigo-500/35 dark:hover:border-indigo-400 dark:text-indigo-200",
+          "bg-indigo-100 hover:bg-indigo-200 border-indigo-300 text-indigo-950 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 dark:border-indigo-800 dark:text-indigo-200",
         badgeClass: "bg-indigo-600 text-white",
       },
     ];
@@ -1042,7 +1042,7 @@ export default function DeckStudyPage() {
 
                   {/* ARKA YÜZ: Anlam + Fonetik + Örnek Cümle */}
                   <div
-                    className={`absolute inset-0 w-full h-full bg-slate-900 text-white border-2 border-indigo-500/60 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl overflow-y-auto ${
+                    className={`absolute inset-0 w-full h-full bg-white text-slate-900 dark:bg-slate-900 dark:text-white border-2 border-indigo-500/60 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl overflow-y-auto ${
                       isFlipped
                         ? "z-20 opacity-100"
                         : "pointer-events-none z-0 opacity-0"
@@ -1053,18 +1053,18 @@ export default function DeckStudyPage() {
                       transform: "rotateY(180deg)",
                     }}
                   >
-                    <div className="flex items-center justify-between text-xs text-slate-400 shrink-0">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 shrink-0">
                       <div className="flex items-center gap-2">
-                        <span className="uppercase tracking-wider font-bold text-emerald-400">
+                        <span className="uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400">
                           {t("study_meaning_example")}
                         </span>
                         {cardPhonetic && (
-                          <span className="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded-md border border-indigo-500/30">
+                          <span className="text-[11px] font-mono text-indigo-700 bg-indigo-100 border-indigo-200 dark:text-indigo-300 dark:bg-indigo-500/15 px-2 py-0.5 rounded-md border dark:border-indigo-500/30">
                             {cardPhonetic}
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] bg-slate-800 px-2.5 py-1 rounded-lg text-slate-300">
+                      <span className="text-[11px] bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-slate-700 dark:text-slate-300 font-medium">
                         {cardWord}
                       </span>
                     </div>
@@ -1089,7 +1089,7 @@ export default function DeckStudyPage() {
                       {cardExEn ? (
                         <div className="w-full max-w-lg text-left bg-slate-50 dark:bg-slate-950/80 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                           <div>
-                            <p className="text-xs sm:text-sm text-slate-900 dark:text-slate-100 font-medium italic">
+                            <p className="text-xs sm:text-sm text-slate-900 dark:text-slate-100 font-semibold italic">
                               &quot;
                               {(() => {
                                 const trimmed = cardWord.trim();
@@ -1191,11 +1191,11 @@ export default function DeckStudyPage() {
                           >
                             {btn.key}
                           </span>
-                          <span className="text-xs sm:text-sm font-black">
+                          <span className="text-xs sm:text-sm font-black text-inherit">
                             {btn.label}
                           </span>
                         </div>
-                        <span className="text-[10px] opacity-75 font-medium">
+                        <span className="text-[10px] text-inherit opacity-80 font-medium">
                           {btn.hint}
                         </span>
                       </button>
