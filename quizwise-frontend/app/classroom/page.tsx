@@ -36,7 +36,7 @@ import { useProfile } from "../context/ProfileContext";
 import { useAuth } from "../context/AuthContext";
 import { useAppTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
-import { formatLocalSessionTime, downloadSessionIcs, getUserTimeZone } from "../utils/calendarUtils";
+import { formatLocalSessionTime, downloadSessionIcs } from "../utils/calendarUtils";
 
 export interface TimelineSession {
   session_id: string;
@@ -690,7 +690,7 @@ function ClassroomContent() {
                             <div>
                               {isTeacher ? (
                                 <Link
-                                  href={`/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&live=1&className=${encodeURIComponent(session.class_name)}`}
+                                  href={`/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&live=1&role=teacher&className=${encodeURIComponent(session.class_name)}`}
                                   className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-95"
                                 >
                                   <Video className="w-3.5 h-3.5" />
@@ -698,7 +698,7 @@ function ClassroomContent() {
                                 </Link>
                               ) : (
                                 <Link
-                                  href={`/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&className=${encodeURIComponent(session.class_name)}`}
+                                  href={`/classroom/board?classId=${session.class_id}&sessionId=${session.session_id}&role=student&className=${encodeURIComponent(session.class_name)}`}
                                   className={`w-full py-2 px-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-95 ${
                                     session.status === "live"
                                       ? "bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500"

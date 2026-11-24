@@ -5,11 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tv, ArrowRight } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
+import { getApiBase } from "../../config";
 
 export interface ActiveClassSession {
   classId: string;
   sessionId?: string;
   className: string;
+  role?: "teacher" | "student" | "attendee";
+  userId?: string;
   startedAt?: string;
 }
 
@@ -52,6 +55,83 @@ export default function ActiveClassBanner() {
   useEffect(() => {
     checkActiveSession();
   }, [pathname]);
+
+  // Tarayıcı sekmesi veya penceresi kapatıldığında aktif dersi/katılımı sendBeacon ile sonlandır
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleTabCloseExit = () => {
+      try {
+        const stored = localStorage.getItem("vocaship_active_class");
+        if (!stored) return;
+
+        const parsed: ActiveClassSession = JSON.parse(stored);
+        if (!parsed?.classId) return;
+
+        // Oturumu yerel depolamadan temizle (idempotent: ikinci tetiklenmede tekrar çalışmaz)
+        localStorage.removeItem("vocaship_active_class");
+        localStorage.removeItem("vocaship_live_session");
+        window.dispatchEvent(new Event("vocaship_active_class_change"));
+
+        let computedDuration: number | undefined = undefined;
+        if (parsed.startedAt) {
+          const diffMs = Date.now() - new Date(parsed.startedAt).getTime();
+          if (Number.isFinite(diffMs) && diffMs > 0) {
+            computedDuration = Math.max(1, Math.round(diffMs / 60000));
+          }
+        }
+
+        const apiUrl = getApiBase();
+        const isTeacherRole = parsed.role === "teacher";
+
+        if (isTeacherRole && parsed.sessionId) {
+          const endUrl = `${apiUrl}/api/v1/classroom/sessions/${encodeURIComponent(parsed.sessionId)}/end`;
+          const body = JSON.stringify({
+            duration_minutes: computedDuration,
+            class_id: parsed.classId,
+            user_id: parsed.userId || undefined,
+          });
+          if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+            const blob = new Blob([body], { type: "application/json" });
+            navigator.sendBeacon(endUrl, blob);
+          } else {
+            fetch(endUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body,
+              keepalive: true,
+            }).catch(() => {});
+          }
+        } else {
+          const leaveUrl = `${apiUrl}/api/v1/classroom/leave-session`;
+          const body = JSON.stringify({
+            session_id: parsed.sessionId || undefined,
+            class_id: parsed.classId,
+            user_id: parsed.userId || undefined,
+            role: parsed.role || "student",
+          });
+          if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+            const blob = new Blob([body], { type: "application/json" });
+            navigator.sendBeacon(leaveUrl, blob);
+          } else {
+            fetch(leaveUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body,
+              keepalive: true,
+            }).catch(() => {});
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener("pagehide", handleTabCloseExit);
+    window.addEventListener("beforeunload", handleTabCloseExit);
+    return () => {
+      window.removeEventListener("pagehide", handleTabCloseExit);
+      window.removeEventListener("beforeunload", handleTabCloseExit);
+    };
+  }, []);
 
   // Kullanıcı zaten akıllı tahtadaysa veya aktif oturum yoksa şeridi gösterme
   if (!activeSession || pathname?.startsWith("/classroom/board")) {

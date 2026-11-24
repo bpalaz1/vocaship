@@ -306,12 +306,18 @@ function SmartBoardConsoleContent() {
     let cancelled = false;
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+    const roleParam = searchParams.get("role");
+    const boardRole: "teacher" | "student" =
+      roleParam === "student" || roleParam === "attendee" ? "student" : "teacher";
+
     const syncLocalActiveClass = (resolvedSessionId: string) => {
       try {
         const activeSession = {
           classId,
           sessionId: resolvedSessionId,
           className: activeClassName || t("brd_default_room", "Ders / Tahta Odası"),
+          role: boardRole,
+          userId: userProfile?.id || undefined,
           startedAt: new Date().toISOString(),
         };
         localStorage.setItem("vocaship_active_class", JSON.stringify(activeSession));

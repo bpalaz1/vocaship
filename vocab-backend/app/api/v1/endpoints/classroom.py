@@ -1,3 +1,4 @@
+import json
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -517,6 +518,87 @@ def complete_session_endpoint(
             sess["is_live"] = False
 
     return result
+
+
+async def _parse_beacon_json(request: Request) -> Dict[str, Any]:
+    """
+    navigator.sendBeacon ile gelen text/plain veya application/json gövdelerini güvenle parse eder.
+    """
+    try:
+        raw = await request.body()
+        if not raw:
+            return {}
+        text = raw.decode("utf-8").strip()
+        if not text:
+            return {}
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+@router.post("/sessions/{session_id}/end", status_code=status.HTTP_200_OK)
+async def end_session_via_beacon_endpoint(
+    session_id: str,
+    request: Request,
+    db: Client = Depends(get_db),
+):
+    """
+    Tarayıcı sekmesi/penceresi kapatıldığında sendBeacon (text/plain veya application/json) ile
+    canlı oturumu (status='completed') anında sonlandırır.
+    """
+    data = await _parse_beacon_json(request)
+    duration_minutes = data.get("duration_minutes")
+    if duration_minutes is not None:
+        try:
+            duration_minutes = int(duration_minutes)
+        except Exception:
+            duration_minutes = None
+    notes = data.get("notes") if isinstance(data.get("notes"), str) else None
+
+    result = classroom_service.complete_session(
+        session_id=session_id,
+        duration_minutes=duration_minutes,
+        notes=notes,
+        db=db,
+    )
+
+    for sess in ACTIVE_LIVE_SESSIONS.values():
+        if sess.get("id") == session_id:
+            sess["isLive"] = False
+            sess["is_live"] = False
+
+    if not result:
+        return {
+            "success": True,
+            "session_id": session_id,
+            "status": "completed",
+        }
+    return result
+
+
+@router.post("/leave-session", status_code=status.HTTP_200_OK)
+async def leave_session_endpoint(
+    request: Request,
+):
+    """
+    Öğrenci veya katılımcı tarayıcı sekmesini kapattığında sendBeacon (text/plain veya application/json)
+    ile aktif sınıf bağlantısını / katılımını temizler.
+    """
+    data = await _parse_beacon_json(request)
+    session_id = data.get("session_id")
+    class_id = data.get("class_id")
+    user_id = data.get("user_id")
+    role = data.get("role") or "student"
+
+    return {
+        "success": True,
+        "status": "left",
+        "session_id": session_id,
+        "class_id": class_id,
+        "user_id": user_id,
+        "role": role,
+    }
 
 
 @router.post("/send-material", status_code=status.HTTP_200_OK)

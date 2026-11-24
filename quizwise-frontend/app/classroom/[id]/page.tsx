@@ -201,14 +201,14 @@ export default function ClassroomRoomPage() {
       const targetUrl = data?.session_id
         ? `/classroom/board?classId=${encodeURIComponent(classId)}&sessionId=${encodeURIComponent(
             data.session_id
-          )}&live=1&className=${encodeURIComponent(classInfo.name)}`
-        : `/classroom/board?classId=${encodeURIComponent(classId)}&live=1&className=${encodeURIComponent(
+          )}&live=1&role=teacher&className=${encodeURIComponent(classInfo.name)}`
+        : `/classroom/board?classId=${encodeURIComponent(classId)}&live=1&role=teacher&className=${encodeURIComponent(
             classInfo.name
           )}`;
       router.push(targetUrl);
     } catch {
       router.push(
-        `/classroom/board?classId=${encodeURIComponent(classId)}&live=1&className=${encodeURIComponent(classInfo.name)}`
+        `/classroom/board?classId=${encodeURIComponent(classId)}&live=1&role=teacher&className=${encodeURIComponent(classInfo.name)}`
       );
     } finally {
       setIsStartingLive(false);
@@ -221,7 +221,7 @@ export default function ClassroomRoomPage() {
       ? `&sessionId=${encodeURIComponent(activeLiveSession.session_id)}`
       : "";
     router.push(
-      `/classroom/board?classId=${encodeURIComponent(classId)}${sessionQuery}&live=1&className=${encodeURIComponent(
+      `/classroom/board?classId=${encodeURIComponent(classId)}${sessionQuery}&live=1&role=student&className=${encodeURIComponent(
         classInfo.name
       )}`
     );
