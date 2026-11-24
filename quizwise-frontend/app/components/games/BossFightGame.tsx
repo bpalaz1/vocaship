@@ -400,7 +400,7 @@ export default function BossFightGame({
   }
 
   return (
-    <div className={`fixed inset-0 z-50 bg-[#0B0F19] text-slate-100 flex flex-col justify-between overflow-hidden select-none transition-colors duration-300 ${bossState === "attack" ? "bg-rose-950/30" : ""}`}>
+    <div className={`fixed inset-0 z-50 bg-[#0B0F19] text-slate-100 flex flex-col justify-between overflow-y-auto overflow-x-hidden pb-28 select-none transition-colors duration-300 ${bossState === "attack" ? "bg-rose-950/30" : ""}`}>
       {/* Özel RPG Animasyon Stilleri */}
       <style jsx>{`
         @keyframes dragonFloat {
@@ -464,7 +464,7 @@ export default function BossFightGame({
       {/* ========================================================================= */}
       {/* 1. ÜST HEADER: ÇIKIŞ, DESTE BAŞLIĞI, SKOR & SES                            */}
       {/* ========================================================================= */}
-      <header className="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center justify-between border-b border-slate-800/80 shrink-0">
+      <header className="w-full max-w-5xl mx-auto px-3 sm:px-6 pt-3 sm:pt-4 pb-2 flex items-center justify-between border-b border-slate-800/80 shrink-0">
         <button
           onClick={onClose}
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-300 transition active:scale-95 cursor-pointer shadow-sm"
@@ -510,12 +510,65 @@ export default function BossFightGame({
       {/* ========================================================================= */}
       {/* 2. ORTA SAVAŞ ALANI: EPİK SİNEMATİK BOSS SAHNESİ, CAN BARI VE HASAR SAYISI */}
       {/* ========================================================================= */}
-      <main className="w-full max-w-4xl mx-auto px-4 py-2 flex-1 flex flex-col items-center justify-center text-center relative gap-2.5">
+      <main className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-2 flex-1 flex flex-col items-center justify-center text-center relative gap-2 overflow-x-hidden">
         {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
         <StreakMilestoneBar streak={combo} />
 
-        {/* Sahne Çerçevesi (Stage Container) */}
-        <div className="w-full max-w-md h-56 mx-auto relative flex items-center justify-center rounded-3xl overflow-hidden bg-slate-900/80 border border-rose-500/30 backdrop-blur-md shadow-[0_0_40px_rgba(244,63,94,0.2)]">
+        {/* MOBİL KOMPAKT BOSS KARTI (< sm): Solda Ejderha, Sağda Ad + BOSS Rozeti + HP */}
+        <div className="flex sm:hidden w-full items-center gap-3 p-3 rounded-2xl bg-slate-900/85 border border-rose-500/30 backdrop-blur-md shadow-[0_0_24px_rgba(244,63,94,0.18)] text-left relative overflow-hidden">
+          <div className="w-20 h-20 shrink-0 relative flex items-center justify-center rounded-xl bg-slate-950/70 border border-rose-500/20">
+            <img
+              src="/bosses/dragon_ignis.png"
+              alt={t("game_boss_name", "Antik Volkanik Ejderha Ignis")}
+              className={`w-full h-full object-contain transition-all ${
+                bossState === "hit"
+                  ? "animate-dragon-hit"
+                  : bossState === "attack"
+                  ? "scale-110 brightness-125"
+                  : "animate-dragon-idle"
+              }`}
+            />
+            {damageIndicators.slice(-1).map((dmg) => (
+              <div
+                key={dmg.id}
+                className={`animate-damage-float absolute inset-0 flex items-center justify-center font-black text-base pointer-events-none z-40 ${
+                  dmg.isCrit ? "text-amber-300" : "text-rose-300"
+                }`}
+              >
+                {dmg.text}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs font-black text-white truncate">
+                🐉 {t("game_boss_name", "Antik Volkanik Ejderha Ignis")}
+              </h2>
+              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30 shrink-0">
+                BOSS
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] font-mono font-bold">
+              <span className="text-rose-400 flex items-center gap-1 truncate">
+                <Flame className="w-3 h-3 text-amber-400 shrink-0" />
+                <span>{t("game_boss_hp_lbl", "Can:")} {bossHp} / {MAX_BOSS_HP} HP</span>
+              </span>
+              <span className="text-amber-300 font-black shrink-0">%{hpPercent}</span>
+            </div>
+
+            <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60 p-0.5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 transition-all duration-500"
+                style={{ width: `${hpPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* MASAÜSTÜ SAHNE ÇERÇEVESİ (sm+) */}
+        <div className="hidden sm:flex w-full max-w-md h-44 mx-auto relative items-center justify-center rounded-3xl overflow-hidden bg-slate-900/80 border border-rose-500/30 backdrop-blur-md shadow-[0_0_40px_rgba(244,63,94,0.2)]">
           {/* Arkasında Hafif Kızıl-Kehribar Ortam Parıltısı */}
           <div
             className="absolute inset-0 pointer-events-none"
@@ -545,7 +598,7 @@ export default function BossFightGame({
 
           {/* Boss Görseli (Idle Süzülme ve Hit Sarsıntı Efekti) */}
           <div
-            className={`relative z-10 w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center transition-all ${
+            className={`relative z-10 w-40 h-40 flex items-center justify-center transition-all ${
               bossState === "hit"
                 ? "animate-dragon-hit"
                 : bossState === "attack"
@@ -582,13 +635,13 @@ export default function BossFightGame({
           </div>
         </div>
 
-        {/* Ejderha Adı & Ünvanı */}
-        <div className="space-y-0.5">
+        {/* Ejderha Adı & Ünvanı (sm+) */}
+        <div className="hidden sm:block space-y-0.5">
           <div className="flex items-center justify-center gap-2">
             <h2 className="text-base sm:text-lg font-black text-white tracking-wide">
               🐉 {t("game_boss_name", "Antik Volkanik Ejderha Ignis")}
             </h2>
-            <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+            <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30">
               BOSS
             </span>
           </div>
@@ -597,8 +650,8 @@ export default function BossFightGame({
           </p>
         </div>
 
-        {/* DİNAMİK LAV CAN BARI (HP BAR) */}
-        <div className="w-full max-w-md mx-auto space-y-1.5">
+        {/* DİNAMİK LAV CAN BARI (sm+) */}
+        <div className="hidden sm:block w-full max-w-md mx-auto space-y-1.5">
           <div className="flex items-center justify-between text-xs font-mono font-bold">
             <span className="text-rose-400 flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-amber-400" />
@@ -626,33 +679,33 @@ export default function BossFightGame({
       {/* ========================================================================= */}
       {/* 3. ALT SALDIRI PANELİ: KELİME SORUSU VE 4 SEÇENEK                           */}
       {/* ========================================================================= */}
-      <footer className="w-full max-w-2xl mx-auto px-4 pb-6 space-y-3 shrink-0">
+      <footer className="w-full max-w-2xl mx-auto px-3 sm:px-4 pb-4 sm:pb-6 space-y-2.5 shrink-0">
         {/* Hedef Kelime (Yüksek Kontrastlı Koyu Saldırı Kartı) */}
         <div
           data-theme-preserve="dark"
           style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
-          className="text-center py-4 px-6 rounded-3xl bg-slate-900 border-2 border-amber-500/40 backdrop-blur-md shadow-[0_0_25px_rgba(0,0,0,0.85)] ring-1 ring-amber-500/30"
+          className="text-center py-2.5 px-4 sm:py-4 sm:px-6 rounded-3xl bg-slate-900 border-2 border-amber-500/40 backdrop-blur-md shadow-[0_0_25px_rgba(0,0,0,0.85)] ring-1 ring-amber-500/30"
         >
-          <span className="inline-block text-[11px] uppercase font-black tracking-widest text-amber-400 font-mono bg-slate-950 px-3 py-0.5 rounded-full border border-amber-500/40 shadow-sm">
+          <span className="inline-block text-[10px] sm:text-[11px] uppercase font-black tracking-widest text-amber-400 font-mono bg-slate-950 px-3 py-0.5 rounded-full border border-amber-500/40 shadow-sm">
             {t("game_boss_attack_word", "⚔️ SALDIRI KELİMESİ")}
           </span>
-          <div className="flex items-center justify-center gap-3 mt-1.5">
+          <div className="flex items-center justify-center gap-2.5 mt-1">
             <h3
               style={{ color: "#ffffff" }}
-              className="text-3xl sm:text-4xl font-extrabold !text-white tracking-wide drop-shadow-[0_2px_12px_rgba(255,255,255,0.35)]"
+              className="text-2xl sm:text-4xl font-extrabold !text-white tracking-wide drop-shadow-[0_2px_12px_rgba(255,255,255,0.35)]"
             >
               {activeCard.word}
             </h3>
             {activeCard.phonetic && (
-              <span className="text-xs text-indigo-200 font-mono font-bold bg-indigo-950/90 px-2.5 py-1 rounded-lg border border-indigo-500/40 shadow-sm">
+              <span className="text-[11px] sm:text-xs text-indigo-200 font-mono font-bold bg-indigo-950/90 px-2 py-0.5 rounded-lg border border-indigo-500/40 shadow-sm">
                 {activeCard.phonetic}
               </span>
             )}
           </div>
         </div>
 
-        {/* 4 Şık (A, B, C, D Anlık Geri Bildirimli Butonlar) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {/* 4 Şık (Mobilde 2x2 Izgara - 4 şık aynı anda ekrana sığar) */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
           {options.map((option, idx) => {
             const isSelected = answeredIndex === idx;
             const isCorrectOption = option === activeCard.meaning;
@@ -678,12 +731,12 @@ export default function BossFightGame({
                 type="button"
                 disabled={feedback !== null}
                 onClick={() => handleAnswer(option, idx)}
-                className={`py-3.5 px-4 rounded-2xl border text-xs sm:text-sm font-bold text-left transition-all active:scale-95 flex items-center gap-2.5 cursor-pointer ${btnStyle}`}
+                className={`p-2.5 sm:py-3.5 sm:px-4 rounded-2xl border text-xs sm:text-sm font-bold text-left transition-all active:scale-95 flex items-center gap-2 min-h-[52px] cursor-pointer ${btnStyle}`}
               >
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-950/90 text-amber-300 border border-slate-700 shrink-0 font-bold">
+                <span className="text-[10px] sm:text-[11px] font-mono px-1.5 sm:px-2 py-0.5 rounded-md bg-slate-950/90 text-amber-300 border border-slate-700 shrink-0 font-bold">
                   [{idx + 1}]
                 </span>
-                <span className="truncate">{option}</span>
+                <span className="line-clamp-2 leading-tight">{option}</span>
               </button>
             );
           })}
