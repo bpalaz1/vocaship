@@ -196,30 +196,30 @@ export default function MatchGame({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100 p-4 sm:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#dce3ec] text-slate-900 dark:bg-slate-950 dark:text-slate-100 px-3 sm:px-6 py-3 sm:py-6 pb-24 overflow-y-auto overflow-x-hidden">
       {/* Üst Kontrol & Durum Çubuğu */}
-      <div className="max-w-4xl mx-auto w-full flex items-center justify-between pb-4 border-b border-slate-800">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-            <Shuffle className="w-5 h-5" />
+      <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-2 pb-2.5 sm:pb-4 border-b border-slate-300 dark:border-slate-800">
+        <div className="flex items-center space-x-2.5 min-w-0">
+          <div className="p-2 rounded-2xl bg-indigo-100 text-indigo-700 border border-indigo-300 dark:bg-indigo-600/20 dark:text-indigo-400 dark:border-indigo-500/30 shrink-0">
+            <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-black text-white">
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-lg font-extrabold text-slate-900 dark:text-white truncate">
               {t("game_match_title", "Kart Eşleştirme (Match)")}
             </h2>
-            <p className="text-xs text-slate-400 font-medium">{resolvedDeckTitle}</p>
+            <p className="text-xs text-slate-600 font-medium dark:text-slate-400 truncate">{resolvedDeckTitle}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* Süre Sayacı */}
-          <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs font-bold text-indigo-300">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" />
+          <div className="flex items-center space-x-1 px-2.5 py-1 sm:py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 font-mono text-xs font-bold text-indigo-700 dark:text-indigo-300 whitespace-nowrap">
+            <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>{seconds}s</span>
           </div>
 
           {/* Skor */}
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs font-bold text-yellow-400">
+          <div className="px-2.5 py-1 sm:py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 font-mono text-xs font-bold text-amber-700 dark:text-yellow-400 whitespace-nowrap">
             {score} {t("game_points_unit", "Puan")}
           </div>
 
@@ -249,13 +249,13 @@ export default function MatchGame({
       </div>
 
       {/* 5 Kademeli Seri Çubuğu (0/5 -> 5/5) */}
-      <div className="max-w-4xl mx-auto w-full pt-3">
+      <div className="max-w-4xl mx-auto w-full pt-2 mb-2">
         <StreakMilestoneBar streak={combos} />
       </div>
 
       {/* 12'li Karışık Izgara */}
-      <div className="max-w-4xl mx-auto w-full flex-1 flex items-center justify-center py-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 w-full">
+      <div className="max-w-4xl mx-auto w-full flex-1 flex items-center justify-center py-2 sm:py-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3.5 w-full">
           {gridItems.map((item) => {
             const isSelected = selectedIds.includes(item.id);
             const isMismatched = mismatchedIds.includes(item.id);
@@ -266,14 +266,14 @@ export default function MatchGame({
                 type="button"
                 disabled={item.isMatched}
                 onClick={() => handleCardClick(item)}
-                className={`h-24 sm:h-28 p-3 rounded-2xl border text-xs sm:text-sm font-bold flex items-center justify-center text-center transition-all duration-200 cursor-pointer select-none relative overflow-hidden ${
+                className={`min-h-[58px] sm:min-h-[84px] py-2 px-2.5 sm:p-3 rounded-2xl border text-xs sm:text-sm leading-snug font-bold flex items-center justify-center text-center transition-all duration-200 cursor-pointer select-none relative overflow-hidden ${
                   item.isMatched
                     ? "opacity-0 scale-95 pointer-events-none transition-all duration-300"
                     : isMismatched
-                    ? "bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse ring-2 ring-rose-500/50"
+                    ? "bg-rose-100 border-rose-400 text-rose-900 dark:bg-rose-500/20 dark:border-rose-500 dark:text-rose-300 animate-pulse ring-2 ring-rose-500/50"
                     : isSelected
                     ? "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/40 scale-105 ring-2 ring-indigo-400"
-                    : "bg-slate-900/90 hover:bg-slate-850 border-slate-800 hover:border-indigo-500/50 text-slate-200 shadow-md hover:-translate-y-0.5"
+                    : "bg-white hover:bg-indigo-50 border-slate-300 text-slate-900 dark:bg-slate-900/90 dark:hover:bg-slate-850 dark:border-slate-800 dark:text-slate-200 hover:border-indigo-500/50 shadow-md hover:-translate-y-0.5"
                 }`}
               >
                 <span className="leading-snug px-1 break-words line-clamp-3">
