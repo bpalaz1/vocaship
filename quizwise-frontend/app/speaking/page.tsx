@@ -1573,15 +1573,36 @@ function SpeakingContent() {
       clearInterval(speechWatchIntervalRef.current);
       speechWatchIntervalRef.current = null;
     }
-    if (audioRef.current) {
+    if (recognitionRef.current) {
       try {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+        recognitionRef.current.stop();
       } catch {}
     }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    if (audioRef.current) {
       try {
-        window.speechSynthesis.cancel();
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = "";
+      } catch {}
+    }
+    if (typeof document !== "undefined") {
+      try {
+        document.querySelectorAll("audio").forEach((el) => {
+          el.pause();
+          el.currentTime = 0;
+        });
+      } catch {}
+    }
+    if (typeof window !== "undefined") {
+      if ("speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {}
+      }
+      try {
+        sessionStorage.removeItem("vocaship_active_story_context");
       } catch {}
     }
     isAiSpeakingRef.current = false;
@@ -1652,6 +1673,43 @@ function SpeakingContent() {
       userLines.sort((a, b) => b.length - a.length)[0] ||
       "I enjoyed practicing English today.";
 
+    const buildDynamicFallbackWords = () => {
+      const stopWords = new Set([
+        "about", "after", "again", "already", "always", "among", "another", "around",
+        "because", "before", "being", "below", "between", "could", "doing", "during",
+        "every", "first", "found", "going", "great", "having", "hello", "however",
+        "might", "never", "other", "please", "really", "right", "should", "since",
+        "small", "some", "something", "still", "thank", "thanks", "their", "there",
+        "these", "thing", "things", "think", "those", "though", "through", "today",
+        "under", "until", "using", "water", "where", "which", "while", "world",
+        "would", "years", "youre", "your",
+      ]);
+      const seen = new Set<string>();
+      const collected: Array<{
+        word: string;
+        turkish_meaning: string;
+        example_sentence: string;
+      }> = [];
+      const sourceTurns = [...dialogueRef.current].reverse();
+      for (const turn of sourceTurns) {
+        const msg = (turn.message || "").trim();
+        if (!msg) continue;
+        const tokens = msg.match(/\b[a-zA-Z]{5,}\b/g) || [];
+        for (const raw of tokens) {
+          const lower = raw.toLowerCase();
+          if (stopWords.has(lower) || seen.has(lower)) continue;
+          seen.add(lower);
+          collected.push({
+            word: lower,
+            turkish_meaning: t("speak_word_meaning_tap", "Konuşma bağlamından çıkarılan kelime"),
+            example_sentence: msg,
+          });
+          if (collected.length >= 4) return collected;
+        }
+      }
+      return collected;
+    };
+
     const localFallbackSummary: SpeakingSummaryData = {
       session_title: activeStoryTitle
         ? `Discussing ${activeStoryTitle.slice(0, 24)}`
@@ -1669,23 +1727,7 @@ function SpeakingContent() {
           "Cümleye 'Honestly' gibi doğal bir konuşma bağlacı eklemek akıcılığı artırır."
         ),
       },
-      extracted_words: [
-        {
-          word: "highlight",
-          turkish_meaning: "en güzel an / öne çıkan nokta",
-          example_sentence: "The highlight of my day was having a great conversation.",
-        },
-        {
-          word: "perspective",
-          turkish_meaning: "bakış açısı",
-          example_sentence: "Hearing your perspective made the topic much clearer.",
-        },
-        {
-          word: "consistent",
-          turkish_meaning: "istikrarlı, düzenli",
-          example_sentence: "Consistent speaking practice helps build strong confidence.",
-        },
-      ],
+      extracted_words: buildDynamicFallbackWords(),
     };
 
     try {
@@ -1694,7 +1736,7 @@ function SpeakingContent() {
         : `${API_BASE}/api/v1/decks`;
 
       const [summaryRes, decksRes] = await Promise.all([
-        resilientFetch(`${API_BASE}/api/v1/speaking/summary`, {
+        resilientFetch(`${API_BASE}/api/v1/speaking/evaluate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2372,7 +2414,7 @@ function SpeakingContent() {
               <div className="flex items-center gap-3 shrink-0">
                 <div className="px-3.5 py-1.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/40 text-center">
                   <span className="block text-[10px] font-semibold text-emerald-300">
-                    {t("speak_fluency_label", "Akıcılık")} ({activeLevel})
+                    Fluency • {activeLevel || "A1-A2"}
                   </span>
                   <span className="text-lg font-extrabold text-emerald-200">
                     {summaryModalData.fluency_score}/100

@@ -2082,6 +2082,38 @@ def _build_fallback_summary(
         else "Everyday English Chat"
     )
 
+    stop_words = {
+        "about", "after", "again", "already", "always", "among", "another", "around",
+        "because", "before", "being", "below", "between", "could", "doing", "during",
+        "every", "first", "found", "going", "great", "having", "hello", "however",
+        "might", "never", "other", "please", "really", "right", "should", "since",
+        "small", "something", "still", "thank", "thanks", "their", "there", "these",
+        "thing", "things", "think", "those", "though", "through", "today", "under",
+        "until", "using", "water", "where", "which", "while", "world", "would", "years",
+    }
+    seen_words = set()
+    dynamic_words: List[Dict[str, str]] = []
+    for t_item in reversed(turns):
+        msg = (t_item.get("text") or "").strip()
+        if not msg:
+            continue
+        for raw_w in re.findall(r"\b[a-zA-Z]{5,}\b", msg):
+            lw = raw_w.lower()
+            if lw in stop_words or lw in seen_words:
+                continue
+            seen_words.add(lw)
+            dynamic_words.append(
+                {
+                    "word": lw,
+                    "turkish_meaning": "Konuşma bağlamından çıkarılan kelime",
+                    "example_sentence": msg,
+                }
+            )
+            if len(dynamic_words) >= 4:
+                break
+        if len(dynamic_words) >= 4:
+            break
+
     return {
         "session_title": title,
         "fluency_score": score,
@@ -2096,23 +2128,7 @@ def _build_fallback_summary(
             else "Honestly, I really enjoyed talking about this today.",
             "reason_tr": "Cümlenin başına 'Honestly' gibi doğal bir konuşma bağlacı eklemek ifadeyi daha akıcı ve samimi kılar.",
         },
-        "extracted_words": [
-            {
-                "word": "highlight",
-                "turkish_meaning": "en güzel an / öne çıkan nokta",
-                "example_sentence": "The highlight of my day was having a great conversation.",
-            },
-            {
-                "word": "perspective",
-                "turkish_meaning": "bakış açısı",
-                "example_sentence": "Hearing your perspective made the topic much clearer.",
-            },
-            {
-                "word": "consistent",
-                "turkish_meaning": "istikrarlı, düzenli",
-                "example_sentence": "Consistent speaking practice helps build strong confidence.",
-            },
-        ],
+        "extracted_words": dynamic_words,
     }
 
 
