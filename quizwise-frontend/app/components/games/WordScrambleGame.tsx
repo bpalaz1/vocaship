@@ -212,26 +212,26 @@ export default function WordScrambleGame({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col justify-between text-slate-100 p-4 sm:p-6 select-none animate-in fade-in">
+    <div className="fixed inset-0 z-50 bg-[#dce3ec] text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-6 pb-24 overflow-y-auto overflow-x-hidden select-none animate-in fade-in">
       {/* Üst Bar */}
-      <div className="max-w-4xl w-full mx-auto flex items-center justify-between pb-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold">
+      <div className="max-w-4xl w-full mx-auto flex items-center justify-between pb-4 border-b border-slate-300 dark:border-slate-800">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-700 dark:bg-emerald-500/15 dark:border-emerald-500/30 flex items-center justify-center dark:text-emerald-400 font-bold shrink-0">
             🔤
           </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-black text-white">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white truncate">
               {t("game_scramble_title", "Harf Avı (Word Scramble)")}
             </h2>
-            <p className="text-xs text-slate-400 font-mono">
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-mono truncate">
               {resolvedDeckTitle} • {t("game_word_of", "Kelime {cur} / {total}", { cur: currentRound + 1, total: totalRounds })}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-amber-300 flex items-center gap-1.5">
-            <Trophy className="w-4 h-4 text-amber-400" />
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 whitespace-nowrap">
+            <Trophy className="w-4 h-4 text-amber-500 dark:text-amber-400" />
             <span>{score} {t("game_points_unit", "Puan")}</span>
           </div>
 
@@ -267,15 +267,15 @@ export default function WordScrambleGame({
       {/* Orta Çalışma Sahnesi */}
       <div className="max-w-2xl w-full mx-auto flex-1 flex flex-col items-center justify-center py-6 space-y-8">
         {/* Anlam / İpucu Kartı */}
-        <div className="w-full p-6 rounded-3xl bg-slate-900/90 border border-slate-800 text-center space-y-2 shadow-2xl">
-          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+        <div className="w-full p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-800 text-center space-y-2 shadow-xl">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
             {t("game_meaning_def_hdr", "Anlam & Tanım")}
           </span>
-          <h3 className="text-xl sm:text-2xl font-bold text-white">
-            "{activeCard.meaning}"
+          <h3 className="text-slate-900 font-extrabold text-xl sm:text-2xl dark:text-white">
+            &quot;{activeCard.meaning}&quot;
           </h3>
           {hintRevealed && activeCard.phonetic && (
-            <p className="text-xs font-mono text-slate-400">
+            <p className="text-xs font-mono text-slate-600 font-medium dark:text-slate-400">
               {t("game_pronunciation_lbl", "Telaffuz:")} {activeCard.phonetic}
             </p>
           )}
@@ -299,7 +299,7 @@ export default function WordScrambleGame({
                       ? "bg-rose-950 text-rose-300 border-2 border-rose-500 animate-shake"
                       : letter
                       ? "bg-indigo-600 text-white border-2 border-indigo-400 shadow-md shadow-indigo-600/30"
-                      : "bg-slate-900 border-2 border-dashed border-slate-700 text-slate-600"
+                      : "bg-white border-2 border-dashed border-indigo-300 text-slate-900 dark:bg-slate-900/80 dark:border-slate-700 dark:text-white"
                   }`}
                 >
                   {letter}
@@ -308,7 +308,7 @@ export default function WordScrambleGame({
             })}
           </div>
 
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-600 font-medium dark:text-slate-400">
             {t("game_scramble_hint_keys", "Harfleri tıklayarak veya klavyenizden yazarak dizin")}
           </span>
         </div>
@@ -325,8 +325,8 @@ export default function WordScrambleGame({
                 onClick={() => handleSelectLetter(idx)}
                 className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl text-lg sm:text-xl font-black font-mono flex items-center justify-center transition-all cursor-pointer ${
                   isUsed
-                    ? "opacity-25 bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed scale-95"
-                    : "bg-slate-900 hover:bg-emerald-600/30 border-2 border-slate-700 hover:border-emerald-400 text-white shadow-md active:scale-95"
+                    ? "opacity-25 bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed scale-95"
+                    : "bg-white hover:bg-emerald-50 border-2 border-slate-300 hover:border-emerald-500 text-slate-900 dark:bg-slate-900 dark:hover:bg-emerald-600/30 dark:border-slate-700 dark:hover:border-emerald-400 dark:text-white shadow-md active:scale-95"
                 }`}
               >
                 {letter}
@@ -337,11 +337,11 @@ export default function WordScrambleGame({
       </div>
 
       {/* Alt Kontrol & İpucu */}
-      <div className="max-w-4xl w-full mx-auto flex items-center justify-between pt-4 border-t border-slate-800 text-xs text-slate-400">
+      <div className="max-w-4xl w-full mx-auto flex items-center justify-between pt-4 border-t border-slate-300 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
         <button
           type="button"
           onClick={() => setSelectedIndices([])}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 transition cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-semibold dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-800 dark:text-slate-300 transition cursor-pointer"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>{t("btn_reset", "Sıfırla")}</span>
@@ -350,7 +350,7 @@ export default function WordScrambleGame({
         <button
           type="button"
           onClick={() => setHintRevealed(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 transition cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-semibold dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-amber-300 dark:border-amber-500/30 transition cursor-pointer"
         >
           <HelpCircle className="w-3.5 h-3.5" />
           <span>{t("game_show_hint", "İpucu Göster")}</span>
