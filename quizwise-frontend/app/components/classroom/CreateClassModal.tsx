@@ -68,9 +68,7 @@ export default function CreateClassModal({
   const [currency, setCurrency] = useState<"TRY" | "USD" | "EUR">("TRY");
   const [billingType, setBillingType] = useState<"one_time" | "monthly">("one_time");
 
-  // Vitrin, Branş, Anlatım Dili & Açıklama
-  const [visibility, setVisibility] = useState<"public" | "invite_only">("invite_only");
-  const [category, setCategory] = useState<"speaking" | "exam" | "business" | "reading">("speaking");
+  // Anlatım Dili & Açıklama
   const [teachingLang, setTeachingLang] = useState<"TR" | "EN" | "DE" | "OTHER">("TR");
   const [description, setDescription] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
@@ -105,8 +103,6 @@ export default function CreateClassModal({
       setPrice(250);
       setCurrency("TRY");
       setBillingType("one_time");
-      setVisibility("invite_only");
-      setCategory("speaking");
       setTeachingLang("TR");
       setDescription("");
       setTargetAudience("");
@@ -218,8 +214,7 @@ export default function CreateClassModal({
           scheduled_dates_utc: scheduledDatesUtc,
           duration_minutes: Number(durationMinutes),
           monthly_credits: billingType === "monthly" ? 4 : 0,
-          visibility,
-          category,
+          visibility: "invite_only",
           teaching_lang: teachingLang,
           description: description.trim() || null,
           target_audience: targetAudience.trim() || null,
@@ -265,25 +260,25 @@ export default function CreateClassModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden text-slate-100 my-auto"
+        className="relative w-full max-w-lg rounded-3xl bg-white border border-slate-300 shadow-2xl overflow-hidden text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 my-auto"
       >
         {/* Parıltı Efektleri */}
         <div className="absolute -top-24 -right-24 w-52 h-52 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-52 h-52 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
         {/* Modal Üst Başlığı */}
-        <div className="relative z-10 flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-800/80">
+        <div className="relative z-10 flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800/80">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
               <School className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-white tracking-tight">
+              <h2 className="text-base font-black text-slate-900 dark:text-white tracking-tight">
                 {createdClassData
                   ? t("cls_cm_ready_title", "🎉 Sınıfınız Hazır!")
                   : t("cls_cm_new_title", "Yeni Sınıf / Ders Oluştur")}
               </h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">
                 {createdClassData
                   ? t("cls_cm_ready_sub", "Davet linkinizi öğrencilerinizle hemen paylaşın")
                   : t("cls_cm_new_sub", "Birebir veya grup dersinizi dakikalar içinde başlatın")}
@@ -294,7 +289,7 @@ export default function CreateClassModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -384,7 +379,7 @@ export default function CreateClassModal({
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             {/* 1. Sınıf / Ders Adı */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300">
+              <label className="text-xs font-semibold text-slate-900 dark:text-slate-200">
                 {t("cls_cm_title_lbl", "Sınıf / Ders Başlığı")}
               </label>
               <input
@@ -393,15 +388,15 @@ export default function CreateClassModal({
                 value={className}
                 onChange={(e) => setClassName(e.target.value)}
                 placeholder={t("cls_cm_title_ph", "Örn: IELTS Okuma & Kelime Grubu veya Ahmet ile Birebir")}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
 
             {/* 2. Zamanlama Tipi: Sabit Tarih vs Esnek Slot */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-900 dark:text-slate-200 flex items-center justify-between">
                 <span>{t("cls_cm_sched_model", "Zamanlama Modeli")}</span>
-                <span className="text-[10px] text-slate-400 font-normal">
+                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">
                   {t("cls_cm_local_time", "Yerel Saat:")} {userTimezone}
                 </span>
               </label>
@@ -412,14 +407,14 @@ export default function CreateClassModal({
                   onClick={() => setScheduleMode("fixed")}
                   className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex items-center gap-2 ${
                     scheduleMode === "fixed"
-                      ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500/40"
-                      : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
+                      ? "bg-indigo-100 border-indigo-500 text-indigo-950 dark:bg-indigo-600/20 dark:border-indigo-500 dark:text-indigo-300 ring-1 ring-indigo-500/40"
+                      : "bg-slate-100 border-slate-300 text-slate-700 hover:text-slate-900 dark:bg-slate-950/70 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
-                  <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <div>
-                    <div className="text-xs font-bold">{t("cls_cm_fixed_date", "Sabit Tarihli")}</div>
-                    <div className="text-[10px] opacity-75">{t("cls_cm_fixed_sub", "Tek / Belirli Saat")}</div>
+                    <div className="text-xs font-bold text-inherit">{t("cls_cm_fixed_date", "Sabit Tarihli")}</div>
+                    <div className="text-[10px] text-inherit opacity-80">{t("cls_cm_fixed_sub", "Tek / Belirli Saat")}</div>
                   </div>
                 </button>
 
@@ -428,48 +423,48 @@ export default function CreateClassModal({
                   onClick={() => setScheduleMode("slot_booking")}
                   className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex items-center gap-2 ${
                     scheduleMode === "slot_booking"
-                      ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500/40"
-                      : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
+                      ? "bg-indigo-100 border-indigo-500 text-indigo-950 dark:bg-indigo-600/20 dark:border-indigo-500 dark:text-indigo-300 ring-1 ring-indigo-500/40"
+                      : "bg-slate-100 border-slate-300 text-slate-700 hover:text-slate-900 dark:bg-slate-950/70 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
-                  <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <div>
-                    <div className="text-xs font-bold">{t("cls_cm_flex_slot", "Esnek Slot Seçimi")}</div>
-                    <div className="text-[10px] opacity-75">{t("cls_cm_flex_slot_sub", "Öğrenci Müsaitlikten Seçer")}</div>
+                    <div className="text-xs font-bold text-inherit">{t("cls_cm_flex_slot", "Esnek Slot Seçimi")}</div>
+                    <div className="text-[10px] text-inherit opacity-80">{t("cls_cm_flex_slot_sub", "Öğrenci Müsaitlikten Seçer")}</div>
                   </div>
                 </button>
               </div>
 
               {scheduleMode === "fixed" ? (
-                <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200 dark:bg-slate-950/60 dark:border-slate-800/80">
                   <div className="space-y-1 col-span-1">
-                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_date_lbl", "Tarih")}</label>
+                    <label className="text-[10px] font-semibold text-slate-900 dark:text-slate-200">{t("cls_cm_date_lbl", "Tarih")}</label>
                     <input
                       type="date"
                       required
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
                     />
                   </div>
 
                   <div className="space-y-1 col-span-1">
-                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_time_lbl", "Saat")}</label>
+                    <label className="text-[10px] font-semibold text-slate-900 dark:text-slate-200">{t("cls_cm_time_lbl", "Saat")}</label>
                     <input
                       type="time"
                       required
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
                     />
                   </div>
 
                   <div className="space-y-1 col-span-1">
-                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_duration", "Süre")}</label>
+                    <label className="text-[10px] font-semibold text-slate-900 dark:text-slate-200">{t("cls_cm_duration", "Süre")}</label>
                     <select
                       value={durationMinutes}
                       onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none"
+                      className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none"
                     >
                       <option value={30}>30 {t("cls_min_short", "dk")}</option>
                       <option value={45}>45 {t("cls_min_short", "dk")}</option>
@@ -479,98 +474,54 @@ export default function CreateClassModal({
                   </div>
                 </div>
               ) : (
-                <div className="p-3 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 text-xs text-indigo-300">
+                <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 dark:bg-indigo-950/30 dark:border-indigo-500/30 dark:text-indigo-300">
                   {t("cls_cm_flex_note", "📅 Öğrencileriniz ders biletini aldıktan sonra takviminizdeki açık saatlerden uygun olanı seçecektir.")}
                 </div>
               )}
             </div>
 
-            {/* 2.5 Vitrin Görünürlüğü, Branş, Dil ve İçerik */}
-            <div className="space-y-3 p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300">Görünürlük</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setVisibility("public")}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer text-xs font-bold ${
-                      visibility === "public"
-                        ? "bg-emerald-600/20 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/40"
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    🌍 Herkese Açık Vitrin Dersi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVisibility("invite_only")}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer text-xs font-bold ${
-                      visibility === "invite_only"
-                        ? "bg-indigo-600/20 border-indigo-500 text-indigo-200 ring-1 ring-indigo-500/40"
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    🔒 Sadece Davet Linki
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-300">Oda Kategorisi</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as any)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="speaking">Speaking Kulübü</option>
-                    <option value="exam">YDS / IELTS / TOEFL</option>
-                    <option value="business">İş İngilizcesi</option>
-                    <option value="reading">Okuma & Kelime</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-300">Dersin Anlatım Dili</label>
-                  <select
-                    value={teachingLang}
-                    onChange={(e) => setTeachingLang(e.target.value as any)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="TR">Türkçe (TR)</option>
-                    <option value="EN">İngilizce (EN)</option>
-                    <option value="DE">Almanca (DE)</option>
-                    <option value="OTHER">Diğer</option>
-                  </select>
-                </div>
+            {/* 2.5 Dersin Anlatım Dili ve İçerik */}
+            <div className="space-y-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 dark:bg-slate-950/60 dark:border-slate-800/80">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-900 dark:text-slate-200">Dersin Anlatım Dili</label>
+                <select
+                  value={teachingLang}
+                  onChange={(e) => setTeachingLang(e.target.value as any)}
+                  className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="TR">Türkçe (TR)</option>
+                  <option value="EN">İngilizce (EN)</option>
+                  <option value="DE">Almanca (DE)</option>
+                  <option value="OTHER">Diğer</option>
+                </select>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-300">Kısa Ders İçeriği</label>
+                <label className="text-[11px] font-semibold text-slate-900 dark:text-slate-200">Kısa Ders İçeriği</label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Bu derste hangi konuları işleyeceksiniz?"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-xl px-3 py-2 text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-300">Kimler Katılmalı</label>
+                <label className="text-[11px] font-semibold text-slate-900 dark:text-slate-200">Kimler Katılmalı</label>
                 <input
                   type="text"
                   value={targetAudience}
                   onChange={(e) => setTargetAudience(e.target.value)}
                   placeholder="Örn: B1-B2 seviyesinde konuşma pratiği yapmak isteyenler"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-xl px-3 py-2 text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
             {/* 3. Katılım Modeli (Tek Karar Anahtarı: Ücretsiz vs Ücretli) */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300">
+              <label className="text-xs font-semibold text-slate-900 dark:text-slate-200">
                 {t("cls_cm_pricing_hdr", "Katılım & Fiyatlandırma Modeli")}
               </label>
 
@@ -580,14 +531,14 @@ export default function CreateClassModal({
                   onClick={() => setIsPaid(false)}
                   className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center gap-2.5 ${
                     !isPaid
-                      ? "bg-emerald-600/20 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/40"
-                      : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
+                      ? "bg-emerald-100 border-emerald-500 text-emerald-950 dark:bg-emerald-600/20 dark:border-emerald-500 dark:text-emerald-300 ring-2 ring-emerald-500/40"
+                      : "bg-slate-100 border-slate-300 text-slate-700 hover:text-slate-900 dark:bg-slate-950/70 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   <span className="text-lg">🟢</span>
                   <div>
-                    <div className="text-xs font-bold">{t("cls_cm_free_class", "Ücretsiz Sınıf")}</div>
-                    <div className="text-[10px] opacity-75">{t("cls_cm_free_sub", "Topluluk & Serbest Katılım")}</div>
+                    <div className="text-xs font-bold text-inherit">{t("cls_cm_free_class", "Ücretsiz Sınıf")}</div>
+                    <div className="text-[10px] text-inherit opacity-80">{t("cls_cm_free_sub", "Topluluk & Serbest Katılım")}</div>
                   </div>
                 </button>
 
@@ -603,39 +554,39 @@ export default function CreateClassModal({
                   }}
                   className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center gap-2.5 ${
                     isPaid
-                      ? "bg-amber-600/20 border-amber-500 text-amber-300 ring-2 ring-amber-500/40"
-                      : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
+                      ? "bg-indigo-100 border-indigo-500 text-indigo-950 dark:bg-indigo-600/20 dark:border-indigo-500 dark:text-indigo-300 ring-2 ring-indigo-500/40"
+                      : "bg-slate-100 border-slate-300 text-slate-700 hover:text-slate-900 dark:bg-slate-950/70 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   <span className="text-lg">💰</span>
                   <div>
-                    <div className="text-xs font-bold">{t("cls_cm_paid_class", "Ücretli Ders")}</div>
-                    <div className="text-[10px] opacity-75">{t("cls_cm_paid_sub", "Bilet / Abonelik Geliri")}</div>
+                    <div className="text-xs font-bold text-inherit">{t("cls_cm_paid_class", "Ücretli Ders")}</div>
+                    <div className="text-[10px] text-inherit opacity-80">{t("cls_cm_paid_sub", "Bilet / Abonelik Geliri")}</div>
                   </div>
                 </button>
               </div>
 
               {/* Ücretli Seçildiğinde Tutar ve Ödeme Sıklığı */}
               {isPaid && (
-                <div className="space-y-3 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 animate-in fade-in">
+                <div className="space-y-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 dark:bg-slate-950/80 dark:border-slate-800 animate-in fade-in">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2 space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_ticket_amount", "Bilet Tutarı")}</label>
+                      <label className="text-[10px] font-semibold text-slate-900 dark:text-slate-200">{t("cls_cm_ticket_amount", "Bilet Tutarı")}</label>
                       <input
                         type="number"
                         min={1}
                         value={price}
                         onChange={(e) => setPrice(Number(e.target.value))}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                        className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
                       />
                     </div>
 
                     <div className="col-span-1 space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_currency_lbl", "Para Birimi")}</label>
+                      <label className="text-[10px] font-semibold text-slate-900 dark:text-slate-200">{t("cls_cm_currency_lbl", "Para Birimi")}</label>
                       <select
                         value={currency}
                         onChange={(e) => setCurrency(e.target.value as any)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-2 text-xs font-bold text-white focus:outline-none"
+                        className="w-full bg-white border border-slate-300 text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-white rounded-xl px-2.5 py-2 text-xs font-bold focus:outline-none"
                       >
                         <option value="TRY">TRY (₺)</option>
                         <option value="USD">USD ($)</option>
@@ -645,7 +596,7 @@ export default function CreateClassModal({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400">{t("cls_cm_pay_model", "Ödeme Modeli")}</label>
+                    <label className="text-[10px] font-semibold text-slate-900 dark:text-slate-200">{t("cls_cm_pay_model", "Ödeme Modeli")}</label>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <button
                         type="button"
@@ -733,12 +684,12 @@ export default function CreateClassModal({
             )}
 
             {/* Alt Butonlar */}
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-end gap-2.5">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold transition cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-750 dark:text-slate-300 text-xs font-semibold transition cursor-pointer"
               >
                 {t("cancel", "Vazgeç")}
               </button>
@@ -746,7 +697,7 @@ export default function CreateClassModal({
               <button
                 type="submit"
                 disabled={isSubmitting || !className.trim() || (isPaid && hasIban === false)}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-40 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 cursor-pointer active:scale-95"
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold text-xs shadow-md transition flex items-center gap-2 cursor-pointer active:scale-95"
               >
                 {isSubmitting ? (
                   <>
