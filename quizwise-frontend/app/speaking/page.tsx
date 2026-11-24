@@ -2399,31 +2399,31 @@ function SpeakingContent() {
       {/* ========================================================================= */}
       {summaryModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-slate-900/95 border border-slate-700/70 shadow-2xl p-6 text-left space-y-5">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white border border-slate-300 text-slate-900 dark:bg-slate-900/95 dark:border-slate-700/70 dark:text-slate-100 shadow-2xl p-6 text-left space-y-5">
             {/* Üst Başlık & Puan Rozeti */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
               <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
                   {t("speak_scorecard_title", "Oturum Sonu Karnesi")}
                 </span>
-                <h2 className="text-xl font-bold text-white mt-0.5">
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white mt-0.5">
                   {summaryModalData.session_title}
                 </h2>
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
-                <div className="px-3.5 py-1.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/40 text-center">
-                  <span className="block text-[10px] font-semibold text-emerald-300">
-                    Fluency • {activeLevel || "A1-A2"}
+                <div className="px-3.5 py-1.5 rounded-2xl bg-emerald-100 border border-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-400/40 text-center">
+                  <span className="block text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">
+                    {language === "en" ? "Fluency" : "Akıcılık"} ({activeLevel || "A1-A2"})
                   </span>
-                  <span className="text-lg font-extrabold text-emerald-200">
+                  <span className="text-lg font-extrabold text-emerald-950 dark:text-emerald-200">
                     {summaryModalData.fluency_score}/100
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleResetFromSummaryModal}
-                  className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                  className="p-2 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
                   aria-label={t("close", "Kapat")}
                 >
                   <X className="w-4 h-4" />
@@ -2432,17 +2432,17 @@ function SpeakingContent() {
             </div>
 
             {/* Koç Yorumu */}
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-              <span className="text-xs font-bold text-indigo-300">{t("speak_coach_feedback", "Koç Yorumu")}</span>
-              <p className="text-sm text-slate-200 leading-relaxed">
+            <div className="p-4 rounded-2xl bg-slate-100 border border-slate-300 dark:bg-slate-800/70 dark:border-slate-800 space-y-1">
+              <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{t("speak_coach_feedback", "Koç Yorumu")}</span>
+              <p className="text-sm text-slate-800 font-medium dark:text-slate-200 leading-relaxed">
                 {summaryModalData.coach_feedback}
               </p>
             </div>
 
             {/* ✨ Altın Cümle Kartı */}
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-950/80 to-emerald-500/10 border border-amber-400/35 space-y-2.5">
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 dark:bg-gradient-to-br dark:from-amber-500/10 dark:via-slate-950/80 dark:to-emerald-500/10 dark:border-amber-400/35 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-300">
                   <Sparkles className="w-4 h-4" />
                   <span>{t("speak_golden_sentence", "Altın Cümle Önerisi")}</span>
                 </span>
@@ -2451,20 +2451,20 @@ function SpeakingContent() {
                   onClick={() =>
                     speakSentencePreview(summaryModalData.golden_sentence.improved)
                   }
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs font-semibold transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-200 hover:bg-amber-300 border border-amber-400 text-amber-950 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 dark:border-amber-400/40 dark:text-amber-200 text-xs font-semibold transition cursor-pointer"
                 >
                   <Volume2 className="w-3.5 h-3.5" />
                   <span>{t("speak_listen_btn", "Dinle")}</span>
                 </button>
               </div>
 
-              <p className="text-xs text-slate-400 line-through">
+              <p className="text-xs text-slate-600 dark:text-slate-400 line-through">
                 &ldquo;{summaryModalData.golden_sentence.original}&rdquo;
               </p>
-              <p className="text-sm sm:text-base font-semibold text-emerald-300">
+              <p className="text-sm sm:text-base font-semibold text-emerald-800 dark:text-emerald-300">
                 &ldquo;{summaryModalData.golden_sentence.improved}&rdquo;
               </p>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                 {summaryModalData.golden_sentence.reason_tr}
               </p>
             </div>
@@ -2472,10 +2472,10 @@ function SpeakingContent() {
             {/* 📚 Oturum Kelimeleri (Onay Kutulu Liste) & Hedef Deste Seçici */}
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-200">
-                  📚 {t("speak_session_words", "Oturum Kelimeleri")}
+                <span className="text-xs font-bold text-slate-900 dark:text-slate-200">
+                  📚 {t("speak_session_words", "Oturum Kelimeleri").replace(/^📚\s*/, "")}
                 </span>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-slate-600 dark:text-slate-400">
                   {t("speak_select_words_hint", "Desteye eklemek istediklerini seç")}
                 </span>
               </div>
@@ -2488,8 +2488,8 @@ function SpeakingContent() {
                       key={item.word}
                       className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition ${
                         isChecked
-                          ? "bg-indigo-950/40 border-indigo-500/40"
-                          : "bg-slate-950/50 border-slate-800/80 opacity-70"
+                          ? "bg-slate-100 border-slate-300 dark:bg-indigo-950/40 dark:border-indigo-500/40"
+                          : "bg-slate-50 border-slate-200 dark:bg-slate-950/50 dark:border-slate-800/80 opacity-70"
                       }`}
                     >
                       <input
@@ -2501,19 +2501,19 @@ function SpeakingContent() {
                             [item.word]: !prev[item.word],
                           }))
                         }
-                        className="mt-1 h-4 w-4 rounded border-slate-600 text-indigo-500 focus:ring-indigo-500"
+                        className="mt-1 h-4 w-4 rounded border-slate-400 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-white">
+                          <span className="text-sm font-bold text-slate-900 dark:text-white">
                             {item.word}
                           </span>
-                          <span className="text-xs text-emerald-300 font-medium">
+                          <span className="text-xs text-emerald-700 font-semibold dark:text-emerald-300">
                             — {item.turkish_meaning}
                           </span>
                         </div>
                         {item.example_sentence && (
-                          <p className="text-xs text-slate-400 mt-0.5 italic">
+                          <p className="text-xs text-slate-700 dark:text-slate-400 mt-0.5 italic">
                             &ldquo;{item.example_sentence}&rdquo;
                           </p>
                         )}
@@ -2523,11 +2523,21 @@ function SpeakingContent() {
                 })}
               </div>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2">
+              {wordsSavedMessage && (
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 dark:bg-emerald-500/15 dark:border-emerald-500/35 dark:text-emerald-200 text-xs font-semibold">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{wordsSavedMessage}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Sabit Alt Kaydetme & Yeni Sohbet Çubuğu */}
+            <div className="sticky bottom-0 z-10 -mx-6 px-6 py-3.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                 <select
                   value={selectedTargetDeckId}
                   onChange={(e) => setSelectedTargetDeckId(e.target.value)}
-                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-900 font-medium dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200 text-xs sm:text-sm focus:outline-none focus:border-indigo-500"
                 >
                   <option value="__new__">{t("speak_new_deck_opt", "Yeni Deste: Speaking Pratikleri")}</option>
                   {userDecks.map((d) => (
@@ -2541,35 +2551,27 @@ function SpeakingContent() {
                   type="button"
                   onClick={handleSaveSelectedWordsToDeck}
                   disabled={isSavingWords}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer disabled:opacity-60 shrink-0"
                 >
                   {isSavingWords ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <BookPlus className="w-4 h-4" />
                   )}
-                  <span>{t("speak_add_words_btn", "Seçilen Kelimeleri Desteye Ekle")}</span>
+                  <span>{t("speak_add_words_btn", "Seçilenleri Desteye Kaydet")}</span>
                 </button>
               </div>
 
-              {wordsSavedMessage && (
-                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/35 text-emerald-200 text-xs font-semibold">
-                  <Check className="w-4 h-4 shrink-0" />
-                  <span>{wordsSavedMessage}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Alt Aksiyon */}
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
-              <button
-                type="button"
-                onClick={handleResetFromSummaryModal}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>{t("speak_new_chat_btn", "Yeni Sohbet Başlat")}</span>
-              </button>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleResetFromSummaryModal}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>{t("speak_new_chat_btn", "Yeni Sohbet Başlat")}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
