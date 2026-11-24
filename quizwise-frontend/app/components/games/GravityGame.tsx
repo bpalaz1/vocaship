@@ -212,37 +212,39 @@ export default function GravityGame({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100 p-4 sm:p-6 overflow-hidden select-none">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#dce3ec] text-slate-900 dark:bg-slate-950 dark:text-slate-100 px-3 sm:px-6 py-3 sm:py-6 overflow-y-auto overflow-x-hidden pb-28 select-none">
       {/* 1. Üst Panel: Canlar, Skor, Dalga ve Çıkış */}
-      <div className="max-w-4xl mx-auto w-full flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-xl bg-rose-600/20 text-rose-400 border border-rose-500/30">
+      <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-2 pb-3 border-b border-slate-300 dark:border-slate-800 shrink-0">
+        <div className="flex items-center space-x-2.5 min-w-0">
+          <div className="p-2 rounded-xl bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-600/20 dark:text-rose-400 dark:border-rose-500/30 shrink-0">
             <Flame className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-base font-black text-white">{t("game_gravity_title", "Yerçekimi Savunması (Gravity)")}</h2>
-            <p className="text-xs text-slate-400 font-medium">{resolvedDeckTitle}</p>
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">{t("game_gravity_title", "Yerçekimi Savunması (Gravity)")}</h2>
+            <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 font-medium truncate">{resolvedDeckTitle}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* 3 Can Göstergesi (❤️ ❤️ ❤️) */}
-          <div className="flex items-center gap-1 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl border border-slate-300 dark:border-slate-800 shrink-0">
             {[1, 2, 3].map((heartIndex) => (
               <Heart
                 key={heartIndex}
-                className={`w-4 h-4 transition-transform duration-300 ${
+                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300 ${
                   heartIndex <= lives
                     ? "fill-rose-500 text-rose-500 scale-110"
-                    : "fill-slate-800 text-slate-700 opacity-40 scale-90"
+                    : "fill-slate-300 text-slate-400 dark:fill-slate-800 dark:text-slate-700 opacity-40 scale-90"
                 }`}
               />
             ))}
           </div>
 
           {/* Skor & Dalga */}
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-amber-400">
-            {score} {t("game_points_unit", "Puan")} • {t("game_wave_n", "Dalga {n}", { n: wave })}
+          <div className="whitespace-nowrap flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono font-bold text-amber-700 dark:text-amber-400 shrink-0">
+            <span>{score} {t("game_points_unit", "Puan")}</span>
+            <span>•</span>
+            <span>{t("game_wave_n", "Dalga {n}", { n: wave })}</span>
           </div>
 
           <button
@@ -274,7 +276,7 @@ export default function GravityGame({
       </div>
 
       {/* 2. Uzay Savunma Arenası (Kayan Kelime Asteroidi) */}
-      <div className="max-w-4xl mx-auto w-full flex-1 relative my-4 rounded-3xl bg-slate-900/60 border-2 border-slate-800 overflow-hidden shadow-2xl flex flex-col justify-between">
+      <div className="max-w-4xl mx-auto w-full h-[34vh] sm:h-[420px] shrink-0 relative my-3 sm:my-4 rounded-3xl bg-slate-900/90 border-2 border-slate-800 overflow-hidden shadow-2xl flex flex-col justify-between">
         {/* Arka plan ızgarası */}
         <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
 
@@ -311,7 +313,7 @@ export default function GravityGame({
 
       {/* 3. Alt Giriş Konsolu (Yazıp Patlatma) */}
       <div className="max-w-2xl mx-auto w-full shrink-0 space-y-2">
-        <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
+        <form onSubmit={handleFormSubmit} className="w-full flex items-center gap-2">
           <input
             ref={inputRef}
             type="text"
@@ -319,14 +321,14 @@ export default function GravityGame({
             disabled={gameOver || isExploding}
             value={typedInput}
             onChange={(e) => setTypedInput(e.target.value)}
-            placeholder={t("game_gravity_input_ph", "Yukarıdaki kelimenin anlamını yazıp Enter'a basın...")}
-            className="flex-1 bg-slate-900 border-2 border-indigo-500/50 focus:border-indigo-400 rounded-2xl px-5 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 font-medium"
+            placeholder={t("game_gravity_input_ph_short", "Anlamını yaz...")}
+            className="min-w-0 flex-1 bg-white dark:bg-slate-900 border-2 border-indigo-500/50 focus:border-indigo-400 rounded-2xl px-3.5 sm:px-5 py-2.5 sm:py-3 text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 font-medium"
           />
 
           <button
             type="submit"
             disabled={!typedInput.trim() || gameOver || isExploding}
-            className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
+            className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer shrink-0"
           >
             <span>{t("game_gravity_blast", "Patlat")}</span>
             <Send className="w-4 h-4" />
@@ -334,14 +336,14 @@ export default function GravityGame({
         </form>
 
         {/* Hızlı Tıklanabilir İpucu Hapı */}
-        <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-          <span>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] leading-tight text-slate-600 dark:text-slate-400 px-1">
+          <span className="leading-tight">
             {t("game_gravity_hint", "İpucu: Anlamın bir parçasını yazabilirsiniz.")}
           </span>
           <button
             type="button"
             onClick={() => handleCheckExplode(activeCard.meaning)}
-            className="text-amber-400 hover:underline cursor-pointer"
+            className="text-amber-800 font-semibold dark:text-amber-400 hover:underline cursor-pointer shrink-0"
           >
             {t("game_gravity_solve", "Anlamı Çöz:")} {activeCard.meaning}
           </button>
