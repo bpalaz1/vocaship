@@ -17,7 +17,7 @@ export interface TabItem {
 export const DEFAULT_TABS: TabItem[] = [
   {
     id: "study",
-    label: "Kütüphanem",
+    label: "Kelimeler",
     href: "/",
     icon: <Layers className="w-5 h-5" />,
     isActive: (path) => path === "/" || path.startsWith("/study"),
@@ -45,7 +45,7 @@ export const DEFAULT_TABS: TabItem[] = [
   },
   {
     id: "classroom",
-    label: "Sınıfım",
+    label: "Sınıflar",
     href: "/classroom",
     icon: <GraduationCap className="w-5 h-5" />,
     isActive: (path) => path.startsWith("/classroom"),
@@ -58,26 +58,27 @@ export default function MobileBottomTabbar({
   tabs?: TabItem[];
 }) {
   const pathname = usePathname() || "";
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const isEn = language === "en";
 
-  const tabLabelKey: Record<string, string> = {
-    study: "nav_library",
-    reading: "nav_reading_short",
-    speaking: "nav_speaking",
-    games: "nav_games_short",
-    classroom: "nav_classroom",
+  const fixedLabels: Record<string, { tr: string; en: string }> = {
+    study: { tr: "Kelimeler", en: "Pool" },
+    reading: { tr: "Okuma", en: "Reading" },
+    speaking: { tr: "Speaking", en: "Speaking" },
+    games: { tr: "Oyunlar", en: "Games" },
+    classroom: { tr: "Sınıflar", en: "Classes" },
   };
 
   return (
     <nav
       data-testid="mobile-bottom-tabbar"
-      className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-xl px-2 sm:px-4 py-1.5 flex justify-around items-center lg:hidden shadow-[0_-8px_24px_rgba(0,0,0,0.6)]"
-      style={{ paddingBottom: "calc(0.4rem + env(safe-area-inset-bottom, 0px))" }}
+      className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-xl px-1.5 py-1.5 flex justify-around items-center md:hidden shadow-[0_-8px_24px_rgba(0,0,0,0.6)] pb-[env(safe-area-inset-bottom)]"
       aria-label={t("aria_mobile_nav", "Mobil Alt Navigasyon")}
     >
       {tabs.map((tab) => {
         const active = tab.isActive(pathname);
-        const displayLabel = tabLabelKey[tab.id] ? t(tabLabelKey[tab.id], tab.label) : tab.label;
+        const mapped = fixedLabels[tab.id];
+        const displayLabel = mapped ? (isEn ? mapped.en : mapped.tr) : tab.label;
 
         return (
           <Link

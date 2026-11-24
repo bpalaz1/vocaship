@@ -61,17 +61,6 @@ const TOPIC_PRESETS = [
   { id: "finance", labelKey: "read_gen_preset_finance", label: "📈 Kurumsal Finans & Girişimcilik", title: "Corporate Finance & Capital Strategy" },
 ];
 
-const DEFAULT_SPACED_REPETITION_WORDS: CardItem[] = [
-  { id: "sr-1", word: "mitigation", phonetic: "/ˌmɪt.ɪˈɡeɪ.ʃən/", turkish_meaning: "hafifletme, azaltma" },
-  { id: "sr-2", word: "critical path", phonetic: "/ˈkrɪt.ɪ.kəl pɑːθ/", turkish_meaning: "kritik yol" },
-  { id: "sr-3", word: "trajectory", phonetic: "/trəˈdʒek.tər.i/", turkish_meaning: "yörünge, gidişat" },
-  { id: "sr-4", word: "resilience", phonetic: "/rɪˈzɪl.jəns/", turkish_meaning: "dayanıklılık, esneklik" },
-  { id: "sr-5", word: "contingency", phonetic: "/kənˈtɪn.dʒən.si/", turkish_meaning: "beklenmedik durum" },
-  { id: "sr-6", word: "arbitration", phonetic: "/ˌɑː.bɪˈtreɪ.ʃən/", turkish_meaning: "tahkim, hakemlik" },
-  { id: "sr-7", word: "discrepancy", phonetic: "/dɪˈskrep.ən.si/", turkish_meaning: "uyuşmazlık, tutarsızlık" },
-  { id: "sr-8", word: "leverage", phonetic: "/ˈliː.vər.ɪdʒ/", turkish_meaning: "kaldıraç, avantaj sağlama" },
-];
-
 export default function StoryGeneratorModal({
   isOpen,
   onClose,
@@ -181,14 +170,14 @@ export default function StoryGeneratorModal({
             turkish_meaning: c.meaning || "Detay görmek için tıklayın",
           }));
           setDeckCards(parsedCards);
-          setSelectedWords((prev) => {
-            if (prev.length === 0) {
-              return parsedCards.slice(0, 6).map((c) => c.word);
-            }
-            return prev;
-          });
+          if (sourceTab === "decks") {
+            setSelectedWords(parsedCards.slice(0, 6).map((c) => c.word));
+          }
         } else {
           setDeckCards([]);
+          if (sourceTab === "decks") {
+            setSelectedWords([]);
+          }
         }
       })
       .catch(() => {
@@ -197,71 +186,109 @@ export default function StoryGeneratorModal({
       .finally(() => {
         setLoadingDeckCards(false);
       });
-  }, [selectedDeckId]);
+  }, [selectedDeckId, sourceTab]);
 
-  // Hatırlama Eğrisi (Zayıf / Tekrarı Gelen Kartları) Çek
-  const fetchDueCards = useCallback(() => {
+  // Hatırlama Eğrisi: Yalnızca kullanıcının kendi destelerinde yanlış bildiği / zorlandığı kartları çek
+  const fetchDueCards = useCallback(async () => {
+    const uid = user?.id || userProfile?.id || "";
     setLoadingDueCards(true);
-    // 1. Önce backend endpoint'ini dene (/study/due-cards veya /study/due)
-    fetch(`${API_BASE}/api/v1/study/due-cards`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        const cards = data?.cards || data;
-        if (Array.isArray(cards) && cards.length > 0) {
-          const list: CardItem[] = cards.slice(0, 16).map((c: any) => ({
-            id: c.id || c.word,
-            word: c.word,
-            phonetic: c.phonetic,
-            turkish_meaning:
-              c.meanings && c.meanings[0]
-                ? typeof c.meanings[0] === "string"
-                  ? c.meanings[0]
-                  : c.meanings[0].meaning
-                : "Tekrarı gelen kelime",
-          }));
-          setDueCards(list);
-          // Otomatik ilk 6'sını seç
-          setSelectedWords(list.slice(0, 6).map((w) => w.word));
-        } else {
-          // LocalStorage zayıf kelimeleri kontrol et
-          loadFallbackDueWords();
+    try {
+      let rawList: any[] = [];
+      if (uid) {
+        const weakRes = await fetch(
+          `${API_BASE}/api/v1/study/weak-spots?user_id=${encodeURIComponent(uid)}&limit=30`
+        ).catch(() => null);
+        if (weakRes && weakRes.ok) {
+          const data = await weakRes.json();
+          if (Array.isArray(data?.cards) && data.cards.length > 0) {
+            rawList = data.cards;
+          }
         }
-      })
-      .catch(() => {
+
+        if (rawList.length === 0) {
+          const dueRes = await fetch(
+            `${API_BASE}/api/v1/study/due-cards?user_id=${encodeURIComponent(uid)}&limit=30`
+          ).catch(() => null);
+          if (dueRes && dueRes.ok) {
+            const data = await dueRes.json();
+            const allDue = Array.isArray(data?.cards) ? data.cards : [];
+            rawList = allDue.filter(
+              (c: any) =>
+                c?.needs_review === true ||
+                c?.rating === 1 ||
+                c?.rating === 3 ||
+                c?.last_rating === 1 ||
+                c?.last_rating === 3 ||
+                Number(c?.lapses || 0) > 0
+            );
+          }
+        }
+      }
+
+      if (rawList.length > 0) {
+        const list: CardItem[] = rawList.slice(0, 16).map((c: any) => ({
+          id: c.id || c.word,
+          word: c.word,
+          phonetic: c.phonetic,
+          turkish_meaning:
+            c.meanings && c.meanings[0]
+              ? typeof c.meanings[0] === "string"
+                ? c.meanings[0]
+                : c.meanings[0].translation || c.meanings[0].meaning || c.meanings[0].definition
+              : "Tekrar bekleyen kart",
+        }));
+        setDueCards(list);
+        setSelectedWords(list.slice(0, 6).map((w) => w.word));
+      } else {
         loadFallbackDueWords();
-      })
-      .finally(() => {
-        setLoadingDueCards(false);
-      });
-  }, []);
+      }
+    } catch {
+      loadFallbackDueWords();
+    } finally {
+      setLoadingDueCards(false);
+    }
+  }, [user?.id, userProfile?.id]);
 
   const loadFallbackDueWords = () => {
     try {
-      const rawWeak = localStorage.getItem("quizwise_weak_words");
-      if (rawWeak) {
-        const parsed = JSON.parse(rawWeak);
+      const uid = user?.id || userProfile?.id;
+      const scopedKey = uid ? `vocaship_due_words_user_${uid}` : "vocaship_due_words_guest";
+      const rawScoped = localStorage.getItem(scopedKey);
+      if (rawScoped) {
+        const parsed = JSON.parse(rawScoped);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const list: CardItem[] = parsed.map((w: string, idx: number) => ({
-            id: `local-weak-${idx}`,
-            word: w,
-            turkish_meaning: "Zayıf nokta kelimesi",
-          }));
-          setDueCards(list);
-          setSelectedWords(list.slice(0, 6).map((item) => item.word));
-          return;
+          const list: CardItem[] = parsed
+            .filter((item: any) =>
+              typeof item === "string"
+                ? true
+                : item?.needs_review === true ||
+                  item?.rating === 1 ||
+                  item?.rating === 3 ||
+                  Number(item?.lapses || 0) > 0
+            )
+            .map((item: any, idx: number) => ({
+              id: typeof item === "string" ? `local-weak-${idx}` : item.id || `local-weak-${idx}`,
+              word: typeof item === "string" ? item : item.word,
+              turkish_meaning: typeof item === "string" ? "Tekrar bekleyen kart" : item.meaning || "Tekrar bekleyen kart",
+            }));
+          if (list.length > 0) {
+            setDueCards(list);
+            setSelectedWords(list.slice(0, 6).map((item) => item.word));
+            return;
+          }
         }
       }
     } catch {}
-    // Varsayılan hatırlama eğrisi havuzu
-    setDueCards(DEFAULT_SPACED_REPETITION_WORDS);
-    setSelectedWords(DEFAULT_SPACED_REPETITION_WORDS.slice(0, 5).map((w) => w.word));
+    // Dışarıdan rastgele kelime kesinlikle ekleme; boş bırak
+    setDueCards([]);
+    setSelectedWords([]);
   };
 
   useEffect(() => {
-    if (isOpen && sourceTab === "spaced_repetition" && dueCards.length === 0) {
+    if (isOpen && sourceTab === "spaced_repetition") {
       fetchDueCards();
     }
-  }, [isOpen, sourceTab, dueCards.length, fetchDueCards]);
+  }, [isOpen, sourceTab, fetchDueCards]);
 
   // Kelime Seçme / Çıkarma
   const toggleWord = (word: string) => {
@@ -343,23 +370,24 @@ export default function StoryGeneratorModal({
 
       let storyData: any = null;
 
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/reading/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+      const res = await fetch(`${API_BASE}/api/v1/reading/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-        if (res.ok) {
-          storyData = await res.json();
-        }
-      } catch (err) {
-        console.warn("Backend generate çağrısı başarısız oldu, akıllı yerel motor devreye giriyor:", err);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(
+          errData?.detail ||
+            t("read_gen_err_api", "Hikaye üretilemedi. Lütfen tekrar deneyin.")
+        );
       }
+
+      storyData = await res.json();
 
       setLoadingStepText(t("read_gen_step_3_txt", "3/3 Kapak görseli ve anlama soruları atanıyor..."));
 
-      // Eğer backend cevap vermediyse veya Gemini kotası aşıldıysa: Yerel zengin metin üret
       if (!storyData || !storyData.content) {
         storyData = generateSmartFallbackStory(level, finalTopic, selectedWords);
       }
@@ -734,6 +762,13 @@ export default function StoryGeneratorModal({
                 <div className="py-6 flex items-center justify-center gap-2 text-xs text-amber-300">
                   <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
                   <span>{t("read_gen_sr_loading", "Hatırlama eğrisi analiz ediliyor...")}</span>
+                </div>
+              ) : dueCards.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  {t(
+                    "read_gen_sr_empty",
+                    "Henüz yanlış cevapladığınız veya tekrar bekleyen kart bulunmuyor."
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1 no-scrollbar">

@@ -29,6 +29,8 @@ const WordCardModal = dynamic(() => import("../../components/reading/WordCardMod
 import TargetVocabularyFlashcards, { TargetVocabularyItem } from "../../components/reading/TargetVocabularyFlashcards";
 import { API_BASE } from "../../config";
 import { useLanguage } from "../../context/LanguageContext";
+import { useUserStories } from "../../context/UserStoriesContext";
+import { autoAssignCover } from "../../utils/autoCover";
 
 export interface SampleArticle {
   id?: string;
@@ -101,6 +103,7 @@ interface BookPage {
 
 export default function CustomArticleReaderPage() {
   const { t, currentLang } = useLanguage();
+  const { saveUserStory } = useUserStories();
 
   const getSampleTitle = (sample: SampleArticle) => {
     if (sample.id === "memory_sm2" || sample.title.includes("Neuroscience of Memory")) {
@@ -434,13 +437,47 @@ export default function CustomArticleReaderPage() {
   };
 
   const handleStartReading = () => {
-    if (!inputText.trim()) return;
+    const trimmedContent = inputText.trim();
+    if (!trimmedContent) return;
+    const resolvedTitle =
+      articleTitle.trim() || t("default_custom_title", "Özel Makale & Notlar");
     if (!articleTitle.trim()) {
-      setArticleTitle(t("default_custom_title", "Özel Makale & Notlar"));
+      setArticleTitle(resolvedTitle);
     }
+
+    const coverImage = autoAssignCover({
+      title: resolvedTitle,
+      topic: "Custom Analysis",
+      content: trimmedContent,
+    });
+    const tokens = Array.from(
+      new Set(
+        trimmedContent
+          .split(/\s+/)
+          .map((w) => w.replace(/[^a-zA-Z]/g, ""))
+          .filter((w) => w.length >= 6)
+      )
+    ).slice(0, 5);
+
+    saveUserStory({
+      id: `custom_${Date.now()}`,
+      title: resolvedTitle,
+      level: "Intermediate",
+      cefr: "B2-C1",
+      topic: "Custom Analysis",
+      desc: trimmedContent.slice(0, 120) + "...",
+      wordCount: trimmedContent.split(/\s+/).filter(Boolean).length,
+      readTime: `${Math.max(1, Math.ceil(trimmedContent.split(/\s+/).filter(Boolean).length / 180))} dk`,
+      target_words: tokens,
+      content: trimmedContent,
+      coverImage,
+      isUserStory: true,
+      createdAt: Date.now(),
+    });
+
     setCurrentPage(0);
     setActiveSentenceIdx(0);
-    extractVocabFromText(inputText);
+    extractVocabFromText(trimmedContent);
     setIsReadingMode(true);
   };
 

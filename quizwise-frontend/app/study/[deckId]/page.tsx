@@ -996,14 +996,14 @@ export default function DeckStudyPage() {
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] bg-slate-800 px-2.5 py-1 rounded-lg text-slate-300 font-medium">
+                      <span className="text-[11px] bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-slate-700 dark:text-slate-300 font-medium">
                         {t("study_space_flip")}
                       </span>
                     </div>
 
                     <div className="text-center py-4 flex flex-col items-center justify-center my-auto space-y-2">
                       <div className="flex items-center justify-center gap-3 flex-wrap">
-                        <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
+                        <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                           {cardWord}
                         </h2>
                         <button

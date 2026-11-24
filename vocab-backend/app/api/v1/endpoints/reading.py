@@ -37,10 +37,18 @@ async def create_story(payload: StoryGenerateRequest, request: Request):
             target_words=payload.target_words,
             length_words=payload.length_words or 250
         )
+        if not story_data or not isinstance(story_data, dict) or not story_data.get("content"):
+            raise ValueError("Yapay zekâ boş hikaye yanıtı döndürdü.")
         return story_data
+    except HTTPException:
+        raise
     except Exception as e:
-        # Gemini kotası dolsa dahi sistem çökmez, o seviyenin hazır hikayesini döndürür
-        print(f"[Gemini Kota Hatası]: {e}. Hazır arşiv hikayesi yükleniyor...")
+        print(f"[Gemini Hikaye Hatası]: {e}")
+        if payload.target_words:
+            raise HTTPException(
+                status_code=503,
+                detail="Yapay zekâ hikaye servisi şu anda yanıt veremiyor veya kota doldu. Lütfen biraz sonra tekrar deneyin."
+            )
         return get_preset_story(payload.level)
 
 

@@ -461,7 +461,7 @@ export default function ReadingRoom({
 }: ReadingRoomProps) {
   const { t } = useTranslation();
   const { isDark } = useAppTheme();
-  const { userStories, deleteUserStory } = useUserStories();
+  const { userStories, saveUserStory, deleteUserStory } = useUserStories();
   const { user, isGuest, openRegistrationGate } = useAuth();
   const { userProfile } = useProfile();
 
@@ -805,6 +805,7 @@ export default function ReadingRoom({
     setPasteTitle("");
     setIsPasteModalOpen(false);
     if (!text) {
+      saveUserStory(customStory);
       consumeDailyAiQuota();
     }
     setStory(customStory);
@@ -1661,6 +1662,7 @@ export default function ReadingRoom({
         isOpen={isGeneratorModalOpen}
         onClose={() => setIsGeneratorModalOpen(false)}
         onStoryGenerated={(newStory) => {
+          saveUserStory(newStory);
           consumeDailyAiQuota();
           setStory(newStory);
         }}

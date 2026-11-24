@@ -186,8 +186,7 @@ export default function PlatformStandardLayout({
         </MobileDrawerSheet>
       )}
 
-      {/* 5. MOBİL ALTA SABİTLENEN 5 İKONLU TABBAR (< lg) */}
-      {!hideBottomTabbar && <MobileBottomTabbar />}
+      {/* 5. MOBİL ALTA SABİTLENEN 5 İKONLU TABBAR (Global MainContentWrapper'dan render edilir) */}
     </div>
   );
 }
