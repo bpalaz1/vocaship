@@ -46,6 +46,13 @@ import SendMaterialModal from "../../components/classroom/SendMaterialModal";
 import ClassLiveQRModal from "../../components/classroom/ClassLiveQRModal";
 import { useProfile } from "../../context/ProfileContext";
 import { useLanguage } from "../../context/LanguageContext";
+import {
+  useBoardRealtimeSync,
+  BoardStrokeEvent,
+  BoardShapeEvent,
+  BoardTextEvent,
+  BoardPdfStateEvent,
+} from "../../hooks/useBoardRealtimeSync";
 
 export type BoardDrawingTool =
   | "pan"
@@ -78,10 +85,17 @@ function SmartBoardConsoleContent() {
   const classId = searchParams.get("classId") || searchParams.get("class_id") || "cls-1";
   const sessionId = searchParams.get("sessionId") || searchParams.get("session_id") || "";
   const activeClassName = searchParams.get("className") || searchParams.get("class_name") || t("brd_default_room", "Ders / Tahta Odası");
+  const roleParam = searchParams.get("role");
+  const isStudentViewer = roleParam === "student" || roleParam === "attendee";
+  const isTeacher = !isStudentViewer;
 
   const [liveSessionId, setLiveSessionId] = useState<string>(sessionId);
   const [liveJoinCode, setLiveJoinCode] = useState<string | null>(null);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [currentPdfPage, setCurrentPdfPage] = useState<number>(1);
+  const pdfPageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const remoteScreenStreamRef = useRef<MediaStream | null>(null);
+  const lastShapeEndRef = useRef<{ x: number; y: number } | null>(null);
 
   // 1. Profil Context (Dinamik Öğretmen Kartı / Stüdyo İçin)
   const { userProfile } = useProfile();
@@ -328,6 +342,12 @@ function SmartBoardConsoleContent() {
     };
 
     syncLocalActiveClass(liveSessionId || sessionId || "");
+
+    if (!isTeacher) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
     fetch(`${apiUrl}/api/v1/classroom/classes/${encodeURIComponent(classId)}/start-live`, {
       method: "POST",
@@ -673,6 +693,7 @@ function SmartBoardConsoleContent() {
 
   // 3. Ekran / Word / Excel / Pencere Paylaşımı Başlat / Durdur
   const toggleScreenShare = async () => {
+    if (!isTeacher) return;
     if (isScreenSharing) {
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -681,6 +702,7 @@ function SmartBoardConsoleContent() {
       if (screenVideoRef.current) {
         screenVideoRef.current.srcObject = null;
       }
+      stopWebRtcBroadcast();
       setIsScreenSharing(false);
     } else {
       try {
@@ -697,9 +719,11 @@ function SmartBoardConsoleContent() {
             if (screenVideoRef.current) {
               screenVideoRef.current.srcObject = null;
             }
+            stopWebRtcBroadcast();
           };
         }
         setIsScreenSharing(true);
+        startWebRtcBroadcast(stream);
         setMediaError(null);
       } catch (err) {
         console.warn("Ekran paylaşımı başlatılamadı:", err);
@@ -709,9 +733,10 @@ function SmartBoardConsoleContent() {
   };
 
   useEffect(() => {
-    if (isScreenSharing && screenStreamRef.current && screenVideoRef.current) {
-      if (screenVideoRef.current.srcObject !== screenStreamRef.current) {
-        screenVideoRef.current.srcObject = screenStreamRef.current;
+    const activeStream = screenStreamRef.current || remoteScreenStreamRef.current;
+    if (isScreenSharing && activeStream && screenVideoRef.current) {
+      if (screenVideoRef.current.srcObject !== activeStream) {
+        screenVideoRef.current.srcObject = activeStream;
       }
     }
   }, [isScreenSharing]);
@@ -844,7 +869,7 @@ function SmartBoardConsoleContent() {
             const tempCtx = tempCanvas.getContext("2d");
             if (tempCtx) {
               await page.render({ canvasContext: tempCtx, viewport }).promise;
-              pages.push(tempCanvas.toDataURL("image/png"));
+              pages.push(tempCanvas.toDataURL("image/jpeg", 0.8));
             }
           }
 
@@ -853,6 +878,12 @@ function SmartBoardConsoleContent() {
           }
           if (pages.length > 0) {
             setPdfPageImages(pages);
+            setCurrentPdfPage(1);
+            broadcastPdfState({
+              pdfFileName: file.name,
+              pdfPageImages: pages,
+              currentPage: 1,
+            });
           }
         }
       } catch (err) {
@@ -870,7 +901,8 @@ function SmartBoardConsoleContent() {
   };
 
   const handleClearPdf = () => {
-    if (pdfUrl) {
+    if (!isTeacher) return;
+    if (pdfUrl && pdfUrl.startsWith("blob:")) {
       URL.revokeObjectURL(pdfUrl);
     }
     setPdfFile(null);
@@ -878,9 +910,24 @@ function SmartBoardConsoleContent() {
     setPdfFileName(null);
     setPdfTextContext("");
     setPdfPageImages([]);
+    setCurrentPdfPage(1);
     setScale(1.0);
     setPan({ x: 0, y: 0 });
     handleClearCanvas();
+    broadcastPdfClear();
+  };
+
+  const handleGoToPdfPage = (pageNum: number) => {
+    if (pdfPageImages.length === 0) return;
+    const clamped = Math.max(1, Math.min(pdfPageImages.length, pageNum));
+    setCurrentPdfPage(clamped);
+    const el = pdfPageRefs.current[clamped - 1];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (isTeacher) {
+      broadcastPdfPage(clamped);
+    }
   };
 
   // Zoom Kontrolleri
@@ -899,11 +946,13 @@ function SmartBoardConsoleContent() {
 
   // Çizimleri Temizle
   const handleClearCanvas = () => {
+    if (!isTeacher) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    broadcastClear();
   };
 
   // Canvas Koordinat Dönüşümü
@@ -955,6 +1004,182 @@ function SmartBoardConsoleContent() {
     }
   };
 
+  // Canlı Öğretmen -> Öğrenci Tahta Senkronizasyonu (Supabase Realtime: board-room-${classId})
+  const {
+    isRealtimeConnected,
+    broadcastDrawStroke,
+    broadcastDrawShape,
+    broadcastDrawText,
+    broadcastLaser,
+    broadcastClear,
+    broadcastPdfState,
+    broadcastPdfPage,
+    broadcastPdfClear,
+    startWebRtcBroadcast,
+    stopWebRtcBroadcast,
+  } = useBoardRealtimeSync({
+    classId,
+    isTeacher,
+    onRemoteStroke: (payload: BoardStrokeEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const sx = payload.canvasWidth > 0 ? canvas.width / payload.canvasWidth : 1;
+      const sy = payload.canvasHeight > 0 ? canvas.height / payload.canvasHeight : 1;
+      ctx.save();
+      setupContextForTool(ctx, payload.tool);
+      ctx.beginPath();
+      ctx.moveTo(payload.from.x * sx, payload.from.y * sy);
+      ctx.lineTo(payload.to.x * sx, payload.to.y * sy);
+      ctx.stroke();
+      ctx.restore();
+    },
+    onRemoteShape: (payload: BoardShapeEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const sx = payload.canvasWidth > 0 ? canvas.width / payload.canvasWidth : 1;
+      const sy = payload.canvasHeight > 0 ? canvas.height / payload.canvasHeight : 1;
+      const startX = payload.start.x * sx;
+      const startY = payload.start.y * sy;
+      const currX = payload.end.x * sx;
+      const currY = payload.end.y * sy;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 0.9;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = payload.color || "#ef4444";
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      if (payload.tool === "line") {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(currX, currY);
+        ctx.stroke();
+      } else if (payload.tool === "rect") {
+        ctx.beginPath();
+        ctx.strokeRect(startX, startY, currX - startX, currY - startY);
+      } else if (payload.tool === "arrow") {
+        const headLen = 16;
+        const angle = Math.atan2(currY - startY, currX - startX);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(currX, currY);
+        ctx.lineTo(currX - headLen * Math.cos(angle - Math.PI / 6), currY - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(currX, currY);
+        ctx.lineTo(currX - headLen * Math.cos(angle + Math.PI / 6), currY - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+      } else if (payload.tool === "circle") {
+        const radiusX = Math.abs(currX - startX) / 2;
+        const radiusY = Math.abs(currY - startY) / 2;
+        const centerX = Math.min(startX, currX) + radiusX;
+        const centerY = Math.min(startY, currY) + radiusY;
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY, Math.max(radiusX, 1), Math.max(radiusY, 1), 0, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+    onRemoteText: (payload: BoardTextEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const sx = payload.canvasWidth > 0 ? canvas.width / payload.canvasWidth : 1;
+      const sy = payload.canvasHeight > 0 ? canvas.height / payload.canvasHeight : 1;
+      ctx.save();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1.0;
+      ctx.font = "bold 24px Inter, system-ui, sans-serif";
+      ctx.fillStyle = payload.color || "#f8fafc";
+      ctx.fillText(payload.text, payload.x * sx, payload.y * sy);
+      ctx.restore();
+    },
+    onRemoteLaser: ({ nx, ny }) => {
+      const ws = workspaceRef.current;
+      if (!ws) return;
+      const rect = ws.getBoundingClientRect();
+      setLaserTrail((prev) => [
+        ...prev.slice(-18),
+        { x: nx * rect.width, y: ny * rect.height, ts: Date.now() },
+      ]);
+    },
+    onRemoteClear: () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    },
+    onRemoteCanvasSnapshot: (dataUrl: string) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = dataUrl;
+    },
+    onRemotePdfState: (payload: BoardPdfStateEvent) => {
+      setPdfFileName(payload.pdfFileName || "Ders Dokümanı.pdf");
+      setPdfPageImages(payload.pdfPageImages || []);
+      setPdfUrl(payload.pdfPageImages?.length ? "remote-synced" : null);
+      setCurrentPdfPage(payload.currentPage || 1);
+      setTimeout(() => {
+        syncCanvasSize();
+        const el = pdfPageRefs.current[(payload.currentPage || 1) - 1];
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    },
+    onRemotePdfPage: (page: number) => {
+      setCurrentPdfPage(page);
+      const el = pdfPageRefs.current[page - 1];
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    onRemotePdfClear: () => {
+      setPdfFile(null);
+      setPdfUrl(null);
+      setPdfFileName(null);
+      setPdfPageImages([]);
+      setCurrentPdfPage(1);
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    },
+    onRemoteScreenStream: (stream: MediaStream | null) => {
+      remoteScreenStreamRef.current = stream;
+      if (stream) {
+        setIsScreenSharing(true);
+        setTimeout(() => {
+          if (screenVideoRef.current) {
+            screenVideoRef.current.srcObject = stream;
+          }
+        }, 50);
+      } else {
+        setIsScreenSharing(false);
+        if (screenVideoRef.current) {
+          screenVideoRef.current.srcObject = null;
+        }
+      }
+    },
+    getSyncState: () => ({
+      pdfFileName,
+      pdfPageImages,
+      currentPage: currentPdfPage,
+      canvasDataUrl: canvasRef.current ? canvasRef.current.toDataURL("image/png") : null,
+      screenStream: screenStreamRef.current,
+    }),
+  });
+
   const commitTextToCanvas = () => {
     if (!textInputBox) return;
     const text = textInputBox.value.trim();
@@ -968,6 +1193,16 @@ function SmartBoardConsoleContent() {
         ctx.fillStyle = shapeColor || "#f8fafc";
         ctx.fillText(text, textInputBox.canvasX, textInputBox.canvasY);
         ctx.restore();
+        if (isTeacher) {
+          broadcastDrawText({
+            text,
+            x: textInputBox.canvasX,
+            y: textInputBox.canvasY,
+            color: shapeColor || "#f8fafc",
+            canvasWidth: canvasRef.current.width,
+            canvasHeight: canvasRef.current.height,
+          });
+        }
       }
     }
     setTextInputBox(null);
@@ -1033,14 +1268,20 @@ function SmartBoardConsoleContent() {
     const ws = workspaceRef.current;
     if (!ws) return;
     const rect = ws.getBoundingClientRect();
+    const rx = clientX - rect.left;
+    const ry = clientY - rect.top;
     setLaserTrail((prev) => [
       ...prev.slice(-18),
-      { x: clientX - rect.left, y: clientY - rect.top, ts: Date.now() },
+      { x: rx, y: ry, ts: Date.now() },
     ]);
+    if (isTeacher && rect.width > 0 && rect.height > 0) {
+      broadcastLaser(rx / rect.width, ry / rect.height);
+    }
   };
 
   // Mouse & Touch Çizim Olayları (Canlı Önizleme / Snapshot Buffer destekli)
   const startDrawing = (clientX: number, clientY: number) => {
+    if (!isTeacher) return;
     if (activeTool === "none" || activeTool === "pan") return;
 
     if (activeTool === "laser") {
@@ -1090,6 +1331,13 @@ function SmartBoardConsoleContent() {
       ctx.lineTo(coords.x, coords.y);
       ctx.stroke();
       lastCoordRef.current = coords;
+      broadcastDrawStroke({
+        tool: activeTool,
+        from: coords,
+        to: coords,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+      });
     }
   };
 
@@ -1131,6 +1379,7 @@ function SmartBoardConsoleContent() {
       const startY = startCoordRef.current.y;
       const currX = coords.x;
       const currY = coords.y;
+      lastShapeEndRef.current = coords;
 
       if (activeTool === "line") {
         ctx.beginPath();
@@ -1173,6 +1422,14 @@ function SmartBoardConsoleContent() {
       ctx.lineTo(coords.x, coords.y);
       ctx.stroke();
 
+      broadcastDrawStroke({
+        tool: activeTool,
+        from: lastCoordRef.current,
+        to: coords,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+      });
+
       lastCoordRef.current = coords;
     }
   };
@@ -1185,10 +1442,29 @@ function SmartBoardConsoleContent() {
       if (ctx) {
         ctx.closePath();
       }
+      if (
+        isTeacher &&
+        startCoordRef.current &&
+        lastShapeEndRef.current &&
+        (activeTool === "line" ||
+          activeTool === "circle" ||
+          activeTool === "rect" ||
+          activeTool === "arrow")
+      ) {
+        broadcastDrawShape({
+          tool: activeTool,
+          start: startCoordRef.current,
+          end: lastShapeEndRef.current,
+          color: shapeColor,
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+        });
+      }
     }
     isDrawingRef.current = false;
     lastCoordRef.current = null;
     startCoordRef.current = null;
+    lastShapeEndRef.current = null;
     shapeSnapshotRef.current = null;
   };
 
@@ -1229,6 +1505,13 @@ function SmartBoardConsoleContent() {
             </span>
           </div>
 
+          {!isTeacher && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-black tracking-wide shrink-0">
+              <span>🟢 Canlı Ders İzleniyor</span>
+              {isRealtimeConnected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+            </div>
+          )}
+
           {liveJoinCode && (
             <button
               type="button"
@@ -1243,73 +1526,77 @@ function SmartBoardConsoleContent() {
 
         {/* Sağ: Ders Materyali / PDF Yükle, Materyal Gönder & Tam Ekran */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* Ekran Paylaşımı VEYA PDF Materyal Durumu */}
-          {isScreenSharing ? (
-            <div className="flex items-center gap-1.5 bg-indigo-950/90 border border-indigo-500/50 py-1.5 px-3 rounded-xl text-xs text-indigo-200">
-              <MonitorUp className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
-              <span className="font-bold hidden sm:inline">🖥️ Canlı Pencere Yansıtılıyor</span>
-              <button
-                type="button"
-                onClick={toggleScreenShare}
-                className="ml-1.5 px-2 py-0.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-[11px] font-bold text-rose-300 hover:text-white hover:bg-rose-600 transition cursor-pointer"
-              >
-                ⏹️ Paylaşımı Bitir
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              {pdfFileName ? (
-                <div className="flex items-center gap-1.5 bg-slate-950/90 border border-slate-800 py-1.5 px-3 rounded-xl text-xs">
-                  <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="text-white font-medium truncate max-w-[110px] sm:max-w-[160px]">
-                    {pdfFileName}
-                  </span>
+          {isTeacher && (
+            <>
+              {/* Ekran Paylaşımı VEYA PDF Materyal Durumu */}
+              {isScreenSharing ? (
+                <div className="flex items-center gap-1.5 bg-indigo-950/90 border border-indigo-500/50 py-1.5 px-3 rounded-xl text-xs text-indigo-200">
+                  <MonitorUp className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
+                  <span className="font-bold hidden sm:inline">🖥️ Canlı Pencere Yansıtılıyor</span>
                   <button
                     type="button"
-                    onClick={handleClearPdf}
-                    className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-                    title={t("brd_close_mat_tip", "Materyali Kapat")}
+                    onClick={toggleScreenShare}
+                    className="ml-1.5 px-2 py-0.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-[11px] font-bold text-rose-300 hover:text-white hover:bg-rose-600 transition cursor-pointer"
                   >
-                    <X className="w-3 h-3" />
+                    ⏹️ Paylaşımı Bitir
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-                  title={t("brd_upload_pdf_tip", "PDF Aç")}
-                >
-                  <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="hidden sm:inline">📄 PDF Aç</span>
-                  <span className="sm:hidden">📄 PDF</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {pdfFileName ? (
+                    <div className="flex items-center gap-1.5 bg-slate-950/90 border border-slate-800 py-1.5 px-3 rounded-xl text-xs">
+                      <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="text-white font-medium truncate max-w-[110px] sm:max-w-[160px]">
+                        {pdfFileName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleClearPdf}
+                        className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                        title={t("brd_close_mat_tip", "Materyali Kapat")}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
+                      title={t("brd_upload_pdf_tip", "PDF Aç")}
+                    >
+                      <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="hidden sm:inline">📄 PDF Aç</span>
+                      <span className="sm:hidden">📄 PDF</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={toggleScreenShare}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500/50 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
+                    title="Word, Excel, PowerPoint veya herhangi bir pencereyi tahtaya yansıt"
+                  >
+                    <MonitorUp className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="hidden md:inline">🖥️ Word / Excel / Pencere Yansıt</span>
+                    <span className="md:hidden">🖥️ Yansıt</span>
+                  </button>
+                </div>
               )}
 
+              {/* Materyal Gönder Butonu */}
               <button
                 type="button"
-                onClick={toggleScreenShare}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500/50 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-                title="Word, Excel, PowerPoint veya herhangi bir pencereyi tahtaya yansıt"
+                onClick={() => setIsSendMaterialOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-xs font-bold text-indigo-300 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
+                title={t("brd_send_mat_tip", "Öğrencilere Not ve Materyal Gönder")}
               >
-                <MonitorUp className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden md:inline">🖥️ Word / Excel / Pencere Yansıt</span>
-                <span className="md:hidden">🖥️ Yansıt</span>
+                <Send className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">{t("brd_send_mat", "📨 Materyal Gönder")}</span>
+                <span className="sm:hidden">{t("brd_send_short", "📨 Gönder")}</span>
               </button>
-            </div>
+            </>
           )}
-
-          {/* Materyal Gönder Butonu */}
-          <button
-            type="button"
-            onClick={() => setIsSendMaterialOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-xs font-bold text-indigo-300 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-            title={t("brd_send_mat_tip", "Öğrencilere Not ve Materyal Gönder")}
-          >
-            <Send className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">{t("brd_send_mat", "📨 Materyal Gönder")}</span>
-            <span className="sm:hidden">{t("brd_send_short", "📨 Gönder")}</span>
-          </button>
 
           {/* Gerçek Tarayıcı Tam Ekran Butonu */}
           <button
@@ -1524,6 +1811,9 @@ function SmartBoardConsoleContent() {
                   pdfPageImages.map((pageSrc, idx) => (
                     <div
                       key={idx}
+                      ref={(el) => {
+                        pdfPageRefs.current[idx] = el;
+                      }}
                       className="relative shadow-2xl rounded-xl overflow-hidden bg-white max-w-4xl w-full select-none"
                     >
                       <img
@@ -1586,36 +1876,43 @@ function SmartBoardConsoleContent() {
               </div>
 
               <h2 className="text-xl sm:text-2xl font-black text-white">
-                {t("brd_empty_title", "PDF Aç veya Pencere Yansıt")}
+                {isTeacher
+                  ? t("brd_empty_title", "PDF Aç veya Pencere Yansıt")
+                  : "Eğitmen Tahta Paylaşımı Bekleniyor"}
               </h2>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mt-2">
-                {t("brd_empty_desc", "PDF dosyanızı açın ya da bilgisayarınızdaki Word, Excel veya PowerPoint penceresini tahtaya yansıtıp üzerine çizim yapın.")}
+                {isTeacher
+                  ? t("brd_empty_desc", "PDF dosyanızı açın ya da bilgisayarınızdaki Word, Excel veya PowerPoint penceresini tahtaya yansıtıp üzerine çizim yapın.")
+                  : "Eğitmeniniz PDF yüklediğinde, çizim yaptığında veya ekranını yansıttığında bu alanda canlı olarak görünecektir."}
               </p>
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 cursor-pointer active:scale-95"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>📄 PDF Aç</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleScreenShare}
-                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs shadow-lg transition flex items-center gap-2 cursor-pointer active:scale-95"
-                >
-                  <MonitorUp className="w-4 h-4 text-emerald-400" />
-                  <span>🖥️ Word / Excel / Pencere Yansıt</span>
-                </button>
-              </div>
+              {isTeacher && (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>📄 PDF Aç</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleScreenShare}
+                    className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs shadow-lg transition flex items-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <MonitorUp className="w-4 h-4 text-emerald-400" />
+                    <span>🖥️ Word / Excel / Pencere Yansıt</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
           </div>
         </section>
 
         {/* SAĞ: ÖĞRETMEN YALIN KONTROL KONSOLU (TEK DİKEY SÜTUN - ÇAKIŞMASIZ) */}
+        {isTeacher && (
         <aside className="w-72 shrink-0 bg-slate-900 border-l border-slate-800 p-3 sm:p-4 flex flex-col gap-3 overflow-y-auto select-none z-20">
           {/* 1. ÜST AKSİYON BUTONLARI (HER ZAMAN GÖRÜNÜR & TIKLANABİLİR) */}
           <div className="space-y-2 shrink-0">
@@ -1909,6 +2206,7 @@ function SmartBoardConsoleContent() {
             <span>{t("brd_zero_audio_badge", "🔒 Sıfır Ses Kaydı • Canlı Dinleme Aktif")}</span>
           </div>
         </aside>
+        )}
       </main>
 
 
@@ -1918,6 +2216,8 @@ function SmartBoardConsoleContent() {
       {/* ========================================================================= */}
       {!isCameraFullscreen && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-3 py-2 bg-slate-900/95 border border-slate-700/80 shadow-2xl rounded-2xl backdrop-blur-md pointer-events-auto max-w-[96vw] overflow-x-auto scrollbar-none">
+        {isTeacher && (
+        <>
         {/* Canlı Stüdyo: 🎤 Mikrofon */}
         <button
           type="button"
@@ -2186,6 +2486,33 @@ function SmartBoardConsoleContent() {
         >
           <Trash2 className="w-4 h-4" />
         </button>
+        </>
+        )}
+
+        {/* PDF Sayfa Senkron Kontrolü */}
+        {pdfPageImages.length > 1 && (
+          <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-800/90 border border-slate-700/70 text-[11px] font-mono text-slate-200">
+            <button
+              type="button"
+              onClick={() => handleGoToPdfPage(currentPdfPage - 1)}
+              disabled={currentPdfPage <= 1}
+              className="px-1.5 py-0.5 rounded hover:bg-slate-700 disabled:opacity-30 cursor-pointer"
+            >
+              ‹
+            </button>
+            <span>
+              {currentPdfPage}/{pdfPageImages.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleGoToPdfPage(currentPdfPage + 1)}
+              disabled={currentPdfPage >= pdfPageImages.length}
+              className="px-1.5 py-0.5 rounded hover:bg-slate-700 disabled:opacity-30 cursor-pointer"
+            >
+              ›
+            </button>
+          </div>
+        )}
 
         {/* 📸 Snapshot (PNG İndir) */}
         <button
