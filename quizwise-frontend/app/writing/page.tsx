@@ -4,9 +4,6 @@ import React, { useState, useEffect, useMemo, useCallback, Suspense } from "reac
 import { useSearchParams } from "next/navigation";
 import {
   PenTool,
-  BookOpen,
-  Mic,
-  Layers,
   Columns2,
   Rows2,
   RefreshCw,
@@ -26,6 +23,8 @@ import { API_BASE } from "../config";
 import { useAuth, getAuthToken } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useUserStories } from "../context/UserStoriesContext";
+import { CURATED_STORIES_CATALOG } from "../data/stories";
 import { fetchDecksList, getActiveDeckCards } from "../utils/activeDeckStore";
 
 type SourceType = "story" | "speaking" | "deck";
@@ -112,6 +111,22 @@ interface WritingAnalysisResult {
   suggested_words: SuggestedWord[];
 }
 
+interface StoryOptionItem {
+  id: string;
+  title: string;
+  level: string;
+  content: string;
+  summary: string;
+  targetWords: TargetWordInfo[];
+  badge?: string;
+}
+
+function buildShortSummary(content?: string, fallback?: string): string {
+  const raw = (content || fallback || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  const sentences = raw.match(/[^.!?]+[.!?]+/g) || [raw];
+  return sentences.slice(0, 3).join(" ").trim();
+}
 interface WritingArchiveEntry {
   id: string;
   createdAt: string;
@@ -140,6 +155,7 @@ function WritingStudioContent() {
   const { user, token, isGuest, openRegistrationGate } = useAuth();
   const { userProfile } = useProfile();
   const { t, language } = useLanguage();
+  const { userStories } = useUserStories();
 
   const isPro = Boolean(
     user &&
@@ -187,6 +203,10 @@ function WritingStudioContent() {
   const [sourceContext, setSourceContext] = useState<string>("");
   const [targetWords, setTargetWords] = useState<TargetWordInfo[]>([]);
   const [selectedWordPopup, setSelectedWordPopup] = useState<TargetWordInfo | null>(null);
+
+  // Hikaye Kaynağı State'i
+  const [selectedStoryId, setSelectedStoryId] = useState<string>("");
+  const [selectedStorySummary, setSelectedStorySummary] = useState<string>("");
 
   // Deste Kaynağı State'i
   const [decks, setDecks] = useState<Array<{ id: string; title: string }>>([]);
@@ -276,6 +296,109 @@ function WritingStudioContent() {
     loadUserDecks();
   }, [loadUserDecks]);
 
+  const storyOptions = useMemo<StoryOptionItem[]>(() => {
+    const map = new Map<string, StoryOptionItem>();
+
+    const mapVocab = (rawVocab: any, rawWords?: any): TargetWordInfo[] => {
+      if (Array.isArray(rawVocab) && rawVocab.length > 0) {
+        return rawVocab.slice(0, 5).map((v: any) => ({
+          word: typeof v === "string" ? v : v.word,
+          meaning: typeof v === "string" ? "" : v.turkish_meaning || v.meaning || "",
+          example: typeof v === "string" ? "" : v.context_sentence || v.example || "",
+        })).filter((v) => v.word);
+      }
+      if (Array.isArray(rawWords) && rawWords.length > 0) {
+        return rawWords.slice(0, 5).map((w: any) => ({
+          word: String(w),
+          meaning: "",
+        })).filter((v) => v.word);
+      }
+      return [];
+    };
+
+    // 1. Kullanıcı hikayeleri (UserStoriesContext + vocaship_user_stories)
+    for (const s of userStories || []) {
+      if (!s?.id || !s?.title) continue;
+      map.set(s.id, {
+        id: s.id,
+        title: s.title,
+        level: s.cefr || s.level || "B1",
+        content: s.content || "",
+        summary: buildShortSummary(s.content, s.desc),
+        targetWords: mapVocab(s.target_vocabulary, s.target_words),
+        badge: "Özel Hikayem",
+      });
+    }
+
+    // 2. Kütüphane hikayeleri
+    for (const s of CURATED_STORIES_CATALOG) {
+      if (!s?.id || !s?.title) continue;
+      if (!map.has(s.id)) {
+        map.set(s.id, {
+          id: s.id,
+          title: s.title,
+          level: s.cefr || s.level || "B1",
+          content: s.content || "",
+          summary: buildShortSummary(s.content, s.desc),
+          targetWords: mapVocab(s.target_vocabulary, s.target_words),
+          badge: s.cefr || s.level || "Kütüphane",
+        });
+      }
+    }
+
+    // 3. localStorage içindeki quizwise_progress_* (devam eden / tamamlanan hikayeler)
+    if (typeof window !== "undefined") {
+      try {
+        const progressIds = new Set<string>();
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k || !k.startsWith("quizwise_progress_")) continue;
+          const raw = localStorage.getItem(k);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          const completed = Array.isArray(parsed?.completedStoryIds) ? parsed.completedStoryIds : [];
+          for (const cid of completed) {
+            if (cid) progressIds.add(String(cid));
+          }
+          if (parsed?.storyId) progressIds.add(String(parsed.storyId));
+        }
+        for (const pid of progressIds) {
+          const existing = map.get(pid);
+          if (existing) {
+            existing.badge = "Okunan";
+          }
+        }
+      } catch {}
+    }
+
+    return Array.from(map.values());
+  }, [userStories]);
+
+  const handleSelectStory = useCallback(
+    (storyId: string) => {
+      setSelectedStoryId(storyId);
+      setSelectedWordPopup(null);
+      if (!storyId) {
+        setSourceTitle("");
+        setSourceContext("");
+        setSelectedStorySummary("");
+        setTaskPrompt("Seçtiğin kaynak veya serbest bir konu üzerine İngilizce yaz.");
+        setTargetWords([]);
+        return;
+      }
+      const found = storyOptions.find((s) => s.id === storyId);
+      if (!found) return;
+      setSourceTitle(found.title);
+      setSourceContext(found.summary || found.content.slice(0, 450) || found.title);
+      setSelectedStorySummary(found.summary);
+      setTaskPrompt(
+        `"${found.title}" hikayesinin sonunu kendi cümlelerinle yeniden yaz veya ana fikrini özetle.`
+      );
+      setTargetWords(found.targetWords.slice(0, 5));
+    },
+    [storyOptions]
+  );
+
   const loadFromStory = useCallback(() => {
     setSourceType("story");
     setSelectedWordPopup(null);
@@ -290,11 +413,15 @@ function WritingStudioContent() {
       if (raw) {
         const ctx = JSON.parse(raw);
         if (!ctx?.sourceType || ctx.sourceType === "story") {
+          const ctxId = String(ctx.storyId || ctx.id || "");
+          const summary = buildShortSummary(ctx.content || ctx.snippet, ctx.title);
+          setSelectedStoryId(ctxId);
           setSourceTitle(ctx.title || "Okuma Hikayesi");
           setSourceContext(ctx.snippet || ctx.content || ctx.title || "");
+          setSelectedStorySummary(summary);
           setTaskPrompt(
             ctx.title
-              ? `"${ctx.title}" hikayesinin sonunu kendi cümlelerinle yeniden kurgula.`
+              ? `"${ctx.title}" hikayesinin sonunu kendi cümlelerinle yeniden yaz veya ana fikrini özetle.`
               : "Hikayenin sonunu kendi cümlelerinle yeniden kurgula."
           );
           const fullVocab = Array.isArray(ctx.full_vocabulary) ? ctx.full_vocabulary : [];
@@ -306,7 +433,7 @@ function WritingStudioContent() {
               }))
             : (Array.isArray(ctx.target_vocabulary) ? ctx.target_vocabulary : []).slice(0, 5).map((w: any) => ({
                 word: typeof w === "string" ? w : w.word,
-                meaning: typeof w === "string" ? "" : w.turkish_meaning || "",
+                meaning: typeof w === "string" ? "" : w.turkish_meaning || w.meaning || "",
               }));
           setTargetWords(list);
           return;
@@ -314,8 +441,10 @@ function WritingStudioContent() {
       }
     } catch {}
 
+    setSelectedStoryId("");
     setSourceTitle("");
     setSourceContext("");
+    setSelectedStorySummary("");
     setTaskPrompt("Seçtiğin kaynak veya serbest bir konu üzerine İngilizce yaz.");
     setTargetWords([]);
   }, []);
@@ -718,7 +847,6 @@ function WritingStudioContent() {
                 : "bg-slate-950/70 text-slate-300 border border-slate-800 hover:text-white"
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
             <span>📖 Hikayeden</span>
           </button>
 
@@ -731,7 +859,6 @@ function WritingStudioContent() {
                 : "bg-slate-950/70 text-slate-300 border border-slate-800 hover:text-white"
             }`}
           >
-            <Mic className="w-3.5 h-3.5" />
             <span>🎙️ Konuşmamdan</span>
           </button>
 
@@ -744,7 +871,6 @@ function WritingStudioContent() {
                 : "bg-slate-950/70 text-slate-300 border border-slate-800 hover:text-white"
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
             <span>🃏 Destemden</span>
           </button>
         </div>
@@ -786,6 +912,37 @@ function WritingStudioContent() {
       >
         {/* SOL / ÜST PANEL: YAZIM MASASI */}
         <section className="rounded-3xl bg-slate-900/90 border border-slate-800 p-5 shadow-xl space-y-4">
+          {/* Hikaye Seçici & Referans Kartı (Yalnızca Hikayeden aktifken) */}
+          {sourceType === "story" && (
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400 shrink-0">Hikaye Seç:</span>
+                <select
+                  value={selectedStoryId}
+                  onChange={(e) => handleSelectStory(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">-- Bir hikaye seçin --</option>
+                  {storyOptions.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.title} ({st.badge || st.level})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedStorySummary && (
+                <div className="p-3 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-1">
+                  <div className="text-xs font-bold text-indigo-300">
+                    📖 {sourceTitle}
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed">
+                    {selectedStorySummary}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Deste Seçici (Yalnızca Destemden aktifken) */}
           {sourceType === "deck" && decks.length > 0 && (
             <div className="flex items-center gap-2">

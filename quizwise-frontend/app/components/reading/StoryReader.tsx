@@ -665,16 +665,21 @@ export default function StoryReader({
                 : Array.isArray(rawTargetWords)
                 ? rawTargetWords
                 : [];
-            const writingCtx = {
+            const payload = {
                 sourceType: "story",
+                id: story.id,
                 storyId: story.id,
                 title: story.title,
                 level: (story as any).cefr || story.level || "B1",
+                topic: story.topic || "",
+                content: story.content || "",
                 snippet: (story.content || "").slice(0, 450),
-                target_vocabulary: vocabList,
+                target_vocabulary: story.target_vocabulary || vocabList,
                 full_vocabulary: story.target_vocabulary || [],
             };
-            sessionStorage.setItem("vocaship_active_writing_context", JSON.stringify(writingCtx));
+            const serialized = JSON.stringify(payload);
+            sessionStorage.setItem("vocaship_active_writing_context", serialized);
+            sessionStorage.setItem("vocaship_active_story_context", serialized);
             router.push("/writing?source=story");
         }
     }, [stopAudio, story, router]);
