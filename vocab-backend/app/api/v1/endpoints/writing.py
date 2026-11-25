@@ -48,11 +48,14 @@ async def analyze_writing(payload: WritingAnalyzeRequest, request: Request):
 
     target_words_clean = [w.strip() for w in (payload.target_words or []) if w and w.strip()][:5]
     explanation_lang = "Turkish" if (payload.native_lang or "tr").lower().startswith("tr") else "English"
+    raw_level = (payload.level or "B1").strip().upper()
+    target_level = raw_level if raw_level in ("A1", "A2", "B1", "B2", "C1") else "B1"
 
     prompt = f"""
 You are a supportive, concise VocaShip English Writing Coach.
 Source Type: {payload.source_type}
 Source Context: {payload.source_context or "General English writing practice"}
+Target CEFR Level: {target_level}
 Target Vocabulary Words: {target_words_clean}
 Student Text:
 \"\"\"
@@ -64,13 +67,13 @@ Pedagogical Rules:
 2. Each correction explanation MUST be a single clear sentence in {explanation_lang}.
 3. Check which words from Target Vocabulary Words were used accurately in context (including inflected forms) and list them in "used_target_words".
 4. Provide "corrected_text" (the student's text with those fixes applied cleanly).
-5. Provide "c1_natural_version" (how a fluent native speaker would express the same ideas at C1 level).
-6. Extract 2 to 3 useful words/phrases from "c1_natural_version" into "suggested_words" with {explanation_lang} meaning and IPA phonetic.
-7. Estimate CEFR level (e.g. "A2", "B1", "B2", "C1").
+5. Provide "c1_natural_version" (natural rewrite strictly matched to CEFR {target_level} vocabulary and grammar complexity — if {target_level} is A1 or A2, keep sentences short, clear, and strictly within {target_level} vocabulary without advanced C1/C2 words; if B1/B2/C1, match that exact level naturally).
+6. Extract 2 to 3 useful words/phrases from "c1_natural_version" appropriate for CEFR {target_level} into "suggested_words" with {explanation_lang} meaning and IPA phonetic.
+7. Estimate the student's actual CEFR level (e.g. "A1", "A2", "B1", "B2", "C1").
 
 Return ONLY valid compact JSON matching this schema:
 {{
-  "cefr_level": "B1",
+  "cefr_level": "{target_level}",
   "corrected_text": "...",
   "corrections": [
     {{
@@ -139,7 +142,7 @@ Return ONLY valid compact JSON matching this schema:
                 )
 
         return WritingAnalyzeResponse(
-            cefr_level=str(ai_data.get("cefr_level") or "B1").strip(),
+            cefr_level=str(ai_data.get("cefr_level") or target_level).strip(),
             corrected_text=str(ai_data.get("corrected_text") or clean_text).strip(),
             corrections=corrections,
             used_target_words=used_words,
@@ -149,13 +152,13 @@ Return ONLY valid compact JSON matching this schema:
     except Exception as e:
         print(f"[Writing Studio Gemini Fallback]: {e}")
         return WritingAnalyzeResponse(
-            cefr_level="B1" if len(clean_text.split()) < 45 else "B2",
+            cefr_level=target_level,
             corrected_text=clean_text,
             corrections=[],
             used_target_words=local_used,
             c1_natural_version=clean_text,
             suggested_words=[
-                SuggestedVocabItem(word="articulate", meaning="açıkça ifade etmek", phonetic="/ɑːrˈtɪk.jə.lət/"),
-                SuggestedVocabItem(word="coherent", meaning="tutarlı, akıcı", phonetic="/koʊˈhɪr.ənt/"),
+                SuggestedVocabItem(word="clear", meaning="açık, net", phonetic="/klɪr/"),
+                SuggestedVocabItem(word="explain", meaning="açıklamak", phonetic="/ɪkˈspleɪn/"),
             ],
         )

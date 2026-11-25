@@ -23,13 +23,25 @@ import {
   Volume2,
 } from "lucide-react";
 import { API_BASE } from "../config";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, getAuthToken } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
 import { useLanguage } from "../context/LanguageContext";
 import { fetchDecksList, getActiveDeckCards } from "../utils/activeDeckStore";
 
 type SourceType = "story" | "speaking" | "deck";
 type SplitMode = "side_by_side" | "top_bottom";
+type CEFRLevel = "A1" | "A2" | "B1" | "B2" | "C1";
+
+const CEFR_LEVELS: CEFRLevel[] = ["A1", "A2", "B1", "B2", "C1"];
+
+function normalizeCefrLevel(raw?: string | null): CEFRLevel {
+  const upper = String(raw || "").trim().toUpperCase();
+  if (upper.includes("A1")) return "A1";
+  if (upper.includes("A2")) return "A2";
+  if (upper.includes("B2")) return "B2";
+  if (upper.includes("C1")) return "C1";
+  return "B1";
+}
 
 interface TargetWordInfo {
   word: string;
@@ -85,7 +97,7 @@ function isWordUsedInText(text: string, word: string): boolean {
 
 function WritingStudioContent() {
   const searchParams = useSearchParams();
-  const { user, isGuest, openRegistrationGate } = useAuth();
+  const { user, token, isGuest, openRegistrationGate } = useAuth();
   const { userProfile } = useProfile();
   const { t, language } = useLanguage();
 
@@ -107,6 +119,7 @@ function WritingStudioContent() {
 
   const [sourceType, setSourceType] = useState<SourceType>(initialSource);
   const [splitMode, setSplitMode] = useState<SplitMode>("side_by_side");
+  const [selectedLevel, setSelectedLevel] = useState<CEFRLevel>("B1");
 
   // Kaynak & Hedef Kelime Havuzu (Maksimum 5 Kelime)
   const [sourceTitle, setSourceTitle] = useState<string>("");
@@ -173,10 +186,43 @@ function WritingStudioContent() {
     } catch {}
   }, []);
 
+  const loadUserDecks = useCallback(async () => {
+    const authToken = token || getAuthToken();
+    if (!authToken) {
+      setDecks([]);
+      return [];
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/decks`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) return [];
+      const list = await res.json();
+      const realDecks = (Array.isArray(list) ? list : []).filter(
+        (d: any) => d?.id && !String(d.id).startsWith("preset_") && !String(d.id).startsWith("guest_")
+      );
+      setDecks(realDecks);
+      setSelectedDeckId((prev) => {
+        if (prev && realDecks.some((d: any) => d.id === prev)) return prev;
+        return realDecks[0]?.id || "";
+      });
+      return realDecks;
+    } catch {
+      return [];
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadUserDecks();
+  }, [loadUserDecks]);
+
   const loadFromStory = useCallback(() => {
     setSourceType("story");
     setSelectedWordPopup(null);
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      setTargetWords([]);
+      return;
+    }
     try {
       const raw =
         sessionStorage.getItem("vocaship_active_writing_context") ||
@@ -186,6 +232,9 @@ function WritingStudioContent() {
         if (!ctx?.sourceType || ctx.sourceType === "story") {
           setSourceTitle(ctx.title || "Okuma Hikayesi");
           setSourceContext(ctx.snippet || ctx.content || ctx.title || "");
+          if (ctx.level) {
+            setSelectedLevel(normalizeCefrLevel(ctx.level));
+          }
           setTaskPrompt(
             ctx.title
               ? `"${ctx.title}" hikayesinin sonunu kendi cümlelerinle yeniden kurgula.`
@@ -202,30 +251,25 @@ function WritingStudioContent() {
                 word: typeof w === "string" ? w : w.word,
                 meaning: typeof w === "string" ? "" : w.turkish_meaning || "",
               }));
-          if (list.length > 0) {
-            setTargetWords(list);
-            return;
-          }
+          setTargetWords(list);
+          return;
         }
       }
     } catch {}
 
-    setSourceTitle("Günlük Okuma Pratiği");
-    setSourceContext("A short reflection about a memorable story or personal discovery.");
-    setTaskPrompt("Okuduğun bir hikayeden aklında kalan bölümü kendi cümlelerinle özetle.");
-    setTargetWords([
-      { word: "discover", meaning: "keşfetmek", example: "She began to discover new ideas in the library." },
-      { word: "journey", meaning: "yolculuk", example: "Every small step made the journey meaningful." },
-      { word: "curious", meaning: "meraklı", example: "He felt curious about the hidden room." },
-      { word: "calm", meaning: "sakin", example: "The morning air felt calm and refreshing." },
-      { word: "remember", meaning: "hatırlamak", example: "I still remember the ending of that story." },
-    ]);
+    setSourceTitle("");
+    setSourceContext("");
+    setTaskPrompt("Seçtiğin kaynak veya serbest bir konu üzerine İngilizce yaz.");
+    setTargetWords([]);
   }, []);
 
   const loadFromSpeaking = useCallback(() => {
     setSourceType("speaking");
     setSelectedWordPopup(null);
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      setTargetWords([]);
+      return;
+    }
     try {
       const raw = sessionStorage.getItem("vocaship_active_writing_context");
       if (raw) {
@@ -233,6 +277,9 @@ function WritingStudioContent() {
         if (ctx?.sourceType === "speaking") {
           setSourceTitle(ctx.title || "Konuşma Oturumu");
           setSourceContext(ctx.snippet || ctx.title || "");
+          if (ctx.level) {
+            setSelectedLevel(normalizeCefrLevel(ctx.level));
+          }
           setTaskPrompt(
             ctx.title
               ? `"${ctx.title}" sohbetinde paylaştığın fikirleri kısa ve akıcı bir paragrafa dönüştür.`
@@ -245,24 +292,16 @@ function WritingStudioContent() {
               meaning: v.turkish_meaning || v.meaning || "",
               example: v.example_sentence || v.example || "",
             }));
-          if (list.length > 0) {
-            setTargetWords(list);
-            return;
-          }
+          setTargetWords(list);
+          return;
         }
       }
     } catch {}
 
-    setSourceTitle("Konuşma Pratiği Özeti");
-    setSourceContext("Summarizing thoughts and opinions from a recent English speaking session.");
-    setTaskPrompt("Son konuşma pratiğinde savunduğun fikri 3-4 cümleyle yazıya dök.");
-    setTargetWords([
-      { word: "opinion", meaning: "görüş, fikir", example: "In my opinion, daily practice builds fluency." },
-      { word: "explain", meaning: "açıklamak", example: "Let me explain why I agree with this idea." },
-      { word: "experience", meaning: "deneyim", example: "That experience taught me something valuable." },
-      { word: "confident", meaning: "özgüvenli", example: "I feel more confident when speaking slowly." },
-      { word: "improve", meaning: "geliştirmek", example: "Writing helps me improve my sentence flow." },
-    ]);
+    setSourceTitle("");
+    setSourceContext("");
+    setTaskPrompt("Seçtiğin kaynak veya serbest bir konu üzerine İngilizce yaz.");
+    setTargetWords([]);
   }, []);
 
   const loadDeckWords = useCallback(async (deckId: string) => {
@@ -286,11 +325,17 @@ function WritingStudioContent() {
     setSelectedWordPopup(null);
     setTaskPrompt("Destendeki seçili kelimeleri doğal bir paragraf içinde kullan.");
     try {
-      const list = await fetchDecksList();
-      const realDecks = (list || []).filter(
-        (d: any) => d?.id && !String(d.id).startsWith("preset_") && !String(d.id).startsWith("guest_")
-      );
-      setDecks(realDecks);
+      let realDecks = decks;
+      if (realDecks.length === 0) {
+        realDecks = await loadUserDecks();
+      }
+      if (realDecks.length === 0) {
+        const list = await fetchDecksList();
+        realDecks = (list || []).filter(
+          (d: any) => d?.id && !String(d.id).startsWith("preset_") && !String(d.id).startsWith("guest_")
+        );
+        setDecks(realDecks);
+      }
       if (realDecks.length > 0) {
         const targetId = selectedDeckId && realDecks.some((d: any) => d.id === selectedDeckId)
           ? selectedDeckId
@@ -303,8 +348,10 @@ function WritingStudioContent() {
       } else {
         setTargetWords([]);
       }
-    } catch {}
-  }, [selectedDeckId, loadDeckWords]);
+    } catch {
+      setTargetWords([]);
+    }
+  }, [decks, selectedDeckId, loadDeckWords, loadUserDecks]);
 
   useEffect(() => {
     if (initialSource === "speaking") {
@@ -337,30 +384,77 @@ function WritingStudioContent() {
     return set;
   }, [text, targetWords]);
 
-  // Fısıltı Koçu: henüz kullanılmamış kelimelerden birine göre cümle başlatıcılar
+  // Fısıltı Koçu: henüz kullanılmamış kelimeler ve seçili CEFR seviyesine göre cümle başlatıcılar
   const sentenceStarters = useMemo(() => {
     const unused = targetWords.filter((w) => !matchedWordsSet.has(w.word.toLowerCase()));
-    const focus = unused[0]?.word || targetWords[0]?.word || "idea";
+    const focus = unused[0]?.word || targetWords[0]?.word || "";
+    const focusOrTopic = focus || "this topic";
+
+    if (selectedLevel === "A1" || selectedLevel === "A2") {
+      if (sourceType === "story") {
+        return [
+          focus ? `Today I read a story about ${focus}.` : `Today I read a very good story.`,
+          `I like this story because it is simple and clear.`,
+          `In the end, the main character feels happy and ready.`,
+        ];
+      }
+      if (sourceType === "speaking") {
+        return [
+          focus ? `In my talk, I used the word ${focus}.` : `In my talk, I shared my simple idea.`,
+          `I think this is good for my daily life.`,
+          `For example, I do this every week with my friends.`,
+        ];
+      }
+      return [
+        focus ? `I want to use ${focus} in a short sentence.` : `Today I want to write a short paragraph.`,
+        `This word is very useful in daily life.`,
+        `For me, learning new words is fun and easy.`,
+      ];
+    }
+
+    if (selectedLevel === "C1") {
+      if (sourceType === "story") {
+        return [
+          `Upon reflecting on the narrative, it becomes evident that ${focusOrTopic} shapes the turning point...`,
+          `What makes this progression particularly compelling is how ${focusOrTopic} alters the character's perspective...`,
+          `Rather than offering a predictable resolution, the story invites us to consider...`,
+        ];
+      }
+      if (sourceType === "speaking") {
+        return [
+          `Throughout our conversation, I sought to underscore the significance of ${focusOrTopic} because...`,
+          `From a broader standpoint, ${focusOrTopic} serves as a catalyst whenever...`,
+          `Nuance aside, the overarching argument rests on the idea that...`,
+        ];
+      }
+      return [
+        `In contemporary contexts, ${focusOrTopic} often emerges as a decisive factor when...`,
+        `A nuanced examination reveals that ${focusOrTopic} can fundamentally transform...`,
+        `To illustrate this point more concretely, consider how individuals navigate...`,
+      ];
+    }
+
+    // B1 / B2 varsayılan orta düzey bağlaçlar
     if (sourceType === "story") {
       return [
-        `In my version of the story, the main character decided to ${focus}...`,
-        `What stood out most to me was how ${focus} changed the situation...`,
+        `In my version of the story, the main character decided to focus on ${focusOrTopic}...`,
+        `What stood out most to me was how ${focusOrTopic} changed the situation...`,
         `Looking back at the ending, I would imagine that...`,
       ];
     }
     if (sourceType === "speaking") {
       return [
-        `During our discussion, I wanted to emphasize ${focus} because...`,
-        `From my perspective, ${focus} plays a key role when...`,
+        `During our discussion, I wanted to emphasize ${focusOrTopic} because...`,
+        `From my perspective, ${focusOrTopic} plays a key role when...`,
         `To put it simply, I believe that...`,
       ];
     }
     return [
-      `In everyday life, ${focus} becomes especially important when...`,
-      `I recently noticed that ${focus} can help people...`,
+      `In everyday life, ${focusOrTopic} becomes especially important when...`,
+      `I recently noticed that ${focusOrTopic} can help people...`,
       `One clear example of this is when someone tries to...`,
     ];
-  }, [sourceType, targetWords, matchedWordsSet]);
+  }, [sourceType, targetWords, matchedWordsSet, selectedLevel]);
 
   const handleAppendStarter = (starter: string) => {
     setText((prev) => {
@@ -398,6 +492,7 @@ function WritingStudioContent() {
           source_context: sourceContext || sourceTitle,
           target_words: targetWords.map((w) => w.word),
           native_lang: language || "tr",
+          level: selectedLevel,
         }),
       });
 
@@ -452,55 +547,40 @@ function WritingStudioContent() {
   };
 
   const handleSaveSuggestedWord = async (item: SuggestedWord) => {
-    if (!user && isGuest) {
+    const authToken = token || getAuthToken();
+    if (!authToken || (!user && isGuest)) {
       openRegistrationGate("Yeni kelimeleri destene kaydetmek için ücretsiz hesabını oluştur.");
       return;
     }
+    const targetDeck = selectedDeckId || decks[0]?.id;
+    if (!targetDeck) return;
+
     setSavingWordKey(item.word);
     try {
-      let targetDeck = selectedDeckId;
-      if (!targetDeck) {
-        const list = await fetchDecksList();
-        const real = (list || []).filter(
-          (d: any) => d?.id && !String(d.id).startsWith("preset_") && !String(d.id).startsWith("guest_")
-        );
-        if (real.length > 0) {
-          targetDeck = real[0].id;
-        } else {
-          const createRes = await fetch(`${API_BASE}/api/v1/decks`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: user?.id,
-              title: "Writing Studio Kelimeleri",
-              description: "Yazım analizlerinden kaydedilen kelimeler",
-              target_lang: "en",
-              native_lang: "tr",
-            }),
-          });
-          if (createRes.ok) {
-            const created = await createRes.json();
-            targetDeck = created.id;
-          }
-        }
-      }
-
-      if (targetDeck) {
-        const res = await fetch(`${API_BASE}/api/v1/decks/${encodeURIComponent(targetDeck)}/cards`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            word: item.word,
-            phonetic: item.phonetic || "",
-            meanings: [{ translation: item.meaning, definition: item.meaning }],
-            example_sentences: analysisResult?.c1_natural_version
-              ? [{ target: analysisResult.c1_natural_version, native: "" }]
-              : [],
-          }),
-        });
-        if (res.ok) {
-          setSavedSuggestedWords((prev) => ({ ...prev, [item.word]: true }));
-        }
+      const res = await fetch(`${API_BASE}/api/v1/decks/cards`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          deck_id: targetDeck,
+          word: item.word,
+          phonetic: item.phonetic || "",
+          meanings: [
+            {
+              part_of_speech: "word",
+              translation: item.meaning,
+              definition: item.meaning,
+            },
+          ],
+          example_sentences: analysisResult?.c1_natural_version
+            ? [{ target: analysisResult.c1_natural_version, native: "" }]
+            : [],
+        }),
+      });
+      if (res.ok) {
+        setSavedSuggestedWords((prev) => ({ ...prev, [item.word]: true }));
       }
     } catch {} finally {
       setSavingWordKey(null);
@@ -590,8 +670,27 @@ function WritingStudioContent() {
           </button>
         </div>
 
-        {/* Sağ: Bölünme Yönü Anahtarı */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold">
+        {/* Sağ: Seviye Seçici & Bölünme Yönü Anahtarı */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-bold">
+            <span className="px-2 text-slate-400">Seviye:</span>
+            {CEFR_LEVELS.map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => setSelectedLevel(lvl)}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer ${
+                  selectedLevel === lvl
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {lvl}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold">
           <button
             type="button"
             onClick={() => setSplitMode("side_by_side")}
@@ -616,6 +715,7 @@ function WritingStudioContent() {
             <Rows2 className="w-3.5 h-3.5" />
             <span>⊟ Üst-Alt</span>
           </button>
+          </div>
         </div>
       </header>
 
@@ -657,40 +757,48 @@ function WritingStudioContent() {
               <p className="text-xs sm:text-sm font-semibold text-slate-200 leading-snug">
                 {taskPrompt}
               </p>
-              <button
-                type="button"
-                onClick={handleRefreshWords}
-                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
-                title="Hedef kelimeleri yenile"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
+              {targetWords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRefreshWords}
+                  className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+                  title="Hedef kelimeleri yenile"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 relative">
-              {targetWords.slice(0, 5).map((item) => {
-                const isUsed = matchedWordsSet.has(item.word.toLowerCase());
-                return (
-                  <button
-                    key={item.word}
-                    type="button"
-                    onClick={() =>
-                      setSelectedWordPopup((prev) =>
-                        prev?.word === item.word ? null : item
-                      )
-                    }
-                    className={`px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer flex items-center gap-1 ${
-                      isUsed
-                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-500/20"
-                        : "bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-500/50"
-                    }`}
-                  >
-                    {isUsed && <Check className="w-3 h-3 text-emerald-400" />}
-                    <span>{item.word}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {targetWords.length === 0 ? (
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Hedef kelimelerle çalışmak için yukarıdan bir Hikaye, Konuşma veya Deste seçin (veya doğrudan serbest yazın).
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 relative">
+                {targetWords.slice(0, 5).map((item) => {
+                  const isUsed = matchedWordsSet.has(item.word.toLowerCase());
+                  return (
+                    <button
+                      key={item.word}
+                      type="button"
+                      onClick={() =>
+                        setSelectedWordPopup((prev) =>
+                          prev?.word === item.word ? null : item
+                        )
+                      }
+                      className={`px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer flex items-center gap-1 ${
+                        isUsed
+                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-500/20"
+                          : "bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-500/50"
+                      }`}
+                    >
+                      {isUsed && <Check className="w-3 h-3 text-emerald-400" />}
+                      <span>{item.word}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {selectedWordPopup && (
               <div className="p-2.5 rounded-xl bg-slate-900 border border-indigo-500/40 text-xs space-y-1 animate-in fade-in duration-150">
@@ -793,7 +901,7 @@ function WritingStudioContent() {
               </div>
               <h2 className="text-base font-bold text-white">Yazım Analizi & Karne</h2>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md leading-relaxed">
-                Metnini tamamlayıp <strong className="text-indigo-300">Analiz Et</strong>&apos;e bastığında yazım, gramer ve C1 akıcılık karnen burada açılacak.
+                Metnini tamamlayıp <strong className="text-indigo-300">Analiz Et</strong>&apos;e bastığında yazım, gramer ve {selectedLevel} akıcılık karnen burada açılacak.
               </p>
             </div>
           ) : (
@@ -849,11 +957,11 @@ function WritingStudioContent() {
                 )}
               </div>
 
-              {/* 3. Altın Versiyon (C1 Doğal Akış) & Önerilen Kelimeler */}
+              {/* 3. Altın Versiyon (Dinamik Seviye Doğal Akış) & Önerilen Kelimeler */}
               <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/50 via-slate-950/80 to-emerald-950/30 border border-indigo-500/35 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-amber-300">
-                    ✨ Altın Versiyon (C1 Doğal Akış)
+                    ✨ Altın Versiyon ({selectedLevel} Doğal Akış)
                   </span>
                   <button
                     type="button"
@@ -869,10 +977,32 @@ function WritingStudioContent() {
                 </p>
 
                 {analysisResult.suggested_words.length > 0 && (
-                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                    <span className="text-[11px] font-semibold text-slate-400 block">
-                      Desteye Eklenebilecek Yeni Kelimeler:
-                    </span>
+                  <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        Desteye Eklenebilecek Yeni Kelimeler:
+                      </span>
+                      {decks.length > 0 ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-slate-400">Hedef Deste:</span>
+                          <select
+                            value={selectedDeckId}
+                            onChange={(e) => setSelectedDeckId(e.target.value)}
+                            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-indigo-500"
+                          >
+                            {decks.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-amber-300">
+                          Önce Word Pool&apos;dan bir deste oluşturun
+                        </span>
+                      )}
+                    </div>
                     <div className="space-y-1.5">
                       {analysisResult.suggested_words.map((sw) => {
                         const isSaved = Boolean(savedSuggestedWords[sw.word]);
@@ -892,9 +1022,9 @@ function WritingStudioContent() {
                             </div>
                             <button
                               type="button"
-                              disabled={isSaved || savingWordKey === sw.word}
+                              disabled={isSaved || savingWordKey === sw.word || decks.length === 0}
                               onClick={() => handleSaveSuggestedWord(sw)}
-                              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] shrink-0 flex items-center gap-1 cursor-pointer ${
+                              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] shrink-0 flex items-center gap-1 cursor-pointer disabled:opacity-50 ${
                                 isSaved
                                   ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                                   : "bg-indigo-600 hover:bg-indigo-500 text-white"
@@ -975,7 +1105,7 @@ function WritingStudioContent() {
                   </div>
                   <p className="text-xs text-slate-200 line-clamp-2">{entry.text}</p>
                   <p className="text-[11px] text-emerald-300/90 italic line-clamp-2">
-                    C1: {entry.c1Version}
+                    {entry.cefrLevel} Doğal Akış: {entry.c1Version}
                   </p>
                 </div>
               ))

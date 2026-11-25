@@ -8,6 +8,7 @@ class WritingAnalyzeRequest(BaseModel):
     source_context: Optional[str] = Field(default=None, description="Hikaye özeti veya konuşma konusu")
     target_words: List[str] = Field(default_factory=list, description="Kullanılması hedeflenen kelimeler")
     native_lang: str = Field(default="tr", description="Açıklama dili")
+    level: str = Field(default="B1", description="Hedef CEFR seviyesi: A1 | A2 | B1 | B2 | C1")
 
 
 class WritingCorrectionItem(BaseModel):
