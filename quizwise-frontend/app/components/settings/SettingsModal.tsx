@@ -172,15 +172,20 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
         email: trimmedEmail || userProfile.email,
         avatar_url: selectedAvatar,
         study_level: studyLevel,
+        target_level: studyLevel,
         daily_goal: dailyGoal,
         tts_voice: voiceTone,
         tts_speed: playbackSpeed,
         theme: themeMode,
       });
 
-      // Küresel Nöral Sesi Kaydet ve Senkronize Et
+      // Küresel Nöral Sesi ve Çalışma Seviyesini Kaydet ve Senkronize Et
       if (typeof window !== "undefined") {
         setStoredNeuralVoice(voiceTone);
+        try {
+          localStorage.setItem("vocaship_target_level", studyLevel);
+        } catch {}
+        window.dispatchEvent(new Event("vocaship-profile-updated"));
       }
 
       // Küresel Tema Uygula ve Senkronize Et

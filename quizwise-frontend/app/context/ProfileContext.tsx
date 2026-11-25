@@ -25,6 +25,7 @@ export interface UserProfile {
   trial_ends_at?: string | null;
   trial_days_left?: number | null;
   study_level?: string;
+  target_level?: string;
   daily_goal?: number;
   tts_voice?: string;
   tts_speed?: string;
@@ -70,6 +71,7 @@ const DEFAULT_PROFILE: UserProfile = {
   plan_tier: "free",
   planTier: "free",
   study_level: "B1",
+  target_level: "B1",
   daily_goal: 20,
   tts_voice: "en-US-JennyNeural",
   tts_speed: "1.0x",
@@ -163,10 +165,12 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     };
 
     window.addEventListener("vocaship_profile_updated", handleProfileCustomEvent);
+    window.addEventListener("vocaship-profile-updated", handleProfileCustomEvent);
     window.addEventListener("storage", handleStorageEvent);
     window.addEventListener("vocaship_logged_out", handleLoggedOut);
     return () => {
       window.removeEventListener("vocaship_profile_updated", handleProfileCustomEvent);
+      window.removeEventListener("vocaship-profile-updated", handleProfileCustomEvent);
       window.removeEventListener("storage", handleStorageEvent);
       window.removeEventListener("vocaship_logged_out", handleLoggedOut);
     };
@@ -317,10 +321,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem("vocaship_custom_avatar");
         }
       }
+      if (updates.study_level !== undefined || updates.target_level !== undefined) {
+        const nextLvl = updates.target_level || updates.study_level || "B1";
+        localStorage.setItem("vocaship_target_level", nextLvl);
+      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("vocaship_profile_updated", { detail: updated })
         );
+        window.dispatchEvent(new Event("vocaship-profile-updated"));
       }
     } catch (err) {
       console.warn("[ProfileContext] localStorage kayıt hatası:", err);

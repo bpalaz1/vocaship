@@ -32,8 +32,6 @@ type SourceType = "story" | "speaking" | "deck";
 type SplitMode = "side_by_side" | "top_bottom";
 type CEFRLevel = "A1" | "A2" | "B1" | "B2" | "C1";
 
-const CEFR_LEVELS: CEFRLevel[] = ["A1", "A2", "B1", "B2", "C1"];
-
 function normalizeCefrLevel(raw?: string | null): CEFRLevel {
   const upper = String(raw || "").trim().toUpperCase();
   if (upper.includes("A1")) return "A1";
@@ -41,6 +39,23 @@ function normalizeCefrLevel(raw?: string | null): CEFRLevel {
   if (upper.includes("B2")) return "B2";
   if (upper.includes("C1")) return "C1";
   return "B1";
+}
+
+function readProfileTargetLevel(userProfile?: { target_level?: string; study_level?: string } | null): CEFRLevel {
+  if (typeof window !== "undefined") {
+    try {
+      const storedLevel = localStorage.getItem("vocaship_target_level");
+      if (storedLevel) return normalizeCefrLevel(storedLevel);
+      const rawProfile = localStorage.getItem("vocaship_profile");
+      if (rawProfile) {
+        const parsed = JSON.parse(rawProfile);
+        if (parsed?.target_level || parsed?.study_level) {
+          return normalizeCefrLevel(parsed.target_level || parsed.study_level);
+        }
+      }
+    } catch {}
+  }
+  return normalizeCefrLevel(userProfile?.target_level || userProfile?.study_level || "B1");
 }
 
 interface TargetWordInfo {
@@ -119,7 +134,25 @@ function WritingStudioContent() {
 
   const [sourceType, setSourceType] = useState<SourceType>(initialSource);
   const [splitMode, setSplitMode] = useState<SplitMode>("side_by_side");
-  const [selectedLevel, setSelectedLevel] = useState<CEFRLevel>("B1");
+  const [activeLevel, setActiveLevel] = useState<CEFRLevel>(() =>
+    readProfileTargetLevel(userProfile)
+  );
+
+  useEffect(() => {
+    const syncLevel = () => {
+      setActiveLevel(readProfileTargetLevel(userProfile));
+    };
+    syncLevel();
+    if (typeof window === "undefined") return;
+    window.addEventListener("vocaship-profile-updated", syncLevel);
+    window.addEventListener("vocaship_profile_updated", syncLevel);
+    window.addEventListener("storage", syncLevel);
+    return () => {
+      window.removeEventListener("vocaship-profile-updated", syncLevel);
+      window.removeEventListener("vocaship_profile_updated", syncLevel);
+      window.removeEventListener("storage", syncLevel);
+    };
+  }, [userProfile]);
 
   // Kaynak & Hedef Kelime Havuzu (Maksimum 5 Kelime)
   const [sourceTitle, setSourceTitle] = useState<string>("");
@@ -234,9 +267,6 @@ function WritingStudioContent() {
         if (!ctx?.sourceType || ctx.sourceType === "story") {
           setSourceTitle(ctx.title || "Okuma Hikayesi");
           setSourceContext(ctx.snippet || ctx.content || ctx.title || "");
-          if (ctx.level) {
-            setSelectedLevel(normalizeCefrLevel(ctx.level));
-          }
           setTaskPrompt(
             ctx.title
               ? `"${ctx.title}" hikayesinin sonunu kendi cümlelerinle yeniden kurgula.`
@@ -279,9 +309,6 @@ function WritingStudioContent() {
         if (ctx?.sourceType === "speaking") {
           setSourceTitle(ctx.title || "Konuşma Oturumu");
           setSourceContext(ctx.snippet || ctx.title || "");
-          if (ctx.level) {
-            setSelectedLevel(normalizeCefrLevel(ctx.level));
-          }
           setTaskPrompt(
             ctx.title
               ? `"${ctx.title}" sohbetinde paylaştığın fikirleri kısa ve akıcı bir paragrafa dönüştür.`
@@ -392,7 +419,7 @@ function WritingStudioContent() {
     const focus = unused[0]?.word || targetWords[0]?.word || "";
     const focusOrTopic = focus || "this topic";
 
-    if (selectedLevel === "A1" || selectedLevel === "A2") {
+    if (activeLevel === "A1" || activeLevel === "A2") {
       if (sourceType === "story") {
         return [
           focus ? `Today I read a story about ${focus}.` : `Today I read a very good story.`,
@@ -414,7 +441,7 @@ function WritingStudioContent() {
       ];
     }
 
-    if (selectedLevel === "C1") {
+    if (activeLevel === "C1") {
       if (sourceType === "story") {
         return [
           `Upon reflecting on the narrative, it becomes evident that ${focusOrTopic} shapes the turning point...`,
@@ -456,7 +483,7 @@ function WritingStudioContent() {
       `I recently noticed that ${focusOrTopic} can help people...`,
       `One clear example of this is when someone tries to...`,
     ];
-  }, [sourceType, targetWords, matchedWordsSet, selectedLevel]);
+  }, [sourceType, targetWords, matchedWordsSet, activeLevel]);
 
   const handleAppendStarter = (starter: string) => {
     const cleanStarter = starter.replace(/\.{2,}\s*$/, "").trimEnd();
@@ -519,7 +546,7 @@ function WritingStudioContent() {
           source_context: sourceContext || sourceTitle,
           target_words: targetWords.map((w) => w.word),
           native_lang: language || "tr",
-          level: selectedLevel,
+          level: activeLevel,
         }),
       });
 
@@ -697,27 +724,8 @@ function WritingStudioContent() {
           </button>
         </div>
 
-        {/* Sağ: Seviye Seçici & Bölünme Yönü Anahtarı */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-bold">
-            <span className="px-2 text-slate-400">Seviye:</span>
-            {CEFR_LEVELS.map((lvl) => (
-              <button
-                key={lvl}
-                type="button"
-                onClick={() => setSelectedLevel(lvl)}
-                className={`px-2 py-1 rounded-lg transition cursor-pointer ${
-                  selectedLevel === lvl
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                {lvl}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold">
+        {/* Sağ: Bölünme Yönü Anahtarı */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold">
           <button
             type="button"
             onClick={() => setSplitMode("side_by_side")}
@@ -742,7 +750,6 @@ function WritingStudioContent() {
             <Rows2 className="w-3.5 h-3.5" />
             <span>⊟ Üst-Alt</span>
           </button>
-          </div>
         </div>
       </header>
 
@@ -932,7 +939,7 @@ function WritingStudioContent() {
               </div>
               <h2 className="text-base font-bold text-white">Yazım Analizi & Karne</h2>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md leading-relaxed">
-                Metnini tamamlayıp <strong className="text-indigo-300">Analiz Et</strong>&apos;e bastığında yazım, gramer ve {selectedLevel} akıcılık karnen burada açılacak.
+                Metnini tamamlayıp <strong className="text-indigo-300">Analiz Et</strong>&apos;e bastığında yazım, gramer ve {activeLevel} akıcılık karnen burada açılacak.
               </p>
             </div>
           ) : (
@@ -992,7 +999,7 @@ function WritingStudioContent() {
               <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/50 via-slate-950/80 to-emerald-950/30 border border-indigo-500/35 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-amber-300">
-                    ✨ Altın Versiyon (Hedef: {selectedLevel})
+                    ✨ Altın Versiyon (Hedef: {activeLevel})
                   </span>
                   <button
                     type="button"
