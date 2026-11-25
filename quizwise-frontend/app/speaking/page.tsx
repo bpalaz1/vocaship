@@ -2562,7 +2562,28 @@ function SpeakingContent() {
                 </button>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      sessionStorage.setItem(
+                        "vocaship_active_writing_context",
+                        JSON.stringify({
+                          sourceType: "speaking",
+                          title: summaryModalData.session_title,
+                          level: activeLevel || "B1",
+                          snippet: summaryModalData.golden_sentence?.improved || summaryModalData.coach_feedback,
+                          full_vocabulary: summaryModalData.extracted_words || [],
+                        })
+                      );
+                    }
+                    router.push("/writing?source=speaking");
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer"
+                >
+                  <span>✍️ {t("speak_write_summary_btn", "Bu Sohbeti Yazıya Dök")}</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleResetFromSummaryModal}

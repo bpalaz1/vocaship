@@ -656,6 +656,29 @@ export default function StoryReader({
         }
     }, [stopAudio, story, router, selectedVoice]);
 
+    const handleWriteAboutStory = useCallback(() => {
+        stopAudio();
+        if (typeof window !== "undefined") {
+            const rawTargetWords = (story as any).target_words;
+            const vocabList = Array.isArray(story.target_vocabulary)
+                ? story.target_vocabulary.map((v: any) => v.word || v).filter(Boolean)
+                : Array.isArray(rawTargetWords)
+                ? rawTargetWords
+                : [];
+            const writingCtx = {
+                sourceType: "story",
+                storyId: story.id,
+                title: story.title,
+                level: (story as any).cefr || story.level || "B1",
+                snippet: (story.content || "").slice(0, 450),
+                target_vocabulary: vocabList,
+                full_vocabulary: story.target_vocabulary || [],
+            };
+            sessionStorage.setItem("vocaship_active_writing_context", JSON.stringify(writingCtx));
+            router.push("/writing?source=story");
+        }
+    }, [stopAudio, story, router]);
+
     const playSentenceAudioRef = useRef<(index: number) => void>(() => {});
 
     // Kesintisiz Ses Oynatma & 1.5 Saniye Fallback + Canlı Karaoke Kelime Takibi (handlePlayAudio)
@@ -2312,7 +2335,7 @@ export default function StoryReader({
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <button
                                             type="button"
                                             onClick={handleDebateStory}
@@ -2321,6 +2344,14 @@ export default function StoryReader({
                                         >
                                             <Mic className="w-4 h-4 text-violet-200" />
                                             <span>🎙️ {t("read_quiz_debate_story", "Bu Hikayeyi {name} ile Tartış", { name: activeVoiceName })}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleWriteAboutStory}
+                                            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs sm:text-sm bg-slate-800 hover:bg-slate-700 border border-indigo-500/40 text-indigo-200 hover:text-white shadow-lg transition active:scale-95 cursor-pointer"
+                                        >
+                                            <span>✍️ {t("read_write_about_story", "Hikaye Üzerine Yaz")}</span>
                                         </button>
 
                                         <button

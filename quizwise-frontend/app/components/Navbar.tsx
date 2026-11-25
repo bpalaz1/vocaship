@@ -19,6 +19,7 @@ import {
   Settings,
   Volume2,
   Crown,
+  PenTool,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import LanguageSelector from "./LanguageSelector";
@@ -102,6 +103,13 @@ export default function Navbar() {
       icon: Mic,
       emoji: "🎙️",
       isActive: pathname.startsWith("/speaking"),
+    },
+    {
+      name: t("nav_writing", "Writing"),
+      href: "/writing",
+      icon: PenTool,
+      emoji: "✍️",
+      isActive: pathname.startsWith("/writing"),
     },
     {
       name: t("nav_games", "Oyun Arenası"),
