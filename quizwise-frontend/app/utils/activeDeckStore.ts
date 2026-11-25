@@ -209,7 +209,11 @@ function getScopedUserContext(): { userId: string; token: string | null } | null
   if (typeof window === "undefined") return null;
   try {
     const rawUser = localStorage.getItem("vorego_auth_user");
-    const token = localStorage.getItem("vorego_auth_token");
+    const token =
+      localStorage.getItem("vocaship_token") ||
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("vorego_auth_token") ||
+      localStorage.getItem("token");
     if (!rawUser) return null;
     const parsed = JSON.parse(rawUser);
     if (!parsed?.id) return null;

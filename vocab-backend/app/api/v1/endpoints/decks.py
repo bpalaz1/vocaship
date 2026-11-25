@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.schemas.deck import DeckCreate, DeckResponse
 from app.schemas.flashcard import FlashcardCreate
 from app.api.v1.endpoints.ai import save_word_to_cache
-from app.services.quota_service import _extract_token_payload
+from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
 
@@ -28,19 +28,12 @@ class CardUpdatePayload(BaseModel):
 @router.get("", response_model=List[DeckResponse])
 @router.get("/", response_model=List[DeckResponse])
 async def list_decks(
-    request: Request,
-    user_id: Optional[str] = None,
     folder_id: Optional[str] = None,
     db: Client = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Yalnızca giriş yapmış kullanıcının kendi oluşturduğu desteleri döner; deste yoksa [] döner."""
-    effective_user_id = (user_id or "").strip()
-    if not effective_user_id:
-        token_data = _extract_token_payload(request)
-        if token_data and token_data.get("sub"):
-            effective_user_id = str(token_data["sub"]).strip()
-    if not effective_user_id:
-        return []
+    effective_user_id = str(current_user["id"]).strip()
 
     query = (
         db.table("decks")
@@ -53,10 +46,8 @@ async def list_decks(
     decks_res = query.execute()
     decks = decks_res.data or []
     for deck in decks:
-        if deck.get("folder_id"):
-            deck["folder_id"] = str(deck["folder_id"])
-        else:
-            deck["folder_id"] = None
+        raw_folder = deck.get("folder_id")
+        deck["folder_id"] = str(raw_folder) if raw_folder else None
 
         count_res = db.table("flashcards").select("id", count="exact").eq("deck_id", deck["id"]).execute()
         deck["card_count"] = count_res.count or 0
@@ -65,7 +56,11 @@ async def list_decks(
 
 @router.post("", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
-async def create_deck(deck_in: DeckCreate, request: Request, db: Client = Depends(get_db)):
+async def create_deck(
+    deck_in: DeckCreate,
+    db: Client = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     data = deck_in.model_dump()
     # Supabase UUID syntax hatasını önle: boş string veya geçersiz değerleri kesinlikle None yap
     raw_fid = data.get("folder_id")
@@ -74,30 +69,38 @@ async def create_deck(deck_in: DeckCreate, request: Request, db: Client = Depend
     else:
         data["folder_id"] = str(raw_fid).strip()
 
-    if not data.get("user_id"):
-        token_data = _extract_token_payload(request)
-        if token_data and token_data.get("sub"):
-            data["user_id"] = str(token_data["sub"]).strip()
-        else:
-            raise HTTPException(status_code=401, detail="Deste oluşturmak için oturum açmalısınız.")
+    data["user_id"] = str(current_user["id"]).strip()
 
     res = db.table("decks").insert(data).execute()
     if not res.data:
         raise HTTPException(status_code=400, detail="Deste oluşturulamadı")
     deck = res.data[0]
+    raw_folder = deck.get("folder_id")
+    deck["folder_id"] = str(raw_folder) if raw_folder else None
     deck["card_count"] = 0
     return deck
 
 
 @router.patch("/{deck_id}/folder", status_code=status.HTTP_200_OK)
-async def update_deck_folder(deck_id: str, payload: DeckUpdateFolder, db: Client = Depends(get_db)):
+async def update_deck_folder(
+    deck_id: str,
+    payload: DeckUpdateFolder,
+    db: Client = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """Destenin bağlı olduğu klasörü günceller."""
     raw_fid = payload.folder_id
     if not raw_fid or str(raw_fid).strip() in ("", "null", "none", "undefined"):
         f_id = None
     else:
         f_id = str(raw_fid).strip()
-    res = db.table("decks").update({"folder_id": f_id}).eq("id", deck_id).execute()
+    res = (
+        db.table("decks")
+        .update({"folder_id": f_id})
+        .eq("id", deck_id)
+        .eq("user_id", str(current_user["id"]).strip())
+        .execute()
+    )
     if not res.data:
         raise HTTPException(status_code=404, detail="Deste bulunamadı.")
     return res.data[0]
@@ -192,9 +195,17 @@ async def remove_card_from_deck(card_id: str, db: Client = Depends(get_db)):
 
 
 @router.delete("/{deck_id}", status_code=status.HTTP_200_OK)
-async def delete_deck(deck_id: str, db: Client = Depends(get_db)):
+async def delete_deck(
+    deck_id: str,
+    db: Client = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    uid = str(current_user["id"]).strip()
+    existing = db.table("decks").select("id").eq("id", deck_id).eq("user_id", uid).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Deste bulunamadı.")
     db.table("flashcards").delete().eq("deck_id", deck_id).execute()
-    res = db.table("decks").delete().eq("id", deck_id).execute()
+    res = db.table("decks").delete().eq("id", deck_id).eq("user_id", uid).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Deste bulunamadı.")
     return {"message": "Deste ve ilişkili tüm kartlar başarıyla silindi."}

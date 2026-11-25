@@ -64,6 +64,18 @@ import WeakSpotRecoveryModal from "./components/WeakSpotRecoveryModal";
 import SettingsModal from "./components/settings/SettingsModal";
 import MobileBottomTabbar from "./components/layout/MobileBottomTabbar";
 
+function getAuthHeaders(): Record<string, string> {
+  const token =
+    getAuthToken() ||
+    (typeof window !== "undefined"
+      ? localStorage.getItem("vocaship_token") || localStorage.getItem("access_token")
+      : null);
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 interface DueCardItem {
   id: string;
   deck_id?: string;
@@ -256,8 +268,9 @@ export default function Home() {
       if (orphanDecks.length > 0) {
         Promise.allSettled(
           orphanDecks.map((d) =>
-            fetch(`${API_BASE}/decks/${encodeURIComponent(d.id)}`, {
+            fetch(`${API_BASE}/api/v1/decks/${encodeURIComponent(d.id)}`, {
               method: "DELETE",
+              headers: getAuthHeaders(),
             })
           )
         ).catch(() => {});
@@ -535,14 +548,10 @@ export default function Home() {
     if (!newFolderName.trim() || isCreatingFolder) return;
     setIsCreatingFolder(true);
     try {
-      const authToken = getAuthToken();
       const targetParent = normalizeFolderId(newFolderParentId);
       const res = await fetch(`${API_BASE}/api/v1/folders`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           name: newFolderName.trim(),
           color: newFolderColor || "#f59e0b",
@@ -591,6 +600,7 @@ export default function Home() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/folders/${folderId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const cleanDeletedId = String(folderId || "").trim();
@@ -670,13 +680,9 @@ export default function Home() {
 
     setIsCreatingDeck(true);
     try {
-      const authToken = getAuthToken();
       const res = await fetch(`${API_BASE}/api/v1/decks`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           title: newTitle.trim(),
           description: newDescription.trim(),
@@ -720,12 +726,17 @@ export default function Home() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/decks/${deckId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         await Promise.all([refreshLibraryData(), fetchStudyMetrics()]);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Deste silinemedi: ${err.detail || err.message || "Sunucu hatası"}`);
       }
     } catch (err) {
       console.error("Deste silinemedi:", err);
+      alert("Deste silinirken sunucuya ulaşılamadı.");
     }
   };
 
@@ -779,7 +790,7 @@ export default function Home() {
         `${API_BASE}/api/v1/decks/${encodeURIComponent(deckId)}/folder`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ folder_id: nextFolderId }),
         }
       );
@@ -831,7 +842,7 @@ export default function Home() {
             `${API_BASE}/api/v1/decks/${encodeURIComponent(d.id)}/folder`,
             {
               method: "PATCH",
-              headers: { "Content-Type": "application/json" },
+              headers: getAuthHeaders(),
               body: JSON.stringify({ folder_id: cleanTarget }),
             }
           )
@@ -960,7 +971,7 @@ export default function Home() {
     try {
       const fRes = await fetch(`${API_BASE}/api/v1/folders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           name: copyName,
           color: sourceFolder.color || "#f59e0b",
@@ -986,7 +997,7 @@ export default function Home() {
         try {
           const dRes = await fetch(`${API_BASE}/api/v1/decks`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
               title: srcDeck.title,
               description: srcDeck.description || "",
@@ -997,7 +1008,8 @@ export default function Home() {
           const createdDeck = await dRes.json();
 
           const cardsRes = await fetch(
-            `${API_BASE}/api/v1/decks/${encodeURIComponent(srcDeck.id)}/cards`
+            `${API_BASE}/api/v1/decks/${encodeURIComponent(srcDeck.id)}/cards`,
+            { headers: getAuthHeaders() }
           );
           if (cardsRes.ok) {
             const rawCards = await cardsRes.json();
@@ -1006,7 +1018,7 @@ export default function Home() {
                 rawCards.map((c: any) =>
                   fetch(`${API_BASE}/api/v1/decks/cards`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                       deck_id: createdDeck.id,
                       word: c.word,
@@ -1048,7 +1060,7 @@ export default function Home() {
         `${API_BASE}/api/v1/folders/${encodeURIComponent(targetId)}`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ name: trimmedName }),
         }
       );
