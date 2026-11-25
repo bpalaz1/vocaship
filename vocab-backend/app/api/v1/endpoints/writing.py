@@ -67,9 +67,10 @@ Pedagogical Rules:
 2. Each correction explanation MUST be a single clear sentence in {explanation_lang}.
 3. Check which words from Target Vocabulary Words were used accurately in context (including inflected forms) and list them in "used_target_words".
 4. Provide "corrected_text" (the student's text with those fixes applied cleanly).
-5. Provide "c1_natural_version" (natural rewrite strictly matched to CEFR {target_level} vocabulary and grammar complexity — if {target_level} is A1 or A2, keep sentences short, clear, and strictly within {target_level} vocabulary without advanced C1/C2 words; if B1/B2/C1, match that exact level naturally).
-6. Extract 2 to 3 useful words/phrases from "c1_natural_version" appropriate for CEFR {target_level} into "suggested_words" with {explanation_lang} meaning and IPA phonetic.
-7. Estimate the student's actual CEFR level (e.g. "A1", "A2", "B1", "B2", "C1").
+5. Provide "c1_natural_version" (natural rewrite STRICTLY locked to CEFR {target_level} vocabulary and grammar complexity — NEVER upgrade to a higher level on your own. If {target_level} is A1 or A2, keep sentences short, clear, and strictly within {target_level} vocabulary; if B1/B2/C1, match that exact level naturally).
+6. STRICT ANTI-HALLUCINATION RULE: Kullanıcının yazmadığı yeni fikirler, olaylar veya cümle devamları ASLA uydurma. NEVER invent, extrapolate, or auto-complete unfinished ideas/events the student did not write. ONLY preserve the exact meaning the student wrote, fix grammar/spelling, and rewrite ONLY the student's written content naturally at CEFR {target_level}.
+7. Extract 2 to 3 useful words/phrases from "c1_natural_version" appropriate for CEFR {target_level} into "suggested_words" with {explanation_lang} meaning and IPA phonetic.
+8. Estimate the student's actual CEFR level (e.g. "A1", "A2", "B1", "B2", "C1").
 
 Return ONLY valid compact JSON matching this schema:
 {{

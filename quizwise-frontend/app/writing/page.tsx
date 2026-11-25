@@ -138,6 +138,8 @@ function WritingStudioContent() {
   // Yazım Editörü & Koç
   const [text, setText] = useState<string>("");
   const [showStarters, setShowStarters] = useState<boolean>(false);
+  const [lastStarterText, setLastStarterText] = useState<string>("");
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   // Analiz & Karne
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -457,16 +459,41 @@ function WritingStudioContent() {
   }, [sourceType, targetWords, matchedWordsSet, selectedLevel]);
 
   const handleAppendStarter = (starter: string) => {
+    const cleanStarter = starter.replace(/\.{2,}\s*$/, "").trimEnd();
+    setLastStarterText(cleanStarter);
+    setAnalyzeError(null);
     setText((prev) => {
       const trimmed = prev.trim();
-      if (!trimmed) return starter + " ";
-      return `${trimmed}\n${starter} `;
+      if (!trimmed) return cleanStarter + " ";
+      return `${trimmed}\n${cleanStarter} `;
     });
     setShowStarters(false);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const len = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(len, len);
+      }
+    }, 0);
   };
 
   const handleAnalyze = async () => {
-    if (!text.trim() || isAnalyzing) return;
+    const trimmedText = text.trim();
+    if (!trimmedText || isAnalyzing) return;
+
+    const wordCount = trimmedText.split(/\s+/).filter(Boolean).length;
+    const isJustStarter =
+      (lastStarterText && trimmedText === lastStarterText) ||
+      sentenceStarters.some(
+        (s) => trimmedText === s.replace(/\.{2,}\s*$/, "").trimEnd()
+      );
+    if (trimmedText.endsWith("...") || wordCount < 4 || isJustStarter) {
+      setAnalyzeError(
+        "Önce cümlenin devamını kendi kelimelerinle tamamla, ardından Analiz Et'e bas."
+      );
+      return;
+    }
+
     if (!isPro && dailyUsed >= FREE_DAILY_LIMIT) {
       setAnalyzeError(
         "Ücretsiz planda günlük 2 yazım analizi hakkınız doldu. Sınırsız analiz için PRO plana geçebilirsiniz."
@@ -819,8 +846,12 @@ function WritingStudioContent() {
 
           {/* Ferah Editör */}
           <textarea
+            ref={textareaRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (analyzeError) setAnalyzeError(null);
+            }}
             placeholder="İngilizce cümlelerini buraya yaz... Hedef kelimeleri kullandıkça yukarıdaki etiketler yeşile dönecek."
             className="w-full min-h-[220px] rounded-2xl bg-slate-950 border border-slate-800 focus:border-indigo-500 p-4 text-base sm:text-lg leading-relaxed text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
           />
@@ -910,7 +941,7 @@ function WritingStudioContent() {
               <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2">
                   <span className="px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-black">
-                    CEFR: {analysisResult.cefr_level}
+                    Yazının Seviyesi: {analysisResult.cefr_level}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -961,7 +992,7 @@ function WritingStudioContent() {
               <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/50 via-slate-950/80 to-emerald-950/30 border border-indigo-500/35 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-amber-300">
-                    ✨ Altın Versiyon ({selectedLevel} Doğal Akış)
+                    ✨ Altın Versiyon (Hedef: {selectedLevel})
                   </span>
                   <button
                     type="button"
