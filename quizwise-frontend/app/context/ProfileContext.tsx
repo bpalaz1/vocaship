@@ -26,6 +26,9 @@ export interface UserProfile {
   trial_days_left?: number | null;
   study_level?: string;
   target_level?: string;
+  targetLevel?: string;
+  cefrLevel?: string;
+  level?: string;
   daily_goal?: number;
   tts_voice?: string;
   tts_speed?: string;
@@ -71,7 +74,6 @@ const DEFAULT_PROFILE: UserProfile = {
   plan_tier: "free",
   planTier: "free",
   study_level: "B1",
-  target_level: "B1",
   daily_goal: 20,
   tts_voice: "en-US-JennyNeural",
   tts_speed: "1.0x",
@@ -106,6 +108,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         const authUserId = getAuthUserIdFromStorage();
         const scopedKey = getUserProfileStorageKey(authUserId);
         const stored = localStorage.getItem(scopedKey) || localStorage.getItem(STORAGE_KEY);
+        const storedTargetLevel = localStorage.getItem("vocaship_target_level");
         const legacyCustomAvatar = localStorage.getItem("vocaship_custom_avatar") || "";
         if (stored) {
           const parsed = JSON.parse(stored);
@@ -123,6 +126,11 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             if (!cleanProfile.avatar_url && legacyCustomAvatar) {
               cleanProfile.avatar_url = legacyCustomAvatar;
             }
+            if (storedTargetLevel) {
+              cleanProfile.targetLevel = storedTargetLevel;
+              cleanProfile.target_level = storedTargetLevel;
+              cleanProfile.study_level = storedTargetLevel;
+            }
             if (_removed !== undefined) {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanProfile));
               if (authUserId) localStorage.setItem(scopedKey, JSON.stringify(cleanProfile));
@@ -132,10 +140,17 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
               ...cleanProfile,
             }));
           }
-        } else if (legacyCustomAvatar) {
+        } else if (legacyCustomAvatar || storedTargetLevel) {
           setUserProfile((prev) => ({
             ...prev,
-            avatar_url: legacyCustomAvatar,
+            ...(legacyCustomAvatar ? { avatar_url: legacyCustomAvatar } : {}),
+            ...(storedTargetLevel
+              ? {
+                  targetLevel: storedTargetLevel,
+                  target_level: storedTargetLevel,
+                  study_level: storedTargetLevel,
+                }
+              : {}),
           }));
         }
       } catch (err) {

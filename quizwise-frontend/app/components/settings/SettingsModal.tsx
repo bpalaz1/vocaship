@@ -108,7 +108,16 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
       setEmailError(null);
       setSelectedAvatar(userProfile.avatar_url || storedProfile.avatar_url || "");
       setSelectedLang(language || "tr");
-      setStudyLevel(storedProfile.study_level || userProfile.study_level || "B1");
+      const storedLevel =
+        (typeof window !== "undefined" ? localStorage.getItem("vocaship_target_level") : null) ||
+        storedProfile.targetLevel ||
+        storedProfile.target_level ||
+        storedProfile.study_level ||
+        userProfile.targetLevel ||
+        userProfile.target_level ||
+        userProfile.study_level ||
+        "B1";
+      setStudyLevel(storedLevel);
       setDailyGoal(storedProfile.daily_goal || userProfile.daily_goal || 20);
       const currentStoredVoice =
         (typeof window !== "undefined" ? localStorage.getItem("vocaship_neural_voice") : null) ||
@@ -173,6 +182,8 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
         avatar_url: selectedAvatar,
         study_level: studyLevel,
         target_level: studyLevel,
+        targetLevel: studyLevel,
+        level: studyLevel,
         daily_goal: dailyGoal,
         tts_voice: voiceTone,
         tts_speed: playbackSpeed,

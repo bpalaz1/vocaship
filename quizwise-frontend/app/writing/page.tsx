@@ -41,21 +41,46 @@ function normalizeCefrLevel(raw?: string | null): CEFRLevel {
   return "B1";
 }
 
-function readProfileTargetLevel(userProfile?: { target_level?: string; study_level?: string } | null): CEFRLevel {
+function readProfileTargetLevel(
+  profile?: {
+    targetLevel?: string;
+    cefrLevel?: string;
+    level?: string;
+    target_level?: string;
+    study_level?: string;
+  } | null
+): CEFRLevel {
+  const fromContext =
+    profile?.targetLevel ||
+    profile?.cefrLevel ||
+    profile?.level ||
+    profile?.target_level;
+  if (fromContext) {
+    return normalizeCefrLevel(fromContext);
+  }
+
   if (typeof window !== "undefined") {
     try {
       const storedLevel = localStorage.getItem("vocaship_target_level");
       if (storedLevel) return normalizeCefrLevel(storedLevel);
-      const rawProfile = localStorage.getItem("vocaship_profile");
-      if (rawProfile) {
-        const parsed = JSON.parse(rawProfile);
-        if (parsed?.target_level || parsed?.study_level) {
-          return normalizeCefrLevel(parsed.target_level || parsed.study_level);
+
+      for (const key of ["vocaship_profile", "quizwise_user_profile"]) {
+        const rawProfile = localStorage.getItem(key);
+        if (rawProfile) {
+          const parsed = JSON.parse(rawProfile);
+          const lvl =
+            parsed?.targetLevel ||
+            parsed?.cefrLevel ||
+            parsed?.level ||
+            parsed?.target_level ||
+            parsed?.study_level;
+          if (lvl) return normalizeCefrLevel(lvl);
         }
       }
     } catch {}
   }
-  return normalizeCefrLevel(userProfile?.target_level || userProfile?.study_level || "B1");
+
+  return normalizeCefrLevel(profile?.study_level || "B1");
 }
 
 interface TargetWordInfo {
