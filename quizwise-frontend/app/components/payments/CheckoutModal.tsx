@@ -203,11 +203,12 @@ export default function CheckoutModal({
         return;
       }
 
+      const paddleToken = (process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "").trim();
       let paddle = paddleRef.current || (await getOrInitPaddle());
-      if (!paddle) {
+      if (!paddle && paddleToken) {
         paddle = await initializePaddle({
           environment: getPaddleEnvironment(),
-          token: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "",
+          token: paddleToken,
           eventCallback: createPaddleEventCallback(),
         }).catch(() => undefined);
       }

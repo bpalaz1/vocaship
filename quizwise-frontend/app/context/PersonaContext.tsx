@@ -703,8 +703,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
             PERSONAS.custom = buildCustomPersona(parsedCustom);
           }
         }
-      } catch (e) {
-        console.warn("Failed to parse custom avatar from localStorage:", e);
+      } catch {
+        try {
+          localStorage.removeItem(CUSTOM_AVATAR_STORAGE_KEY);
+        } catch {}
       }
 
       try {
@@ -718,8 +720,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
           setUser3DAvatarMeta(parsedMeta);
           PERSONAS.my_avatar = buildUser3DPersona(saved3D, parsedMeta);
         }
-      } catch (e) {
-        console.warn("Failed to parse 3D avatar from localStorage:", e);
+      } catch {
+        try {
+          localStorage.removeItem(VOCASHIP_CUSTOM_3D_META_KEY);
+        } catch {}
       }
 
       const savedKids = localStorage.getItem("vocaship_kids_character") as KidsCharacterId | null;

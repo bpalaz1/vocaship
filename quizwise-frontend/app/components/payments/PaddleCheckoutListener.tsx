@@ -36,9 +36,11 @@ export async function getOrInitPaddle(): Promise<Paddle | undefined> {
   if (typeof window === "undefined") return undefined;
   if (paddleInstanceCache) return paddleInstanceCache;
 
+  const token = (process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "").trim();
+  if (!token) return undefined;
+
   if (!paddleInitPromise) {
     const environment = getPaddleEnvironment();
-    const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "";
 
     paddleInitPromise = initializePaddle({
       environment,
