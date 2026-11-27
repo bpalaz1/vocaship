@@ -3126,7 +3126,7 @@ function SmartBoardConsoleInner({
                     className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs shadow-lg transition flex items-center gap-2 cursor-pointer active:scale-95"
                   >
                     <MonitorUp className="w-4 h-4 text-emerald-400" />
-                    <span>🖥️ Word / Excel / Pencere Yansıt</span>
+                    <span>Ekranı Paylaş</span>
                   </button>
                 </div>
               )}
