@@ -53,6 +53,7 @@ import {
   LiveKitBoardProvider,
   TeamsParticipantGallery,
   useLiveKitBoard,
+  type RaisedHandEntry,
 } from "../../components/board/LiveKitClassroomStage";
 import { API_BASE } from "../../config";
 import { useProfile } from "../../context/ProfileContext";
@@ -188,16 +189,20 @@ function SmartBoardConsoleInner({
   const {
     isConnected: isLiveKitConnected,
     roomName: liveKitRoomName,
+    localIdentity,
+    localName,
     isMicEnabled: isMicActive,
     isCameraEnabled: isCameraActive,
     isScreenShareEnabled: isScreenSharing,
     participantsCount: liveParticipantsCount,
     mediaError: lkMediaError,
     toggleMicrophone,
+    enableMicrophone,
     toggleCamera,
     toggleScreenShare,
     publishBoardData,
     subscribeBoardData,
+    subscribeParticipantDisconnected,
   } = useLiveKitBoard();
 
   const roomSuffix = (liveKitRoomName || `vocaship-room-${classId.toLowerCase()}`).slice(-6);
@@ -234,6 +239,146 @@ function SmartBoardConsoleInner({
   const [isShapePopoverOpen, setIsShapePopoverOpen] = useState(false);
   const [lastShapeTool, setLastShapeTool] = useState<"line" | "circle" | "rect" | "arrow">("rect");
   const [incomingMaterial, setIncomingMaterial] = useState<SharedMaterialPayload | null>(null);
+
+  // 5b. Canlı El Kaldırma (Raise Hand) ve Eğitmen Söz Verme Durumları
+  const [raisedHands, setRaisedHands] = useState<Record<string, RaisedHandEntry>>({});
+  const raisedHandsRef = useRef<Record<string, RaisedHandEntry>>({});
+  raisedHandsRef.current = raisedHands;
+
+  const [raiseHandToast, setRaiseHandToast] = useState<{ id: string; name: string } | null>(null);
+  const [speakGrantToast, setSpeakGrantToast] = useState<{ teacherName: string } | null>(null);
+  const raiseHandToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speakGrantToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isHandRaised = Boolean(localIdentity && raisedHands[localIdentity]);
+
+  // Web Audio API ile çok hafif, rahatsız etmeyen tek nota uyarı tonu (harici mp3 kullanmaz)
+  const playRaiseHandChime = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.24);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.26);
+      osc.onended = () => {
+        ctx.close().catch(() => {});
+      };
+    } catch {}
+  }, []);
+
+  const showTeacherRaiseHandToast = useCallback(
+    (name: string) => {
+      if (raiseHandToastTimerRef.current) {
+        clearTimeout(raiseHandToastTimerRef.current);
+      }
+      setRaiseHandToast({ id: `${Date.now()}`, name });
+      playRaiseHandChime();
+      raiseHandToastTimerRef.current = setTimeout(() => {
+        setRaiseHandToast(null);
+      }, 4000);
+    },
+    [playRaiseHandChime]
+  );
+
+  const showStudentSpeakGrantToast = useCallback((teacherName: string) => {
+    if (speakGrantToastTimerRef.current) {
+      clearTimeout(speakGrantToastTimerRef.current);
+    }
+    setSpeakGrantToast({ teacherName });
+    speakGrantToastTimerRef.current = setTimeout(() => {
+      setSpeakGrantToast(null);
+    }, 5000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (raiseHandToastTimerRef.current) clearTimeout(raiseHandToastTimerRef.current);
+      if (speakGrantToastTimerRef.current) clearTimeout(speakGrantToastTimerRef.current);
+    };
+  }, []);
+
+  const handleToggleRaiseHand = useCallback(() => {
+    if (isTeacher || !localIdentity) return;
+    const nextRaised = !Boolean(raisedHandsRef.current[localIdentity]);
+    const now = Date.now();
+    const displayName =
+      localName || userProfile.full_name || userProfile.username || "Öğrenci";
+
+    setRaisedHands((prev) => {
+      const next = { ...prev };
+      if (nextRaised) {
+        next[localIdentity] = { identity: localIdentity, name: displayName, raisedAt: now };
+      } else {
+        delete next[localIdentity];
+      }
+      return next;
+    });
+
+    publishBoardData(
+      {
+        type: "RAISE_HAND_TOGGLE",
+        identity: localIdentity,
+        name: displayName,
+        raised: nextRaised,
+        raisedAt: now,
+      },
+      { reliable: true }
+    );
+  }, [isTeacher, localIdentity, localName, userProfile.full_name, userProfile.username, publishBoardData]);
+
+  const handleLowerHand = useCallback(
+    (targetIdentity: string | "ALL") => {
+      if (!isTeacher) return;
+      setRaisedHands((prev) => {
+        if (targetIdentity === "ALL") return {};
+        if (!prev[targetIdentity]) return prev;
+        const next = { ...prev };
+        delete next[targetIdentity];
+        return next;
+      });
+      publishBoardData(
+        {
+          type: "LOWER_HAND",
+          targetIdentity,
+        },
+        { reliable: true }
+      );
+    },
+    [isTeacher, publishBoardData]
+  );
+
+  const handleGrantSpeak = useCallback(
+    (targetIdentity: string) => {
+      if (!isTeacher) return;
+      const teacherDisplayName =
+        localName || userProfile.full_name || userProfile.username || "Eğitmen";
+      setRaisedHands((prev) => {
+        if (!prev[targetIdentity]) return prev;
+        const next = { ...prev };
+        delete next[targetIdentity];
+        return next;
+      });
+      publishBoardData(
+        {
+          type: "GRANT_SPEAK",
+          targetIdentity,
+          teacherName: teacherDisplayName,
+        },
+        { reliable: true }
+      );
+    },
+    [isTeacher, localName, userProfile.full_name, userProfile.username, publishBoardData]
+  );
 
   const handleDownloadIncomingMaterial = useCallback((mat: SharedMaterialPayload) => {
     if (mat.downloadUrl) {
@@ -1437,16 +1582,120 @@ function SmartBoardConsoleInner({
     }),
   });
 
-  // Öğrenci odaya bağlandığında geç katılan tam senkronizasyon (REQUEST_FULL_SYNC) ister
+  // Odaya bağlandığında: öğrenci tam tahta + el senkronu ister, eğitmen de yenileme sonrası aktif elleri senkronlar
   useEffect(() => {
-    if (isTeacher || !isLiveKitConnected) return;
-    publishBoardData({ type: "REQUEST_FULL_SYNC" }, { reliable: true });
+    if (!isLiveKitConnected) return;
+    publishBoardData({ type: "SYNC_HANDS_REQUEST" }, { reliable: true });
+    if (!isTeacher) {
+      publishBoardData({ type: "REQUEST_FULL_SYNC" }, { reliable: true });
+    }
   }, [isTeacher, isLiveKitConnected, publishBoardData]);
 
-  // LiveKit DataChannel Dinleyicisi (Öğretmen: REQUEST_FULL_SYNC yanıtlar, Öğrenci: tüm çizim/lazer/viewport/PDF uygular)
+  // Katılımcı odadan ayrıldığında (ParticipantDisconnected) varsa el kaldırma kaydını otomatik temizle
+  useEffect(() => {
+    return subscribeParticipantDisconnected((disconnectedIdentity: string) => {
+      if (!disconnectedIdentity) return;
+      setRaisedHands((prev) => {
+        if (!prev[disconnectedIdentity]) return prev;
+        const next = { ...prev };
+        delete next[disconnectedIdentity];
+        return next;
+      });
+    });
+  }, [subscribeParticipantDisconnected]);
+
+  // LiveKit DataChannel Dinleyicisi (El Kaldırma + Söz Verme + Tahta Senkronizasyonu)
   useEffect(() => {
     return subscribeBoardData((msg: any) => {
       if (!msg || typeof msg !== "object") return;
+
+      // 0. ORTAK OLAYLAR: El Kaldırma (RAISE_HAND_TOGGLE / LOWER_HAND / GRANT_SPEAK / SYNC_HANDS_*)
+      if (msg.type === "RAISE_HAND_TOGGLE" && msg.identity) {
+        const id = String(msg.identity);
+        const name = String(msg.name || "Öğrenci");
+        const raised = Boolean(msg.raised);
+        const raisedAt = typeof msg.raisedAt === "number" ? msg.raisedAt : Date.now();
+        setRaisedHands((prev) => {
+          const next = { ...prev };
+          if (raised) {
+            next[id] = { identity: id, name, raisedAt };
+          } else {
+            delete next[id];
+          }
+          return next;
+        });
+        if (raised && isTeacher) {
+          showTeacherRaiseHandToast(name);
+        }
+        return;
+      }
+
+      if (msg.type === "LOWER_HAND" && msg.targetIdentity) {
+        const target = String(msg.targetIdentity);
+        setRaisedHands((prev) => {
+          if (target === "ALL") return {};
+          if (!prev[target]) return prev;
+          const next = { ...prev };
+          delete next[target];
+          return next;
+        });
+        return;
+      }
+
+      if (msg.type === "GRANT_SPEAK" && msg.targetIdentity) {
+        const target = String(msg.targetIdentity);
+        const teacherName = String(msg.teacherName || "Eğitmen");
+        setRaisedHands((prev) => {
+          if (!prev[target]) return prev;
+          const next = { ...prev };
+          delete next[target];
+          return next;
+        });
+        if (!isTeacher && localIdentity && target === localIdentity) {
+          showStudentSpeakGrantToast(teacherName);
+        }
+        return;
+      }
+
+      if (msg.type === "SYNC_HANDS_REQUEST") {
+        const current = raisedHandsRef.current;
+        if (isTeacher) {
+          if (Object.keys(current).length > 0) {
+            publishBoardData(
+              { type: "SYNC_HANDS_STATE", raisedHands: current },
+              { reliable: true }
+            );
+          }
+        } else if (localIdentity && current[localIdentity]) {
+          publishBoardData(
+            {
+              type: "SYNC_HANDS_STATE",
+              raisedHands: { [localIdentity]: current[localIdentity] },
+            },
+            { reliable: true }
+          );
+        }
+        return;
+      }
+
+      if (msg.type === "SYNC_HANDS_STATE" && msg.raisedHands && typeof msg.raisedHands === "object") {
+        setRaisedHands((prev) => {
+          const next = { ...prev };
+          for (const [id, raw] of Object.entries(msg.raisedHands as Record<string, any>)) {
+            if (!id || !raw || typeof raw !== "object") continue;
+            const entry: RaisedHandEntry = {
+              identity: String(raw.identity || id),
+              name: String(raw.name || "Öğrenci"),
+              raisedAt: typeof raw.raisedAt === "number" ? raw.raisedAt : Date.now(),
+            };
+            if (!next[id] || entry.raisedAt < next[id].raisedAt) {
+              next[id] = entry;
+            }
+          }
+          return next;
+        });
+        return;
+      }
 
       // 1. EĞİTMEN: Geç katılan öğrencinin tam senkronizasyon isteğini yanıtla
       if (isTeacher) {
@@ -1595,7 +1844,9 @@ function SmartBoardConsoleInner({
     });
   }, [
     isTeacher,
+    localIdentity,
     pdfFileName,
+    publishBoardData,
     subscribeBoardData,
     teacherPublish,
     fetchAndRenderServerPdf,
@@ -1603,6 +1854,8 @@ function SmartBoardConsoleInner({
     redrawAllStrokes,
     renderNormalizedAction,
     applyStudentViewportScroll,
+    showTeacherRaiseHandToast,
+    showStudentSpeakGrantToast,
   ]);
 
   const commitTextToCanvas = () => {
@@ -2357,6 +2610,59 @@ function SmartBoardConsoleInner({
               </div>
             )}
 
+            {/* Eğitmen Köşe Bildirimi: Öğrenci El Kaldırdı (RAISE_HAND_TOGGLE) */}
+            {isTeacher && raiseHandToast && (
+              <div className="fixed top-20 right-4 sm:right-6 md:right-[340px] z-50 px-4 py-2.5 rounded-2xl bg-slate-900/95 border border-amber-400/60 shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <span className="text-base leading-none">✋</span>
+                <span className="text-xs font-bold text-amber-200">
+                  {raiseHandToast.name} söz istiyor
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRaiseHandToast(null)}
+                  className="p-0.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                  aria-label="Kapat"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Öğrenci Söz Verildi Bildirimi (GRANT_SPEAK — 5 saniye) */}
+            {!isTeacher && speakGrantToast && (
+              <div className="fixed top-20 left-1/2 -translate-x-1/2 md:left-[calc(50%-160px)] z-50 w-[92vw] max-w-md rounded-2xl bg-slate-900/95 border border-emerald-400/70 ring-2 ring-emerald-400/25 shadow-2xl backdrop-blur-md p-3.5 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center shrink-0 text-emerald-300">
+                    <Mic className="w-4 h-4" />
+                  </div>
+                  <p className="text-xs font-bold text-white leading-snug">
+                    🎤 Eğitmen size söz verdi — Mikrofonunuzu açıp konuşabilirsiniz.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await enableMicrophone();
+                      setSpeakGrantToast(null);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-md transition cursor-pointer active:scale-95 whitespace-nowrap"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Mikrofonu Aç</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpeakGrantToast(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                    aria-label="Kapat"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Öğrenci Canlı Materyal Bildirim Kartı (MATERIAL_SHARED) */}
             {!isTeacher && incomingMaterial && (
               <div className="fixed top-20 right-4 sm:right-6 md:right-[340px] z-50 w-80 max-w-[92vw] rounded-2xl bg-slate-900/95 border border-indigo-500/50 shadow-2xl backdrop-blur-md p-4 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -2748,7 +3054,14 @@ function SmartBoardConsoleInner({
           )}
 
           {/* 2. ALT BLOK (KAYDIRILABİLİR): TEK BİRLEŞİK TEAMS KATILIMCI GALERİSİ (15+ KAMERA) */}
-          <TeamsParticipantGallery role={isTeacher ? "teacher" : "student"} />
+          <TeamsParticipantGallery
+            role={isTeacher ? "teacher" : "student"}
+            raisedHands={raisedHands}
+            isHandRaised={isHandRaised}
+            onToggleRaiseHand={handleToggleRaiseHand}
+            onGrantSpeak={handleGrantSpeak}
+            onLowerHand={handleLowerHand}
+          />
 
           {/* 3. ALT DURUM BİLGİSİ */}
           <div className="shrink-0 p-2 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 flex items-center gap-2">
@@ -2790,6 +3103,20 @@ function SmartBoardConsoleInner({
           >
             {isCameraActive ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5" />}
           </button>
+          {!isTeacher && (
+            <button
+              type="button"
+              onClick={handleToggleRaiseHand}
+              className={`p-1.5 rounded-full transition cursor-pointer ${
+                isHandRaised
+                  ? "bg-amber-500/25 text-amber-300 ring-1 ring-amber-400/60"
+                  : "text-slate-300 hover:bg-slate-800"
+              }`}
+              title={isHandRaised ? "Eli İndir" : "El Kaldır"}
+            >
+              <Hand className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* PDF Sayfa Kontrolü (Yalnızca Eğitmen) */}
