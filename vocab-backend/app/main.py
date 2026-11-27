@@ -10,6 +10,7 @@ from app.api.v1 import router as api_v1_router
 from app.api.v1.endpoints.reading import router as reading_router
 from app.api.v1.endpoints.speaking import router as speaking_router
 from app.api.v1.endpoints import tts
+from app.core import database as db_module
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.services.quota_service import QuotaExceededException, ProRequiredException
 
@@ -77,7 +78,12 @@ async def root():
 
 @app.get("/health")
 async def root_health_check():
-    return {"status": "ok"}
+    db = db_module.get_db()
+    return {
+        "status": "ok",
+        "db_type": type(db).__name__,
+        "db_error": db_module.DB_INIT_ERROR,
+    }
 
 
 app.openapi()

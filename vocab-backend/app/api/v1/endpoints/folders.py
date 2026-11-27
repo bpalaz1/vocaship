@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from supabase import Client
+from app.core import database as db_module
 from app.core.database import get_db
 from app.schemas.folder import FolderCreate, FolderResponse
 from app.api.v1.endpoints.auth import get_current_user
@@ -22,10 +23,19 @@ def _extract_user_field(current_user: Any, key: str, default: str = "") -> str:
     return str(val).strip() if val is not None else default
 
 
+def _assert_real_supabase(db: Any) -> None:
+    if type(db).__name__ in ("FallbackDB", "FallbackDatabaseClient"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Supabase bağlantısı aktif değil: {db_module.DB_INIT_ERROR}",
+        )
+
+
 def _ensure_public_user_exists(db: Client, current_user: Any) -> str:
     """
     public.folders(user_id) -> public.users(id) Foreign Key hatasını önlemek için
-    aktif kullanıcının public.users tablosunda var olduğundan emin olur; yoksa upsert eder.
+    aktif kullanıcının public.users tablosunda var olup olmadığını .select('id') ile kontrol eder;
+    kayıt yoksa .insert({...}) ile ekler.
     """
     uid = _extract_user_field(current_user, "id")
     if not uid:
@@ -35,7 +45,7 @@ def _ensure_public_user_exists(db: Client, current_user: Any) -> str:
         )
 
     try:
-        existing = db.table("users").select("id").eq("id", uid).limit(1).execute()
+        existing = db.table("users").select("id").eq("id", uid).execute()
         if existing.data and len(existing.data) > 0:
             return uid
     except Exception as exc:
@@ -73,9 +83,16 @@ def _ensure_public_user_exists(db: Client, current_user: Any) -> str:
     last_err: Optional[Exception] = None
     for row in candidates:
         try:
-            db.table("users").upsert(row, on_conflict="id").execute()
+            db.table("users").insert(row).execute()
             return uid
         except Exception as exc:
+            # Eşzamanlı istekte başka bir çağrı zaten eklediyse tekrar kontrol et
+            try:
+                recheck = db.table("users").select("id").eq("id", uid).execute()
+                if recheck.data and len(recheck.data) > 0:
+                    return uid
+            except Exception:
+                pass
             last_err = exc
 
     raise HTTPException(
@@ -91,6 +108,7 @@ async def list_folders(
     current_user: dict = Depends(get_current_user),
 ):
     """Yalnızca giriş yapmış kullanıcının kendi klasörlerini Supabase public.folders tablosundan listeler."""
+    _assert_real_supabase(db)
     effective_user_id = _extract_user_field(current_user, "id")
     if not effective_user_id:
         raise HTTPException(
@@ -130,7 +148,8 @@ async def create_folder(
     db: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Yeni bir klasör oluşturur ve yalnızca gerçek public.folders sütunlarını yazar."""
+    """Yeni bir klasör oluşturur ve yalnızca gerçek public.folders sütunlarını Supabase'e yazar."""
+    _assert_real_supabase(db)
     clean_name = (folder_in.name or "").strip()
     if not clean_name:
         raise HTTPException(
@@ -171,6 +190,7 @@ async def update_folder(
     current_user: dict = Depends(get_current_user),
 ):
     """Klasör adını veya rengini günceller."""
+    _assert_real_supabase(db)
     uid = _extract_user_field(current_user, "id")
     updates: Dict[str, Any] = {}
     if folder_in.name is not None:
@@ -225,6 +245,7 @@ async def delete_orphan_decks(
     current_user: dict = Depends(get_current_user),
 ):
     """Mevcut tüm klasörsüz (folder_id IS NULL) desteleri ve kartlarını temizler."""
+    _assert_real_supabase(db)
     deleted_count = cleanup_orphan_decks(db, user_id=_extract_user_field(current_user, "id"))
     return {"message": f"{deleted_count} klasörsüz deste temizlendi.", "deleted_count": deleted_count}
 
@@ -236,6 +257,7 @@ async def delete_folder(
     current_user: dict = Depends(get_current_user),
 ):
     """Klasörü, klasöre bağlı tüm desteleri ve bu destelerin kartlarını kalıcı olarak siler."""
+    _assert_real_supabase(db)
     uid = _extract_user_field(current_user, "id")
     try:
         # 1. Klasöre bağlı desteleri bul
