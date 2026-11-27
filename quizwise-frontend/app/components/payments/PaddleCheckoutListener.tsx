@@ -12,7 +12,14 @@ let paddleInitPromise: Promise<Paddle | undefined> | null = null;
 let autoOpenedPtxn: string | null = null;
 const confirmedTransactions = new Set<string>();
 
-export function getPaddleEnvironment(): "production" | "sandbox" {
+export function getPaddleEnvironment(tokenOverride?: string): "production" | "sandbox" {
+  const rawToken = (
+    tokenOverride ??
+    process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ??
+    ""
+  ).trim();
+  if (rawToken.startsWith("test_")) return "sandbox";
+  if (rawToken.startsWith("live_")) return "production";
   return process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "production"
     ? "production"
     : "sandbox";
@@ -40,7 +47,7 @@ export async function getOrInitPaddle(): Promise<Paddle | undefined> {
   if (!token) return undefined;
 
   if (!paddleInitPromise) {
-    const environment = getPaddleEnvironment();
+    const environment = getPaddleEnvironment(token);
 
     paddleInitPromise = initializePaddle({
       environment,

@@ -203,14 +203,31 @@ export default function CheckoutModal({
         return;
       }
 
-      const paddleToken = (process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "").trim();
+      const rawToken = (process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "").trim();
+      const environment: "sandbox" | "production" = rawToken.startsWith("test_")
+        ? "sandbox"
+        : "production";
+
       let paddle = paddleRef.current || (await getOrInitPaddle());
-      if (!paddle && paddleToken) {
-        paddle = await initializePaddle({
-          environment: getPaddleEnvironment(),
-          token: paddleToken,
-          eventCallback: createPaddleEventCallback(),
-        }).catch(() => undefined);
+      if (!paddle) {
+        if (!rawToken) {
+          setPaddleError(
+            "Paddle ödeme penceresi başlatılamadı: NEXT_PUBLIC_PADDLE_CLIENT_TOKEN tanımlı değil."
+          );
+          return;
+        }
+        try {
+          paddle = await initializePaddle({
+            environment,
+            token: rawToken,
+            eventCallback: createPaddleEventCallback(),
+          });
+        } catch (initErr: any) {
+          setPaddleError(
+            `Paddle başlatılamadı: ${initErr?.message || String(initErr)}`
+          );
+          return;
+        }
       }
 
       if (!paddle) {
@@ -228,7 +245,7 @@ export default function CheckoutModal({
       paddle.Checkout.open({ transactionId });
     } catch (err: any) {
       setPaddleError(
-        err?.message || "Paddle ödeme sunucusuna bağlanılamadı."
+        `Paddle ödeme hatası: ${err?.message || "Paddle ödeme sunucusuna bağlanılamadı."}`
       );
     } finally {
       setInternalProcessing(false);
@@ -311,7 +328,7 @@ export default function CheckoutModal({
       <div
         data-testid="checkout-modal"
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-slate-900 border border-amber-500/40 shadow-2xl space-y-5 text-slate-100 my-auto"
+        className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-amber-500/40 shadow-2xl space-y-5 text-slate-900 dark:text-slate-100 my-auto"
       >
         <button
           type="button"
@@ -441,14 +458,14 @@ export default function CheckoutModal({
         ) : (
           <>
             <div className="space-y-2 pr-8">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-extrabold">
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-extrabold">
+                <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                 <span>{t("pay_pro_badge", "PRO ÖDEME PLANI")}</span>
               </div>
-              <h2 className="text-xl font-black text-white">
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">
                 {t("pay_pro_title", "VocaShip PRO Planını Seçin")}
               </h2>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                 {reasonMessage ||
                   t("pay_pro_default_reason", "Seçtiğiniz kilitli PRO özelliğini etkinleştirmek için abonelik planınızı seçin.")}
               </p>
@@ -460,12 +477,12 @@ export default function CheckoutModal({
                 onClick={() => setProBillingCycle("monthly")}
                 className={`p-3.5 rounded-2xl border text-left transition cursor-pointer ${
                   proBillingCycle === "monthly"
-                    ? "bg-indigo-600/20 border-indigo-400 text-white ring-2 ring-indigo-500/30"
-                    : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-indigo-50 dark:bg-indigo-600/20 border-indigo-500 dark:border-indigo-400 text-slate-900 dark:text-white ring-2 ring-indigo-500/30"
+                    : "bg-slate-100 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <div className="text-xs font-bold">{t("pay_monthly_pro", "Aylık PRO")}</div>
-                <div className="text-lg font-black font-mono text-indigo-300 mt-1">
+                <div className="text-lg font-black font-mono text-indigo-700 dark:text-indigo-300 mt-1">
                   $7.99/{t("pay_per_month", "ay")}
                 </div>
               </button>
@@ -475,23 +492,23 @@ export default function CheckoutModal({
                 onClick={() => setProBillingCycle("yearly")}
                 className={`p-3.5 rounded-2xl border text-left transition cursor-pointer ${
                   proBillingCycle === "yearly"
-                    ? "bg-amber-500/20 border-amber-400 text-white ring-2 ring-amber-500/30"
-                    : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-amber-50 dark:bg-amber-500/20 border-amber-500 dark:border-amber-400 text-slate-900 dark:text-white ring-2 ring-amber-500/30"
+                    : "bg-slate-100 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-xs font-bold">{t("pay_yearly_pro", "Yıllık PRO")}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold whitespace-nowrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold whitespace-nowrap">
                     %38 İndirim
                   </span>
                 </div>
-                <div className="text-lg font-black font-mono text-amber-300 mt-1">
+                <div className="text-lg font-black font-mono text-amber-700 dark:text-amber-300 mt-1">
                   $59/{t("pay_per_year", "yıl")}
                 </div>
               </button>
             </div>
 
-            <div className="space-y-2 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
+            <div className="space-y-2 p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800">
               {[
                 t("pay_pf1", PRO_PLAN_FEATURES[0]),
                 t("pay_pf2", PRO_PLAN_FEATURES[1]),
@@ -499,18 +516,18 @@ export default function CheckoutModal({
               ].map((feat, idx) => (
                 <div
                   key={idx}
-                  className="flex items-start gap-2 text-xs text-slate-200"
+                  className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200 font-medium"
                 >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <span>{feat}</span>
                 </div>
               ))}
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
-              <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300">
+              <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>
-                Ödemeler global ödeme altyapısı <strong className="text-white">Paddle Billing</strong> güvencesiyle (Kart, Apple Pay, PayPal) 256-bit SSL üzerinden işlenir.
+                Ödemeler global ödeme altyapısı <strong className="text-slate-900 dark:text-white">Paddle Billing</strong> güvencesiyle (Kart, Apple Pay, PayPal) 256-bit SSL üzerinden işlenir.
               </span>
             </div>
 
