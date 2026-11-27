@@ -26,6 +26,8 @@ import {
   ChevronDown,
   Copy,
   CornerDownRight,
+  Share2,
+  KeyRound,
 } from "lucide-react";
 import { API_BASE } from "./config";
 import { useAuth, getAuthToken } from "./context/AuthContext";
@@ -63,6 +65,10 @@ import AddWordModal, {
 import WeakSpotRecoveryModal from "./components/WeakSpotRecoveryModal";
 import SettingsModal from "./components/settings/SettingsModal";
 import MobileBottomTabbar from "./components/layout/MobileBottomTabbar";
+import DeckShareModal from "./components/DeckShareModal";
+import ImportDeckModal, {
+  PENDING_IMPORT_DECK_KEY,
+} from "./components/ImportDeckModal";
 
 function getAuthHeaders(): Record<string, string> {
   const token = getAuthToken();
@@ -146,6 +152,15 @@ export default function Home() {
   const [newDescription, setNewDescription] = useState("");
   const [newDeckFolderId, setNewDeckFolderId] = useState("");
   const [isCreatingDeck, setIsCreatingDeck] = useState(false);
+
+  // Kalıcı Deste Paylaşma & Kodla Deste Kopyalama Modalları
+  const [sharingDeck, setSharingDeck] = useState<{
+    id: string;
+    title: string;
+    card_count?: number;
+  } | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [initialImportCode, setInitialImportCode] = useState("");
 
   // Kalıcı Görünüm Seçici (Klasör / Kart / Liste) & Sürükle-Bırak State + Ref
   const [viewMode, setViewModeState] = useState<LibraryViewMode>("grid");
@@ -244,15 +259,9 @@ export default function Home() {
         fetchDecksList(),
       ]);
 
-      // Klasörsüz (folder_id === null) veya eski hazır desteleri temizle
-      const orphanDecks = fetchedDecks.filter(
-        (d) => !d.id.startsWith("preset_") && normalizeFolderId(d.folder_id) === null
-      );
-      let cleanDecks = fetchedDecks.filter(
-        (d) =>
-          !d.id.startsWith("preset_") &&
-          !d.id.startsWith("guest_") &&
-          normalizeFolderId(d.folder_id) !== null
+      // Eski preset/guest kayıtlarını filtrele; klasörsüz (folder_id === null) paylaşılan/kopyalanan desteleri KORU
+      const cleanDecks = fetchedDecks.filter(
+        (d) => !d.id.startsWith("preset_") && !d.id.startsWith("guest_")
       );
       const finalFolders = fetchedFolders.filter(
         (f) => !String(f.id || "").startsWith("guest_")
@@ -260,25 +269,6 @@ export default function Home() {
 
       setFolders(finalFolders);
       setDecks(cleanDecks);
-
-      if (orphanDecks.length > 0) {
-        Promise.allSettled(
-          orphanDecks.map((d) =>
-            fetch(`${API_BASE}/api/v1/decks/${encodeURIComponent(d.id)}`, {
-              method: "DELETE",
-              headers: getAuthHeaders(),
-            })
-          )
-        ).catch(() => {});
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(DECKS_CACHE_STORAGE_KEY, JSON.stringify(cleanDecks));
-            for (const od of orphanDecks) {
-              localStorage.removeItem(`vocaship_deck_cards_${od.id}`);
-            }
-          } catch {}
-        }
-      }
 
       hydrateDeckCards(cleanDecks);
     } finally {
@@ -352,6 +342,32 @@ export default function Home() {
       window.removeEventListener("focus", handleFocusRefresh);
     };
   }, [refreshLibraryData, fetchStudyMetrics]);
+
+  // URL'de ?importDeck=... varsa veya giriş sonrası bekleyen bir paylaşım kodu varsa ImportDeckModal'ı otomatik aç
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlCode = (params.get("importDeck") || "").trim();
+      const pendingCode = (sessionStorage.getItem(PENDING_IMPORT_DECK_KEY) || "").trim();
+      const targetCode = urlCode || (user ? pendingCode : "");
+      if (targetCode) {
+        setInitialImportCode(targetCode);
+        setIsImportModalOpen(true);
+      }
+    } catch {}
+  }, [user]);
+
+  const clearImportDeckParam = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("importDeck")) {
+        url.searchParams.delete("importDeck");
+        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : "") + url.hash);
+      }
+    } catch {}
+  }, []);
 
   // Merkezi Hafıza Öncelikli Kelime Ekleme Kontrolcüsü (300ms debounce + anında dil değiştirme)
   const addWordModalDecks = useMemo(
@@ -1923,6 +1939,23 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => {
+                  setInitialImportCode("");
+                  setIsImportModalOpen(true);
+                }}
+                className={`px-3.5 py-2 rounded-xl border font-bold text-xs shadow-xs flex items-center gap-1.5 transition cursor-pointer active:scale-95 ${
+                  isDark
+                    ? "bg-slate-900 hover:bg-slate-800 border-amber-500/40 hover:border-amber-400 text-amber-300"
+                    : "bg-[#f8fafc] hover:bg-amber-50 border-amber-400/70 hover:border-amber-500 text-amber-800"
+                }`}
+                title="Paylaşım Kodu veya Link ile Deste Al"
+              >
+                <KeyRound className={`w-3.5 h-3.5 ${isDark ? "text-amber-400" : "text-amber-600"}`} />
+                <span>🔑 Kodla Deste Al</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
                   if (!user && isGuest) {
                     openRegistrationGate("Harika gidiyorsun! Öğrendiğin kelimeleri kalıcı olarak kaydetmek için 10 saniyede ücretsiz hesabını aç.");
                     return;
@@ -2193,6 +2226,78 @@ export default function Home() {
                   </button>
                 </div>
               )}
+              {/* Klasörsüz / Kopyalanan Desteler (Kök Dizinde Her Zaman Görünür) */}
+              {decks.filter((d) => !normalizeFolderId(d.folder_id)).length > 0 && (
+                <div className="space-y-3">
+                  <div className={`text-[11px] font-bold uppercase tracking-wider px-1 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                    Genel Desteler ({decks.filter((d) => !normalizeFolderId(d.folder_id)).length})
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {decks
+                      .filter((d) => !normalizeFolderId(d.folder_id))
+                      .map((deck) => {
+                        const realCardCount = getRealDeckWordCount(deck);
+                        return (
+                          <div
+                            key={deck.id}
+                            role="link"
+                            tabIndex={0}
+                            onClick={() => {
+                              setActiveDeckId(deck.id);
+                              router.push(`/study/${deck.id}`);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                setActiveDeckId(deck.id);
+                                router.push(`/study/${deck.id}`);
+                              }
+                            }}
+                            className={`p-5 rounded-3xl border transition-all duration-200 flex flex-col justify-between group cursor-pointer ${
+                              isDark
+                                ? "bg-slate-900/90 hover:bg-slate-800/90 border-slate-800 hover:border-indigo-500/60 shadow-lg"
+                                : "bg-[#f8fafc] hover:bg-white border-slate-300 hover:border-indigo-400 shadow-sm hover:shadow-md"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`w-9 h-9 rounded-xl border flex items-center justify-center ${isDark ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-400" : "bg-indigo-100 border-indigo-200 text-indigo-700"}`}>
+                                <BookOpen className="w-4 h-4" />
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSharingDeck({
+                                      id: deck.id,
+                                      title: deck.title,
+                                      card_count: realCardCount,
+                                    });
+                                  }}
+                                  title="Desteyi Paylaş"
+                                  className={`p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/15" : "text-slate-500 hover:text-indigo-700 hover:bg-indigo-50"}`}
+                                >
+                                  <Share2 className="w-3.5 h-3.5" />
+                                </button>
+                                <span className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-semibold ${isDark ? "bg-slate-950 border-slate-800 text-slate-300" : "bg-slate-100 border-slate-300 text-slate-800"}`}>
+                                  {realCardCount} {t("lib_word_unit")}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="mt-3 space-y-1">
+                              <h3 className={`text-base font-bold line-clamp-1 ${isDark ? "text-white group-hover:text-indigo-300" : "text-slate-900 group-hover:text-indigo-700"}`}>
+                                {deck.title}
+                              </h3>
+                              <p className={`text-xs line-clamp-2 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                                {deck.description || t("lib_personal_sm2_desc")}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : deckSearchResults.length === 0 ? (
             viewMode === "folder" &&
@@ -2321,16 +2426,34 @@ export default function Home() {
                         <span>{t("lib_sm2_ready")}</span>
                       </span>
                       {!isPresetDeck && (
-                        <button
-                          type="button"
-                          onClick={(e) =>
-                            handleDeleteDeck(e, deck.id, deck.title)
-                          }
-                          title={t("lib_delete_deck_title")}
-                          className={`p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400 hover:bg-rose-500/15" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSharingDeck({
+                                id: deck.id,
+                                title: deck.title,
+                                card_count: realCardCount,
+                              });
+                            }}
+                            title="Desteyi Paylaş"
+                            className={`p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/15" : "text-slate-500 hover:text-indigo-700 hover:bg-indigo-50"}`}
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) =>
+                              handleDeleteDeck(e, deck.id, deck.title)
+                            }
+                            title={t("lib_delete_deck_title")}
+                            className={`p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400 hover:bg-rose-500/15" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
                       )}
                       <span className={`font-bold text-xs flex items-center gap-1 group-hover:translate-x-0.5 transition ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>
                         <span>{t("lib_study")}</span>
@@ -2393,16 +2516,34 @@ export default function Home() {
 
                         <div className="flex items-center gap-1.5">
                           {!isPresetDeck && (
-                            <button
-                              type="button"
-                              onClick={(e) =>
-                                handleDeleteDeck(e, deck.id, deck.title)
-                              }
-                              title={t("lib_delete_deck_title")}
-                              className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400 hover:bg-rose-500/15" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSharingDeck({
+                                    id: deck.id,
+                                    title: deck.title,
+                                    card_count: realCardCount,
+                                  });
+                                }}
+                                title="Desteyi Paylaş"
+                                className={`p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/15" : "text-slate-500 hover:text-indigo-700 hover:bg-indigo-50"}`}
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) =>
+                                  handleDeleteDeck(e, deck.id, deck.title)
+                                }
+                                title={t("lib_delete_deck_title")}
+                                className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition cursor-pointer ${isDark ? "text-slate-400 hover:text-rose-400 hover:bg-rose-500/15" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
                           )}
                           <span className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-semibold transition ${isDark ? "bg-slate-950 border-slate-800 text-slate-300 group-hover:text-indigo-300" : "bg-slate-100 border-slate-300 text-slate-800 group-hover:text-indigo-700"}`}>
                             {realCardCount} {t("lib_word_unit")}
@@ -3143,6 +3284,29 @@ export default function Home() {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+      />
+
+      {/* 9. Deste Paylaşma Modalı */}
+      <DeckShareModal
+        isOpen={Boolean(sharingDeck)}
+        onClose={() => setSharingDeck(null)}
+        deck={sharingDeck}
+      />
+
+      {/* 10. Kodla / Linkle Deste Kopyalama (Import) Modalı */}
+      <ImportDeckModal
+        isOpen={isImportModalOpen}
+        onClose={() => {
+          setIsImportModalOpen(false);
+          setInitialImportCode("");
+          clearImportDeckParam();
+        }}
+        initialCode={initialImportCode}
+        folders={folders.map((f) => ({ id: f.id, name: f.name }))}
+        onImported={async () => {
+          clearImportDeckParam();
+          await Promise.all([refreshLibraryData(), fetchStudyMetrics()]);
+        }}
       />
 
       <MobileBottomTabbar />

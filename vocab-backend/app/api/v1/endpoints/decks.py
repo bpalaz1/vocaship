@@ -1,3 +1,5 @@
+import re
+import uuid
 from datetime import date
 from typing import List, Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -14,6 +16,79 @@ router = APIRouter()
 
 class DeckUpdateFolder(BaseModel):
     folder_id: Optional[str] = None
+
+
+class CloneSharedDeckPayload(BaseModel):
+    folder_id: Optional[str] = None
+
+
+def _deck_share_code(deck_id: str) -> str:
+    clean = str(deck_id or "").strip().replace("-", "")
+    return f"VS-{clean[:6].upper()}"
+
+
+def _find_deck_by_code_or_id(db: Client, code_or_id: str) -> Optional[dict]:
+    raw = (code_or_id or "").strip()
+    if not raw:
+        return None
+
+    # 1. Tam UUID kontrolü
+    try:
+        parsed_uuid = str(uuid.UUID(raw))
+        res = (
+            db.table("decks")
+            .select("id, title, description, folder_id, user_id, created_at")
+            .eq("id", parsed_uuid)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+    except ValueError:
+        pass
+
+    # 2. VS-XXXXXX veya 6+ karakterlik önek eşleştirmesi (sıfır şema değişikliği, UUID aralık sorgusu)
+    cleaned = raw
+    if cleaned.upper().startswith("VS-"):
+        cleaned = cleaned[3:]
+    hex_prefix = cleaned.strip().lower().replace("-", "")
+
+    if re.fullmatch(r"[0-9a-f]{6,32}", hex_prefix):
+        low_hex = hex_prefix.ljust(32, "0")
+        high_hex = hex_prefix.ljust(32, "f")
+        low_uuid = f"{low_hex[:8]}-{low_hex[8:12]}-{low_hex[12:16]}-{low_hex[16:20]}-{low_hex[20:32]}"
+        high_uuid = f"{high_hex[:8]}-{high_hex[8:12]}-{high_hex[12:16]}-{high_hex[16:20]}-{high_hex[20:32]}"
+        try:
+            range_res = (
+                db.table("decks")
+                .select("id, title, description, folder_id, user_id, created_at")
+                .gte("id", low_uuid)
+                .lte("id", high_uuid)
+                .limit(1)
+                .execute()
+            )
+            if range_res.data:
+                return range_res.data[0]
+        except Exception:
+            pass
+
+    # 3. Yedek önek taraması (standart dışı ID'ler için)
+    if len(hex_prefix) >= 6:
+        try:
+            scan_res = (
+                db.table("decks")
+                .select("id, title, description, folder_id, user_id, created_at")
+                .limit(1000)
+                .execute()
+            )
+            for row in scan_res.data or []:
+                rid = str(row.get("id") or "").lower().replace("-", "")
+                if rid.startswith(hex_prefix):
+                    return row
+        except Exception:
+            pass
+
+    return None
 
 
 class CardUpdatePayload(BaseModel):
@@ -79,6 +154,105 @@ async def create_deck(
     deck["folder_id"] = str(raw_folder) if raw_folder else None
     deck["card_count"] = 0
     return deck
+
+
+@router.get("/shared/{code_or_id}", status_code=status.HTTP_200_OK)
+async def preview_shared_deck(code_or_id: str, db: Client = Depends(get_db)):
+    """Herkese açık kalıcı deste paylaşım önizlemesi (UUID veya VS-XXXXXX)."""
+    deck = _find_deck_by_code_or_id(db, code_or_id)
+    if not deck:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paylaşılan deste bulunamadı. Kodu kontrol edip tekrar deneyin.",
+        )
+
+    cards_res = (
+        db.table("flashcards")
+        .select("id, word, phonetic, meanings, example_sentences, collocations, grammar_notes, created_at")
+        .eq("deck_id", deck["id"])
+        .order("created_at")
+        .execute()
+    )
+    cards = cards_res.data or []
+    return {
+        "id": str(deck["id"]),
+        "share_code": _deck_share_code(str(deck["id"])),
+        "title": deck.get("title") or "İsimsiz Deste",
+        "description": deck.get("description") or "",
+        "card_count": len(cards),
+        "preview_words": cards[:8],
+    }
+
+
+@router.post("/shared/{code_or_id}/clone", status_code=status.HTTP_201_CREATED)
+async def clone_shared_deck(
+    code_or_id: str,
+    payload: Optional[CloneSharedDeckPayload] = None,
+    db: Client = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Paylaşılan desteyi orijinaline dokunmadan kullanıcının kendi hesabına bağımsız kopya olarak ekler."""
+    source_deck = _find_deck_by_code_or_id(db, code_or_id)
+    if not source_deck:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kopyalanacak paylaşılan deste bulunamadı.",
+        )
+
+    raw_fid = payload.folder_id if payload else None
+    if not raw_fid or str(raw_fid).strip().lower() in ("", "null", "none", "undefined"):
+        target_folder_id = None
+    else:
+        target_folder_id = str(raw_fid).strip()
+
+    source_cards_res = (
+        db.table("flashcards")
+        .select("*")
+        .eq("deck_id", source_deck["id"])
+        .order("created_at")
+        .execute()
+    )
+    source_cards = source_cards_res.data or []
+
+    new_deck_data = {
+        "user_id": str(current_user["id"]).strip(),
+        "title": source_deck.get("title") or "Paylaşılan Deste",
+        "description": source_deck.get("description") or "",
+        "folder_id": target_folder_id,
+    }
+    created_res = db.table("decks").insert(new_deck_data).execute()
+    if not created_res.data:
+        raise HTTPException(status_code=400, detail="Deste kopyalanırken bir hata oluştu.")
+
+    new_deck = created_res.data[0]
+    new_deck_id = str(new_deck["id"])
+
+    today_str = str(date.today())
+    new_cards = [
+        {
+            "deck_id": new_deck_id,
+            "word": c.get("word") or "",
+            "phonetic": c.get("phonetic") or "",
+            "meanings": c.get("meanings") or [],
+            "example_sentences": c.get("example_sentences") or [],
+            "collocations": c.get("collocations") or [],
+            "grammar_notes": c.get("grammar_notes") or "",
+            "ease_factor": 2.5,
+            "interval_days": 0,
+            "repetitions": 0,
+            "next_review_date": today_str,
+        }
+        for c in source_cards
+    ]
+
+    if new_cards:
+        db.table("flashcards").insert(new_cards).execute()
+
+    raw_folder = new_deck.get("folder_id")
+    new_deck["folder_id"] = str(raw_folder) if raw_folder else None
+    new_deck["card_count"] = len(new_cards)
+    new_deck["share_code"] = _deck_share_code(new_deck_id)
+    return new_deck
 
 
 @router.patch("/{deck_id}/folder", status_code=status.HTTP_200_OK)

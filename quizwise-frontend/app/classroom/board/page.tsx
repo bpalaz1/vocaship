@@ -42,11 +42,16 @@ import {
   Crosshair,
   Download,
   Paperclip,
+  BookOpen,
+  Plus,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import BoardTimer from "./components/BoardTimer";
 import SendMaterialModal, {
   type SharedMaterialPayload,
+  type SharedDeckPayload,
 } from "../../components/classroom/SendMaterialModal";
 import ClassLiveQRModal from "../../components/classroom/ClassLiveQRModal";
 import {
@@ -56,6 +61,7 @@ import {
   type RaisedHandEntry,
 } from "../../components/board/LiveKitClassroomStage";
 import { API_BASE } from "../../config";
+import { getAuthToken } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import { useLanguage } from "../../context/LanguageContext";
 import {
@@ -239,6 +245,42 @@ function SmartBoardConsoleInner({
   const [isShapePopoverOpen, setIsShapePopoverOpen] = useState(false);
   const [lastShapeTool, setLastShapeTool] = useState<"line" | "circle" | "rect" | "arrow">("rect");
   const [incomingMaterial, setIncomingMaterial] = useState<SharedMaterialPayload | null>(null);
+  const [incomingDeck, setIncomingDeck] = useState<SharedDeckPayload | null>(null);
+  const [isCloningIncomingDeck, setIsCloningIncomingDeck] = useState(false);
+  const [clonedIncomingDeckId, setClonedIncomingDeckId] = useState<string | null>(null);
+  const [cloneIncomingDeckError, setCloneIncomingDeckError] = useState<string | null>(null);
+
+  const handleCloneIncomingDeck = useCallback(async (deck: SharedDeckPayload) => {
+    const token = getAuthToken();
+    if (!token) {
+      setCloneIncomingDeckError("Desteyi eklemek için hesabınıza giriş yapmalısınız.");
+      return;
+    }
+    setIsCloningIncomingDeck(true);
+    setCloneIncomingDeckError(null);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/decks/shared/${encodeURIComponent(deck.deckId)}/clone`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ folder_id: null }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Deste eklenemedi.");
+      }
+      setClonedIncomingDeckId(deck.deckId);
+    } catch (err: any) {
+      setCloneIncomingDeckError(err?.message || "Deste kütüphaneye eklenemedi.");
+    } finally {
+      setIsCloningIncomingDeck(false);
+    }
+  }, []);
 
   // 5b. Canlı El Kaldırma (Raise Hand) ve Eğitmen Söz Verme Durumları
   const [raisedHands, setRaisedHands] = useState<Record<string, RaisedHandEntry>>({});
@@ -1786,6 +1828,19 @@ function SmartBoardConsoleInner({
           downloadUrl: msg.downloadUrl ? String(msg.downloadUrl) : null,
           sentAt: String(msg.sentAt || new Date().toISOString()),
         });
+      } else if (msg.type === "DECK_SHARED" && msg.deckId) {
+        setClonedIncomingDeckId(null);
+        setCloneIncomingDeckError(null);
+        setIncomingDeck({
+          deckId: String(msg.deckId),
+          shareCode: String(
+            msg.shareCode || `VS-${String(msg.deckId).replace(/-/g, "").slice(0, 6).toUpperCase()}`
+          ),
+          title: String(msg.title || "Kelime Destesi"),
+          cardCount: typeof msg.cardCount === "number" ? msg.cardCount : 0,
+          note: String(msg.note || ""),
+          sentAt: String(msg.sentAt || new Date().toISOString()),
+        });
       } else if (msg.type === "DRAW_MOVE" && msg.from && msg.to) {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -2717,6 +2772,89 @@ function SmartBoardConsoleInner({
               </div>
             )}
 
+            {/* Öğrenci Canlı Kelime Destesi Bildirim Kartı (DECK_SHARED) */}
+            {!isTeacher && incomingDeck && (
+              <div
+                className={`fixed ${
+                  incomingMaterial ? "top-64" : "top-20"
+                } right-4 sm:right-6 md:right-[340px] z-50 w-80 max-w-[92vw] rounded-2xl bg-slate-900/95 border border-emerald-500/50 shadow-2xl backdrop-blur-md p-4 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                    <BookOpen className="w-4 h-4 shrink-0" />
+                    <span>📚 Eğitmen Kelime Destesi Paylaştı</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIncomingDeck(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                    aria-label="Kapat"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-sm font-bold text-white truncate">
+                    {incomingDeck.title}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold text-emerald-300">
+                      {incomingDeck.cardCount} Kelime
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-indigo-300">
+                      {incomingDeck.shareCode}
+                    </span>
+                  </div>
+                  {incomingDeck.note && (
+                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-3 pt-0.5">
+                      {incomingDeck.note}
+                    </p>
+                  )}
+                  {cloneIncomingDeckError && (
+                    <p className="text-[11px] text-rose-300 font-medium pt-0.5">
+                      {cloneIncomingDeckError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  {clonedIncomingDeckId === incomingDeck.deckId ? (
+                    <div className="flex-1 py-2 px-3 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>✓ Kütüphanene Eklendi</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isCloningIncomingDeck}
+                      onClick={() => handleCloneIncomingDeck(incomingDeck)}
+                      className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 disabled:opacity-50 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer active:scale-95"
+                    >
+                      {isCloningIncomingDeck ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Ekleniyor...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Desteme Ekle</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIncomingDeck(null)}
+                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* 🔴 Lazer İşaretçi Katmanı */}
             {laserTrail.length > 0 && (
               <svg className="pointer-events-none absolute inset-0 w-full h-full z-30">
@@ -3208,6 +3346,9 @@ function SmartBoardConsoleInner({
           activeBoardPdfName={pdfFileName}
           onMaterialShared={(payload) => {
             teacherPublish({ type: "MATERIAL_SHARED", ...payload }, { reliable: true });
+          }}
+          onDeckShared={(payload) => {
+            teacherPublish({ type: "DECK_SHARED", ...payload }, { reliable: true });
           }}
         />
       )}
