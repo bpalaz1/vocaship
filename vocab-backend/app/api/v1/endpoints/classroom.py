@@ -1,11 +1,14 @@
 import json
 import os
+import re
+import tempfile
+import time
 import uuid
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Depends, Request, Body, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Depends, Request, Body, UploadFile, File, status
+from fastapi.responses import JSONResponse, FileResponse
 from supabase import Client
 from app.core.database import get_db
 from app.services.quota_service import require_pro_for_classroom, check_and_consume_quota, _extract_token_payload
@@ -685,6 +688,159 @@ async def create_livekit_token(
         "server_url": livekit_url,
         "room_name": room_name,
     }
+
+
+# =========================================================================
+# CANLI TAHTA PDF & DURUM SENKRONİZASYONU (LIVEKIT DATACHANNEL DESTEKLİ)
+# =========================================================================
+
+_BOARD_PDF_DIR = os.path.join(
+    "/tmp" if os.name != "nt" else tempfile.gettempdir(),
+    "vocaship_pdfs",
+)
+os.makedirs(_BOARD_PDF_DIR, exist_ok=True)
+
+_BOARD_STATE_STORE: Dict[str, Dict[str, Any]] = {}
+
+
+def _safe_board_class_id(class_id: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", (class_id or "default").strip()) or "default"
+
+
+def _board_pdf_path(class_id: str) -> str:
+    return os.path.join(_BOARD_PDF_DIR, f"{_safe_board_class_id(class_id)}.pdf")
+
+
+class BoardStateUpdatePayload(BaseModel):
+    page_num: Optional[int] = None
+    clear_pdf: Optional[bool] = False
+
+
+@router.post("/classes/{class_id}/board-pdf", status_code=status.HTTP_200_OK)
+async def upload_board_pdf(
+    class_id: str,
+    file: UploadFile = File(...),
+    db: Client = Depends(get_db),
+):
+    """Öğretmenin yüklediği PDF dosyasını diske (ve varsa Supabase Storage'a) kaydeder."""
+    os.makedirs(_BOARD_PDF_DIR, exist_ok=True)
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Boş PDF dosyası yüklenemez.")
+
+    pdf_path = _board_pdf_path(class_id)
+    with open(pdf_path, "wb") as f:
+        f.write(content)
+
+    version = int(time.time() * 1000)
+    filename = (file.filename or f"{_safe_board_class_id(class_id)}.pdf").strip()
+
+    # Opsiyonel Supabase Storage yedekleme (bucket yoksa ana akışı kesmez)
+    storage_url: Optional[str] = None
+    try:
+        storage_key = f"board/{_safe_board_class_id(class_id)}.pdf"
+        db.storage.from_("board-pdfs").upload(
+            storage_key,
+            content,
+            {"content-type": "application/pdf", "upsert": "true"},
+        )
+        storage_url = db.storage.from_("board-pdfs").get_public_url(storage_key)
+    except Exception:
+        storage_url = None
+
+    state = {
+        "has_pdf": True,
+        "active_pdf_filename": filename,
+        "page_num": 1,
+        "version": version,
+        "pdf_url": f"/api/v1/classroom/classes/{class_id}/board-pdf?v={version}",
+        "storage_url": storage_url,
+    }
+    _BOARD_STATE_STORE[class_id] = state
+    return state
+
+
+@router.get("/classes/{class_id}/board-pdf")
+async def get_board_pdf(class_id: str):
+    """Kayıtlı PDF dosyasını CORS başlıklarıyla öğrencilere sunar."""
+    pdf_path = _board_pdf_path(class_id)
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="Aktif PDF bulunamadı.")
+
+    state = _BOARD_STATE_STORE.get(class_id) or {}
+    filename = state.get("active_pdf_filename") or f"{_safe_board_class_id(class_id)}.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store, max-age=0",
+        },
+    )
+
+
+@router.get("/classes/{class_id}/board-state", status_code=status.HTTP_200_OK)
+async def get_board_state(class_id: str):
+    """Sınıfın aktif PDF ve sayfa durumunu döner."""
+    state = _BOARD_STATE_STORE.get(class_id)
+    pdf_path = _board_pdf_path(class_id)
+    if state and state.get("has_pdf") and os.path.exists(pdf_path):
+        return state
+    if os.path.exists(pdf_path):
+        version = int(os.path.getmtime(pdf_path) * 1000)
+        restored = {
+            "has_pdf": True,
+            "active_pdf_filename": f"{_safe_board_class_id(class_id)}.pdf",
+            "page_num": 1,
+            "version": version,
+            "pdf_url": f"/api/v1/classroom/classes/{class_id}/board-pdf?v={version}",
+        }
+        _BOARD_STATE_STORE[class_id] = restored
+        return restored
+    return {
+        "has_pdf": False,
+        "active_pdf_filename": None,
+        "page_num": 1,
+        "version": 0,
+        "pdf_url": None,
+    }
+
+
+@router.post("/classes/{class_id}/board-state", status_code=status.HTTP_200_OK)
+async def update_board_state(class_id: str, payload: BoardStateUpdatePayload):
+    """Öğretmen sayfa değiştirdiğinde veya PDF'i temizlediğinde sunucu durumunu günceller."""
+    pdf_path = _board_pdf_path(class_id)
+    if payload.clear_pdf:
+        _BOARD_STATE_STORE.pop(class_id, None)
+        try:
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+        except Exception:
+            pass
+        return {
+            "has_pdf": False,
+            "active_pdf_filename": None,
+            "page_num": 1,
+            "version": 0,
+            "pdf_url": None,
+        }
+
+    state = _BOARD_STATE_STORE.get(class_id)
+    if not state:
+        has_file = os.path.exists(pdf_path)
+        version = int(os.path.getmtime(pdf_path) * 1000) if has_file else 0
+        state = {
+            "has_pdf": has_file,
+            "active_pdf_filename": f"{_safe_board_class_id(class_id)}.pdf" if has_file else None,
+            "page_num": 1,
+            "version": version,
+            "pdf_url": f"/api/v1/classroom/classes/{class_id}/board-pdf?v={version}" if has_file else None,
+        }
+    if payload.page_num is not None and payload.page_num >= 1:
+        state["page_num"] = int(payload.page_num)
+    _BOARD_STATE_STORE[class_id] = state
+    return state
 
 
 

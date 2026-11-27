@@ -45,10 +45,12 @@ import confetti from "canvas-confetti";
 import BoardTimer from "./components/BoardTimer";
 import SendMaterialModal from "../../components/classroom/SendMaterialModal";
 import ClassLiveQRModal from "../../components/classroom/ClassLiveQRModal";
-const LiveKitClassroomStage = dynamic(
-  () => import("../../components/board/LiveKitClassroomStage"),
-  { ssr: false }
-);
+import {
+  LiveKitBoardProvider,
+  TeamsParticipantGallery,
+  useLiveKitBoard,
+} from "../../components/board/LiveKitClassroomStage";
+import { API_BASE } from "../../config";
 import { useProfile } from "../../context/ProfileContext";
 import { useLanguage } from "../../context/LanguageContext";
 import {
@@ -85,8 +87,9 @@ export interface BoardTerm {
 
 function SmartBoardConsoleContent() {
   const { t } = useLanguage();
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const { userProfile } = useProfile();
+
   const urlRoomKey =
     searchParams.get("classId") ||
     searchParams.get("class_id") ||
@@ -122,13 +125,8 @@ function SmartBoardConsoleContent() {
     }
   }, [urlRoomKey]);
 
-  const classId = roomKey;
   const sessionId = searchParams.get("sessionId") || searchParams.get("session_id") || "";
   const activeClassName = searchParams.get("className") || searchParams.get("class_name") || t("brd_default_room", "Ders / Tahta Odası");
-  const [liveParticipantsCount, setLiveParticipantsCount] = useState<number>(1);
-  // 1. Profil Context (Dinamik Öğretmen Kartı / Stüdyo İçin)
-  const { userProfile } = useProfile();
-
   const roleParam = searchParams.get("role");
   const teacherIdParam = searchParams.get("teacherId") || searchParams.get("teacher_id");
   const isOwnerMismatch = Boolean(
@@ -138,6 +136,51 @@ function SmartBoardConsoleContent() {
     roleParam === "student" || roleParam === "attendee" || isOwnerMismatch;
   const isTeacher = !isStudentViewer;
 
+  return (
+    <LiveKitBoardProvider
+      classId={roomKey}
+      userId={userProfile.id || undefined}
+      userName={userProfile.full_name || userProfile.username || undefined}
+      role={isTeacher ? "teacher" : "student"}
+    >
+      <SmartBoardConsoleInner
+        classId={roomKey}
+        sessionId={sessionId}
+        activeClassName={activeClassName}
+        isTeacher={isTeacher}
+      />
+    </LiveKitBoardProvider>
+  );
+}
+
+function SmartBoardConsoleInner({
+  classId,
+  sessionId,
+  activeClassName,
+  isTeacher,
+}: {
+  classId: string;
+  sessionId: string;
+  activeClassName: string;
+  isTeacher: boolean;
+}) {
+  const { t } = useLanguage();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { userProfile } = useProfile();
+  const {
+    isMicEnabled: isMicActive,
+    isCameraEnabled: isCameraActive,
+    isScreenShareEnabled: isScreenSharing,
+    participantsCount: liveParticipantsCount,
+    mediaError: lkMediaError,
+    toggleMicrophone,
+    toggleCamera,
+    toggleScreenShare,
+    publishBoardData,
+    subscribeBoardData,
+  } = useLiveKitBoard();
+
   const [liveSessionId, setLiveSessionId] = useState<string>(sessionId);
   const [liveJoinCode, setLiveJoinCode] = useState<string | null>(null);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
@@ -145,8 +188,6 @@ function SmartBoardConsoleContent() {
   const pdfPageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const remoteScreenStreamRef = useRef<MediaStream | null>(null);
   const lastShapeEndRef = useRef<{ x: number; y: number } | null>(null);
-
-  const [isExpanded, setIsExpanded] = useState(true);
 
   // 2. Ekran & PDF Materyali Durumları
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -157,20 +198,8 @@ function SmartBoardConsoleContent() {
   const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const pdfWrapperRef = useRef<HTMLDivElement | null>(null);
-
-  // 3. Canlı Stüdyo (Mikrofon, Kamera, Ekran Paylaşımı)
-  const [isMicActive, setIsMicActive] = useState(false);
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [isCameraFullscreen, setIsCameraFullscreen] = useState(false);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [mediaError, setMediaError] = useState<string | null>(null);
-
-  const audioStreamRef = useRef<MediaStream | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
-  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
-  const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [localMediaError, setLocalMediaError] = useState<string | null>(null);
+  const mediaError = lkMediaError || localMediaError;
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // 4. Zoom & Pan Durumları
@@ -431,26 +460,6 @@ function SmartBoardConsoleContent() {
           recognitionRef.current.stop();
         } catch {}
       }
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach((t) => t.stop());
-        micStreamRef.current = null;
-      }
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
-        cameraStreamRef.current = null;
-      }
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject = null;
-      }
-      if (fullscreenVideoRef.current) {
-        fullscreenVideoRef.current.srcObject = null;
-      }
-      setIsCameraActive(false);
-      setIsCameraFullscreen(false);
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
 
       let computedDuration: number | undefined = undefined;
       if (typeof window !== "undefined") {
@@ -495,52 +504,14 @@ function SmartBoardConsoleContent() {
 
   // Hata mesajını 4 saniye sonra otomatik kaldır
   useEffect(() => {
-    if (!mediaError) return;
-    const timer = setTimeout(() => setMediaError(null), 4000);
+    if (!localMediaError) return;
+    const timer = setTimeout(() => setLocalMediaError(null), 4000);
     return () => clearTimeout(timer);
-  }, [mediaError]);
+  }, [localMediaError]);
 
-  // Kamera stream video bağlantısı
-  useEffect(() => {
-    if (isCameraActive && cameraVideoRef.current && cameraStreamRef.current) {
-      if (cameraVideoRef.current.srcObject !== cameraStreamRef.current) {
-        cameraVideoRef.current.srcObject = cameraStreamRef.current;
-      }
-    }
-  }, [isCameraActive]);
-
-  // Ekran paylaşımı stream video bağlantısı
-  useEffect(() => {
-    if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
-      if (screenVideoRef.current.srcObject !== screenStreamRef.current) {
-        screenVideoRef.current.srcObject = screenStreamRef.current;
-      }
-    }
-  }, [isScreenSharing]);
-
-  // Sayfadan çıkışta veya bileşen unmount edildiğinde medya akışlarını temizle
+  // Sayfadan çıkışta konuşma tanımayı temizle (Kamera/Mikrofon LiveKitRoom tarafından yönetilir)
   useEffect(() => {
     return () => {
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach((t) => t.stop());
-        micStreamRef.current = null;
-      }
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
-        cameraStreamRef.current = null;
-      }
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject = null;
-      }
-      if (fullscreenVideoRef.current) {
-        fullscreenVideoRef.current.srcObject = null;
-      }
-      setIsCameraActive(false);
-      setIsCameraFullscreen(false);
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
@@ -644,115 +615,7 @@ function SmartBoardConsoleContent() {
     };
   }, [isMicActive]);
 
-  // =========================================================================
-  // CANLI STÜDYO KONTROLLERİ: MİKROFON, KAMERA, EKRAN PAYLAŞIMI
-  // =========================================================================
-
-  // 1. Mikrofon Başlat / Durdur (Kameradan tamamen izole)
-  const toggleMicrophone = async () => {
-    if (isMicActive) {
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach((t) => t.stop());
-        micStreamRef.current = null;
-      }
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
-      }
-      setIsMicActive(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        micStreamRef.current = stream;
-        setIsMicActive(true);
-        setMicPermissionDenied(false);
-        if (recognitionRef.current) {
-          try {
-            recognitionRef.current.start();
-          } catch {}
-        }
-      } catch (err) {
-        console.warn("Mikrofon izni alınamadı:", err);
-        setMicPermissionDenied(true);
-        setMediaError("Mikrofon izni verilmedi.");
-      }
-    }
-  };
-
-  // 2. Kamera Başlat / Durdur (Mikrofondan tamamen izole)
-  const toggleCamera = async () => {
-    if (isCameraActive) {
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
-        cameraStreamRef.current = null;
-      }
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject = null;
-      }
-      if (fullscreenVideoRef.current) {
-        fullscreenVideoRef.current.srcObject = null;
-      }
-      setIsCameraActive(false);
-      setIsCameraFullscreen(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        cameraStreamRef.current = stream;
-        setIsCameraActive(true);
-        setIsCameraFullscreen(true);
-        setMediaError(null);
-      } catch (err) {
-        console.warn("Kamera izni alınamadı:", err);
-        setMediaError("Kamera izni verilmedi.");
-      }
-    }
-  };
-
-  // Kamera Akışı Aktarma (Fullscreen <-> PiP geçişinde tracks durdurulmadan srcObject aktarılır)
-  useEffect(() => {
-    if (isCameraActive && cameraStreamRef.current) {
-      if (isCameraFullscreen && fullscreenVideoRef.current) {
-        if (fullscreenVideoRef.current.srcObject !== cameraStreamRef.current) {
-          fullscreenVideoRef.current.srcObject = cameraStreamRef.current;
-        }
-      } else if (!isCameraFullscreen && cameraVideoRef.current) {
-        if (cameraVideoRef.current.srcObject !== cameraStreamRef.current) {
-          cameraVideoRef.current.srcObject = cameraStreamRef.current;
-        }
-      }
-    }
-  }, [isCameraFullscreen, isCameraActive]);
-
-  // Esc tuşu ile tam ekrandan kamerayı sağ sütuna küçültme
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isCameraFullscreen) {
-        setIsCameraFullscreen(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isCameraFullscreen]);
-
-  // 3. Ekran / Word / Excel / Pencere Paylaşımı Başlat / Durdur (LiveKit SFU üzerinden)
-  const toggleScreenShare = async () => {
-    if (!isTeacher) return;
-    setMediaError(null);
-    setIsScreenSharing((prev) => !prev);
-  };
-
-  useEffect(() => {
-    const activeStream = screenStreamRef.current || remoteScreenStreamRef.current;
-    if (isScreenSharing && activeStream && screenVideoRef.current) {
-      if (screenVideoRef.current.srcObject !== activeStream) {
-        screenVideoRef.current.srcObject = activeStream;
-      }
-    }
-  }, [isScreenSharing]);
+  // Canlı medya kontrolleri artık %100 LiveKit (useLiveKitBoard) üzerinden yönetiliyor.
 
   // Lazer izini 1.2 saniye sonra otomatik temizle
   useEffect(() => {
@@ -838,32 +701,26 @@ function SmartBoardConsoleContent() {
     }
   };
 
-  // PDF Dosyası Yükleme (page.getTextContent ile tam gövde metni ve 1:1 senkron sayfalar)
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPdfFile(file);
-      setPdfFileName(file.name);
-      const url = URL.createObjectURL(file);
-      setPdfUrl(url);
+  const lastLoadedPdfVersionRef = useRef<number>(0);
+
+  const renderPdfFromArrayBuffer = useCallback(
+    async (arrayBuffer: ArrayBuffer, fileName: string, targetPage = 1) => {
+      setPdfFileName(fileName);
+      setPdfUrl("remote-synced");
       setScale(1.0);
       setPan({ x: 0, y: 0 });
       setIsPdfLoading(true);
-
-      let extractedFullText = "";
       try {
-        const arrayBuffer = await file.arrayBuffer();
         const pdfjs = await loadPdfJs();
-        if (pdfjs) {
-          const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-          const pdfDoc = await loadingTask.promise;
-          const pages: string[] = [];
-          let collectedText = "";
+        if (!pdfjs) return { pages: [] as string[], text: "" };
+        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+        const pdfDoc = await loadingTask.promise;
+        const pages: string[] = [];
+        let collectedText = "";
 
-          for (let i = 1; i <= pdfDoc.numPages; i++) {
-            const page = await pdfDoc.getPage(i);
-
-            // 1. Gerçek sayfa metnini çıkar (page.getTextContent)
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          try {
             const textContent = await page.getTextContent();
             const pageStr = textContent.items
               .map((it: any) => it.str)
@@ -873,44 +730,135 @@ function SmartBoardConsoleContent() {
             if (pageStr) {
               collectedText += `\n[Sayfa ${i}]: ` + pageStr;
             }
+          } catch {}
 
-            // 2. Sayfayı yüksek kaliteli DOM görseline renderla (1:1 çizim senkronizasyonu için)
-            const viewport = page.getViewport({ scale: 1.5 });
-            const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = viewport.width;
-            tempCanvas.height = viewport.height;
-            const tempCtx = tempCanvas.getContext("2d");
-            if (tempCtx) {
-              await page.render({ canvasContext: tempCtx, viewport }).promise;
-              pages.push(tempCanvas.toDataURL("image/jpeg", 0.78));
-            }
-          }
-
-          if (collectedText.trim().length > 10) {
-            extractedFullText = collectedText.trim();
-          }
-          if (pages.length > 0) {
-            setPdfPageImages(pages);
-            setCurrentPdfPage(1);
-            broadcastPdfState({
-              pdfFileName: file.name,
-              pdfPageImages: pages,
-              currentPage: 1,
-            });
+          const viewport = page.getViewport({ scale: 1.5 });
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = viewport.width;
+          tempCanvas.height = viewport.height;
+          const tempCtx = tempCanvas.getContext("2d");
+          if (tempCtx) {
+            await page.render({ canvasContext: tempCtx, viewport }).promise;
+            pages.push(tempCanvas.toDataURL("image/jpeg", 0.78));
           }
         }
+
+        if (pages.length > 0) {
+          const clamped = Math.max(1, Math.min(pages.length, targetPage));
+          setPdfPageImages(pages);
+          setCurrentPdfPage(clamped);
+          setTimeout(() => {
+            const el = pdfPageRefs.current[clamped - 1];
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 120);
+        }
+        return { pages, text: collectedText.trim() };
       } catch (err) {
-        console.warn("PDF.js render & extraction fallback:", err);
+        console.warn("PDF.js render hatası:", err);
+        return { pages: [] as string[], text: "" };
       } finally {
         setIsPdfLoading(false);
       }
+    },
+    []
+  );
 
-      // PDF.js metin çıkaramadıysa regex fallback kullan
-      if (!extractedFullText) {
-        extractedFullText = await extractTextFromPdf(file);
+  const fetchAndRenderServerPdf = useCallback(
+    async (pdfPathOrUrl: string, fileName: string, pageNum = 1, version = 0) => {
+      if (version && version === lastLoadedPdfVersionRef.current) {
+        setCurrentPdfPage(pageNum);
+        const el = pdfPageRefs.current[Math.max(0, pageNum - 1)];
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
       }
-      setPdfTextContext(extractedFullText);
+      const fullUrl = pdfPathOrUrl.startsWith("http")
+        ? pdfPathOrUrl
+        : `${API_BASE}${pdfPathOrUrl.startsWith("/") ? "" : "/"}${pdfPathOrUrl}`;
+      try {
+        const res = await fetch(fullUrl);
+        if (!res.ok) return;
+        const buf = await res.arrayBuffer();
+        if (version) lastLoadedPdfVersionRef.current = version;
+        await renderPdfFromArrayBuffer(buf, fileName || "Ders Dokümanı.pdf", pageNum);
+      } catch (err) {
+        console.warn("Sunucu PDF indirme hatası:", err);
+      }
+    },
+    [renderPdfFromArrayBuffer]
+  );
+
+  // Öğrenci odaya girdiğinde sunucudaki mevcut PDF durumunu (GET /board-state) çek ve render et
+  useEffect(() => {
+    if (isTeacher || !classId) return;
+    let active = true;
+    const syncInitialBoardState = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/board-state`
+        );
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (active && data?.has_pdf && data?.pdf_url) {
+          await fetchAndRenderServerPdf(
+            data.pdf_url,
+            data.active_pdf_filename || "Ders Dokümanı.pdf",
+            data.page_num || 1,
+            data.version || 0
+          );
+        }
+      } catch {}
+    };
+    syncInitialBoardState();
+    return () => {
+      active = false;
+    };
+  }, [isTeacher, classId, fetchAndRenderServerPdf]);
+
+  // PDF Dosyası Yükleme: Yerel render + Backend /board-pdf upload + LiveKit DataChannel broadcast
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPdfFile(file);
+    const url = URL.createObjectURL(file);
+    setPdfUrl(url);
+
+    let extractedFullText = "";
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const rendered = await renderPdfFromArrayBuffer(arrayBuffer, file.name, 1);
+      if (rendered.text.length > 10) {
+        extractedFullText = rendered.text;
+      }
+
+      // Sunucuya PDF'i yükle ve LiveKit DataChannel ile tüm öğrencilere bildir
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch(
+        `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/board-pdf`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+      if (uploadRes.ok) {
+        const data = await uploadRes.json();
+        lastLoadedPdfVersionRef.current = data.version || Date.now();
+        await publishBoardData({
+          type: "PDF_UPDATED",
+          pdfUrl: data.pdf_url,
+          fileName: data.active_pdf_filename || file.name,
+          pageNum: 1,
+          version: data.version,
+        });
+      }
+    } catch (err) {
+      console.warn("PDF yükleme/yayınlama hatası:", err);
     }
+
+    if (!extractedFullText) {
+      extractedFullText = await extractTextFromPdf(file);
+    }
+    setPdfTextContext(extractedFullText);
   };
 
   const handleClearPdf = () => {
@@ -928,6 +876,15 @@ function SmartBoardConsoleContent() {
     setPan({ x: 0, y: 0 });
     handleClearCanvas();
     broadcastPdfClear();
+    fetch(
+      `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/board-state`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clear_pdf: true }),
+      }
+    ).catch(() => {});
+    publishBoardData({ type: "PDF_CLEARED" });
   };
 
   const handleGoToPdfPage = (pageNum: number) => {
@@ -940,15 +897,15 @@ function SmartBoardConsoleContent() {
     }
     if (isTeacher) {
       broadcastPdfPage(clamped);
-      broadcastPdfState({
-        pdfFileName: pdfFileName || "Ders Dokümanı.pdf",
-        pdfPageImages: pdfPageImages.length <= 2 ? pdfPageImages : [],
-        activePageImage: pdfPageImages[clamped - 1] || null,
-        currentPage: clamped,
-        totalPages: pdfPageImages.length,
-        zoom: scale,
-        canvasDataUrl: canvasRef.current ? canvasRef.current.toDataURL("image/png") : null,
-      });
+      fetch(
+        `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/board-state`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ page_num: clamped }),
+        }
+      ).catch(() => {});
+      publishBoardData({ type: "PDF_PAGE", pageNum: clamped });
     }
   };
 
@@ -975,6 +932,7 @@ function SmartBoardConsoleContent() {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     broadcastClear();
+    publishBoardData({ type: "BOARD_CLEAR" });
   };
 
   // Canvas Koordinat Dönüşümü
@@ -1190,30 +1148,122 @@ function SmartBoardConsoleContent() {
         ctx?.clearRect(0, 0, canvas.width, canvas.height);
       }
     },
-    onRemoteScreenStream: (stream: MediaStream | null) => {
-      remoteScreenStreamRef.current = stream;
-      if (stream) {
-        setIsScreenSharing(true);
-        setTimeout(() => {
-          if (screenVideoRef.current) {
-            screenVideoRef.current.srcObject = stream;
-          }
-        }, 50);
-      } else {
-        setIsScreenSharing(false);
-        if (screenVideoRef.current) {
-          screenVideoRef.current.srcObject = null;
-        }
-      }
-    },
+    onRemoteScreenStream: () => {},
     getSyncState: () => ({
       pdfFileName,
-      pdfPageImages,
+      pdfPageImages: [],
       currentPage: currentPdfPage,
-      canvasDataUrl: canvasRef.current ? canvasRef.current.toDataURL("image/png") : null,
-      screenStream: screenStreamRef.current,
+      canvasDataUrl: null,
+      screenStream: null,
     }),
   });
+
+  // LiveKit DataChannel Dinleyicisi (PDF_UPDATED, PDF_PAGE, PDF_CLEARED, DRAW_STROKE, DRAW_SHAPE, DRAW_TEXT, BOARD_CLEAR)
+  useEffect(() => {
+    if (isTeacher) return;
+    return subscribeBoardData((msg: any) => {
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "PDF_UPDATED" && msg.pdfUrl) {
+        fetchAndRenderServerPdf(
+          msg.pdfUrl,
+          msg.fileName || "Ders Dokümanı.pdf",
+          msg.pageNum || 1,
+          msg.version || 0
+        );
+      } else if (msg.type === "PDF_PAGE" && typeof msg.pageNum === "number") {
+        setCurrentPdfPage(msg.pageNum);
+        const el = pdfPageRefs.current[Math.max(0, msg.pageNum - 1)];
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (msg.type === "PDF_CLEARED") {
+        setPdfFile(null);
+        setPdfUrl(null);
+        setPdfFileName(null);
+        setPdfPageImages([]);
+        setCurrentPdfPage(1);
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      } else if (msg.type === "DRAW_STROKE" && msg.stroke) {
+        const payload = msg.stroke as BoardStrokeEvent;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const scaleX = payload.canvasWidth ? canvas.width / payload.canvasWidth : 1;
+        const scaleY = payload.canvasHeight ? canvas.height / payload.canvasHeight : 1;
+        ctx.save();
+        ctx.beginPath();
+        setupContextForTool(ctx, payload.tool);
+        ctx.moveTo(payload.from.x * scaleX, payload.from.y * scaleY);
+        ctx.lineTo(payload.to.x * scaleX, payload.to.y * scaleY);
+        ctx.stroke();
+        ctx.restore();
+      } else if (msg.type === "DRAW_SHAPE" && msg.shape) {
+        const payload = msg.shape as BoardShapeEvent;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const scaleX = payload.canvasWidth ? canvas.width / payload.canvasWidth : 1;
+        const scaleY = payload.canvasHeight ? canvas.height / payload.canvasHeight : 1;
+        const sx = payload.start.x * scaleX;
+        const sy = payload.start.y * scaleY;
+        const ex = payload.end.x * scaleX;
+        const ey = payload.end.y * scaleY;
+        ctx.save();
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = payload.color || "#38bdf8";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        if (payload.tool === "line") {
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+        } else if (payload.tool === "rect") {
+          ctx.strokeRect(sx, sy, ex - sx, ey - sy);
+        } else if (payload.tool === "arrow") {
+          const headLen = 14;
+          const angle = Math.atan2(ey - sy, ex - sx);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.lineTo(ex - headLen * Math.cos(angle - Math.PI / 6), ey - headLen * Math.sin(angle - Math.PI / 6));
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(ex - headLen * Math.cos(angle + Math.PI / 6), ey - headLen * Math.sin(angle + Math.PI / 6));
+          ctx.stroke();
+        } else if (payload.tool === "circle") {
+          const rx = Math.abs(ex - sx) / 2;
+          const ry = Math.abs(ey - sy) / 2;
+          ctx.beginPath();
+          ctx.ellipse(Math.min(sx, ex) + rx, Math.min(sy, ey) + ry, Math.max(rx, 1), Math.max(ry, 1), 0, 0, 2 * Math.PI);
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (msg.type === "DRAW_TEXT" && msg.textEvent) {
+        const payload = msg.textEvent as BoardTextEvent;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const scaleX = payload.canvasWidth ? canvas.width / payload.canvasWidth : 1;
+        const scaleY = payload.canvasHeight ? canvas.height / payload.canvasHeight : 1;
+        ctx.save();
+        ctx.globalCompositeOperation = "source-over";
+        ctx.font = "bold 24px Inter, system-ui, sans-serif";
+        ctx.fillStyle = payload.color || "#f8fafc";
+        ctx.fillText(payload.text, payload.x * scaleX, payload.y * scaleY);
+        ctx.restore();
+      } else if (msg.type === "BOARD_CLEAR") {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+    });
+  }, [isTeacher, subscribeBoardData, fetchAndRenderServerPdf]);
 
   const commitTextToCanvas = () => {
     if (!textInputBox) return;
@@ -1229,14 +1279,16 @@ function SmartBoardConsoleContent() {
         ctx.fillText(text, textInputBox.canvasX, textInputBox.canvasY);
         ctx.restore();
         if (isTeacher) {
-          broadcastDrawText({
+          const textEvt = {
             text,
             x: textInputBox.canvasX,
             y: textInputBox.canvasY,
             color: shapeColor || "#f8fafc",
             canvasWidth: canvasRef.current.width,
             canvasHeight: canvasRef.current.height,
-          });
+          };
+          broadcastDrawText(textEvt);
+          publishBoardData({ type: "DRAW_TEXT", textEvent: textEvt });
         }
       }
     }
@@ -1457,13 +1509,15 @@ function SmartBoardConsoleContent() {
       ctx.lineTo(coords.x, coords.y);
       ctx.stroke();
 
-      broadcastDrawStroke({
+      const strokeEvt = {
         tool: activeTool,
         from: lastCoordRef.current,
         to: coords,
         canvasWidth: canvas.width,
         canvasHeight: canvas.height,
-      });
+      };
+      broadcastDrawStroke(strokeEvt);
+      publishBoardData({ type: "DRAW_STROKE", stroke: strokeEvt });
 
       lastCoordRef.current = coords;
     }
@@ -1486,14 +1540,16 @@ function SmartBoardConsoleContent() {
           activeTool === "rect" ||
           activeTool === "arrow")
       ) {
-        broadcastDrawShape({
+        const shapeEvt = {
           tool: activeTool,
           start: startCoordRef.current,
           end: lastShapeEndRef.current,
           color: shapeColor,
           canvasWidth: canvas.width,
           canvasHeight: canvas.height,
-        });
+        };
+        broadcastDrawShape(shapeEvt);
+        publishBoardData({ type: "DRAW_SHAPE", shape: shapeEvt });
       }
     }
     isDrawingRef.current = false;
@@ -1953,10 +2009,10 @@ function SmartBoardConsoleContent() {
           </div>
         </section>
 
-        {/* SAĞ: ÖĞRETMEN YALIN KONTROL KONSOLU (TEK DİKEY SÜTUN - ÇAKIŞMASIZ) */}
-        {isTeacher && (
-        <aside className="w-72 shrink-0 bg-slate-900 border-l border-slate-800 p-3 sm:p-4 flex flex-col gap-3 overflow-y-auto select-none z-20">
-          {/* 1. ÜST AKSİYON BUTONLARI (HER ZAMAN GÖRÜNÜR & TIKLANABİLİR) */}
+        {/* SAĞ: TEAMS TARZI BİRLEŞİK KATILIMCI GALERİSİ & DERS EYLEMLERİ */}
+        <aside className="hidden md:flex w-80 shrink-0 bg-slate-900 border-l border-slate-800 p-3 flex-col gap-3 h-full overflow-hidden select-none z-20">
+          {/* 1. ÜST BLOK (SABİT): LESSON ACTIONS (Yalnızca Eğitmen İçin) */}
+          {isTeacher && (
           <div className="space-y-2 shrink-0">
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
@@ -2007,267 +2063,33 @@ function SmartBoardConsoleContent() {
               </span>
             </button>
           </div>
+          )}
 
-          {/* 2. ÖĞRETMEN STÜDYOSU KARTI (SAĞ SÜTUNA TAM OTURAN KALICI MODÜL) */}
-          <div className="w-full rounded-2xl bg-slate-950/85 border border-slate-800/80 p-3 shadow-md flex flex-col gap-2.5 transition-all duration-200">
-            {/* Kart Başlık Çubuğu / Daraltılmış Şerit */}
-            <div
-              onClick={() => setIsExpanded((prev) => !prev)}
-              className="flex items-center justify-between cursor-pointer select-none group gap-2"
-              title={isExpanded ? t("brd_collapse_tip", "Daraltmak için tıklayın") : t("brd_expand_tip", "Genişletmek için tıklayın")}
-            >
-              {/* Sol: Yeşil Canlı Nokta & Başlık */}
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                <span className="text-[11px] font-mono font-bold text-slate-200 group-hover:text-indigo-300 transition-colors truncate">
-                  {isExpanded ? t("brd_studio_title", "Öğretmen Stüdyosu") : t("brd_studio_live", "🟢 Öğretmen Stüdyosu (Canlı)")}
-                </span>
-              </div>
-
-              {/* Sağ Kontroller */}
-              <div className="flex items-center gap-1 shrink-0">
-                {/* Daraltılmış Modda Hızlı 🎤 ve 📷 Kontrolleri */}
-                {!isExpanded && (
-                  <div className="flex items-center gap-1 mr-0.5">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleMicrophone();
-                      }}
-                      className={`p-1.5 rounded-lg transition cursor-pointer ${
-                        isMicActive
-                          ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 ring-1 ring-emerald-500/40"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800"
-                      }`}
-                      title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
-                    >
-                      {isMicActive ? (
-                        <Mic className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <MicOff className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleCamera();
-                      }}
-                      className={`p-1.5 rounded-lg transition cursor-pointer ${
-                        isCameraActive
-                          ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 ring-1 ring-emerald-500/40"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800"
-                      }`}
-                      title={isCameraActive ? t("brd_cam_off_tip", "Kamerayı Kapat") : t("brd_cam_on_tip", "Kamerayı Aç")}
-                    >
-                      {isCameraActive ? (
-                        <Video className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <VideoOff className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Genişlet / Daralt İkonu */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsExpanded((prev) => !prev);
-                  }}
-                  className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-                  title={isExpanded ? t("brd_collapse_tip", "Daralt") : t("brd_expand_tip", "Genişlet")}
-                >
-                  {isExpanded ? (
-                    <Minus className="w-3.5 h-3.5" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5 group-hover:text-indigo-300" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Genişletilmiş Görünüm */}
-            {isExpanded && (
-              <div className="flex flex-col gap-2 pt-1 border-t border-slate-850 animate-in fade-in duration-150">
-                {/* Kamera Videosu veya Profil Avatarı (Kompakt max-h-36 w-full) */}
-                <div className="relative w-full aspect-video max-h-36 rounded-xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center shadow-inner group">
-                  <video
-                    id="teacher-cam"
-                    ref={(el) => {
-                      cameraVideoRef.current = el;
-                      if (el && cameraStreamRef.current && el.srcObject !== cameraStreamRef.current) {
-                        el.srcObject = cameraStreamRef.current;
-                      }
-                    }}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover bg-black ${
-                      isCameraActive ? "block" : "hidden"
-                    }`}
-                  />
-
-                  {!isCameraActive && (
-                    <div className="flex flex-col items-center justify-center p-2 text-center">
-                      <div className="w-12 h-12 rounded-xl border border-indigo-400/40 overflow-hidden bg-slate-800 flex items-center justify-center text-xl shadow-md mb-1.5">
-                        {userProfile.avatar_url &&
-                        (userProfile.avatar_url.startsWith("http") ||
-                          userProfile.avatar_url.startsWith("/") ||
-                          userProfile.avatar_url.startsWith("data:")) ? (
-                          <img
-                            src={userProfile.avatar_url}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span>{userProfile.avatar_url || "👨‍🏫"}</span>
-                        )}
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-400">{t("brd_cam_off_lbl", "Kamera Kapalı")}</span>
-                    </div>
-                  )}
-
-                  {isCameraActive && (
-                    <>
-                      <div className="absolute top-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-900/85 text-[9px] text-emerald-300 font-bold backdrop-blur-sm pointer-events-none">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>{t("brd_pip_lbl", "Canlı PiP")}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsCameraFullscreen(true);
-                        }}
-                        className="absolute top-1.5 right-1.5 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900/85 hover:bg-slate-800 text-white text-[10px] font-semibold backdrop-blur-sm border border-slate-700/80 transition-all cursor-pointer shadow-md hover:scale-105 active:scale-95"
-                        title={t("brd_cam_fs_tip", "Kamerayı Tam Ekran Yap")}
-                      >
-                        <Maximize2 className="w-3 h-3 text-indigo-400" />
-                        <span>{t("brd_fs_enter", "⛶ Tam Ekran")}</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* Eğitmen & Aktif Ders Bilgisi (Kompakt Satırlar) */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-white truncate max-w-[170px]">
-                      {userProfile.full_name || userProfile.username}
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-mono">
-                      @{userProfile.username}
-                    </span>
-                  </div>
-
-                  <div className="w-full py-1.5 px-2 rounded-lg bg-slate-900/90 border border-slate-800/80 text-[11px] flex items-center justify-between gap-1.5">
-                    <span className="text-slate-400 font-medium shrink-0">{t("brd_active_lesson_lbl", "Aktif Ders:")}</span>
-                    <span className="font-bold text-indigo-300 truncate text-right">
-                      {activeClassName}
-                    </span>
-                  </div>
-                </div>
-
-                {/* BİRLEŞİK MİKROFON & KAMERA BUTONLARI (Kompakt Tek Satırda) */}
-                <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-850">
-                  <button
-                    type="button"
-                    onClick={toggleMicrophone}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
-                      isMicActive
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 ring-1 ring-emerald-400/40"
-                        : "bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700"
-                    }`}
-                    title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
-                  >
-                    {isMicActive ? (
-                      <>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <Mic className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>{t("brd_on", "Açık")}</span>
-                      </>
-                    ) : (
-                      <>
-                        <MicOff className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{t("brd_mic_short", "Mikrofon")}</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={toggleCamera}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
-                      isCameraActive
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 ring-1 ring-emerald-400/40"
-                        : "bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700"
-                    }`}
-                    title={isCameraActive ? t("brd_cam_off_tip", "Kamerayı Kapat") : t("brd_cam_on_tip", "Kamerayı Aç")}
-                  >
-                    {isCameraActive ? (
-                      <>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <Video className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>{t("brd_on", "Açık")}</span>
-                      </>
-                    ) : (
-                      <>
-                        <VideoOff className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{t("brd_cam_short", "Kamera")}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Kart küçültülmüşken kamera akışını kesintisiz canlı tutan gizli video elemanı */}
-            {!isExpanded && isCameraActive && (
-              <video
-                ref={(el) => {
-                  cameraVideoRef.current = el;
-                  if (el && cameraStreamRef.current && el.srcObject !== cameraStreamRef.current) {
-                    el.srcObject = cameraStreamRef.current;
-                  }
-                }}
-                autoPlay
-                playsInline
-                muted
-                className="hidden"
-              />
-            )}
-          </div>
+          {/* 2. ALT BLOK (KAYDIRILABİLİR): TEK BİRLEŞİK TEAMS KATILIMCI GALERİSİ (15+ KAMERA) */}
+          <TeamsParticipantGallery role={isTeacher ? "teacher" : "student"} />
 
           {/* 3. ALT DURUM BİLGİSİ */}
-          <div className="mt-auto p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 flex items-center gap-2">
+          <div className="shrink-0 p-2 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            <span>{t("brd_zero_audio_badge", "🔒 Sıfır Ses Kaydı • Canlı Dinleme Aktif")}</span>
+            <span>{t("brd_zero_audio_badge", "🔒 Sıfır Ses Kaydı • LiveKit SFU Aktif")}</span>
           </div>
         </aside>
-        )}
       </main>
 
 
 
       {/* ========================================================================= */}
-      {/* 4. ALT SABİT DOCK ÇUBUĞU (FIXED DOCK - ASLA KAYMAZ)                       */}
+      {/* 4. ALT SABİT DOCK ÇUBUĞU (FIXED DOCK - ÖĞRETMEN & ÖĞRENCİ CANLI MEDYA)   */}
       {/* ========================================================================= */}
-      {!isCameraFullscreen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-3 py-2 bg-slate-900/95 border border-slate-700/80 shadow-2xl rounded-2xl backdrop-blur-md pointer-events-auto max-w-[96vw] overflow-x-auto scrollbar-none">
-        {isTeacher && (
-        <>
-        {/* Canlı Stüdyo: 🎤 Mikrofon */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-3 py-2 bg-slate-900/95 border border-slate-700/80 shadow-2xl rounded-2xl backdrop-blur-md pointer-events-auto max-w-[96vw] overflow-x-auto scrollbar-none">
+        {/* Canlı Medya (Öğretmen & Öğrenci): 🎤 Mikrofon */}
         <button
           type="button"
           onClick={toggleMicrophone}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
+          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0 ${
             isMicActive
               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-md ring-2 ring-emerald-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
+              : "text-slate-300 hover:text-white hover:bg-slate-800"
           }`}
           title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
         >
@@ -2279,17 +2101,17 @@ function SmartBoardConsoleContent() {
           ) : (
             <MicOff className="w-4 h-4" />
           )}
-          <span className="hidden xl:inline">{t("brd_mic_short", "Mikrofon")}</span>
+          <span className="hidden sm:inline">{t("brd_mic_short", "Mikrofon")}</span>
         </button>
 
-        {/* Canlı Stüdyo: 📷 Kamera */}
+        {/* Canlı Medya (Öğretmen & Öğrenci): 📷 Kamera */}
         <button
           type="button"
           onClick={toggleCamera}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
+          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0 ${
             isCameraActive
               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-md ring-2 ring-emerald-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
+              : "text-slate-300 hover:text-white hover:bg-slate-800"
           }`}
           title={isCameraActive ? t("brd_cam_off_tip", "Kamerayı Kapat") : t("brd_cam_on_tip", "Kamerayı Aç")}
         >
@@ -2301,9 +2123,11 @@ function SmartBoardConsoleContent() {
           ) : (
             <VideoOff className="w-4 h-4" />
           )}
-          <span className="hidden xl:inline">{t("brd_cam_short", "Kamera")}</span>
+          <span className="hidden sm:inline">{t("brd_cam_short", "Kamera")}</span>
         </button>
 
+        {isTeacher && (
+        <>
         {/* Canlı Stüdyo: 🖥️ Ekran Paylaş */}
         <button
           type="button"
@@ -2599,122 +2423,9 @@ function SmartBoardConsoleContent() {
           <ZoomIn className="w-4 h-4" />
         </button>
       </div>
-      )}
 
       {/* ========================================================================= */}
-      {/* 5. KAMERA TAM EKRAN SAHNESİ (FULL-STAGE CAMERA OVERLAY)                   */}
-      {/* ========================================================================= */}
-      {isCameraActive && isCameraFullscreen && (
-        <div className="fixed inset-0 z-50 w-screen h-screen bg-slate-950 flex flex-col justify-between animate-in fade-in duration-200">
-          {/* Arka Plan Video */}
-          <video
-            ref={(el) => {
-              fullscreenVideoRef.current = el;
-              if (el && cameraStreamRef.current && el.srcObject !== cameraStreamRef.current) {
-                el.srcObject = cameraStreamRef.current;
-              }
-            }}
-            autoPlay
-            playsInline
-            muted
-            className="absolute inset-0 w-full h-full object-cover bg-slate-950 pointer-events-none"
-          />
-
-          {/* Üst Bilgi Rozeti */}
-          <div className="relative z-10 p-6 flex items-center justify-between pointer-events-auto">
-            <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-900/80 border border-slate-700/80 backdrop-blur-md shadow-2xl text-white">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs sm:text-sm font-bold tracking-wide">
-                {t("brd_live_broadcast", "🎥 CANLI EĞİTMEN YAYINI")}
-              </span>
-              <span className="text-slate-500 font-mono">•</span>
-              <span className="text-xs text-indigo-300 font-semibold truncate max-w-xs sm:max-w-md">
-                {activeClassName}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsCameraFullscreen(false)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold backdrop-blur-md shadow-2xl transition active:scale-95 cursor-pointer"
-              title={t("brd_min_cam_tip", "Kamerayı Sağ Panele Küçült [Esc]")}
-            >
-              <Minimize2 className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">{t("brd_min_cam", "Kamerayı Küçült")}</span>
-            </button>
-          </div>
-
-          {/* Alt Kontrol Barı */}
-          <div className="relative z-10 pb-8 flex items-center justify-center px-4 pointer-events-auto">
-            <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-3xl bg-slate-900/90 border border-slate-700/80 backdrop-blur-xl shadow-2xl">
-              {/* [ 🎤 Mikrofon Aç/Kapat ] */}
-              <button
-                type="button"
-                onClick={toggleMicrophone}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
-                  isMicActive
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-500/30"
-                    : "bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700"
-                }`}
-                title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
-              >
-                {isMicActive ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <Mic className="w-4 h-4 text-emerald-400" />
-                    <span>{t("brd_mic_on_lbl", "Mikrofon Açık")}</span>
-                  </>
-                ) : (
-                  <>
-                    <MicOff className="w-4 h-4 text-slate-400" />
-                    <span>{t("brd_mic_off_lbl", "Mikrofon Kapalı")}</span>
-                  </>
-                )}
-              </button>
-
-              {/* [ 📷 Kamerayı Kapat ] */}
-              <button
-                type="button"
-                onClick={toggleCamera}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/50 text-xs sm:text-sm font-bold transition shadow-md active:scale-95 cursor-pointer"
-                title={t("brd_cam_off_tip", "Kamerayı Kapat")}
-              >
-                <VideoOff className="w-4 h-4 text-rose-400" />
-                <span>{t("brd_cam_off_tip", "Kamerayı Kapat")}</span>
-              </button>
-
-              {/* [ 📄 Tahtaya / PDF'e Geç (Kamerayı Küçült) ] */}
-              <button
-                type="button"
-                onClick={() => setIsCameraFullscreen(false)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer"
-                title={t("brd_back_board_tip", "Kamerayı Sağ Panele Küçültüp Tahtaya Dön")}
-              >
-                <FileText className="w-4 h-4 text-white" />
-                <span>{t("brd_back_board", "Tahtaya / PDF'e Geç")}</span>
-              </button>
-
-              {/* Ayırıcı Çizgi */}
-              <div className="w-px h-6 bg-slate-700/80 mx-1 hidden sm:block" />
-
-              {/* [ ⚡ Dersi Bitir ] */}
-              <button
-                type="button"
-                onClick={handleCompleteLesson}
-                disabled={isEndingLesson}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-200 border border-slate-700 hover:border-rose-500/50 text-xs sm:text-sm font-bold transition shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
-                title={t("brd_end_lesson_tip", "Aktif Dersi Sonlandır")}
-              >
-                <Power className="w-4 h-4 text-amber-400 hover:text-rose-400" />
-                <span>{isEndingLesson ? t("brd_ending", "Tamamlanıyor...") : t("brd_end_btn", "Dersi Bitir")}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 6. MODALLAR: ESNEK SAYAÇ & MANUEL MATERYAL GÖNDERİMİ                       */}
+      {/* 5. MODALLAR: ESNEK SAYAÇ & MANUEL MATERYAL GÖNDERİMİ                       */}
       {/* ========================================================================= */}
       <BoardTimer
         isOpen={isTimerOpen}
@@ -2738,18 +2449,6 @@ function SmartBoardConsoleContent() {
         classCode={liveJoinCode || classId}
         className={activeClassName}
         activeSessionId={liveSessionId || sessionId || undefined}
-      />
-
-      <LiveKitClassroomStage
-        classId={classId}
-        userId={userProfile.id || undefined}
-        userName={userProfile.full_name || userProfile.username || undefined}
-        role={isTeacher ? "teacher" : "student"}
-        isMicEnabled={isMicActive}
-        isCameraEnabled={isCameraActive}
-        isScreenShareEnabled={isScreenSharing}
-        onParticipantsCountChange={setLiveParticipantsCount}
-        onScreenShareStopped={() => setIsScreenSharing(false)}
       />
     </div>
   );
