@@ -1740,11 +1740,44 @@ def get_class_by_invite_slug(slug: str, db=None) -> Optional[Dict[str, Any]]:
         except Exception as e:
             print(f"[DB Get Class by Slug Error]: {e}")
 
+        # Canlı oturum PIN kodu (join_code: örn. Z46-EXK) ile eşleştirme
+        if not class_record:
+            try:
+                sess_res = (
+                    db.table("class_sessions")
+                    .select("class_id")
+                    .eq("join_code", clean_slug)
+                    .limit(1)
+                    .execute()
+                )
+                if sess_res.data and sess_res.data[0].get("class_id"):
+                    cid = sess_res.data[0]["class_id"]
+                    c_res = db.table("classes").select("*").eq("id", cid).limit(1).execute()
+                    if c_res.data and len(c_res.data) > 0:
+                        class_record = c_res.data[0]
+            except Exception as e:
+                print(f"[DB Get Class by JoinCode Error]: {e}")
+
     if not class_record:
         class_record = next(
             (c for c in IN_MEMORY_CLASSES_V2 if c.get("invite_slug", "").upper() == clean_slug or c.get("code", "").upper() == clean_slug),
             None
         )
+    if not class_record:
+        matched_sess = next(
+            (s for s in IN_MEMORY_CLASS_SESSIONS if str(s.get("join_code") or "").upper() == clean_slug),
+            None,
+        )
+        if matched_sess and matched_sess.get("class_id"):
+            cid = matched_sess["class_id"]
+            class_record = next((c for c in IN_MEMORY_CLASSES_V2 if c.get("id") == cid), None)
+            if not class_record and db:
+                try:
+                    c_res = db.table("classes").select("*").eq("id", cid).limit(1).execute()
+                    if c_res.data:
+                        class_record = c_res.data[0]
+                except Exception:
+                    pass
 
     if not class_record:
         return None
@@ -1780,6 +1813,7 @@ def get_class_by_invite_slug(slug: str, db=None) -> Optional[Dict[str, Any]]:
             pass
 
     return {
+        "class_id": class_id,
         "class": class_record,
         "upcoming_sessions": upcoming_sessions,
         "teacher": {

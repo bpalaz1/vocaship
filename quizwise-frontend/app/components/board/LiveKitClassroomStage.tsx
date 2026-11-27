@@ -40,6 +40,7 @@ import { getAuthToken } from "../../context/AuthContext";
 
 export interface LiveKitBoardContextValue {
   isConnected: boolean;
+  roomName: string;
   isMicEnabled: boolean;
   isCameraEnabled: boolean;
   isScreenShareEnabled: boolean;
@@ -54,6 +55,7 @@ export interface LiveKitBoardContextValue {
 
 const LiveKitBoardContext = createContext<LiveKitBoardContextValue>({
   isConnected: false,
+  roomName: "",
   isMicEnabled: false,
   isCameraEnabled: false,
   isScreenShareEnabled: false,
@@ -95,9 +97,11 @@ function isTeacherIdentity(p: { identity?: string; name?: string; isLocal?: bool
 
 function LiveKitBoardBridge({
   role,
+  roomName,
   children,
 }: {
   role: "teacher" | "student";
+  roomName: string;
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
@@ -239,6 +243,7 @@ function LiveKitBoardBridge({
   const ctxValue = useMemo<LiveKitBoardContextValue>(
     () => ({
       isConnected,
+      roomName,
       isMicEnabled,
       isCameraEnabled,
       isScreenShareEnabled,
@@ -252,6 +257,7 @@ function LiveKitBoardBridge({
     }),
     [
       isConnected,
+      roomName,
       isMicEnabled,
       isCameraEnabled,
       isScreenShareEnabled,
@@ -551,6 +557,9 @@ export function LiveKitBoardProvider({
   const [serverUrl, setServerUrl] = useState<string>(
     process.env.NEXT_PUBLIC_LIVEKIT_URL || ""
   );
+  const [roomName, setRoomName] = useState<string>(
+    classId ? `vocaship-room-${classId.trim().toLowerCase()}` : ""
+  );
 
   const stableIdentity = useMemo(
     () => (userId ? `${role}-${userId}` : `${role}-${classId}-${Math.random().toString(36).slice(2, 6)}`),
@@ -558,14 +567,15 @@ export function LiveKitBoardProvider({
   );
 
   useEffect(() => {
-    if (!classId) return;
+    const cleanClassId = (classId || "").trim().toLowerCase();
+    if (!cleanClassId) return;
     let active = true;
 
     const fetchToken = async () => {
       try {
         const authToken = getAuthToken();
         const res = await fetch(
-          `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/livekit-token`,
+          `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(cleanClassId)}/livekit-token`,
           {
             method: "POST",
             headers: {
@@ -582,6 +592,9 @@ export function LiveKitBoardProvider({
         if (!res.ok) return;
         const data = await res.json();
         if (active && data?.token) {
+          const resolvedRoom = data.room_name || `vocaship-room-${cleanClassId}`;
+          console.info(`[LiveKit] Bağlanılan oda: ${resolvedRoom}`);
+          setRoomName(resolvedRoom);
           setToken(data.token);
           if (data.server_url) setServerUrl(data.server_url);
         }
@@ -607,7 +620,7 @@ export function LiveKitBoardProvider({
       data-lk-theme="default"
       className="h-full w-full"
     >
-      <LiveKitBoardBridge role={role}>{children}</LiveKitBoardBridge>
+      <LiveKitBoardBridge role={role} roomName={roomName}>{children}</LiveKitBoardBridge>
     </LiveKitRoom>
   );
 }

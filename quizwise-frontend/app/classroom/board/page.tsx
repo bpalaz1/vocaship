@@ -87,43 +87,41 @@ export interface BoardTerm {
 
 function SmartBoardConsoleContent() {
   const { t } = useLanguage();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { userProfile } = useProfile();
 
-  const urlRoomKey =
-    searchParams.get("classId") ||
-    searchParams.get("class_id") ||
-    searchParams.get("sessionId") ||
-    searchParams.get("session_id") ||
-    "";
-  const [roomKey, setRoomKey] = useState<string>(urlRoomKey || "cls-1");
+  // Yalnızca URL'deki classId kullanılır (asla sessionId veya sahte oda kullanılmaz)
+  const roomKey = (searchParams.get("classId") || "").trim();
 
   useEffect(() => {
-    if (urlRoomKey) {
-      setRoomKey(urlRoomKey);
-      return;
+    if (!roomKey) {
+      const timer = setTimeout(() => {
+        router.replace("/classroom");
+      }, 1500);
+      return () => clearTimeout(timer);
     }
-    if (typeof window !== "undefined") {
-      try {
-        const rawActive = localStorage.getItem("vocaship_active_class");
-        if (rawActive) {
-          const parsed = JSON.parse(rawActive);
-          if (parsed?.classId || parsed?.id) {
-            setRoomKey(String(parsed.classId || parsed.id));
-            return;
-          }
-        }
-        const rawSession = localStorage.getItem("vocaship_live_session");
-        if (rawSession) {
-          const parsedSession = JSON.parse(rawSession);
-          if (parsedSession?.classId || parsedSession?.id) {
-            setRoomKey(String(parsedSession.classId || parsedSession.id));
-            return;
-          }
-        }
-      } catch {}
-    }
-  }, [urlRoomKey]);
+  }, [roomKey, router]);
+
+  if (!roomKey) {
+    return (
+      <div className="min-h-screen w-screen bg-slate-950 text-white flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-base sm:text-lg font-bold">Sınıf kimliği (classId) bulunamadı</h2>
+        <p className="text-xs sm:text-sm text-slate-400 max-w-md">
+          Geçerli bir sınıf seçilmeden canlı ders odasına girilemez. Sınıflarım sayfasına yönlendiriliyorsunuz...
+        </p>
+        <Link
+          href="/classroom"
+          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition"
+        >
+          ← Sınıflarım Sayfasına Dön
+        </Link>
+      </div>
+    );
+  }
 
   const sessionId = searchParams.get("sessionId") || searchParams.get("session_id") || "";
   const activeClassName = searchParams.get("className") || searchParams.get("class_name") || t("brd_default_room", "Ders / Tahta Odası");
@@ -169,6 +167,8 @@ function SmartBoardConsoleInner({
   const searchParams = useSearchParams();
   const { userProfile } = useProfile();
   const {
+    isConnected: isLiveKitConnected,
+    roomName: liveKitRoomName,
     isMicEnabled: isMicActive,
     isCameraEnabled: isCameraActive,
     isScreenShareEnabled: isScreenSharing,
@@ -180,6 +180,8 @@ function SmartBoardConsoleInner({
     publishBoardData,
     subscribeBoardData,
   } = useLiveKitBoard();
+
+  const roomSuffix = (liveKitRoomName || `vocaship-room-${classId.toLowerCase()}`).slice(-6);
 
   const [liveSessionId, setLiveSessionId] = useState<string>(sessionId);
   const [liveJoinCode, setLiveJoinCode] = useState<string | null>(null);
@@ -702,6 +704,7 @@ function SmartBoardConsoleInner({
   };
 
   const lastLoadedPdfVersionRef = useRef<number>(0);
+  const serverPdfMetaRef = useRef<{ pdfUrl: string; fileName: string; version: number } | null>(null);
 
   const renderPdfFromArrayBuffer = useCallback(
     async (arrayBuffer: ArrayBuffer, fileName: string, targetPage = 1) => {
@@ -787,14 +790,15 @@ function SmartBoardConsoleInner({
     [renderPdfFromArrayBuffer]
   );
 
-  // Öğrenci odaya girdiğinde sunucudaki mevcut PDF durumunu (GET /board-state) çek ve render et
+  // Öğrenci hem sayfaya ilk girdiğinde hem de LiveKit odasına bağlandığında (RoomEvent.Connected)
+  // GET /board-state çağırıp aktif PDF varsa hemen render eder
   useEffect(() => {
     if (isTeacher || !classId) return;
     let active = true;
     const syncInitialBoardState = async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/board-state`
+          `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId.trim().toLowerCase())}/board-state`
         );
         if (!res.ok || !active) return;
         const data = await res.json();
@@ -812,7 +816,7 @@ function SmartBoardConsoleInner({
     return () => {
       active = false;
     };
-  }, [isTeacher, classId, fetchAndRenderServerPdf]);
+  }, [isTeacher, classId, isLiveKitConnected, fetchAndRenderServerPdf]);
 
   // PDF Dosyası Yükleme: Yerel render + Backend /board-pdf upload + LiveKit DataChannel broadcast
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -842,13 +846,19 @@ function SmartBoardConsoleInner({
       );
       if (uploadRes.ok) {
         const data = await uploadRes.json();
-        lastLoadedPdfVersionRef.current = data.version || Date.now();
+        const ver = data.version || Date.now();
+        lastLoadedPdfVersionRef.current = ver;
+        serverPdfMetaRef.current = {
+          pdfUrl: data.pdf_url,
+          fileName: data.active_pdf_filename || file.name,
+          version: ver,
+        };
         await publishBoardData({
           type: "PDF_UPDATED",
           pdfUrl: data.pdf_url,
           fileName: data.active_pdf_filename || file.name,
           pageNum: 1,
-          version: data.version,
+          version: ver,
         });
       }
     } catch (err) {
@@ -906,6 +916,15 @@ function SmartBoardConsoleInner({
         }
       ).catch(() => {});
       publishBoardData({ type: "PDF_PAGE", pageNum: clamped });
+      if (serverPdfMetaRef.current) {
+        publishBoardData({
+          type: "PDF_UPDATED",
+          pdfUrl: serverPdfMetaRef.current.pdfUrl,
+          fileName: serverPdfMetaRef.current.fileName,
+          pageNum: clamped,
+          version: serverPdfMetaRef.current.version,
+        });
+      }
     }
   };
 
@@ -1604,10 +1623,10 @@ function SmartBoardConsoleInner({
           )}
 
           <div
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-slate-800/90 border border-slate-700/80 text-slate-200 text-xs font-bold shrink-0"
-            title={`Oda: vocaship-room-${classId}`}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-slate-800/90 border border-slate-700/80 text-slate-200 text-xs font-bold shrink-0"
+            title={`Oda: ${liveKitRoomName || `vocaship-room-${classId.toLowerCase()}`}`}
           >
-            <span>👥 {liveParticipantsCount} Kişi Odada</span>
+            <span>👥 {liveParticipantsCount} Kişi Odada • #{roomSuffix}</span>
           </div>
 
           {liveJoinCode && (

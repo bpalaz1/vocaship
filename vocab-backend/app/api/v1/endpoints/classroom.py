@@ -666,7 +666,11 @@ async def create_livekit_token(
     )
     display_name = (req_name or "VocaShip Katılımcı").strip()
 
-    room_name = f"vocaship-room-{class_id}"
+    clean_class_id = (class_id or "").strip().lower()
+    if not clean_class_id:
+        raise HTTPException(status_code=400, detail="Geçerli bir class_id gereklidir.")
+
+    room_name = f"vocaship-room-{clean_class_id}"
 
     grant = livekit_api.VideoGrants(
         room_join=True,
@@ -704,7 +708,11 @@ _BOARD_STATE_STORE: Dict[str, Dict[str, Any]] = {}
 
 
 def _safe_board_class_id(class_id: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9_-]", "_", (class_id or "default").strip()) or "default"
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", (class_id or "default").strip().lower()) or "default"
+
+
+def _norm_board_key(class_id: str) -> str:
+    return (class_id or "").strip().lower()
 
 
 def _board_pdf_path(class_id: str) -> str:
@@ -748,27 +756,29 @@ async def upload_board_pdf(
     except Exception:
         storage_url = None
 
+    norm_cid = _norm_board_key(class_id)
     state = {
         "has_pdf": True,
         "active_pdf_filename": filename,
         "page_num": 1,
         "version": version,
-        "pdf_url": f"/api/v1/classroom/classes/{class_id}/board-pdf?v={version}",
+        "pdf_url": f"/api/v1/classroom/classes/{norm_cid}/board-pdf?v={version}",
         "storage_url": storage_url,
     }
-    _BOARD_STATE_STORE[class_id] = state
+    _BOARD_STATE_STORE[norm_cid] = state
     return state
 
 
 @router.get("/classes/{class_id}/board-pdf")
 async def get_board_pdf(class_id: str):
     """Kayıtlı PDF dosyasını CORS başlıklarıyla öğrencilere sunar."""
-    pdf_path = _board_pdf_path(class_id)
+    norm_cid = _norm_board_key(class_id)
+    pdf_path = _board_pdf_path(norm_cid)
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="Aktif PDF bulunamadı.")
 
-    state = _BOARD_STATE_STORE.get(class_id) or {}
-    filename = state.get("active_pdf_filename") or f"{_safe_board_class_id(class_id)}.pdf"
+    state = _BOARD_STATE_STORE.get(norm_cid) or {}
+    filename = state.get("active_pdf_filename") or f"{_safe_board_class_id(norm_cid)}.pdf"
     return FileResponse(
         path=pdf_path,
         media_type="application/pdf",
@@ -783,20 +793,21 @@ async def get_board_pdf(class_id: str):
 @router.get("/classes/{class_id}/board-state", status_code=status.HTTP_200_OK)
 async def get_board_state(class_id: str):
     """Sınıfın aktif PDF ve sayfa durumunu döner."""
-    state = _BOARD_STATE_STORE.get(class_id)
-    pdf_path = _board_pdf_path(class_id)
+    norm_cid = _norm_board_key(class_id)
+    state = _BOARD_STATE_STORE.get(norm_cid)
+    pdf_path = _board_pdf_path(norm_cid)
     if state and state.get("has_pdf") and os.path.exists(pdf_path):
         return state
     if os.path.exists(pdf_path):
         version = int(os.path.getmtime(pdf_path) * 1000)
         restored = {
             "has_pdf": True,
-            "active_pdf_filename": f"{_safe_board_class_id(class_id)}.pdf",
+            "active_pdf_filename": f"{_safe_board_class_id(norm_cid)}.pdf",
             "page_num": 1,
             "version": version,
-            "pdf_url": f"/api/v1/classroom/classes/{class_id}/board-pdf?v={version}",
+            "pdf_url": f"/api/v1/classroom/classes/{norm_cid}/board-pdf?v={version}",
         }
-        _BOARD_STATE_STORE[class_id] = restored
+        _BOARD_STATE_STORE[norm_cid] = restored
         return restored
     return {
         "has_pdf": False,
@@ -810,9 +821,10 @@ async def get_board_state(class_id: str):
 @router.post("/classes/{class_id}/board-state", status_code=status.HTTP_200_OK)
 async def update_board_state(class_id: str, payload: BoardStateUpdatePayload):
     """Öğretmen sayfa değiştirdiğinde veya PDF'i temizlediğinde sunucu durumunu günceller."""
-    pdf_path = _board_pdf_path(class_id)
+    norm_cid = _norm_board_key(class_id)
+    pdf_path = _board_pdf_path(norm_cid)
     if payload.clear_pdf:
-        _BOARD_STATE_STORE.pop(class_id, None)
+        _BOARD_STATE_STORE.pop(norm_cid, None)
         try:
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
@@ -826,20 +838,20 @@ async def update_board_state(class_id: str, payload: BoardStateUpdatePayload):
             "pdf_url": None,
         }
 
-    state = _BOARD_STATE_STORE.get(class_id)
+    state = _BOARD_STATE_STORE.get(norm_cid)
     if not state:
         has_file = os.path.exists(pdf_path)
         version = int(os.path.getmtime(pdf_path) * 1000) if has_file else 0
         state = {
             "has_pdf": has_file,
-            "active_pdf_filename": f"{_safe_board_class_id(class_id)}.pdf" if has_file else None,
+            "active_pdf_filename": f"{_safe_board_class_id(norm_cid)}.pdf" if has_file else None,
             "page_num": 1,
             "version": version,
-            "pdf_url": f"/api/v1/classroom/classes/{class_id}/board-pdf?v={version}" if has_file else None,
+            "pdf_url": f"/api/v1/classroom/classes/{norm_cid}/board-pdf?v={version}" if has_file else None,
         }
     if payload.page_num is not None and payload.page_num >= 1:
         state["page_num"] = int(payload.page_num)
-    _BOARD_STATE_STORE[class_id] = state
+    _BOARD_STATE_STORE[norm_cid] = state
     return state
 
 

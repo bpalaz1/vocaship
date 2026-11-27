@@ -33,26 +33,41 @@ function JoinContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoRedirecting, setAutoRedirecting] = useState(false);
   const [classInfo, setClassInfo] = useState<{
+    id?: string;
     name: string;
     grade_level?: string;
   } | null>(null);
 
-  // 1. Sınıf bilgilerini önbellekten veya API'den çek
+  // 1. Sınıf bilgilerini davet/PIN endpoint'inden çöz (gerçek classId UUID için)
   useEffect(() => {
     if (!codeParam) return;
     const fetchClassInfo = async () => {
+      try {
+        const invRes = await fetch(`${API_BASE}/api/v1/classroom/invite/${encodeURIComponent(codeParam)}`);
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          const resolvedId = invData?.class?.id || invData?.class_id || codeParam;
+          setClassInfo({
+            id: String(resolvedId),
+            name: invData?.class?.title || invData?.class?.name || t("join_default_cls_name", "VocaShip Canlı Sınıfı"),
+            grade_level: invData?.class?.level || "B2-C1",
+          });
+          return;
+        }
+      } catch {}
       try {
         const res = await fetch(`${API_BASE}/api/v1/classroom/assignments/${encodeURIComponent(codeParam)}`);
         if (res.ok) {
           const data = await res.json();
           setClassInfo({
+            id: data.class_id || codeParam,
             name: data.class_name || t("join_default_cls_name", "VocaShip Canlı Sınıfı"),
             grade_level: data.grade_level || "B2-C1",
           });
         }
       } catch {
-        // Fallback
         setClassInfo({
+          id: codeParam,
           name: t("join_default_cls_name", "VocaShip Canlı Sınıfı"),
           grade_level: t("join_grade_general", "Genel"),
         });
@@ -63,15 +78,15 @@ function JoinContent() {
 
   // 2. Kullanıcı Zaten Oturum Açmışsa: Doğrudan Canlı Derse Yönlendir
   useEffect(() => {
-    if (user && codeParam) {
+    if (user && codeParam && classInfo?.id) {
       setAutoRedirecting(true);
       const timer = setTimeout(() => {
-        const targetUrl = `/classroom/board?classId=${encodeURIComponent(codeParam)}&live=1${sessionParam ? `&sessionId=${encodeURIComponent(sessionParam)}` : ""}&role=student`;
+        const targetUrl = `/classroom/board?classId=${encodeURIComponent(classInfo.id!)}&live=1${sessionParam ? `&sessionId=${encodeURIComponent(sessionParam)}` : ""}&role=student`;
         router.push(targetUrl);
-      }, 900);
+      }, 600);
       return () => clearTimeout(timer);
     }
-  }, [user, codeParam, sessionParam, router]);
+  }, [user, codeParam, classInfo, sessionParam, router]);
 
   // 3. Geçici Öğrenci / Takma Ad ile Hızlı Katılım
   const handleGuestJoin = (e: React.FormEvent) => {
@@ -86,7 +101,8 @@ function JoinContent() {
       }
     } catch {}
 
-    const targetUrl = `/classroom/board?classId=${encodeURIComponent(codeParam)}&live=1${sessionParam ? `&sessionId=${encodeURIComponent(sessionParam)}` : ""}&role=student&guestName=${encodeURIComponent(cleanName)}`;
+    const targetClassId = classInfo?.id || codeParam;
+    const targetUrl = `/classroom/board?classId=${encodeURIComponent(targetClassId)}&live=1${sessionParam ? `&sessionId=${encodeURIComponent(sessionParam)}` : ""}&role=student&guestName=${encodeURIComponent(cleanName)}`;
     router.push(targetUrl);
   };
 

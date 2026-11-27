@@ -260,7 +260,7 @@ function ClassroomContent() {
     setClassrooms(updated);
   };
 
-  // 3. Öğrenci PIN ile Katılım -> Doğrudan LiveKit destekli /classroom/board sahnesine yönlendir
+  // 3. Öğrenci PIN ile Katılım -> Doğrudan gerçek classId ile LiveKit destekli /classroom/board sahnesine yönlendir
   const handleStudentJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = studentPin.trim();
@@ -268,9 +268,7 @@ function ClassroomContent() {
     const upper = clean.toUpperCase();
 
     const matchedSession = [...teachingSessions, ...attendingSessions].find(
-      (s) =>
-        String(s.class_id || "").toUpperCase() === upper ||
-        String(s.session_id || "").toUpperCase() === upper
+      (s) => String(s.class_id || "").toUpperCase() === upper
     );
 
     let targetClassId = matchedSession?.class_id || "";
@@ -279,15 +277,17 @@ function ClassroomContent() {
         const res = await fetch(`${API_BASE}/api/v1/classroom/invite/${encodeURIComponent(clean)}`);
         if (res.ok) {
           const info = await res.json();
-          if (info?.class_id || info?.id) {
-            targetClassId = String(info.class_id || info.id);
+          const resolvedId = info?.class?.id || info?.class_id || info?.id;
+          if (resolvedId) {
+            targetClassId = String(resolvedId);
           }
         }
       } catch {}
     }
 
     if (!targetClassId) {
-      targetClassId = clean;
+      alert("Bu PIN koduna ait aktif bir sınıf bulunamadı. Lütfen eğitmeninizin paylaştığı kodu kontrol edin.");
+      return;
     }
 
     setShowJoinPinModal(false);
