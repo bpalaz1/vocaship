@@ -90,8 +90,16 @@ function SmartBoardConsoleContent() {
   const classId = searchParams.get("classId") || searchParams.get("class_id") || "cls-1";
   const sessionId = searchParams.get("sessionId") || searchParams.get("session_id") || "";
   const activeClassName = searchParams.get("className") || searchParams.get("class_name") || t("brd_default_room", "Ders / Tahta Odası");
+  // 1. Profil Context (Dinamik Öğretmen Kartı / Stüdyo İçin)
+  const { userProfile } = useProfile();
+
   const roleParam = searchParams.get("role");
-  const isStudentViewer = roleParam === "student" || roleParam === "attendee";
+  const teacherIdParam = searchParams.get("teacherId") || searchParams.get("teacher_id");
+  const isOwnerMismatch = Boolean(
+    teacherIdParam && userProfile?.id && String(teacherIdParam) !== String(userProfile.id)
+  );
+  const isStudentViewer =
+    roleParam === "student" || roleParam === "attendee" || isOwnerMismatch;
   const isTeacher = !isStudentViewer;
 
   const [liveSessionId, setLiveSessionId] = useState<string>(sessionId);
@@ -102,8 +110,6 @@ function SmartBoardConsoleContent() {
   const remoteScreenStreamRef = useRef<MediaStream | null>(null);
   const lastShapeEndRef = useRef<{ x: number; y: number } | null>(null);
 
-  // 1. Profil Context (Dinamik Öğretmen Kartı / Stüdyo İçin)
-  const { userProfile } = useProfile();
   const [isExpanded, setIsExpanded] = useState(true);
 
   // 2. Ekran & PDF Materyali Durumları

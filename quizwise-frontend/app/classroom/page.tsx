@@ -26,6 +26,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { API_BASE } from "../config";
 import ClassCard, { ClassroomItem } from "../components/classroom/ClassCard";
 import ClassPinModal, { generateClassPin } from "../components/classroom/ClassPinModal";
 import CreateClassModal from "../components/classroom/CreateClassModal";
@@ -259,12 +260,40 @@ function ClassroomContent() {
     setClassrooms(updated);
   };
 
-  // 3. Öğrenci PIN ile Katılım
-  const handleStudentJoin = (e: React.FormEvent) => {
+  // 3. Öğrenci PIN ile Katılım -> Doğrudan LiveKit destekli /classroom/board sahnesine yönlendir
+  const handleStudentJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = studentPin.trim().toUpperCase();
+    const clean = studentPin.trim();
     if (!clean) return;
-    router.push(`/reading?code=${encodeURIComponent(clean)}`);
+    const upper = clean.toUpperCase();
+
+    const matchedSession = [...teachingSessions, ...attendingSessions].find(
+      (s) =>
+        String(s.class_id || "").toUpperCase() === upper ||
+        String(s.session_id || "").toUpperCase() === upper
+    );
+
+    let targetClassId = matchedSession?.class_id || "";
+    if (!targetClassId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/classroom/invite/${encodeURIComponent(clean)}`);
+        if (res.ok) {
+          const info = await res.json();
+          if (info?.class_id || info?.id) {
+            targetClassId = String(info.class_id || info.id);
+          }
+        }
+      } catch {}
+    }
+
+    if (!targetClassId) {
+      targetClassId = clean;
+    }
+
+    setShowJoinPinModal(false);
+    router.push(
+      `/classroom/board?classId=${encodeURIComponent(targetClassId)}&role=student`
+    );
   };
 
   // 4. Yeni Ödev Ekleme
