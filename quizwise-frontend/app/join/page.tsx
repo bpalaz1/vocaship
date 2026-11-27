@@ -66,7 +66,7 @@ function JoinContent() {
     if (user && codeParam) {
       setAutoRedirecting(true);
       const timer = setTimeout(() => {
-        const targetUrl = `/classroom/board?classId=${encodeURIComponent(codeParam)}&sessionId=${encodeURIComponent(sessionParam)}&role=student`;
+        const targetUrl = `/classroom/board?classId=${encodeURIComponent(codeParam)}&live=1${sessionParam ? `&sessionId=${encodeURIComponent(sessionParam)}` : ""}&role=student`;
         router.push(targetUrl);
       }, 900);
       return () => clearTimeout(timer);
@@ -86,7 +86,7 @@ function JoinContent() {
       }
     } catch {}
 
-    const targetUrl = `/classroom/board?classId=${encodeURIComponent(codeParam)}&sessionId=${encodeURIComponent(sessionParam)}&role=student&guestName=${encodeURIComponent(cleanName)}`;
+    const targetUrl = `/classroom/board?classId=${encodeURIComponent(codeParam)}&live=1${sessionParam ? `&sessionId=${encodeURIComponent(sessionParam)}` : ""}&role=student&guestName=${encodeURIComponent(cleanName)}`;
     router.push(targetUrl);
   };
 

@@ -292,7 +292,7 @@ function ClassroomContent() {
 
     setShowJoinPinModal(false);
     router.push(
-      `/classroom/board?classId=${encodeURIComponent(targetClassId)}&role=student`
+      `/classroom/board?classId=${encodeURIComponent(targetClassId)}&live=1&role=student`
     );
   };
 

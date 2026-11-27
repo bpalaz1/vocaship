@@ -87,12 +87,17 @@ function SmartBoardConsoleContent() {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlClassId = searchParams.get("classId") || searchParams.get("class_id") || "";
-  const [effectiveClassId, setEffectiveClassId] = useState<string>(urlClassId || "cls-1");
+  const urlRoomKey =
+    searchParams.get("classId") ||
+    searchParams.get("class_id") ||
+    searchParams.get("sessionId") ||
+    searchParams.get("session_id") ||
+    "";
+  const [roomKey, setRoomKey] = useState<string>(urlRoomKey || "cls-1");
 
   useEffect(() => {
-    if (urlClassId) {
-      setEffectiveClassId(urlClassId);
+    if (urlRoomKey) {
+      setRoomKey(urlRoomKey);
       return;
     }
     if (typeof window !== "undefined") {
@@ -100,24 +105,24 @@ function SmartBoardConsoleContent() {
         const rawActive = localStorage.getItem("vocaship_active_class");
         if (rawActive) {
           const parsed = JSON.parse(rawActive);
-          if (parsed?.classId) {
-            setEffectiveClassId(String(parsed.classId));
+          if (parsed?.classId || parsed?.id) {
+            setRoomKey(String(parsed.classId || parsed.id));
             return;
           }
         }
         const rawSession = localStorage.getItem("vocaship_live_session");
         if (rawSession) {
           const parsedSession = JSON.parse(rawSession);
-          if (parsedSession?.classId) {
-            setEffectiveClassId(String(parsedSession.classId));
+          if (parsedSession?.classId || parsedSession?.id) {
+            setRoomKey(String(parsedSession.classId || parsedSession.id));
             return;
           }
         }
       } catch {}
     }
-  }, [urlClassId]);
+  }, [urlRoomKey]);
 
-  const classId = effectiveClassId;
+  const classId = roomKey;
   const sessionId = searchParams.get("sessionId") || searchParams.get("session_id") || "";
   const activeClassName = searchParams.get("className") || searchParams.get("class_name") || t("brd_default_room", "Ders / Tahta Odası");
   const [liveParticipantsCount, setLiveParticipantsCount] = useState<number>(1);
@@ -877,7 +882,7 @@ function SmartBoardConsoleContent() {
             const tempCtx = tempCanvas.getContext("2d");
             if (tempCtx) {
               await page.render({ canvasContext: tempCtx, viewport }).promise;
-              pages.push(tempCanvas.toDataURL("image/jpeg", 0.82));
+              pages.push(tempCanvas.toDataURL("image/jpeg", 0.78));
             }
           }
 
@@ -942,6 +947,7 @@ function SmartBoardConsoleContent() {
         currentPage: clamped,
         totalPages: pdfPageImages.length,
         zoom: scale,
+        canvasDataUrl: canvasRef.current ? canvasRef.current.toDataURL("image/png") : null,
       });
     }
   };
@@ -1543,7 +1549,7 @@ function SmartBoardConsoleContent() {
 
           <div
             className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-slate-800/90 border border-slate-700/80 text-slate-200 text-xs font-bold shrink-0"
-            title={`Oda: vocaship-class-${classId}`}
+            title={`Oda: vocaship-room-${classId}`}
           >
             <span>👥 {liveParticipantsCount} Kişi Odada</span>
           </div>

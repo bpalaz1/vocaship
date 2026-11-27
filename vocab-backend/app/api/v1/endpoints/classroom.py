@@ -663,7 +663,7 @@ async def create_livekit_token(
     )
     display_name = (req_name or "VocaShip Katılımcı").strip()
 
-    room_name = f"vocaship-class-{class_id}"
+    room_name = f"vocaship-room-{class_id}"
 
     grant = livekit_api.VideoGrants(
         room_join=True,

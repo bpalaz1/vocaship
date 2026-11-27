@@ -75,7 +75,7 @@ export default function ClassLiveQRModal({
 
   // Quick join URL -> Doğrudan LiveKit destekli /classroom/board sahnesine bağlar
   const effectiveTargetId = (classId || classCode || "").trim();
-  const joinUrl = `${origin}/classroom/board?classId=${encodeURIComponent(effectiveTargetId)}&role=student${activeSessionId ? `&sessionId=${encodeURIComponent(activeSessionId)}` : ""}`;
+  const joinUrl = `${origin}/classroom/board?classId=${encodeURIComponent(effectiveTargetId)}&live=1&role=student${activeSessionId ? `&sessionId=${encodeURIComponent(activeSessionId)}` : ""}`;
 
   const handleCopy = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
