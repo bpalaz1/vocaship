@@ -207,6 +207,7 @@ function WritingStudioContent() {
   // Hikaye Kaynağı State'i
   const [selectedStoryId, setSelectedStoryId] = useState<string>("");
   const [selectedStorySummary, setSelectedStorySummary] = useState<string>("");
+  const [selectedStoryContent, setSelectedStoryContent] = useState<string>("");
 
   // Deste Kaynağı State'i
   const [decks, setDecks] = useState<Array<{ id: string; title: string }>>([]);
@@ -382,6 +383,7 @@ function WritingStudioContent() {
         setSourceTitle("");
         setSourceContext("");
         setSelectedStorySummary("");
+        setSelectedStoryContent("");
         setTaskPrompt("Seçtiğin kaynak veya serbest bir konu üzerine İngilizce yaz.");
         setTargetWords([]);
         return;
@@ -391,6 +393,7 @@ function WritingStudioContent() {
       setSourceTitle(found.title);
       setSourceContext(found.summary || found.content.slice(0, 450) || found.title);
       setSelectedStorySummary(found.summary);
+      setSelectedStoryContent(found.content || found.summary || "");
       setTaskPrompt(
         `"${found.title}" hikayesinin sonunu kendi cümlelerinle yeniden yaz veya ana fikrini özetle.`
       );
@@ -419,6 +422,7 @@ function WritingStudioContent() {
           setSourceTitle(ctx.title || "Okuma Hikayesi");
           setSourceContext(ctx.snippet || ctx.content || ctx.title || "");
           setSelectedStorySummary(summary);
+          setSelectedStoryContent(ctx.content || ctx.snippet || "");
           setTaskPrompt(
             ctx.title
               ? `"${ctx.title}" hikayesinin sonunu kendi cümlelerinle yeniden yaz veya ana fikrini özetle.`
@@ -445,6 +449,7 @@ function WritingStudioContent() {
     setSourceTitle("");
     setSourceContext("");
     setSelectedStorySummary("");
+    setSelectedStoryContent("");
     setTaskPrompt("Seçtiğin kaynak veya serbest bir konu üzerine İngilizce yaz.");
     setTargetWords([]);
   }, []);
@@ -567,77 +572,138 @@ function WritingStudioContent() {
     return set;
   }, [text, targetWords]);
 
-  // Fısıltı Koçu: henüz kullanılmamış kelimeler ve seçili CEFR seviyesine göre cümle başlatıcılar
-  const sentenceStarters = useMemo(() => {
+  // Fısıltı Koçu: hikaye içeriği, henüz kullanılmamış kelimeler ve seçili CEFR seviyesine göre dinamik ipuçları
+  interface WritingStarterCard {
+    label: string;
+    starter: string;
+    hint?: string;
+  }
+
+  const buildDynamicWritingStarters = useCallback((): WritingStarterCard[] => {
     const unused = targetWords.filter((w) => !matchedWordsSet.has(w.word.toLowerCase()));
-    const focus = unused[0]?.word || targetWords[0]?.word || "";
+    const nextWord = unused[0]?.word || "";
+    const focus = nextWord || targetWords[0]?.word || "";
     const focusOrTopic = focus || "this topic";
 
+    if (sourceType === "story" && (sourceTitle || selectedStoryContent)) {
+      const cleanTitle = (sourceTitle || "this story").trim();
+      const rawContent = (selectedStoryContent || sourceContext || "").replace(/\s+/g, " ").trim();
+      const sentences = rawContent.match(/[^.!?]+[.!?]+/g) || [];
+      const firstSentence = sentences[0]?.trim() || "";
+      const lastSentence = sentences.length > 1 ? sentences[sentences.length - 1]?.trim() : "";
+
+      const card1: WritingStarterCard = {
+        label: "1. Olay Özeti",
+        starter: `In '${cleanTitle}', the main event happened when `,
+        hint: firstSentence ? `Başlangıç: "${firstSentence}"` : undefined,
+      };
+
+      const card2: WritingStarterCard = nextWord
+        ? {
+            label: `2. Kullanılmamış Hikaye Kelimesi (${nextWord})`,
+            starter: `The most interesting part about the ${nextWord} was `,
+          }
+        : {
+            label: "2. Hikaye Kelimeleri Tamamlandı ✓",
+            starter: `Looking back at the key details in '${cleanTitle}', I noticed that `,
+          };
+
+      const card3: WritingStarterCard = {
+        label: "3. Alternatif Son",
+        starter: `If I could change the ending of '${cleanTitle}', I would `,
+        hint: lastSentence ? `Mevcut son: "${lastSentence}"` : undefined,
+      };
+
+      return [card1, card2, card3];
+    }
+
     if (activeLevel === "A1" || activeLevel === "A2") {
-      if (sourceType === "story") {
-        return [
-          focus ? `Today I read a story about ${focus}.` : `Today I read a very good story.`,
-          `I like this story because it is simple and clear.`,
-          `In the end, the main character feels happy and ready.`,
-        ];
-      }
       if (sourceType === "speaking") {
         return [
-          focus ? `In my talk, I used the word ${focus}.` : `In my talk, I shared my simple idea.`,
-          `I think this is good for my daily life.`,
-          `For example, I do this every week with my friends.`,
+          {
+            label: "1. Ana Fikir",
+            starter: focus ? `In my talk, I used the word ${focus}.` : `In my talk, I shared my simple idea.`,
+          },
+          { label: "2. Günlük Hayat", starter: `I think this is good for my daily life.` },
+          { label: "3. Örnek", starter: `For example, I do this every week with my friends.` },
         ];
       }
       return [
-        focus ? `I want to use ${focus} in a short sentence.` : `Today I want to write a short paragraph.`,
-        `This word is very useful in daily life.`,
-        `For me, learning new words is fun and easy.`,
+        {
+          label: "1. Kelime Cümlesi",
+          starter: focus ? `I want to use ${focus} in a short sentence.` : `Today I want to write a short paragraph.`,
+        },
+        { label: "2. Kullanım Alanı", starter: `This word is very useful in daily life.` },
+        { label: "3. Kişisel Görüş", starter: `For me, learning new words is fun and easy.` },
       ];
     }
 
     if (activeLevel === "C1") {
-      if (sourceType === "story") {
-        return [
-          `Upon reflecting on the narrative, it becomes evident that ${focusOrTopic} shapes the turning point...`,
-          `What makes this progression particularly compelling is how ${focusOrTopic} alters the character's perspective...`,
-          `Rather than offering a predictable resolution, the story invites us to consider...`,
-        ];
-      }
       if (sourceType === "speaking") {
         return [
-          `Throughout our conversation, I sought to underscore the significance of ${focusOrTopic} because...`,
-          `From a broader standpoint, ${focusOrTopic} serves as a catalyst whenever...`,
-          `Nuance aside, the overarching argument rests on the idea that...`,
+          {
+            label: "1. Temel Argüman",
+            starter: `Throughout our conversation, I sought to underscore the significance of ${focusOrTopic} because...`,
+          },
+          {
+            label: "2. Geniş Perspektif",
+            starter: `From a broader standpoint, ${focusOrTopic} serves as a catalyst whenever...`,
+          },
+          {
+            label: "3. Sonuç",
+            starter: `Nuance aside, the overarching argument rests on the idea that...`,
+          },
         ];
       }
       return [
-        `In contemporary contexts, ${focusOrTopic} often emerges as a decisive factor when...`,
-        `A nuanced examination reveals that ${focusOrTopic} can fundamentally transform...`,
-        `To illustrate this point more concretely, consider how individuals navigate...`,
+        {
+          label: "1. Bağlam",
+          starter: `In contemporary contexts, ${focusOrTopic} often emerges as a decisive factor when...`,
+        },
+        {
+          label: "2. Derinlemesine Bakış",
+          starter: `A nuanced examination reveals that ${focusOrTopic} can fundamentally transform...`,
+        },
+        {
+          label: "3. Somut Örnek",
+          starter: `To illustrate this point more concretely, consider how individuals navigate...`,
+        },
       ];
     }
 
-    // B1 / B2 varsayılan orta düzey bağlaçlar
-    if (sourceType === "story") {
-      return [
-        `In my version of the story, the main character decided to focus on ${focusOrTopic}...`,
-        `What stood out most to me was how ${focusOrTopic} changed the situation...`,
-        `Looking back at the ending, I would imagine that...`,
-      ];
-    }
     if (sourceType === "speaking") {
       return [
-        `During our discussion, I wanted to emphasize ${focusOrTopic} because...`,
-        `From my perspective, ${focusOrTopic} plays a key role when...`,
-        `To put it simply, I believe that...`,
+        {
+          label: "1. Vurgu",
+          starter: `During our discussion, I wanted to emphasize ${focusOrTopic} because...`,
+        },
+        {
+          label: "2. Bakış Açısı",
+          starter: `From my perspective, ${focusOrTopic} plays a key role when...`,
+        },
+        { label: "3. Özet", starter: `To put it simply, I believe that...` },
       ];
     }
     return [
-      `In everyday life, ${focusOrTopic} becomes especially important when...`,
-      `I recently noticed that ${focusOrTopic} can help people...`,
-      `One clear example of this is when someone tries to...`,
+      {
+        label: "1. Günlük Bağlam",
+        starter: `In everyday life, ${focusOrTopic} becomes especially important when...`,
+      },
+      {
+        label: "2. Gözlem",
+        starter: `I recently noticed that ${focusOrTopic} can help people...`,
+      },
+      {
+        label: "3. Örnek",
+        starter: `One clear example of this is when someone tries to...`,
+      },
     ];
-  }, [sourceType, targetWords, matchedWordsSet, activeLevel]);
+  }, [sourceType, sourceTitle, selectedStoryContent, sourceContext, targetWords, matchedWordsSet, activeLevel]);
+
+  const sentenceStarters = useMemo(
+    () => buildDynamicWritingStarters(),
+    [buildDynamicWritingStarters]
+  );
 
   const handleAppendStarter = (starter: string) => {
     const cleanStarter = starter.replace(/\.{2,}\s*$/, "").trimEnd();
@@ -666,7 +732,7 @@ function WritingStudioContent() {
     const isJustStarter =
       (lastStarterText && trimmedText === lastStarterText) ||
       sentenceStarters.some(
-        (s) => trimmedText === s.replace(/\.{2,}\s*$/, "").trimEnd()
+        (s) => trimmedText === s.starter.replace(/\.{2,}\s*$/, "").trimEnd()
       );
     if (trimmedText.endsWith("...") || wordCount < 4 || isJustStarter) {
       setAnalyzeError(
@@ -1051,15 +1117,23 @@ function WritingStudioContent() {
               <span className="text-[11px] font-bold text-amber-300 block">
                 💡 Cümle Başlatıcılar (Tıklayınca editöre eklenir):
               </span>
-              <div className="space-y-1.5">
-                {sentenceStarters.map((starter, idx) => (
+              <div className="space-y-2">
+                {sentenceStarters.map((item, idx) => (
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => handleAppendStarter(starter)}
-                    className="w-full text-left px-3 py-2 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-xs text-slate-200 transition cursor-pointer"
+                    onClick={() => handleAppendStarter(item.starter)}
+                    className="w-full text-left px-3 py-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 space-y-1 transition cursor-pointer"
                   >
-                    {starter}
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300/90 block">
+                      {item.label}
+                    </span>
+                    <span className="text-xs text-slate-100 block">{item.starter}</span>
+                    {item.hint && (
+                      <span className="text-[11px] text-slate-400 italic block line-clamp-1">
+                        {item.hint}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
