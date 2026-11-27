@@ -22,6 +22,7 @@ import { useLanguage } from "../../context/LanguageContext";
 export interface ClassLiveQRModalProps {
   isOpen: boolean;
   onClose: () => void;
+  classId?: string;
   classCode: string | null;
   className?: string;
   gradeLevel?: string;
@@ -31,6 +32,7 @@ export interface ClassLiveQRModalProps {
 export default function ClassLiveQRModal({
   isOpen,
   onClose,
+  classId,
   classCode,
   className,
   gradeLevel = "C1 Pro",
@@ -71,8 +73,9 @@ export default function ClassLiveQRModal({
       ? `${cleanCode.slice(0, 3)} - ${cleanCode.slice(3).split("").join(" ")}`
       : classCode.replace("-", " - ");
 
-  // Quick join URL
-  const joinUrl = `${origin}/join?code=${encodeURIComponent(classCode)}&session=${encodeURIComponent(activeSessionId)}`;
+  // Quick join URL -> Doğrudan LiveKit destekli /classroom/board sahnesine bağlar
+  const effectiveTargetId = (classId || classCode || "").trim();
+  const joinUrl = `${origin}/classroom/board?classId=${encodeURIComponent(effectiveTargetId)}&role=student${activeSessionId ? `&sessionId=${encodeURIComponent(activeSessionId)}` : ""}`;
 
   const handleCopy = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

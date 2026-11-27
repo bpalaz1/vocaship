@@ -87,9 +87,40 @@ function SmartBoardConsoleContent() {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const classId = searchParams.get("classId") || searchParams.get("class_id") || "cls-1";
+  const urlClassId = searchParams.get("classId") || searchParams.get("class_id") || "";
+  const [effectiveClassId, setEffectiveClassId] = useState<string>(urlClassId || "cls-1");
+
+  useEffect(() => {
+    if (urlClassId) {
+      setEffectiveClassId(urlClassId);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      try {
+        const rawActive = localStorage.getItem("vocaship_active_class");
+        if (rawActive) {
+          const parsed = JSON.parse(rawActive);
+          if (parsed?.classId) {
+            setEffectiveClassId(String(parsed.classId));
+            return;
+          }
+        }
+        const rawSession = localStorage.getItem("vocaship_live_session");
+        if (rawSession) {
+          const parsedSession = JSON.parse(rawSession);
+          if (parsedSession?.classId) {
+            setEffectiveClassId(String(parsedSession.classId));
+            return;
+          }
+        }
+      } catch {}
+    }
+  }, [urlClassId]);
+
+  const classId = effectiveClassId;
   const sessionId = searchParams.get("sessionId") || searchParams.get("session_id") || "";
   const activeClassName = searchParams.get("className") || searchParams.get("class_name") || t("brd_default_room", "Ders / Tahta Odası");
+  const [liveParticipantsCount, setLiveParticipantsCount] = useState<number>(1);
   // 1. Profil Context (Dinamik Öğretmen Kartı / Stüdyo İçin)
   const { userProfile } = useProfile();
 
@@ -702,45 +733,11 @@ function SmartBoardConsoleContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isCameraFullscreen]);
 
-  // 3. Ekran / Word / Excel / Pencere Paylaşımı Başlat / Durdur
+  // 3. Ekran / Word / Excel / Pencere Paylaşımı Başlat / Durdur (LiveKit SFU üzerinden)
   const toggleScreenShare = async () => {
     if (!isTeacher) return;
-    if (isScreenSharing) {
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
-      if (screenVideoRef.current) {
-        screenVideoRef.current.srcObject = null;
-      }
-      stopWebRtcBroadcast();
-      setIsScreenSharing(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: false,
-        });
-        screenStreamRef.current = stream;
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.onended = () => {
-            setIsScreenSharing(false);
-            screenStreamRef.current = null;
-            if (screenVideoRef.current) {
-              screenVideoRef.current.srcObject = null;
-            }
-            stopWebRtcBroadcast();
-          };
-        }
-        setIsScreenSharing(true);
-        startWebRtcBroadcast(stream);
-        setMediaError(null);
-      } catch (err) {
-        console.warn("Ekran paylaşımı başlatılamadı:", err);
-        setMediaError(t("brd_screen_err", "Ekran paylaşımı izni verilmedi veya iptal edildi."));
-      }
-    }
+    setMediaError(null);
+    setIsScreenSharing((prev) => !prev);
   };
 
   useEffect(() => {
@@ -880,7 +877,7 @@ function SmartBoardConsoleContent() {
             const tempCtx = tempCanvas.getContext("2d");
             if (tempCtx) {
               await page.render({ canvasContext: tempCtx, viewport }).promise;
-              pages.push(tempCanvas.toDataURL("image/jpeg", 0.8));
+              pages.push(tempCanvas.toDataURL("image/jpeg", 0.82));
             }
           }
 
@@ -938,6 +935,14 @@ function SmartBoardConsoleContent() {
     }
     if (isTeacher) {
       broadcastPdfPage(clamped);
+      broadcastPdfState({
+        pdfFileName: pdfFileName || "Ders Dokümanı.pdf",
+        pdfPageImages: pdfPageImages.length <= 2 ? pdfPageImages : [],
+        activePageImage: pdfPageImages[clamped - 1] || null,
+        currentPage: clamped,
+        totalPages: pdfPageImages.length,
+        zoom: scale,
+      });
     }
   };
 
@@ -1140,12 +1145,25 @@ function SmartBoardConsoleContent() {
     },
     onRemotePdfState: (payload: BoardPdfStateEvent) => {
       setPdfFileName(payload.pdfFileName || "Ders Dokümanı.pdf");
-      setPdfPageImages(payload.pdfPageImages || []);
-      setPdfUrl(payload.pdfPageImages?.length ? "remote-synced" : null);
-      setCurrentPdfPage(payload.currentPage || 1);
+      const targetPage = payload.currentPage || 1;
+      let nextPages = Array.isArray(payload.pdfPageImages) ? [...payload.pdfPageImages] : [];
+      if (nextPages.length === 0 && payload.activePageImage) {
+        const total = Math.max(targetPage, payload.totalPages || 1);
+        nextPages = Array.from({ length: total }, (_, idx) =>
+          idx === targetPage - 1 ? payload.activePageImage! : ""
+        ).filter(Boolean);
+        // Tek sayfa görüntüsünü aktif göster
+        nextPages = [payload.activePageImage];
+      }
+      setPdfPageImages(nextPages);
+      setPdfUrl(nextPages.length > 0 ? "remote-synced" : null);
+      setCurrentPdfPage(nextPages.length === 1 ? 1 : targetPage);
+      if (typeof payload.zoom === "number" && payload.zoom >= 0.5 && payload.zoom <= 3) {
+        setScale(payload.zoom);
+      }
       setTimeout(() => {
         syncCanvasSize();
-        const el = pdfPageRefs.current[(payload.currentPage || 1) - 1];
+        const el = pdfPageRefs.current[(nextPages.length === 1 ? 1 : targetPage) - 1];
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
     },
@@ -1522,6 +1540,13 @@ function SmartBoardConsoleContent() {
               {isRealtimeConnected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
             </div>
           )}
+
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-slate-800/90 border border-slate-700/80 text-slate-200 text-xs font-bold shrink-0"
+            title={`Oda: vocaship-class-${classId}`}
+          >
+            <span>👥 {liveParticipantsCount} Kişi Odada</span>
+          </div>
 
           {liveJoinCode && (
             <button
@@ -2703,7 +2728,8 @@ function SmartBoardConsoleContent() {
       <ClassLiveQRModal
         isOpen={isQRModalOpen}
         onClose={() => setIsQRModalOpen(false)}
-        classCode={liveJoinCode}
+        classId={classId}
+        classCode={liveJoinCode || classId}
         className={activeClassName}
         activeSessionId={liveSessionId || sessionId || undefined}
       />
@@ -2716,6 +2742,8 @@ function SmartBoardConsoleContent() {
         isMicEnabled={isMicActive}
         isCameraEnabled={isCameraActive}
         isScreenShareEnabled={isScreenSharing}
+        onParticipantsCountChange={setLiveParticipantsCount}
+        onScreenShareStopped={() => setIsScreenSharing(false)}
       />
     </div>
   );

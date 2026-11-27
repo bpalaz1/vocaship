@@ -43,7 +43,11 @@ export interface BoardTextEvent {
 export interface BoardPdfStateEvent {
   pdfFileName: string | null;
   pdfPageImages: string[];
+  activePageImage?: string | null;
   currentPage: number;
+  totalPages?: number;
+  zoom?: number;
+  canvasDataUrl?: string | null;
 }
 
 export interface UseBoardRealtimeSyncOptions {
@@ -222,8 +226,11 @@ export function useBoardRealtimeSync({
           cb.onRemoteClear?.();
         } else if (event === "board-canvas-snapshot" && payload?.dataUrl) {
           cb.onRemoteCanvasSnapshot?.(payload.dataUrl);
-        } else if (event === "board-pdf-state" && payload) {
+        } else if ((event === "board-pdf-state" || event === "board-state") && payload) {
           cb.onRemotePdfState?.(payload);
+          if (payload.canvasDataUrl) {
+            cb.onRemoteCanvasSnapshot?.(payload.canvasDataUrl);
+          }
         } else if (event === "board-pdf-page" && typeof payload?.currentPage === "number") {
           cb.onRemotePdfPage?.(payload.currentPage);
         } else if (event === "board-pdf-clear") {
@@ -282,14 +289,18 @@ export function useBoardRealtimeSync({
         }
       } else {
         // Teacher incoming handlers
-        if (event === "board-request-sync") {
+        if (event === "board-request-sync" || event === "request-sync") {
           const state = cb.getSyncState?.();
           if (state) {
             if (state.pdfPageImages.length > 0 || state.pdfFileName) {
-              emitEvent("board-pdf-state", {
+              const activeIdx = Math.max(0, (state.currentPage || 1) - 1);
+              const activeImg = state.pdfPageImages[activeIdx] || state.pdfPageImages[0] || null;
+              emitEvent("board-state", {
                 pdfFileName: state.pdfFileName,
-                pdfPageImages: state.pdfPageImages,
+                pdfPageImages: state.pdfPageImages.length <= 2 ? state.pdfPageImages : [],
+                activePageImage: activeImg,
                 currentPage: state.currentPage,
+                totalPages: state.pdfPageImages.length,
               });
             }
             if (state.canvasDataUrl) {
@@ -352,9 +363,11 @@ export function useBoardRealtimeSync({
       "board-clear",
       "board-canvas-snapshot",
       "board-pdf-state",
+      "board-state",
       "board-pdf-page",
       "board-pdf-clear",
       "board-request-sync",
+      "request-sync",
       "rtc-screen-started",
       "rtc-screen-stopped",
       "rtc-request-offer",
@@ -374,6 +387,7 @@ export function useBoardRealtimeSync({
         setIsRealtimeConnected(true);
         if (!isTeacher) {
           emitEvent("board-request-sync", { studentPeerId: peerIdRef.current });
+          emitEvent("request-sync", { studentPeerId: peerIdRef.current });
         }
       } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
         setIsRealtimeConnected(false);
@@ -441,7 +455,26 @@ export function useBoardRealtimeSync({
   const broadcastPdfState = useCallback(
     (payload: BoardPdfStateEvent) => {
       if (!isTeacher) return;
-      emitEvent("board-pdf-state", payload);
+      const activeIdx = Math.max(0, (payload.currentPage || 1) - 1);
+      const activeImg =
+        payload.activePageImage ||
+        payload.pdfPageImages?.[activeIdx] ||
+        payload.pdfPageImages?.[0] ||
+        null;
+      const compactPayload: BoardPdfStateEvent = {
+        pdfFileName: payload.pdfFileName,
+        pdfPageImages:
+          payload.pdfPageImages && payload.pdfPageImages.length <= 2
+            ? payload.pdfPageImages
+            : [],
+        activePageImage: activeImg,
+        currentPage: payload.currentPage,
+        totalPages: payload.totalPages ?? payload.pdfPageImages?.length ?? 1,
+        zoom: payload.zoom,
+        canvasDataUrl: payload.canvasDataUrl,
+      };
+      emitEvent("board-state", compactPayload);
+      emitEvent("board-pdf-state", compactPayload);
     },
     [isTeacher, emitEvent]
   );
