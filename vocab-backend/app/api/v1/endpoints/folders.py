@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from supabase import Client
@@ -14,29 +14,113 @@ class FolderUpdate(BaseModel):
     color: Optional[str] = None
 
 
+def _extract_user_field(current_user: Any, key: str, default: str = "") -> str:
+    if isinstance(current_user, dict):
+        val = current_user.get(key)
+    else:
+        val = getattr(current_user, key, None)
+    return str(val).strip() if val is not None else default
+
+
+def _ensure_public_user_exists(db: Client, current_user: Any) -> str:
+    """
+    public.folders(user_id) -> public.users(id) Foreign Key hatasını önlemek için
+    aktif kullanıcının public.users tablosunda var olduğundan emin olur; yoksa upsert eder.
+    """
+    uid = _extract_user_field(current_user, "id")
+    if not uid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Geçerli bir kullanıcı kimliği bulunamadı.",
+        )
+
+    try:
+        existing = db.table("users").select("id").eq("id", uid).limit(1).execute()
+        if existing.data and len(existing.data) > 0:
+            return uid
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"public.users kontrolü başarısız: {str(exc)}",
+        )
+
+    email = _extract_user_field(current_user, "email").lower()
+    full_name = _extract_user_field(current_user, "full_name")
+    username = _extract_user_field(current_user, "username").lower()
+
+    safe_email = email or f"user-{uid[:8]}@vocaship.local"
+    safe_full_name = full_name or username or safe_email.split("@")[0]
+    safe_username = username or safe_email.split("@")[0]
+
+    candidates: List[Dict[str, Any]] = [
+        {
+            "id": uid,
+            "email": safe_email,
+            "full_name": safe_full_name,
+            "username": safe_username,
+        },
+        {
+            "id": uid,
+            "email": safe_email,
+            "full_name": safe_full_name,
+        },
+        {
+            "id": uid,
+            "email": safe_email,
+        },
+    ]
+
+    last_err: Optional[Exception] = None
+    for row in candidates:
+        try:
+            db.table("users").upsert(row, on_conflict="id").execute()
+            return uid
+        except Exception as exc:
+            last_err = exc
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"public.users kaydı oluşturulamadı: {str(last_err)}",
+    )
+
+
 @router.get("", response_model=List[FolderResponse])
 @router.get("/", response_model=List[FolderResponse])
 async def list_folders(
     db: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Yalnızca giriş yapmış kullanıcının kendi klasörlerini listeler; yoksa [] döner."""
-    effective_user_id = str(current_user["id"]).strip()
+    """Yalnızca giriş yapmış kullanıcının kendi klasörlerini Supabase public.folders tablosundan listeler."""
+    effective_user_id = _extract_user_field(current_user, "id")
+    if not effective_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Oturum doğrulanamadı.",
+        )
 
-    res = db.table("folders").select("*").eq("user_id", effective_user_id).order("created_at").execute()
-    folders = res.data or []
-    for f in folders:
-        raw_parent = f.get("parent_id")
-        f["parent_id"] = str(raw_parent) if raw_parent else None
-        count_res = (
-            db.table("decks")
-            .select("id", count="exact")
-            .eq("folder_id", f["id"])
+    try:
+        res = (
+            db.table("folders")
+            .select("id, user_id, name, color, created_at")
             .eq("user_id", effective_user_id)
+            .order("created_at")
             .execute()
         )
-        f["deck_count"] = count_res.count or 0
-    return folders
+        folders = res.data or []
+        for f in folders:
+            count_res = (
+                db.table("decks")
+                .select("id", count="exact")
+                .eq("folder_id", f["id"])
+                .eq("user_id", effective_user_id)
+                .execute()
+            )
+            f["deck_count"] = count_res.count or 0
+        return folders
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
@@ -46,24 +130,36 @@ async def create_folder(
     db: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Yeni bir klasör (örn: Kuzey, Animals) oluşturur."""
-    data = folder_in.model_dump()
-    raw_parent = str(data.get("parent_id") or "").strip()
-    if not raw_parent or raw_parent.lower() == "root directory":
-        data["parent_id"] = None
-    else:
-        data["parent_id"] = raw_parent
-    if data.get("parent_id") is None:
-        data.pop("parent_id", None)
+    """Yeni bir klasör oluşturur ve yalnızca gerçek public.folders sütunlarını yazar."""
+    clean_name = (folder_in.name or "").strip()
+    if not clean_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Klasör adı boş olamaz.",
+        )
 
-    data["user_id"] = str(current_user["id"]).strip()
+    uid = _ensure_public_user_exists(db, current_user)
 
-    res = db.table("folders").insert(data).execute()
-    if not res.data:
-        raise HTTPException(status_code=400, detail="Klasör oluşturulamadı")
-    folder = res.data[0]
-    folder["deck_count"] = 0
-    return folder
+    payload = {
+        "user_id": uid,
+        "name": clean_name,
+        "color": folder_in.color or "#6366f1",
+    }
+
+    try:
+        res = db.table("folders").insert(payload).execute()
+        if not res.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Supabase folders.insert boş yanıt döndürdü.",
+            )
+        folder = res.data[0]
+        folder["deck_count"] = 0
+        return folder
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.patch("/{folder_id}", response_model=FolderResponse, status_code=status.HTTP_200_OK)
@@ -75,17 +171,36 @@ async def update_folder(
     current_user: dict = Depends(get_current_user),
 ):
     """Klasör adını veya rengini günceller."""
-    uid = str(current_user["id"]).strip()
-    updates = {k: v for k, v in folder_in.model_dump(exclude_unset=True).items() if v is not None}
+    uid = _extract_user_field(current_user, "id")
+    updates: Dict[str, Any] = {}
+    if folder_in.name is not None:
+        trimmed = folder_in.name.strip()
+        if trimmed:
+            updates["name"] = trimmed
+    if folder_in.color is not None:
+        updates["color"] = folder_in.color
+
     if not updates:
         raise HTTPException(status_code=400, detail="Güncellenecek alan belirtilmedi.")
-    res = db.table("folders").update(updates).eq("id", folder_id).eq("user_id", uid).execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Klasör bulunamadı")
-    folder = res.data[0]
-    count_res = db.table("decks").select("id", count="exact").eq("folder_id", folder_id).eq("user_id", uid).execute()
-    folder["deck_count"] = count_res.count or 0
-    return folder
+
+    try:
+        res = db.table("folders").update(updates).eq("id", folder_id).eq("user_id", uid).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Klasör bulunamadı")
+        folder = res.data[0]
+        count_res = (
+            db.table("decks")
+            .select("id", count="exact")
+            .eq("folder_id", folder_id)
+            .eq("user_id", uid)
+            .execute()
+        )
+        folder["deck_count"] = count_res.count or 0
+        return folder
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 def cleanup_orphan_decks(db: Client, user_id: Optional[str] = None) -> int:
@@ -110,7 +225,7 @@ async def delete_orphan_decks(
     current_user: dict = Depends(get_current_user),
 ):
     """Mevcut tüm klasörsüz (folder_id IS NULL) desteleri ve kartlarını temizler."""
-    deleted_count = cleanup_orphan_decks(db, user_id=str(current_user["id"]).strip())
+    deleted_count = cleanup_orphan_decks(db, user_id=_extract_user_field(current_user, "id"))
     return {"message": f"{deleted_count} klasörsüz deste temizlendi.", "deleted_count": deleted_count}
 
 
@@ -121,29 +236,32 @@ async def delete_folder(
     current_user: dict = Depends(get_current_user),
 ):
     """Klasörü, klasöre bağlı tüm desteleri ve bu destelerin kartlarını kalıcı olarak siler."""
-    uid = str(current_user["id"]).strip()
-    # 1. Klasöre bağlı desteleri bul
-    decks_res = db.table("decks").select("id").eq("folder_id", folder_id).eq("user_id", uid).execute()
-    folder_decks = decks_res.data or []
+    uid = _extract_user_field(current_user, "id")
+    try:
+        # 1. Klasöre bağlı desteleri bul
+        decks_res = db.table("decks").select("id").eq("folder_id", folder_id).eq("user_id", uid).execute()
+        folder_decks = decks_res.data or []
 
-    # 2. Her desteye bağlı tüm kartları (flashcards) sil
-    for deck in folder_decks:
-        deck_id = deck.get("id")
-        if deck_id:
-            db.table("flashcards").delete().eq("deck_id", deck_id).execute()
+        # 2. Her desteye bağlı tüm kartları (flashcards) sil
+        for deck in folder_decks:
+            deck_id = deck.get("id")
+            if deck_id:
+                db.table("flashcards").delete().eq("deck_id", deck_id).execute()
 
-    # 3. Klasöre bağlı tüm desteleri sil
-    if folder_decks:
-        db.table("decks").delete().eq("folder_id", folder_id).eq("user_id", uid).execute()
+        # 3. Klasöre bağlı tüm desteleri sil
+        if folder_decks:
+            db.table("decks").delete().eq("folder_id", folder_id).eq("user_id", uid).execute()
 
-    # 4. Klasörün kendisini sil
-    res = db.table("folders").delete().eq("id", folder_id).eq("user_id", uid).execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Klasör bulunamadı")
+        # 4. Klasörün kendisini sil
+        res = db.table("folders").delete().eq("id", folder_id).eq("user_id", uid).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Klasör bulunamadı")
 
-    # 5. Varsa sahipsiz (folder_id IS NULL) kalmış desteleri de temizle
-    cleanup_orphan_decks(db, user_id=uid)
-    return {
-        "message": "Klasör ve içindeki tüm desteler/kartlar kalıcı olarak silindi.",
-        "deleted_decks_count": len(folder_decks),
-    }
+        return {
+            "message": "Klasör ve içindeki tüm desteler/kartlar kalıcı olarak silindi.",
+            "deleted_decks_count": len(folder_decks),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

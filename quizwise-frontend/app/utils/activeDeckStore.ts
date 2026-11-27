@@ -242,98 +242,64 @@ function clearLegacyShowcaseCaches(): void {
 }
 
 /**
- * Kullanıcının klasörlerini backend'den çeker, kullanıcıya özel localStorage anahtarına önbelleğe alır
+ * Kullanıcının klasörlerini doğrudan backend'den (Supabase public.folders) çeker.
+ * Yerel localStorage fallback kullanılmaz.
  */
 export async function fetchFoldersList(): Promise<FolderItem[]> {
   clearLegacyShowcaseCaches();
   const authCtx = getScopedUserContext();
-  if (!authCtx) {
+  if (!authCtx || !authCtx.token) {
     return [];
   }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   const hierarchy = getFolderHierarchyMap();
-  const scopedCacheKey = `${FOLDERS_CACHE_STORAGE_KEY}_${authCtx.userId}`;
 
   try {
-    const headers: Record<string, string> = {};
-    if (authCtx.token) {
-      headers["Authorization"] = `Bearer ${authCtx.token}`;
+    const res = await fetch(`${API_BASE}/api/v1/folders`, {
+      headers: {
+        Authorization: `Bearer ${authCtx.token}`,
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.error("[fetchFoldersList] Backend hatası:", res.status, errData?.detail || errData);
+      return [];
     }
-    const res = await fetch(
-      `${API_BASE}/api/v1/folders?user_id=${encodeURIComponent(authCtx.userId)}`,
-      {
-        headers,
-        signal: controller.signal,
-      }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const mapped: FolderItem[] = data
-          .filter((f: any) => !String(f.id || "").startsWith("guest_"))
-          .map((f: any) => {
-            const id = String(f.id || "").trim();
-            const parentId =
-              normalizeFolderId(f.parent_id) ?? normalizeFolderId(hierarchy[id]);
-            return {
-              id,
-              name: String(
-                f.name ||
-                  pickUiText({
-                    tr: "Klasör",
-                    en: "Folder",
-                    de: "Ordner",
-                    es: "Carpeta",
-                    fr: "Dossier",
-                  })
-              ),
-              color: f.color || "#f59e0b",
-              parent_id: parentId === id ? null : parentId,
-              deck_count:
-                typeof f.deck_count === "number" ? f.deck_count : undefined,
-            };
-          });
-        const normalized = sortFoldersBySavedOrder(mapped);
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(scopedCacheKey, JSON.stringify(normalized));
-          } catch {}
-        }
-        return normalized;
-      }
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      const mapped: FolderItem[] = data
+        .filter((f: any) => !String(f.id || "").startsWith("guest_"))
+        .map((f: any) => {
+          const id = String(f.id || "").trim();
+          const parentId =
+            normalizeFolderId(f.parent_id) ?? normalizeFolderId(hierarchy[id]);
+          return {
+            id,
+            name: String(
+              f.name ||
+                pickUiText({
+                  tr: "Klasör",
+                  en: "Folder",
+                  de: "Ordner",
+                  es: "Carpeta",
+                  fr: "Dossier",
+                })
+            ),
+            color: f.color || "#6366f1",
+            parent_id: parentId === id ? null : parentId,
+            deck_count:
+              typeof f.deck_count === "number" ? f.deck_count : undefined,
+          };
+        });
+      return sortFoldersBySavedOrder(mapped);
     }
   } catch (err) {
-    console.warn("fetchFoldersList network/timeout fallback:", err);
+    console.error("[fetchFoldersList] Ağ/istek hatası:", err);
   } finally {
     clearTimeout(timeoutId);
-  }
-
-  if (typeof window !== "undefined") {
-    try {
-      const cached = localStorage.getItem(scopedCacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
-          return sortFoldersBySavedOrder(
-            parsed
-              .filter((f: any) => !String(f.id || "").startsWith("guest_"))
-              .map((f: any) => {
-                const id = String(f.id || "").trim();
-                const parentId =
-                  normalizeFolderId(f.parent_id) ??
-                  normalizeFolderId(hierarchy[id]);
-                return {
-                  ...f,
-                  id,
-                  parent_id: parentId === id ? null : parentId,
-                };
-              })
-          );
-        }
-      }
-    } catch {}
   }
 
   return [];

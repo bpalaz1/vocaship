@@ -558,39 +558,44 @@ export default function Home() {
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim() || isCreatingFolder) return;
+    const token = getAuthToken();
+    if (!token) {
+      alert("Klasör oluşturmak için önce hesabınıza giriş yapmalısınız.");
+      return;
+    }
     setIsCreatingFolder(true);
     try {
       const targetParent = normalizeFolderId(newFolderParentId);
       const res = await fetch(`${API_BASE}/api/v1/folders`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           name: newFolderName.trim(),
-          color: newFolderColor || "#f59e0b",
-          parent_id: targetParent || null,
-          ...(user?.id ? { user_id: user.id } : {}),
+          color: newFolderColor || "#6366f1",
         }),
       });
-      if (res.ok) {
-        const created = await res.json().catch(() => null);
-        if (created?.id && targetParent) {
-          setFolderParentInHierarchy(String(created.id).trim(), targetParent);
-          setExpandedFolderIds((prev) =>
-            Array.from(new Set([...prev, targetParent]))
-          );
-        }
-        setNewFolderName("");
-        setNewFolderParentId("");
-        setIsCreateFolderModalOpen(false);
-        await refreshLibraryData();
-      } else {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(
-          `Klasör oluşturulamadı: ${err.detail || err.message || "Sunucu hatası"}`
+        const detail = err.detail || err.message || `Sunucu hatası (${res.status})`;
+        alert(`Klasör oluşturulamadı: ${detail}`);
+        return;
+      }
+      const created = await res.json().catch(() => null);
+      if (created?.id && targetParent) {
+        setFolderParentInHierarchy(String(created.id).trim(), targetParent);
+        setExpandedFolderIds((prev) =>
+          Array.from(new Set([...prev, targetParent]))
         );
       }
-    } catch {
-      alert("Klasör oluşturulurken sunucuya ulaşılamadı.");
+      setNewFolderName("");
+      setNewFolderParentId("");
+      setIsCreateFolderModalOpen(false);
+      await refreshLibraryData();
+    } catch (err: any) {
+      alert(`Klasör oluşturulurken sunucuya ulaşılamadı: ${err?.message || "Ağ hatası"}`);
     } finally {
       setIsCreatingFolder(false);
     }
@@ -609,71 +614,47 @@ export default function Home() {
     ) {
       return;
     }
+    const token = getAuthToken();
+    if (!token) {
+      alert("Klasör silmek için hesabınıza giriş yapmalısınız.");
+      return;
+    }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/folders/${folderId}`, {
+      const res = await fetch(`${API_BASE}/api/v1/folders/${encodeURIComponent(folderId)}`, {
         method: "DELETE",
-        headers: getAuthHeaders(),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       });
-      if (res.ok) {
-        const cleanDeletedId = String(folderId || "").trim();
-        const deletedDeckIds = new Set(
-          decks
-            .filter((d) => normalizeFolderId(d.folder_id) === cleanDeletedId)
-            .map((d) => d.id)
-        );
-        removeFolderFromHierarchy(cleanDeletedId);
-        if (selectedFolderFilter === cleanDeletedId) {
-          setSelectedFolderFilter("all");
-        }
-        setSelectedQuickFolderIds((prev) =>
-          prev.filter((id) => id !== cleanDeletedId)
-        );
-        setSelectedQuickSubfolderIds((prev) =>
-          prev.filter((id) => id !== cleanDeletedId)
-        );
-        setSelectedQuickDeckIds((prev) =>
-          prev.filter((id) => !deletedDeckIds.has(id))
-        );
-        setFolders((prev) => {
-          const next = prev.filter(
-            (f) => String(f.id || "").trim() !== cleanDeletedId
-          );
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem(
-                FOLDERS_CACHE_STORAGE_KEY,
-                JSON.stringify(next)
-              );
-              const nextOrder = next.map((f) => String(f.id || "").trim());
-              localStorage.setItem(
-                FOLDER_ORDER_STORAGE_KEY,
-                JSON.stringify(nextOrder)
-              );
-            } catch {}
-          }
-          return next;
-        });
-        setDecks((prev) => {
-          const next = prev.filter(
-            (d) => normalizeFolderId(d.folder_id) !== cleanDeletedId
-          );
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem(
-                DECKS_CACHE_STORAGE_KEY,
-                JSON.stringify(next)
-              );
-              deletedDeckIds.forEach((did) => {
-                localStorage.removeItem(`vocaship_deck_cards_${did}`);
-              });
-            } catch {}
-          }
-          return next;
-        });
-        await refreshLibraryData();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Klasör silinemedi: ${err.detail || err.message || `Sunucu hatası (${res.status})`}`);
+        return;
       }
-    } catch (err) {
+      const cleanDeletedId = String(folderId || "").trim();
+      const deletedDeckIds = new Set(
+        decks
+          .filter((d) => normalizeFolderId(d.folder_id) === cleanDeletedId)
+          .map((d) => d.id)
+      );
+      removeFolderFromHierarchy(cleanDeletedId);
+      if (selectedFolderFilter === cleanDeletedId) {
+        setSelectedFolderFilter("all");
+      }
+      setSelectedQuickFolderIds((prev) =>
+        prev.filter((id) => id !== cleanDeletedId)
+      );
+      setSelectedQuickSubfolderIds((prev) =>
+        prev.filter((id) => id !== cleanDeletedId)
+      );
+      setSelectedQuickDeckIds((prev) =>
+        prev.filter((id) => !deletedDeckIds.has(id))
+      );
+      await refreshLibraryData();
+    } catch (err: any) {
       console.error("Klasör silinemedi:", err);
+      alert(`Klasör silinirken sunucuya ulaşılamadı: ${err?.message || "Ağ hatası"}`);
     }
   };
 
@@ -907,10 +888,6 @@ export default function Home() {
             FOLDER_ORDER_STORAGE_KEY,
             JSON.stringify(orderIds)
           );
-          localStorage.setItem(
-            FOLDERS_CACHE_STORAGE_KEY,
-            JSON.stringify(updated)
-          );
         } catch {}
       }
       return updated;
@@ -936,19 +913,13 @@ export default function Home() {
     }
 
     setFolderParentInHierarchy(cleanSource, cleanParent);
-    setFolders((prev) => {
-      const next = prev.map((f) =>
+    setFolders((prev) =>
+      prev.map((f) =>
         String(f.id || "").trim() === cleanSource
           ? { ...f, parent_id: cleanParent }
           : f
-      );
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(FOLDERS_CACHE_STORAGE_KEY, JSON.stringify(next));
-        } catch {}
-      }
-      return next;
-    });
+      )
+    );
 
     if (cleanParent) {
       setExpandedFolderIds((prev) =>
@@ -990,7 +961,8 @@ export default function Home() {
         }),
       });
       if (!fRes.ok) {
-        alert("Klasör kopyalanamadı.");
+        const err = await fRes.json().catch(() => ({}));
+        alert(`Klasör kopyalanamadı: ${err.detail || err.message || `Sunucu hatası (${fRes.status})`}`);
         return;
       }
       const newFolder = await fRes.json();
