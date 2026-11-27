@@ -26,36 +26,66 @@ app.add_middleware(
 )
 
 
+def _cors_error_headers(request: Request) -> dict:
+    origin = request.headers.get("origin") or "*"
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+    if origin != "*":
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+    return headers
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    headers = _cors_error_headers(request)
+    extra = getattr(exc, "headers", None)
+    if isinstance(extra, dict):
+        headers.update(extra)
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=getattr(exc, "headers", None),
+        headers=headers,
     )
 
 
 @app.exception_handler(QuotaExceededException)
 async def quota_exceeded_handler(request: Request, exc: QuotaExceededException):
-    return JSONResponse(status_code=403, content=exc.payload)
+    return JSONResponse(
+        status_code=403,
+        content=exc.payload,
+        headers=_cors_error_headers(request),
+    )
 
 
 @app.exception_handler(ProRequiredException)
 async def pro_required_handler(request: Request, exc: ProRequiredException):
-    return JSONResponse(status_code=403, content=exc.payload)
+    return JSONResponse(
+        status_code=403,
+        content=exc.payload,
+        headers=_cors_error_headers(request),
+    )
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    headers = _cors_error_headers(request)
     if isinstance(exc, StarletteHTTPException):
+        extra = getattr(exc, "headers", None)
+        if isinstance(extra, dict):
+            headers.update(extra)
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
-            headers=getattr(exc, "headers", None),
+            headers=headers,
         )
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Sunucu hatası: {str(exc)}"},
+        content={"detail": str(exc)},
+        headers=headers,
     )
 
 

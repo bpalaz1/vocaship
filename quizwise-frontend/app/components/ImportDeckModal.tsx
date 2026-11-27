@@ -82,6 +82,7 @@ export default function ImportDeckModal({
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   const [isSearching, setIsSearching] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  const [isRetryingClone, setIsRetryingClone] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [clonedSuccess, setClonedSuccess] = useState(false);
 
@@ -96,9 +97,15 @@ export default function ImportDeckModal({
     setErrorMsg(null);
     setClonedSuccess(false);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/v1/decks/shared/${encodeURIComponent(cleaned)}`
-      );
+      const url = `${API_BASE}/api/v1/decks/shared/${encodeURIComponent(cleaned)}`;
+      let res: Response;
+      try {
+        res = await fetch(url);
+      } catch {
+        // Sunucu uyku modundan uyanıyorsa 2 sn bekleyip 1 kez yeniden dene
+        await new Promise((r) => setTimeout(r, 2000));
+        res = await fetch(url);
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         setPreview(null);
@@ -111,7 +118,7 @@ export default function ImportDeckModal({
       setPreview(data);
     } catch {
       setPreview(null);
-      setErrorMsg("Sunucuya ulaşılamadı. Lütfen tekrar deneyin.");
+      setErrorMsg("Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.");
     } finally {
       setIsSearching(false);
     }
@@ -121,6 +128,7 @@ export default function ImportDeckModal({
     if (!isOpen) return;
     setErrorMsg(null);
     setClonedSuccess(false);
+    setIsRetryingClone(false);
     if (folders.length > 0 && !selectedFolderId) {
       setSelectedFolderId(String(folders[0].id || "").trim());
     }
@@ -159,39 +167,78 @@ export default function ImportDeckModal({
     }
 
     setIsCloning(true);
+    setIsRetryingClone(false);
     setErrorMsg(null);
+
+    const cloneUrl = `${API_BASE}/api/v1/decks/shared/${encodeURIComponent(preview.id)}/clone`;
+    const requestInit: RequestInit = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        folder_id: selectedFolderId.trim() || null,
+      }),
+    };
+
     try {
-      const res = await fetch(
-        `${API_BASE}/api/v1/decks/shared/${encodeURIComponent(preview.id)}/clone`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            folder_id: selectedFolderId.trim() || null,
-          }),
+      let res: Response;
+      try {
+        res = await fetch(cloneUrl, requestInit);
+      } catch (firstErr: any) {
+        // Ağ hatası / Failed to fetch (sunucu uyanıyorsa) -> 2 sn bekleyip 1 kez otomatik yeniden dene
+        setIsRetryingClone(true);
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          res = await fetch(cloneUrl, requestInit);
+        } catch {
+          throw new Error(
+            "Sunucu yanıt vermiyor (ağ bağlantısı kurulamadı). Lütfen birkaç saniye sonra tekrar deneyin."
+          );
+        } finally {
+          setIsRetryingClone(false);
         }
-      );
+      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Deste kütüphanenize kopyalanamadı.");
+        throw new Error(
+          err.detail || `Deste kütüphanenize kopyalanamadı (Hata: ${res.status}).`
+        );
       }
 
       try {
         sessionStorage.removeItem(PENDING_IMPORT_DECK_KEY);
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("importDeck")) {
+            url.searchParams.delete("importDeck");
+            window.history.replaceState(
+              {},
+              "",
+              url.pathname + (url.search ? url.search : "") + url.hash
+            );
+          }
+        }
       } catch {}
 
       setClonedSuccess(true);
       await onImported();
       setTimeout(() => {
         onClose();
-      }, 900);
+      }, 650);
     } catch (err: any) {
-      setErrorMsg(err?.message || "Kopyalama sırasında bir hata oluştu.");
+      const msg = String(err?.message || "");
+      if (msg.toLowerCase().includes("failed to fetch")) {
+        setErrorMsg(
+          "Sunucuya ulaşılamadı (Failed to fetch). Lütfen bağlantınızı kontrol edip birkaç saniye sonra tekrar deneyin."
+        );
+      } else {
+        setErrorMsg(msg || "Kopyalama sırasında bir hata oluştu.");
+      }
     } finally {
+      setIsRetryingClone(false);
       setIsCloning(false);
     }
   };
@@ -363,7 +410,9 @@ export default function ImportDeckModal({
                 {isCloning ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Kopyalanıyor...</span>
+                    <span>
+                      {isRetryingClone ? "Yeniden deneniyor..." : "Kopyalanıyor..."}
+                    </span>
                   </>
                 ) : !user ? (
                   <>

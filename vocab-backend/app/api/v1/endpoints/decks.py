@@ -27,6 +27,77 @@ def _deck_share_code(deck_id: str) -> str:
     return f"VS-{clean[:6].upper()}"
 
 
+def _extract_user_field(current_user: Any, key: str, default: str = "") -> str:
+    if isinstance(current_user, dict):
+        val = current_user.get(key)
+    else:
+        val = getattr(current_user, key, None)
+    return str(val).strip() if val is not None else default
+
+
+def _ensure_public_user_exists(db: Client, current_user: Any) -> str:
+    """
+    decks(user_id) -> public.users(id) Foreign Key hatasını önlemek için
+    aktif kullanıcının public.users tablosunda var olup olmadığını .select('id') ile kontrol eder;
+    kayıt yoksa .insert({...}) ile ekler.
+    """
+    uid = _extract_user_field(current_user, "id")
+    if not uid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Geçerli bir kullanıcı kimliği bulunamadı.",
+        )
+
+    existing = db.table("users").select("id").eq("id", uid).execute()
+    if existing.data and len(existing.data) > 0:
+        return uid
+
+    email = _extract_user_field(current_user, "email").lower()
+    full_name = _extract_user_field(current_user, "full_name")
+    username = _extract_user_field(current_user, "username").lower()
+
+    safe_email = email or f"user-{uid[:8]}@vocaship.local"
+    safe_full_name = full_name or username or safe_email.split("@")[0]
+    safe_username = username or safe_email.split("@")[0]
+
+    candidates = [
+        {
+            "id": uid,
+            "email": safe_email,
+            "full_name": safe_full_name,
+            "username": safe_username,
+        },
+        {
+            "id": uid,
+            "email": safe_email,
+            "full_name": safe_full_name,
+        },
+        {
+            "id": uid,
+            "email": safe_email,
+        },
+    ]
+
+    last_err: Optional[Exception] = None
+    for row in candidates:
+        try:
+            db.table("users").insert(row).execute()
+            return uid
+        except Exception as exc:
+            try:
+                recheck = db.table("users").select("id").eq("id", uid).execute()
+                if recheck.data and len(recheck.data) > 0:
+                    return uid
+            except Exception:
+                pass
+            last_err = exc
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Deste kopyalanamadı: kullanıcı kaydı oluşturulamadı ({str(last_err)})",
+    )
+
+
 def _find_deck_by_code_or_id(db: Client, code_or_id: str) -> Optional[dict]:
     raw = (code_or_id or "").strip()
     if not raw:
@@ -192,67 +263,99 @@ async def clone_shared_deck(
     current_user: dict = Depends(get_current_user),
 ):
     """Paylaşılan desteyi orijinaline dokunmadan kullanıcının kendi hesabına bağımsız kopya olarak ekler."""
-    source_deck = _find_deck_by_code_or_id(db, code_or_id)
-    if not source_deck:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Kopyalanacak paylaşılan deste bulunamadı.",
+    try:
+        uid = _ensure_public_user_exists(db, current_user)
+
+        source_deck = _find_deck_by_code_or_id(db, code_or_id)
+        if not source_deck:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Kopyalanacak paylaşılan deste bulunamadı.",
+            )
+
+        raw_fid = payload.folder_id if payload else None
+        if not raw_fid or str(raw_fid).strip().lower() in ("", "null", "none", "undefined"):
+            target_folder_id = None
+        else:
+            candidate_fid = str(raw_fid).strip()
+            # Hedef klasör bu kullanıcıda gerçekten yoksa FK hatasını önlemek için None yap
+            f_check = (
+                db.table("folders")
+                .select("id")
+                .eq("id", candidate_fid)
+                .eq("user_id", uid)
+                .execute()
+            )
+            target_folder_id = candidate_fid if (f_check.data and len(f_check.data) > 0) else None
+
+        source_cards_res = (
+            db.table("flashcards")
+            .select("word, phonetic, meanings, grammar_notes, example_sentences, collocations, created_at")
+            .eq("deck_id", source_deck["id"])
+            .order("created_at")
+            .execute()
         )
+        source_cards = source_cards_res.data or []
 
-    raw_fid = payload.folder_id if payload else None
-    if not raw_fid or str(raw_fid).strip().lower() in ("", "null", "none", "undefined"):
-        target_folder_id = None
-    else:
-        target_folder_id = str(raw_fid).strip()
-
-    source_cards_res = (
-        db.table("flashcards")
-        .select("*")
-        .eq("deck_id", source_deck["id"])
-        .order("created_at")
-        .execute()
-    )
-    source_cards = source_cards_res.data or []
-
-    new_deck_data = {
-        "user_id": str(current_user["id"]).strip(),
-        "title": source_deck.get("title") or "Paylaşılan Deste",
-        "description": source_deck.get("description") or "",
-        "folder_id": target_folder_id,
-    }
-    created_res = db.table("decks").insert(new_deck_data).execute()
-    if not created_res.data:
-        raise HTTPException(status_code=400, detail="Deste kopyalanırken bir hata oluştu.")
-
-    new_deck = created_res.data[0]
-    new_deck_id = str(new_deck["id"])
-
-    today_str = str(date.today())
-    new_cards = [
-        {
-            "deck_id": new_deck_id,
-            "word": c.get("word") or "",
-            "phonetic": c.get("phonetic") or "",
-            "meanings": c.get("meanings") or [],
-            "example_sentences": c.get("example_sentences") or [],
-            "collocations": c.get("collocations") or [],
-            "grammar_notes": c.get("grammar_notes") or "",
-            "ease_factor": 2.5,
-            "interval_days": 0,
-            "repetitions": 0,
-            "next_review_date": today_str,
+        new_deck_data = {
+            "user_id": uid,
+            "title": str(source_deck.get("title") or "Paylaşılan Deste").strip(),
+            "description": str(source_deck.get("description") or ""),
+            "folder_id": target_folder_id,
         }
-        for c in source_cards
-    ]
+        created_res = db.table("decks").insert(new_deck_data).execute()
+        if not created_res.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Deste kopyalanamadı: yeni deste kaydı oluşturulamadı.",
+            )
 
-    if new_cards:
-        db.table("flashcards").insert(new_cards).execute()
+        new_deck = created_res.data[0]
+        new_deck_id = str(new_deck["id"])
 
-    raw_folder = new_deck.get("folder_id")
-    new_deck["folder_id"] = str(raw_folder) if raw_folder else None
-    new_deck["card_count"] = len(new_cards)
-    new_deck["share_code"] = _deck_share_code(new_deck_id)
-    return new_deck
+        today_str = str(date.today())
+        new_cards = [
+            {
+                "deck_id": new_deck_id,
+                "word": str(c.get("word") or ""),
+                "phonetic": str(c.get("phonetic") or ""),
+                "meanings": c.get("meanings") if isinstance(c.get("meanings"), list) else [],
+                "grammar_notes": str(c.get("grammar_notes") or ""),
+                "example_sentences": (
+                    c.get("example_sentences")
+                    if isinstance(c.get("example_sentences"), list)
+                    else []
+                ),
+                "collocations": (
+                    c.get("collocations")
+                    if isinstance(c.get("collocations"), list)
+                    else []
+                ),
+                "ease_factor": 2.5,
+                "interval_days": 0,
+                "repetitions": 0,
+                "next_review_date": today_str,
+            }
+            for c in source_cards
+        ]
+
+        if new_cards:
+            chunk_size = 100
+            for i in range(0, len(new_cards), chunk_size):
+                db.table("flashcards").insert(new_cards[i : i + chunk_size]).execute()
+
+        raw_folder = new_deck.get("folder_id")
+        new_deck["folder_id"] = str(raw_folder) if raw_folder else None
+        new_deck["card_count"] = len(new_cards)
+        new_deck["share_code"] = _deck_share_code(new_deck_id)
+        return new_deck
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Deste kopyalanamadı: {str(e)}",
+        )
 
 
 @router.patch("/{deck_id}/folder", status_code=status.HTTP_200_OK)
