@@ -1,13 +1,14 @@
 import json
 import os
 import re
+import shutil
 import tempfile
 import time
 import uuid
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Depends, Request, Body, UploadFile, File, status
+from fastapi import APIRouter, HTTPException, Depends, Request, Body, UploadFile, File, Form, status
 from fastapi.responses import JSONResponse, FileResponse
 from supabase import Client
 from app.core.database import get_db
@@ -853,6 +854,140 @@ async def update_board_state(class_id: str, payload: BoardStateUpdatePayload):
         state["page_num"] = int(payload.page_num)
     _BOARD_STATE_STORE[norm_cid] = state
     return state
+
+
+# =========================================================================
+# CANLI DERS ANLIK MATERYAL PAYLAŞIMI & İNDİRME ENDPOINT'LERİ
+# =========================================================================
+
+_MATERIALS_ROOT_DIR = os.path.join(
+    "/tmp" if os.name != "nt" else tempfile.gettempdir(),
+    "vocaship_materials",
+)
+os.makedirs(_MATERIALS_ROOT_DIR, exist_ok=True)
+_CLASS_MATERIALS_STORE: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+
+def _safe_material_filename(name: str) -> str:
+    base = os.path.basename((name or "materyal").strip())
+    safe = re.sub(r"[^a-zA-Z0-9._-]", "_", base)
+    return safe or "materyal.pdf"
+
+
+@router.post("/classes/{class_id}/materials", status_code=status.HTTP_201_CREATED)
+async def share_class_material(
+    class_id: str,
+    title: Optional[str] = Form(default=""),
+    note: Optional[str] = Form(default=""),
+    use_active_board_pdf: Optional[bool] = Form(default=False),
+    file: Optional[UploadFile] = File(default=None),
+):
+    """
+    Eğitmenin yüklediği dosyayı veya tahtadaki aktif PDF'i kaydeder ve
+    öğrencilerin canlı derste tek tıkla indirebileceği download_url döner.
+    """
+    norm_cid = _norm_board_key(class_id)
+    safe_cid = _safe_board_class_id(norm_cid)
+    class_dir = os.path.join(_MATERIALS_ROOT_DIR, safe_cid)
+    os.makedirs(class_dir, exist_ok=True)
+
+    clean_title = (title or "").strip()
+    clean_note = (note or "").strip()
+    material_id = uuid.uuid4().hex[:12]
+
+    saved_path: Optional[str] = None
+    final_filename: Optional[str] = None
+
+    if file is not None and file.filename:
+        raw_bytes = await file.read()
+        if raw_bytes:
+            final_filename = _safe_material_filename(file.filename)
+            saved_path = os.path.join(class_dir, f"{material_id}_{final_filename}")
+            with open(saved_path, "wb") as out_f:
+                out_f.write(raw_bytes)
+    elif use_active_board_pdf:
+        board_pdf = _board_pdf_path(norm_cid)
+        if not os.path.exists(board_pdf):
+            raise HTTPException(
+                status_code=404,
+                detail="Tahtada kayıtlı aktif bir PDF bulunamadı. Lütfen cihazınızdan dosya seçin.",
+            )
+        board_state = _BOARD_STATE_STORE.get(norm_cid) or {}
+        orig_name = board_state.get("active_pdf_filename") or f"{safe_cid}.pdf"
+        final_filename = _safe_material_filename(orig_name)
+        saved_path = os.path.join(class_dir, f"{material_id}_{final_filename}")
+        shutil.copyfile(board_pdf, saved_path)
+
+    if not saved_path and not clean_note and not clean_title:
+        raise HTTPException(
+            status_code=400,
+            detail="Lütfen bir dosya seçin, aktif tahta PDF'ini işaretleyin veya bir ders notu yazın.",
+        )
+
+    final_title = clean_title or final_filename or "Ders Materyali"
+    download_url = (
+        f"/api/v1/classroom/classes/{norm_cid}/materials/{material_id}/download"
+        if saved_path
+        else None
+    )
+    sent_at = datetime.now(timezone.utc).isoformat()
+
+    record = {
+        "material_id": material_id,
+        "title": final_title,
+        "note": clean_note,
+        "filename": final_filename,
+        "file_path": saved_path,
+        "download_url": download_url,
+        "sent_at": sent_at,
+    }
+    _CLASS_MATERIALS_STORE.setdefault(norm_cid, {})[material_id] = record
+
+    return {
+        "material_id": material_id,
+        "title": final_title,
+        "note": clean_note,
+        "filename": final_filename,
+        "download_url": download_url,
+        "sent_at": sent_at,
+    }
+
+
+@router.get("/classes/{class_id}/materials/{material_id}/download")
+async def download_class_material(class_id: str, material_id: str):
+    """Paylaşılan ders materyalini doğrudan indirilebilir olarak sunar."""
+    norm_cid = _norm_board_key(class_id)
+    safe_cid = _safe_board_class_id(norm_cid)
+    class_dir = os.path.join(_MATERIALS_ROOT_DIR, safe_cid)
+
+    rec = (_CLASS_MATERIALS_STORE.get(norm_cid) or {}).get(material_id)
+    file_path = rec.get("file_path") if rec else None
+    filename = rec.get("filename") if rec else None
+
+    if not file_path or not os.path.exists(file_path):
+        # Disk üzerinden material_id önekiyle kurtarma
+        if os.path.isdir(class_dir):
+            prefix = f"{material_id}_"
+            for entry in os.listdir(class_dir):
+                if entry.startswith(prefix):
+                    file_path = os.path.join(class_dir, entry)
+                    filename = entry[len(prefix):] or entry
+                    break
+
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Materyal dosyası bulunamadı.")
+
+    safe_dl_name = _safe_material_filename(filename or "materyal.pdf")
+    return FileResponse(
+        path=file_path,
+        media_type="application/octet-stream",
+        filename=safe_dl_name,
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_dl_name}"',
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store, max-age=0",
+        },
+    )
 
 
 

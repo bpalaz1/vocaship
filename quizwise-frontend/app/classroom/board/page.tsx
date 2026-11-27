@@ -40,10 +40,14 @@ import {
   Type,
   Camera,
   Crosshair,
+  Download,
+  Paperclip,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import BoardTimer from "./components/BoardTimer";
-import SendMaterialModal from "../../components/classroom/SendMaterialModal";
+import SendMaterialModal, {
+  type SharedMaterialPayload,
+} from "../../components/classroom/SendMaterialModal";
 import ClassLiveQRModal from "../../components/classroom/ClassLiveQRModal";
 import {
   LiveKitBoardProvider,
@@ -225,6 +229,40 @@ function SmartBoardConsoleInner({
 
   // 5. Araç Durumu & 🖐️ Gezin (Pan / Grab & Drag) Referansları
   const [activeTool, setActiveTool] = useState<BoardDrawingTool>("pan");
+  const [penColor, setPenColor] = useState<string>("#ef4444");
+  const [isPenPopoverOpen, setIsPenPopoverOpen] = useState(false);
+  const [isShapePopoverOpen, setIsShapePopoverOpen] = useState(false);
+  const [lastShapeTool, setLastShapeTool] = useState<"line" | "circle" | "rect" | "arrow">("rect");
+  const [incomingMaterial, setIncomingMaterial] = useState<SharedMaterialPayload | null>(null);
+
+  const handleDownloadIncomingMaterial = useCallback((mat: SharedMaterialPayload) => {
+    if (mat.downloadUrl) {
+      const fullUrl = mat.downloadUrl.startsWith("http")
+        ? mat.downloadUrl
+        : `${API_BASE}${mat.downloadUrl.startsWith("/") ? "" : "/"}${mat.downloadUrl}`;
+      const a = document.createElement("a");
+      a.href = fullUrl;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      if (mat.filename) a.download = mat.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+    // Yalnızca not gönderildiyse .txt olarak indir
+    try {
+      const textContent = `${mat.title}\n\n${mat.note || ""}\n`;
+      const blob = new Blob([textContent], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const slug = (mat.title || "ders-notu").toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/gi, "-");
+      a.download = `${slug}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
+  }, []);
 
   // Lazer İşaretçi (1.2 saniye sonra kaybolan iz)
   const [laserTrail, setLaserTrail] = useState<Array<{ x: number; y: number; ts: number }>>([]);
@@ -1199,7 +1237,7 @@ function SmartBoardConsoleInner({
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1.0;
       ctx.lineWidth = 4;
-      ctx.strokeStyle = "#ef4444"; // Kırmızı not kalemi
+      ctx.strokeStyle = penColor || "#ef4444"; // Tekil kalem (seçili renk)
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
     } else if (tool === "pen_blue") {
@@ -1490,6 +1528,15 @@ function SmartBoardConsoleInner({
         if (canvas) {
           canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
         }
+      } else if (msg.type === "MATERIAL_SHARED") {
+        setIncomingMaterial({
+          materialId: String(msg.materialId || Date.now()),
+          title: String(msg.title || "Ders Materyali"),
+          note: String(msg.note || ""),
+          filename: msg.filename ? String(msg.filename) : null,
+          downloadUrl: msg.downloadUrl ? String(msg.downloadUrl) : null,
+          sentAt: String(msg.sentAt || new Date().toISOString()),
+        });
       } else if (msg.type === "DRAW_MOVE" && msg.from && msg.to) {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -1737,7 +1784,7 @@ function SmartBoardConsoleInner({
           ? "#facc15"
           : activeTool === "pen_blue"
           ? "#3b82f6"
-          : "#ef4444";
+          : penColor || "#ef4444";
       const baseWidth =
         activeTool === "highlighter"
           ? 22
@@ -1991,7 +2038,7 @@ function SmartBoardConsoleInner({
           )}
         </div>
 
-        {/* Sağ: Ders Materyali / PDF Yükle, Materyal Gönder & Tam Ekran */}
+        {/* Sağ: Ders PDF Durumu & Tam Ekran (Mükerrer Yansıt & Materyal Gönder kaldırıldı) */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           {isTeacher && (
             <>
@@ -2037,31 +2084,8 @@ function SmartBoardConsoleInner({
                       <span className="sm:hidden">📄 PDF</span>
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={toggleScreenShare}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500/50 text-xs font-bold text-slate-200 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-                    title="Word, Excel, PowerPoint veya herhangi bir pencereyi tahtaya yansıt"
-                  >
-                    <MonitorUp className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="hidden md:inline">🖥️ Word / Excel / Pencere Yansıt</span>
-                    <span className="md:hidden">🖥️ Yansıt</span>
-                  </button>
                 </div>
               )}
-
-              {/* Materyal Gönder Butonu */}
-              <button
-                type="button"
-                onClick={() => setIsSendMaterialOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-xs font-bold text-indigo-300 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
-                title={t("brd_send_mat_tip", "Öğrencilere Not ve Materyal Gönder")}
-              >
-                <Send className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">{t("brd_send_mat", "📨 Materyal Gönder")}</span>
-                <span className="sm:hidden">{t("brd_send_short", "📨 Gönder")}</span>
-              </button>
             </>
           )}
 
@@ -2103,6 +2127,290 @@ function SmartBoardConsoleInner({
           className="flex-1 min-w-0 bg-slate-950 flex flex-col relative overflow-hidden p-2 select-none"
         >
           <div className="w-full h-full flex flex-col relative min-w-0">
+            {/* A) SOL DİKEY PEDAGOJİK ÇİZİM ÇUBUĞU (Yalnızca Eğitmen) */}
+            {isTeacher && (
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 z-30 w-13 rounded-2xl bg-slate-900/90 border border-slate-700/70 backdrop-blur-md shadow-xl p-1.5 flex flex-col items-center gap-1.5">
+                {/* Grup 1: Gezinme & Odak (Pan + Lazer) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool("pan");
+                    setIsPenPopoverOpen(false);
+                    setIsShapePopoverOpen(false);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                    activeTool === "pan" || activeTool === "none"
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  title="🖐️ Gezinme & Pan Modu"
+                >
+                  <Hand className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool("laser");
+                    setIsPenPopoverOpen(false);
+                    setIsShapePopoverOpen(false);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                    activeTool === "laser"
+                      ? "bg-rose-600/30 text-rose-300 border border-rose-500/50 shadow-md"
+                      : "text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+                  }`}
+                  title="🔴 Lazer İşaretçi"
+                >
+                  <Crosshair className="w-4 h-4" />
+                </button>
+
+                <div className="h-px w-7 bg-slate-700/80" />
+
+                {/* Grup 2: Yazma & Vurgulama (Fosforlu + Tekil Kalem + Metin) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool("highlighter");
+                    setIsPenPopoverOpen(false);
+                    setIsShapePopoverOpen(false);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                    activeTool === "highlighter"
+                      ? "bg-amber-400/20 text-amber-300 border border-amber-400/50 shadow-md"
+                      : "text-slate-400 hover:text-amber-300 hover:bg-slate-800"
+                  }`}
+                  title="🟡 Fosforlu Kalem"
+                >
+                  <Highlighter className="w-4 h-4" />
+                </button>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTool("pen_red");
+                      setIsPenPopoverOpen((prev) => !prev);
+                      setIsShapePopoverOpen(false);
+                    }}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer relative ${
+                      activeTool === "pen_red" || activeTool === "pen_blue"
+                        ? "bg-slate-800 text-white border border-indigo-400/60 shadow-md"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                    title="✏️ Kalem (Renk Seç)"
+                  >
+                    <PenTool className="w-4 h-4" />
+                    <span
+                      style={{ backgroundColor: penColor }}
+                      className="w-2.5 h-2.5 rounded-full border border-white/80 absolute bottom-1.5 right-1.5"
+                    />
+                  </button>
+
+                  {isPenPopoverOpen && (
+                    <div className="absolute left-13 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-md">
+                      {[
+                        { color: "#ef4444", label: "Kırmızı" },
+                        { color: "#3b82f6", label: "Mavi" },
+                        { color: "#0f172a", label: "Siyah" },
+                        { color: "#10b981", label: "Yeşil" },
+                      ].map((c) => (
+                        <button
+                          key={c.color}
+                          type="button"
+                          onClick={() => {
+                            setPenColor(c.color);
+                            setActiveTool("pen_red");
+                            setIsPenPopoverOpen(false);
+                          }}
+                          style={{ backgroundColor: c.color }}
+                          className={`w-5 h-5 rounded-full border-2 transition cursor-pointer ${
+                            penColor === c.color
+                              ? "border-white scale-115 shadow"
+                              : "border-slate-500 hover:scale-110"
+                          }`}
+                          title={c.label}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool("text");
+                    setIsPenPopoverOpen(false);
+                    setIsShapePopoverOpen(false);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                    activeTool === "text"
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  title="🔤 Metin Kutusu (T)"
+                >
+                  <Type className="w-4 h-4" />
+                </button>
+
+                <div className="h-px w-7 bg-slate-700/80" />
+
+                {/* Grup 3: Şekiller (Açılır Mini Palet) */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTool(lastShapeTool);
+                      setIsShapePopoverOpen((prev) => !prev);
+                      setIsPenPopoverOpen(false);
+                    }}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                      activeTool === "line" ||
+                      activeTool === "circle" ||
+                      activeTool === "rect" ||
+                      activeTool === "arrow"
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                    title="⬜ Şekiller (Çizgi, Daire, Kare, Ok)"
+                  >
+                    {lastShapeTool === "line" && <Ruler className="w-4 h-4" />}
+                    {lastShapeTool === "circle" && <Circle className="w-4 h-4" />}
+                    {lastShapeTool === "rect" && <Square className="w-4 h-4" />}
+                    {lastShapeTool === "arrow" && <ArrowUpRight className="w-4 h-4" />}
+                  </button>
+
+                  {isShapePopoverOpen && (
+                    <div className="absolute left-13 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-2 p-2.5 rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-md">
+                      <div className="flex items-center gap-1">
+                        {[
+                          { id: "line" as const, icon: Ruler, label: "Çizgi" },
+                          { id: "circle" as const, icon: Circle, label: "Daire" },
+                          { id: "rect" as const, icon: Square, label: "Kare" },
+                          { id: "arrow" as const, icon: ArrowUpRight, label: "Ok" },
+                        ].map((sh) => {
+                          const Icon = sh.icon;
+                          return (
+                            <button
+                              key={sh.id}
+                              type="button"
+                              onClick={() => {
+                                setLastShapeTool(sh.id);
+                                setActiveTool(sh.id);
+                                setIsShapePopoverOpen(false);
+                              }}
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                                activeTool === sh.id
+                                  ? "bg-indigo-600 text-white"
+                                  : "text-slate-300 hover:bg-slate-800"
+                              }`}
+                              title={sh.label}
+                            >
+                              <Icon className="w-4 h-4" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center justify-center gap-1.5 pt-1 border-t border-slate-800">
+                        {["#ef4444", "#3b82f6", "#10b981", "#facc15"].map((col) => (
+                          <button
+                            key={col}
+                            type="button"
+                            onClick={() => setShapeColor(col)}
+                            style={{ backgroundColor: col }}
+                            className={`w-4 h-4 rounded-full border transition cursor-pointer ${
+                              shapeColor === col ? "border-white scale-120" : "border-slate-600 opacity-75"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="h-px w-7 bg-slate-700/80" />
+
+                {/* Grup 4: Temizlik (Silgi + Sayfayı Temizle) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool("eraser");
+                    setIsPenPopoverOpen(false);
+                    setIsShapePopoverOpen(false);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                    activeTool === "eraser"
+                      ? "bg-slate-700 text-white border border-slate-500 shadow-md"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  title="🧹 Silgi"
+                >
+                  <Eraser className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearCanvas}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/15 transition cursor-pointer"
+                  title="🗑️ Sayfayı Temizle"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Öğrenci Canlı Materyal Bildirim Kartı (MATERIAL_SHARED) */}
+            {!isTeacher && incomingMaterial && (
+              <div className="fixed top-20 right-4 sm:right-6 md:right-[340px] z-50 w-80 max-w-[92vw] rounded-2xl bg-slate-900/95 border border-indigo-500/50 shadow-2xl backdrop-blur-md p-4 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 text-indigo-300 font-bold text-xs">
+                    <Paperclip className="w-4 h-4 shrink-0" />
+                    <span>📎 Eğitmen Materyal Paylaştı</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIncomingMaterial(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                    aria-label="Kapat"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-sm font-bold text-white truncate">
+                    {incomingMaterial.title}
+                  </div>
+                  {incomingMaterial.filename && (
+                    <div className="text-[11px] font-mono text-emerald-300 truncate">
+                      📄 {incomingMaterial.filename}
+                    </div>
+                  )}
+                  {incomingMaterial.note && (
+                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
+                      {incomingMaterial.note}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadIncomingMaterial(incomingMaterial)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer active:scale-95"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>⬇️ İndir</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIncomingMaterial(null)}
+                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* 🔴 Lazer İşaretçi Katmanı */}
             {laserTrail.length > 0 && (
               <svg className="pointer-events-none absolute inset-0 w-full h-full z-30">
@@ -2453,290 +2761,45 @@ function SmartBoardConsoleInner({
 
 
       {/* ========================================================================= */}
-      {/* 4. ALT SABİT DOCK ÇUBUĞU (FIXED DOCK - ÖĞRETMEN & ÖĞRENCİ CANLI MEDYA)   */}
+      {/* 4. C) ALT MİNİ DOKÜMAN KONTROL HAPI (bottom-3 — PDF'İ KAPATMAZ)           */}
       {/* ========================================================================= */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-3 py-2 bg-slate-900/95 border border-slate-700/80 shadow-2xl rounded-2xl backdrop-blur-md pointer-events-auto max-w-[96vw] overflow-x-auto scrollbar-none">
-        {/* Canlı Medya (Öğretmen & Öğrenci): 🎤 Mikrofon */}
-        <button
-          type="button"
-          onClick={toggleMicrophone}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0 ${
-            isMicActive
-              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-md ring-2 ring-emerald-400/40"
-              : "text-slate-300 hover:text-white hover:bg-slate-800"
-          }`}
-          title={isMicActive ? t("brd_mic_off_tip", "Mikrofonu Kapat") : t("brd_mic_on_tip", "Mikrofonu Aç")}
-        >
-          {isMicActive ? (
-            <>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <Mic className="w-4 h-4 text-emerald-400" />
-            </>
-          ) : (
-            <MicOff className="w-4 h-4" />
-          )}
-          <span className="hidden sm:inline">{t("brd_mic_short", "Mikrofon")}</span>
-        </button>
+      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 md:left-[calc(50%-160px)] z-40 flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900/80 border border-slate-700/70 shadow-xl rounded-full backdrop-blur-md pointer-events-auto">
+        {/* Mobil ekranlarda (< md) sağ sütun gizliyken öğrenci/eğitmen ses & kamera erişimi */}
+        <div className="flex md:hidden items-center gap-1 pr-1.5 border-r border-slate-700/70">
+          <button
+            type="button"
+            onClick={toggleMicrophone}
+            className={`p-1.5 rounded-full transition cursor-pointer ${
+              isMicActive
+                ? "bg-emerald-500/25 text-emerald-300"
+                : "text-slate-300 hover:bg-slate-800"
+            }`}
+            title={isMicActive ? "Mikrofonu Kapat" : "Mikrofonu Aç"}
+          >
+            {isMicActive ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={toggleCamera}
+            className={`p-1.5 rounded-full transition cursor-pointer ${
+              isCameraActive
+                ? "bg-emerald-500/25 text-emerald-300"
+                : "text-slate-300 hover:bg-slate-800"
+            }`}
+            title={isCameraActive ? "Kamerayı Kapat" : "Kamerayı Aç"}
+          >
+            {isCameraActive ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5" />}
+          </button>
+        </div>
 
-        {/* Canlı Medya (Öğretmen & Öğrenci): 📷 Kamera */}
-        <button
-          type="button"
-          onClick={toggleCamera}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0 ${
-            isCameraActive
-              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-md ring-2 ring-emerald-400/40"
-              : "text-slate-300 hover:text-white hover:bg-slate-800"
-          }`}
-          title={isCameraActive ? t("brd_cam_off_tip", "Kamerayı Kapat") : t("brd_cam_on_tip", "Kamerayı Aç")}
-        >
-          {isCameraActive ? (
-            <>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <Video className="w-4 h-4 text-emerald-400" />
-            </>
-          ) : (
-            <VideoOff className="w-4 h-4" />
-          )}
-          <span className="hidden sm:inline">{t("brd_cam_short", "Kamera")}</span>
-        </button>
-
-        {isTeacher && (
-        <>
-        {/* Canlı Stüdyo: 🖥️ Ekran Paylaş */}
-        <button
-          type="button"
-          onClick={toggleScreenShare}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
-            isScreenSharing
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title={isScreenSharing ? t("brd_screen_stop_tip", "Ekran Paylaşımını Durdur") : t("brd_screen_start_tip", "Ekran Paylaş (Canlı Sahne)")}
-        >
-          {isScreenSharing ? (
-            <>
-              <span className="w-2 h-2 rounded-full bg-indigo-300 animate-pulse" />
-              <MonitorUp className="w-4 h-4 text-white" />
-            </>
-          ) : (
-            <Monitor className="w-4 h-4" />
-          )}
-          <span className="hidden xl:inline">{t("brd_screen_btn", "Ekran Paylaş")}</span>
-        </button>
-
-        <div className="w-px h-5 bg-slate-700 mx-0.5" />
-
-        {/* 🖐️ Gezinme / Pan Modu */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("pan")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "pan" || activeTool === "none"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_pan_tip", "🖐️ Gezinme & Pan Modu (Tut & Kaydır)")}
-        >
-          <Hand className="w-4 h-4" />
-          <span className="hidden sm:inline">{t("brd_tool_pan_lbl", "Gezin")}</span>
-        </button>
-
-        {/* 🟡 Fosforlu Kalem (%80 Transparanlık) */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("highlighter")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
-            activeTool === "highlighter"
-              ? "bg-amber-400/20 text-amber-300 border border-amber-400/50 shadow-md ring-2 ring-amber-400/30"
-              : "text-slate-400 hover:text-amber-300 hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_hl_tip", "🟡 Fosforlu Kalem (%80 Şeffaf Vurgu)")}
-        >
-          <Highlighter className="w-4 h-4 text-amber-400" />
-          <span className="hidden sm:inline">{t("brd_tool_hl_lbl", "Fosforlu")}</span>
-        </button>
-
-        {/* ✏️ Kırmızı Not Kalemi */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("pen_red")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "pen_red"
-              ? "bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-md"
-              : "text-slate-400 hover:text-rose-400 hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_pen_tip", "✏️ Kırmızı Not Kalemi")}
-        >
-          <PenTool className="w-4 h-4 text-rose-400" />
-          <span className="hidden md:inline">{t("brd_tool_red_lbl", "Kırmızı")}</span>
-        </button>
-
-        {/* ✏️ Mavi Not Kalemi */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("pen_blue")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "pen_blue"
-              ? "bg-blue-500/20 text-blue-300 border border-blue-500/50 shadow-md"
-              : "text-slate-400 hover:text-blue-400 hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_blue_tip", "✏️ Mavi Not Kalemi")}
-        >
-          <PenTool className="w-4 h-4 text-blue-400" />
-          <span className="hidden md:inline">{t("brd_tool_blue_lbl", "Mavi")}</span>
-        </button>
-
-        <div className="w-px h-5 bg-slate-700 mx-0.5" />
-
-        {/* 📏 Çizgi Aracı */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("line")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "line"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_line_tip", "📏 Düz Çizgi Aracı")}
-        >
-          <Ruler className="w-4 h-4" />
-          <span className="hidden xl:inline">{t("brd_tool_line_lbl", "Çizgi")}</span>
-        </button>
-
-        {/* ⭕ Daire Aracı */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("circle")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "circle"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_circle_tip", "⭕ Daire / Elips Vurgulama Aracı")}
-        >
-          <Circle className="w-4 h-4" />
-          <span className="hidden xl:inline">{t("brd_tool_circle_lbl", "Daire")}</span>
-        </button>
-
-        {/* ⬜ Kare / Dikdörtgen Aracı */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("rect")}
-          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "rect"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_rect_tip", "⬜ Kare / Dikdörtgen Çerçeve Aracı")}
-        >
-          <Square className="w-4 h-4" />
-          <span className="hidden xl:inline">{t("brd_tool_rect_lbl", "Kare")}</span>
-        </button>
-
-        {/* ↗️ Ok Çizici */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("arrow")}
-          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "arrow"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title="↗️ Ok Çizici"
-        >
-          <ArrowUpRight className="w-4 h-4" />
-          <span className="hidden xl:inline">Ok</span>
-        </button>
-
-        {/* 🔴 Lazer İşaretçi */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("laser")}
-          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "laser"
-              ? "bg-rose-600/25 text-rose-300 border border-rose-500/50 shadow-md ring-2 ring-rose-500/30"
-              : "text-slate-400 hover:text-rose-400 hover:bg-slate-800"
-          }`}
-          title="🔴 Lazer İşaretçi (1.2 sn sonra kaybolur)"
-        >
-          <Crosshair className="w-4 h-4 text-rose-400" />
-          <span className="hidden xl:inline">Lazer</span>
-        </button>
-
-        {/* 🔤 Tahta Metin Kutusu */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("text")}
-          className={`min-h-[44px] px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "text"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/40"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title="🔤 Tahta Metin Kutusu"
-        >
-          <Type className="w-4 h-4" />
-          <span className="hidden xl:inline">Metin</span>
-        </button>
-
-        {/* Şekil Renk Paleti (Kırmızı, Mavi, Zümrüt Yeşili, Sarı) */}
-        {(activeTool === "line" || activeTool === "circle" || activeTool === "rect" || activeTool === "arrow" || activeTool === "text") && (
-          <div className="flex items-center gap-1 px-1.5 py-1 rounded-xl bg-slate-800/80 border border-slate-700/60 animate-in fade-in zoom-in-95">
-            {[
-              { color: "#ef4444", label: t("brd_tool_red_lbl", "Kırmızı"), bg: "bg-rose-500" },
-              { color: "#3b82f6", label: t("brd_tool_blue_lbl", "Mavi"), bg: "bg-blue-500" },
-              { color: "#10b981", label: t("brd_tool_emerald_lbl", "Zümrüt Yeşili"), bg: "bg-emerald-500" },
-              { color: "#facc15", label: t("brd_tool_yellow_lbl", "Sarı"), bg: "bg-amber-400" },
-            ].map((p) => (
-              <button
-                key={p.color}
-                type="button"
-                onClick={() => setShapeColor(p.color)}
-                className={`w-3.5 h-3.5 rounded-full ${p.bg} transition-all cursor-pointer ${
-                  shapeColor === p.color
-                    ? "ring-2 ring-white scale-125 shadow-sm"
-                    : "opacity-60 hover:opacity-100 hover:scale-110"
-                }`}
-                title={p.label}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* 🧹 Silgi */}
-        <button
-          type="button"
-          onClick={() => setActiveTool("eraser")}
-          className={`p-2 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-            activeTool === "eraser"
-              ? "bg-slate-700 text-white border border-slate-600 shadow-md"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-          title={t("brd_tool_eraser_lbl", "Silgi")}
-        >
-          <Eraser className="w-4 h-4" />
-          <span className="hidden md:inline">{t("brd_tool_eraser_lbl", "Silgi")}</span>
-        </button>
-
-        {/* 🗑️ Çizimleri Temizle */}
-        <button
-          type="button"
-          onClick={handleClearCanvas}
-          className="min-h-[44px] px-2.5 py-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-          title={t("brd_clear_draw_tip", "🗑️ Tüm Çizimleri Temizle")}
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-        </>
-        )}
-
-        {/* PDF Sayfa Senkron Kontrolü (Yalnızca Eğitmen) */}
+        {/* PDF Sayfa Kontrolü (Yalnızca Eğitmen) */}
         {isTeacher && pdfPageImages.length > 1 && (
-          <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-800/90 border border-slate-700/70 text-[11px] font-mono text-slate-200">
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700/70 text-[11px] font-mono text-slate-200">
             <button
               type="button"
               onClick={() => handleGoToPdfPage(currentPdfPage - 1)}
               disabled={currentPdfPage <= 1}
-              className="px-1.5 py-0.5 rounded hover:bg-slate-700 disabled:opacity-30 cursor-pointer"
+              className="px-1 rounded hover:bg-slate-700 disabled:opacity-30 cursor-pointer"
             >
               ‹
             </button>
@@ -2747,63 +2810,61 @@ function SmartBoardConsoleInner({
               type="button"
               onClick={() => handleGoToPdfPage(currentPdfPage + 1)}
               disabled={currentPdfPage >= pdfPageImages.length}
-              className="px-1.5 py-0.5 rounded hover:bg-slate-700 disabled:opacity-30 cursor-pointer"
+              className="px-1 rounded hover:bg-slate-700 disabled:opacity-30 cursor-pointer"
             >
               ›
             </button>
           </div>
         )}
 
-        {/* 📸 Snapshot (PNG İndir) */}
+        {/* Zoom Kontrolleri (Yalnızca Eğitmen) */}
+        {isTeacher && (
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              disabled={scale <= 0.8}
+              className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
+              title="Uzaklaş"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleResetZoom}
+              className="px-2 py-0.5 rounded-full bg-slate-800/90 text-indigo-300 font-mono font-bold text-[11px] transition cursor-pointer"
+              title="Ölçeği Sıfırla (%100)"
+            >
+              %{Math.round(scale * 100)}
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              disabled={scale >= 2.5}
+              className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
+              title="Yakınlaş"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {isTeacher && <div className="w-px h-4 bg-slate-700/80" />}
+
+        {/* 📸 Snapshot (Eğitmen & Öğrenci) */}
         <button
           type="button"
           onClick={handleSnapshot}
-          className="min-h-[44px] px-2.5 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+          className="px-2.5 py-1 rounded-full text-slate-200 hover:text-white hover:bg-slate-800 transition cursor-pointer flex items-center gap-1.5 text-[11px] font-bold"
           title="📸 Tahta Görüntüsünü PNG Olarak İndir"
         >
-          <Camera className="w-4 h-4 text-emerald-400" />
-          <span className="hidden lg:inline">Snapshot</span>
+          <Camera className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Snapshot</span>
         </button>
-
-        {/* Zoom Kontrolleri (Yalnızca Eğitmen) */}
-        {isTeacher && (
-        <>
-        <div className="w-px h-5 bg-slate-700 mx-0.5" />
-
-        <button
-          type="button"
-          onClick={handleZoomOut}
-          disabled={scale <= 0.8}
-          className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
-          title={t("brd_zoom_out_tip", "➖ Uzaklaş (Scale -0.15)")}
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-
-        <button
-          type="button"
-          onClick={handleResetZoom}
-          className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 text-indigo-300 font-mono font-bold text-xs transition cursor-pointer"
-          title={t("brd_zoom_reset_tip", "Ölçeği Sıfırla (%100)")}
-        >
-          %{Math.round(scale * 100)}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleZoomIn}
-          disabled={scale >= 2.5}
-          className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
-          title={t("brd_zoom_in_tip", "➕ Yakınlaş (Scale +0.15)")}
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-        </>
-        )}
       </div>
 
       {/* ========================================================================= */}
-      {/* 5. MODALLAR: ESNEK SAYAÇ & MANUEL MATERYAL GÖNDERİMİ                       */}
+      {/* 5. MODALLAR: ESNEK SAYAÇ & ANLIK CANLI MATERYAL PAYLAŞIMI                  */}
       {/* ========================================================================= */}
       <BoardTimer
         isOpen={isTimerOpen}
@@ -2817,6 +2878,10 @@ function SmartBoardConsoleInner({
           classId={classId}
           className={activeClassName}
           teacherId={userProfile.id || "00000000-0000-0000-0000-000000000001"}
+          activeBoardPdfName={pdfFileName}
+          onMaterialShared={(payload) => {
+            teacherPublish({ type: "MATERIAL_SHARED", ...payload }, { reliable: true });
+          }}
         />
       )}
 

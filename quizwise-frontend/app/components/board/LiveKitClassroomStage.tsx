@@ -24,9 +24,11 @@ import {
   ChevronDown,
   ChevronUp,
   Monitor,
+  MonitorUp,
   Users,
   Mic,
   MicOff,
+  Video,
   VideoOff,
   Pin,
   PinOff,
@@ -324,6 +326,14 @@ export function TeamsParticipantGallery({ role }: TeamsParticipantGalleryProps) 
   const [viewMode, setViewMode] = useState<"grid" | "speaker">("grid");
   const [collapsed, setCollapsed] = useState(false);
   const [pinnedIdentity, setPinnedIdentity] = useState<string | null>(null);
+  const {
+    isMicEnabled,
+    isCameraEnabled,
+    isScreenShareEnabled,
+    toggleMicrophone,
+    toggleCamera,
+    toggleScreenShare,
+  } = useLiveKitBoard();
 
   const participants = useParticipants();
   const cameraTracks = useTracks(
@@ -536,6 +546,56 @@ export function TeamsParticipantGallery({ role }: TeamsParticipantGalleryProps) 
           )}
         </div>
       )}
+
+      {/* B) Canlı İletişim Kontrol Şeridi (Teams Galerisinin En Altına Sabit) */}
+      <div className="shrink-0 flex items-center justify-center gap-2 p-2.5 border-t border-slate-800/80 bg-slate-900/95">
+        <button
+          type="button"
+          onClick={toggleMicrophone}
+          className={`flex-1 py-2 px-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 text-xs font-bold ${
+            isMicEnabled
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm ring-1 ring-emerald-400/40"
+              : "bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700/80"
+          }`}
+          title={isMicEnabled ? "Mikrofonu Kapat" : "Mikrofonu Aç"}
+        >
+          {isMicEnabled ? <Mic className="w-4 h-4 text-emerald-400" /> : <MicOff className="w-4 h-4" />}
+          <span>Mikrofon</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleCamera}
+          className={`flex-1 py-2 px-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 text-xs font-bold ${
+            isCameraEnabled
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm ring-1 ring-emerald-400/40"
+              : "bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700/80"
+          }`}
+          title={isCameraEnabled ? "Kamerayı Kapat" : "Kamerayı Aç"}
+        >
+          {isCameraEnabled ? <Video className="w-4 h-4 text-emerald-400" /> : <VideoOff className="w-4 h-4" />}
+          <span>Kamera</span>
+        </button>
+
+        {role === "teacher" && (
+          <button
+            type="button"
+            onClick={toggleScreenShare}
+            className={`py-2 px-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 text-xs font-bold ${
+              isScreenShareEnabled
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/50"
+                : "bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700/80"
+            }`}
+            title={isScreenShareEnabled ? "Ekran Paylaşımını Durdur" : "Ekran Paylaş"}
+          >
+            {isScreenShareEnabled ? (
+              <MonitorUp className="w-4 h-4 text-white" />
+            ) : (
+              <Monitor className="w-4 h-4" />
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

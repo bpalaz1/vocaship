@@ -1,8 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
-import { Send, CheckCircle2, AlertCircle, X, Download } from "lucide-react";
-import { useLanguage } from "../../context/LanguageContext";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  FileText,
+  Paperclip,
+  Rocket,
+  Loader2,
+} from "lucide-react";
+import { API_BASE } from "../../config";
+
+export interface SharedMaterialPayload {
+  materialId: string;
+  title: string;
+  note: string;
+  filename: string | null;
+  downloadUrl: string | null;
+  sentAt: string;
+}
 
 interface SendMaterialModalProps {
   isOpen: boolean;
@@ -10,6 +28,8 @@ interface SendMaterialModalProps {
   classId: string;
   className: string;
   teacherId: string;
+  activeBoardPdfName?: string | null;
+  onMaterialShared?: (payload: SharedMaterialPayload) => void;
 }
 
 export default function SendMaterialModal({
@@ -17,194 +37,266 @@ export default function SendMaterialModal({
   onClose,
   classId,
   className,
-  teacherId,
+  activeBoardPdfName,
+  onMaterialShared,
 }: SendMaterialModalProps) {
-  const { t } = useLanguage();
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasBoardPdf = Boolean(activeBoardPdfName);
+
+  const [sourceMode, setSourceMode] = useState<"board_pdf" | "upload" | "note_only">(
+    hasBoardPdf ? "board_pdf" : "upload"
+  );
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successInfo, setSuccessInfo] = useState<{ sentCount: number } | null>(null);
+  const [sentSuccess, setSentSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSourceMode(activeBoardPdfName ? "board_pdf" : "upload");
+      setSelectedFile(null);
+      setTitle("");
+      setNote("");
+      setErrorMsg(null);
+      setSentSuccess(false);
+    }
+  }, [isOpen, activeBoardPdfName]);
 
   if (!isOpen) return null;
 
-  const handleDownloadNote = () => {
-    const title = subject.trim() || "ders-notu";
-    const body = message.trim();
-    const content = `Sınıf: ${className}\nKonu: ${title}\n\n${body}\n`;
-    try {
-      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${title.toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/gi, "-")}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      const lastSnap = sessionStorage.getItem("vocaship_last_board_snapshot");
-      if (lastSnap) {
-        const imgLink = document.createElement("a");
-        imgLink.href = lastSnap;
-        imgLink.download = "vocaship-board-snapshot.png";
-        imgLink.click();
-      }
-    } catch {}
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject.trim()) {
-      setErrorMsg(t("cls_mat_err_subject", "Lütfen bir konu veya başlık girin."));
-      return;
-    }
-    if (!message.trim()) {
-      setErrorMsg(t("cls_mat_err_msg", "Lütfen öğrenci mesajı veya ödev notu girin."));
+    setErrorMsg(null);
+
+    if (sourceMode === "upload" && !selectedFile && !note.trim() && !title.trim()) {
+      setErrorMsg("Lütfen cihazınızdan bir dosya seçin veya kısa bir ders notu yazın.");
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMsg(null);
-    setSuccessInfo(null);
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
     try {
-      const res = await fetch(`${apiUrl}/api/v1/classroom/send-material`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacher_id: teacherId,
-          class_id: classId,
-          subject: subject.trim(),
-          message_body: message.trim(),
-        }),
-      });
+      const formData = new FormData();
+      formData.append("title", title.trim());
+      formData.append("note", note.trim());
+
+      if (sourceMode === "board_pdf" && hasBoardPdf) {
+        formData.append("use_active_board_pdf", "true");
+      } else if (sourceMode === "upload" && selectedFile) {
+        formData.append("file", selectedFile);
+        formData.append("use_active_board_pdf", "false");
+      } else {
+        formData.append("use_active_board_pdf", "false");
+      }
+
+      const normClassId = (classId || "").trim().toLowerCase();
+      const res = await fetch(
+        `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(normClassId)}/materials`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Materyal gönderilirken bir hata oluştu.");
+        throw new Error(errData.detail || "Materyal paylaşılırken bir hata oluştu.");
       }
 
       const data = await res.json();
-      setSuccessInfo({ sentCount: data.sent_count ?? 0 });
-      setSubject("");
-      setMessage("");
+      const sharedPayload: SharedMaterialPayload = {
+        materialId: data.material_id,
+        title: data.title || title.trim() || "Ders Materyali",
+        note: data.note || note.trim(),
+        filename: data.filename || null,
+        downloadUrl: data.download_url || null,
+        sentAt: data.sent_at || new Date().toISOString(),
+      };
+
+      onMaterialShared?.(sharedPayload);
+      setSentSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 900);
     } catch (err: any) {
-      setErrorMsg(err.message || "İşlem sırasında bir hata oluştu.");
+      setErrorMsg(err?.message || "Materyal gönderilemedi.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl p-6 shadow-2xl space-y-5 text-slate-100"
+      >
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition"
+          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition cursor-pointer"
+          aria-label="Kapat"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+        <div className="flex items-center gap-3 pr-8">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
             <Send className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">{t("cls_mat_title", "Manuel Materyal & Not Gönder")}</h3>
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              Canlı Derse Materyal Paylaş
+            </h3>
             <p className="text-xs text-slate-400">
-              {t("cls_mat_class_lbl", "Sınıf:")} <span className="text-indigo-400 font-medium">{className}</span>
+              Sınıf: <span className="text-indigo-300 font-semibold">{className}</span>
             </p>
           </div>
         </div>
 
-        {successInfo ? (
-          <div className="py-6 text-center space-y-4">
-            <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto text-emerald-400 animate-in zoom-in duration-300">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <div>
-              <h4 className="text-base font-semibold text-white">{t("cls_mat_sent_title", "Materyal Başarıyla Gönderildi!")}</h4>
-              <p className="text-sm text-slate-300 mt-1">
-                {t("cls_mat_sent_desc", "Bu sınıfa kayıtlı {count} öğrenciye e-posta ve bildirim ulaştırıldı.", { count: successInfo.sentCount })}
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setSuccessInfo(null);
-                onClose();
-              }}
-              className="mt-4 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition"
-            >
-              {t("close", "Kapat")}
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {errorMsg && (
-              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMsg}</span>
-              </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0] || null;
+            if (f) {
+              setSelectedFile(f);
+              setSourceMode("upload");
+              if (!title.trim()) {
+                setTitle(f.name.replace(/\.[^.]+$/, ""));
+              }
+            }
+          }}
+        />
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* 1. Kaynak Seçimi (Harici URL alanı yok!) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {hasBoardPdf && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSourceMode("board_pdf");
+                  setSelectedFile(null);
+                }}
+                className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-start gap-2.5 ${
+                  sourceMode === "board_pdf"
+                    ? "bg-indigo-600/20 border-indigo-400 text-white ring-2 ring-indigo-500/30"
+                    : "bg-slate-950/70 border-slate-800 text-slate-300 hover:border-slate-700"
+                }`}
+              >
+                <FileText className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <div className="text-xs font-bold">📄 Açık Olan Tahta PDF&apos;ini Gönder</div>
+                  <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                    {activeBoardPdfName}
+                  </div>
+                </div>
+              </button>
             )}
 
+            <button
+              type="button"
+              onClick={() => {
+                setSourceMode("upload");
+                fileInputRef.current?.click();
+              }}
+              className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-start gap-2.5 ${
+                !hasBoardPdf ? "sm:col-span-2" : ""
+              } ${
+                sourceMode === "upload"
+                  ? "bg-indigo-600/20 border-indigo-400 text-white ring-2 ring-indigo-500/30"
+                  : "bg-slate-950/70 border-slate-800 text-slate-300 hover:border-slate-700"
+              }`}
+            >
+              <Paperclip className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-xs font-bold">📎 Cihazdan Dosya Seç</div>
+                <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                  {selectedFile ? selectedFile.name : "PDF, DOCX, PNG veya TXT seçin"}
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* 2. İsteğe Bağlı Kısa Başlık & Ders Notu */}
+          <div className="space-y-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                {t("cls_mat_subject_lbl", "Konu / Başlık")} <span className="text-red-400">*</span>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Kısa Başlık (İsteğe Bağlı)
               </label>
               <input
                 type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder={t("cls_mat_subject_ph", "Örn: Hafta 3 Ders Notları ve Okuma Parçası")}
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Örn: Hafta 3 Okuma Metni & Alıştırmalar"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Message / Note <span className="text-red-400">*</span>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Ders Notu (İsteğe Bağlı)
               </label>
               <textarea
-                rows={4}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={t("cls_mat_msg_ph", "Öğrencilerinize iletmek istediğiniz açıklama, ödev veya çalışma yönergeleri...")}
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition resize-none"
+                rows={3}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Öğrencilere anlık düşecek kısa açıklama veya ödev notu..."
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none resize-none"
               />
             </div>
+          </div>
 
-            <div className="pt-2 flex flex-wrap items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleDownloadNote}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-medium rounded-xl transition flex items-center gap-2 cursor-pointer"
-              >
-                <Download className="w-4 h-4 text-emerald-400" />
-                <span>📥 Notu İndir</span>
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white font-medium text-sm rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center gap-2 cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>{t("cls_mat_sending", "Gönderiliyor...")}</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>{t("cls_mat_send_btn", "📧 Sınıf Öğrencilerine Gönder")}</span>
-                  </>
-                )}
-              </button>
+          {errorMsg && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs text-rose-300 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
             </div>
-          </form>
-        )}
+          )}
+
+          {sentSuccess && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/35 text-xs text-emerald-300 font-semibold">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>Materyal sınıftaki tüm öğrencilere anlık olarak gönderildi!</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+            >
+              Vazgeç
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || sentSuccess}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg transition cursor-pointer active:scale-95"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Gönderiliyor...</span>
+                </>
+              ) : (
+                <>
+                  <Rocket className="w-4 h-4" />
+                  <span>🚀 Derse Gönder</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
-
