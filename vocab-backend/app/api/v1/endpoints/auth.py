@@ -190,44 +190,24 @@ def get_current_user(request: Request) -> Dict[str, Any]:
 def _find_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     clean_id = str(user_id).strip()
     db = get_db()
-    # 1. Primary DB (Supabase / Fallback)
     try:
         res = db.table("users").select("*").eq("id", clean_id).limit(1).execute()
         if res.data and len(res.data) > 0:
             return res.data[0]
     except Exception as exc:
-        logger.debug(f"[Auth] DB id sorgusu: {exc}")
-
-    # 2. Local DB
-    try:
-        local_res = _local_auth_db.table("users").select("*").eq("id", clean_id).limit(1).execute()
-        if local_res.data and len(local_res.data) > 0:
-            return local_res.data[0]
-    except Exception as exc:
-        logger.debug(f"[Auth] Yerel DB id sorgusu: {exc}")
-
+        logger.warning(f"[Auth] Supabase DB id sorgusu hatası: {exc}")
     return None
 
 
 def _find_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     normalized = email.strip().lower()
     db = get_db()
-    # 1. Primary DB (Supabase / Fallback)
     try:
         res = db.table("users").select("*").eq("email", normalized).limit(1).execute()
         if res.data and len(res.data) > 0:
             return res.data[0]
     except Exception as exc:
-        logger.debug(f"[Auth] DB email sorgusu: {exc}")
-
-    # 2. Local DB
-    try:
-        local_res = _local_auth_db.table("users").select("*").eq("email", normalized).limit(1).execute()
-        if local_res.data and len(local_res.data) > 0:
-            return local_res.data[0]
-    except Exception as exc:
-        logger.debug(f"[Auth] Yerel DB email sorgusu: {exc}")
-
+        logger.warning(f"[Auth] Supabase DB email sorgusu hatası: {exc}")
     return None
 
 
@@ -238,21 +218,12 @@ def _find_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     """
     normalized = username.strip().lower()
     db = get_db()
-
     try:
         res = db.table("users").select("*").eq("username", normalized).limit(1).execute()
         if res.data and len(res.data) > 0:
             return res.data[0]
     except Exception as exc:
-        logger.debug(f"[Auth] DB username sorgusu: {exc}")
-
-    try:
-        local_res = _local_auth_db.table("users").select("*").eq("username", normalized).limit(1).execute()
-        if local_res.data and len(local_res.data) > 0:
-            return local_res.data[0]
-    except Exception as exc:
-        logger.debug(f"[Auth] Yerel DB username sorgusu: {exc}")
-
+        logger.warning(f"[Auth] Supabase DB username sorgusu hatası: {exc}")
     return None
 
 
@@ -311,29 +282,52 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
                 detail="Bu e-posta adresi ile kayıtlı bir hesap zaten mevcut. Lütfen giriş yapın.",
             )
 
-        # Doğrulanmamış yarım kalmış kayıt için yeni kod üretip güncelle
+        # Doğrulanmamış yarım kalmış kayıt için yeni kod üretip doğrudan Supabase'de güncelle
         user_id = str(existing_user_by_email.get("id"))
         pwd_hash = hash_password(payload.password)
-        refresh_updates = {
-            "full_name": clean_full_name,
-            "username": clean_username,
-            "password_hash": pwd_hash,
-            "plan_tier": plan_tier,
-            "is_pro": is_pro_val,
-            "is_educator": False,
-            "email_verified": 0,
-            "email_confirmed": 0,
-            "verification_code": verification_code,
-        }
+        normalized_username = clean_username.strip().lower()
+        refresh_candidates = [
+            {
+                "full_name": clean_full_name,
+                "username": normalized_username,
+                "password_hash": pwd_hash,
+                "plan_tier": plan_tier,
+                "is_pro": is_pro_val,
+                "is_educator": False,
+                "email_verified": False,
+                "email_confirmed": False,
+                "verification_code": verification_code,
+            },
+            {
+                "full_name": clean_full_name,
+                "username": normalized_username,
+                "password_hash": pwd_hash,
+                "plan_tier": plan_tier,
+                "is_pro": is_pro_val,
+                "email_verified": False,
+            },
+            {
+                "full_name": clean_full_name,
+                "username": normalized_username,
+                "password_hash": pwd_hash,
+            },
+        ]
         db = get_db()
-        try:
-            db.table("users").update(refresh_updates).eq("id", user_id).execute()
-        except Exception:
-            pass
-        try:
-            _local_auth_db.table("users").update(refresh_updates).eq("id", user_id).execute()
-        except Exception:
-            pass
+        refreshed = False
+        last_refresh_err = ""
+        for upd_payload in refresh_candidates:
+            try:
+                upd_res = db.table("users").update(upd_payload).eq("id", user_id).execute()
+                if upd_res.data and len(upd_res.data) > 0:
+                    refreshed = True
+                    break
+            except Exception as exc:
+                last_refresh_err = str(exc)
+        if not refreshed:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Kayıt güncellenirken veritabanı hatası oluştu: {last_refresh_err or 'Kullanıcı kaydı güncellenemedi.'}",
+            )
 
         sent = _send_verification_email(clean_email, clean_full_name, verification_code)
         user_resp = UserResponse(
@@ -391,10 +385,10 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         except Exception as exc:
             logger.warning(f"[Auth] Supabase sign_up uyarısı: {exc}")
 
-    # 2. Veritabanı Kullanıcı Profil Tablosu Kaydı (Supabase public.users + SQLite)
+    # 2. Doğrudan Supabase public.users Tablosu Kalıcı Kaydı (SQLite fallback yok!)
     pwd_hash = hash_password(payload.password)
     today_str = date.today().isoformat()
-    normalized_username = clean_username.lower()
+    normalized_username = clean_username.strip().lower()
 
     full_user_record: Dict[str, Any] = {
         "id": user_id,
@@ -407,8 +401,8 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         "is_educator": False,
         "plan_tier": plan_tier,
         "avatar_url": None,
-        "email_confirmed": 0,
-        "email_verified": 0,
+        "email_confirmed": False,
+        "email_verified": False,
         "verification_code": verification_code,
         "daily_custom_texts_used": 0,
         "daily_ai_stories_used": 0,
@@ -426,44 +420,44 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         "is_pro": False,
         "is_educator": False,
         "plan_tier": plan_tier,
-        "email_confirmed": 0,
+        "email_verified": False,
     }
 
     minimal_supabase_record: Dict[str, Any] = {
         "id": user_id,
         "email": clean_email,
+        "username": normalized_username,
         "full_name": clean_full_name,
-        "is_pro": False,
-        "is_educator": False,
-        "plan_tier": plan_tier,
+        "password_hash": pwd_hash,
     }
 
     db = get_db()
     supabase_saved = False
+    last_db_error = ""
     for candidate_payload in (full_user_record, core_supabase_record, minimal_supabase_record):
         try:
-            db.table("users").insert(candidate_payload).execute()
-            supabase_saved = True
-            break
-        except Exception as exc:
-            logger.warning(f"[Auth] Supabase users insert hatası ({list(candidate_payload.keys())}): {exc}")
-            try:
-                db.table("users").update(candidate_payload).eq("id", user_id).execute()
+            ins_res = db.table("users").insert(candidate_payload).execute()
+            if ins_res.data and len(ins_res.data) > 0:
                 supabase_saved = True
                 break
+        except Exception as exc:
+            last_db_error = str(exc)
+            logger.warning(f"[Auth] Supabase users insert hatası ({list(candidate_payload.keys())}): {exc}")
+            try:
+                upd_res = db.table("users").update(candidate_payload).eq("id", user_id).execute()
+                if upd_res.data and len(upd_res.data) > 0:
+                    supabase_saved = True
+                    break
             except Exception as upd_exc:
+                last_db_error = str(upd_exc)
                 logger.warning(f"[Auth] Supabase users update hatası: {upd_exc}")
 
     if not supabase_saved:
-        logger.error(f"[Auth] Kullanıcı Supabase users tablosuna yazılamadı: {clean_email} ({user_id})")
-
-    try:
-        _local_auth_db.table("users").insert(full_user_record).execute()
-    except Exception:
-        try:
-            _local_auth_db.table("users").update(full_user_record).eq("email", clean_email).execute()
-        except Exception as local_exc:
-            logger.warning(f"[Auth] Yerel DB kayıt uyarısı: {local_exc}")
+        logger.error(f"[Auth] Kullanıcı Supabase users tablosuna yazılamadı: {clean_email} ({user_id}) -> {last_db_error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Hesap kalıcı veritabanına (Supabase) kaydedilemedi: {last_db_error or 'Bilinmeyen veritabanı hatası'}",
+        )
 
     sent = _send_verification_email(clean_email, clean_full_name, verification_code)
 
@@ -529,23 +523,23 @@ def verify_email_code(payload: VerifyEmailRequest) -> AuthResponse:
         )
 
     user_id = str(user_row.get("id") or "")
-    verify_updates = {
-        "email_verified": 1,
-        "email_confirmed": 1,
-        "verification_code": None,
-    }
     db = get_db()
-    try:
-        db.table("users").update(verify_updates).eq("id", user_id).execute()
-    except Exception:
+    verified_saved = False
+    last_verify_err = ""
+    for verify_updates in (
+        {"email_verified": True, "email_confirmed": True, "verification_code": None},
+        {"email_verified": True},
+        {"email_confirmed": True},
+    ):
         try:
-            db.table("users").update({"email_confirmed": 1}).eq("id", user_id).execute()
-        except Exception:
-            pass
-    try:
-        _local_auth_db.table("users").update(verify_updates).eq("id", user_id).execute()
-    except Exception as exc:
-        logger.warning(f"[Auth] Yerel DB email_verified güncelleme uyarısı: {exc}")
+            upd_res = db.table("users").update(verify_updates).eq("id", user_id).execute()
+            if upd_res.data and len(upd_res.data) > 0:
+                verified_saved = True
+                break
+        except Exception as exc:
+            last_verify_err = str(exc)
+    if not verified_saved and last_verify_err:
+        logger.warning(f"[Auth] Supabase email_verified güncelleme uyarısı: {last_verify_err}")
 
     _PENDING_VERIFICATION_CODES.pop(clean_email, None)
 

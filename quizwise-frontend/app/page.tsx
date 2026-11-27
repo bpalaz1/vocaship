@@ -65,11 +65,7 @@ import SettingsModal from "./components/settings/SettingsModal";
 import MobileBottomTabbar from "./components/layout/MobileBottomTabbar";
 
 function getAuthHeaders(): Record<string, string> {
-  const token =
-    getAuthToken() ||
-    (typeof window !== "undefined"
-      ? localStorage.getItem("vocaship_token") || localStorage.getItem("access_token")
-      : null);
+  const token = getAuthToken();
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1064,29 +1060,18 @@ export default function Home() {
           body: JSON.stringify({ name: trimmedName }),
         }
       );
-      setFolders((prev) => {
-        const next = prev.map((f) =>
-          String(f.id || "").trim() === targetId
-            ? { ...f, name: trimmedName }
-            : f
-        );
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(
-              FOLDERS_CACHE_STORAGE_KEY,
-              JSON.stringify(next)
-            );
-          } catch {}
-        }
-        return next;
-      });
-      setRenamingFolder(null);
       if (res.ok) {
+        setRenamingFolder(null);
         await refreshLibraryData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(
+          `Klasör adı güncellenemedi: ${err.detail || err.message || "Sunucu hatası"}`
+        );
       }
     } catch (err) {
       console.error("Klasör adı güncellenemedi:", err);
-      setRenamingFolder(null);
+      alert("Klasör adı güncellenirken sunucuya ulaşılamadı.");
     } finally {
       setIsRenamingFolder(false);
     }

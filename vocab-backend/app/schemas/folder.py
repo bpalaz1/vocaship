@@ -1,5 +1,5 @@
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator
 
 
 class FolderCreate(BaseModel):
@@ -7,6 +7,16 @@ class FolderCreate(BaseModel):
     color: Optional[str] = Field(default="#6366f1", description="Klasör etiketi rengi")
     user_id: Optional[str] = Field(default=None, description="Kullanıcı UUID")
     parent_id: Optional[str] = Field(default=None, description="Üst klasör UUID")
+
+    @field_validator("parent_id", mode="before")
+    @classmethod
+    def normalize_parent_id(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s or s.lower() in ("null", "none", "undefined", "root directory"):
+            return None
+        return s
 
 
 class FolderResponse(BaseModel):

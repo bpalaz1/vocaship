@@ -1,4 +1,5 @@
 import { API_BASE } from "../config";
+import { getAuthToken } from "../context/AuthContext";
 import { pickUiText } from "./uiLocale";
 
 export const ACTIVE_DECK_STORAGE_KEY = "vocaship_selected_deck_id";
@@ -209,15 +210,14 @@ function getScopedUserContext(): { userId: string; token: string | null } | null
   if (typeof window === "undefined") return null;
   try {
     const rawUser = localStorage.getItem("vorego_auth_user");
-    const token =
-      localStorage.getItem("vocaship_token") ||
-      localStorage.getItem("access_token") ||
-      localStorage.getItem("vorego_auth_token") ||
-      localStorage.getItem("token");
-    if (!rawUser) return null;
-    const parsed = JSON.parse(rawUser);
-    if (!parsed?.id) return null;
-    return { userId: String(parsed.id), token };
+    const token = getAuthToken();
+    if (!token) return null;
+    let userId = "";
+    if (rawUser) {
+      const parsed = JSON.parse(rawUser);
+      if (parsed?.id) userId = String(parsed.id);
+    }
+    return { userId: userId || "auth", token };
   } catch {
     return null;
   }
