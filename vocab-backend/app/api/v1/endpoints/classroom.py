@@ -1,4 +1,6 @@
 import json
+import os
+import uuid
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -6,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request, Body, status
 from fastapi.responses import JSONResponse
 from supabase import Client
 from app.core.database import get_db
-from app.services.quota_service import require_pro_for_classroom, check_and_consume_quota
+from app.services.quota_service import require_pro_for_classroom, check_and_consume_quota, _extract_token_payload
 from app.schemas.classroom import (
     ClassroomCreateRequest,
     ClassroomResponse,
@@ -621,6 +623,68 @@ def send_material_endpoint(payload: SendMaterialRequest, db: Client = Depends(ge
         db=db
     )
     return result
+
+
+class LiveKitTokenRequest(BaseModel):
+    identity: Optional[str] = None
+    name: Optional[str] = None
+    role: Optional[str] = "participant"
+
+
+@router.post("/classes/{class_id}/livekit-token", status_code=status.HTTP_200_OK)
+async def create_livekit_token(
+    class_id: str,
+    request: Request,
+    payload: Optional[LiveKitTokenRequest] = Body(default=None),
+):
+    """
+    Sınıf odası (vocaship-class-{class_id}) için LiveKit SFU JWT token üretir.
+    """
+    livekit_url = (os.getenv("LIVEKIT_URL") or "").strip()
+    api_key = (os.getenv("LIVEKIT_API_KEY") or "").strip()
+    api_secret = (os.getenv("LIVEKIT_API_SECRET") or "").strip()
+
+    if not livekit_url or not api_key or not api_secret:
+        raise HTTPException(
+            status_code=500,
+            detail="LiveKit sunucu yapılandırması eksik (LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET).",
+        )
+
+    from livekit import api as livekit_api
+
+    token_data = _extract_token_payload(request)
+    req_identity = (payload.identity if payload else None) or (
+        str(token_data.get("sub")) if token_data and token_data.get("sub") else None
+    )
+    identity = (req_identity or f"guest-{uuid.uuid4().hex[:8]}").strip()
+
+    req_name = (payload.name if payload else None) or (
+        str(token_data.get("username")) if token_data and token_data.get("username") else None
+    )
+    display_name = (req_name or "VocaShip Katılımcı").strip()
+
+    room_name = f"vocaship-class-{class_id}"
+
+    grant = livekit_api.VideoGrants(
+        room_join=True,
+        room=room_name,
+        can_publish=True,
+        can_subscribe=True,
+        can_publish_data=True,
+    )
+    jwt_token = (
+        livekit_api.AccessToken(api_key, api_secret)
+        .with_identity(identity)
+        .with_name(display_name)
+        .with_grants(grant)
+        .to_jwt()
+    )
+
+    return {
+        "token": jwt_token,
+        "server_url": livekit_url,
+        "room_name": room_name,
+    }
 
 
 

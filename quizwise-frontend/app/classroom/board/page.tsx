@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -44,6 +45,10 @@ import confetti from "canvas-confetti";
 import BoardTimer from "./components/BoardTimer";
 import SendMaterialModal from "../../components/classroom/SendMaterialModal";
 import ClassLiveQRModal from "../../components/classroom/ClassLiveQRModal";
+const LiveKitClassroomStage = dynamic(
+  () => import("../../components/board/LiveKitClassroomStage"),
+  { ssr: false }
+);
 import { useProfile } from "../../context/ProfileContext";
 import { useLanguage } from "../../context/LanguageContext";
 import {
@@ -2695,6 +2700,16 @@ function SmartBoardConsoleContent() {
         classCode={liveJoinCode}
         className={activeClassName}
         activeSessionId={liveSessionId || sessionId || undefined}
+      />
+
+      <LiveKitClassroomStage
+        classId={classId}
+        userId={userProfile.id || undefined}
+        userName={userProfile.full_name || userProfile.username || undefined}
+        role={isTeacher ? "teacher" : "student"}
+        isMicEnabled={isMicActive}
+        isCameraEnabled={isCameraActive}
+        isScreenShareEnabled={isScreenSharing}
       />
     </div>
   );
