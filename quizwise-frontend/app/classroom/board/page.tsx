@@ -85,6 +85,21 @@ export interface BoardTerm {
   category?: string;
 }
 
+interface DrawAction {
+  strokeId: string;
+  kind: "freehand" | "shape" | "text";
+  tool: BoardDrawingTool;
+  color: string;
+  lineWidthRatio: number;
+  pageNum: number;
+  points?: Array<{ x: number; y: number }>;
+  start?: { x: number; y: number };
+  end?: { x: number; y: number };
+  text?: string;
+  x?: number;
+  y?: number;
+}
+
 function SmartBoardConsoleContent() {
   const { t } = useLanguage();
   const router = useRouter();
@@ -705,6 +720,202 @@ function SmartBoardConsoleInner({
 
   const lastLoadedPdfVersionRef = useRef<number>(0);
   const serverPdfMetaRef = useRef<{ pdfUrl: string; fileName: string; version: number } | null>(null);
+  const strokesByPageRef = useRef<Record<number, DrawAction[]>>({});
+  const activeStrokeRef = useRef<DrawAction | null>(null);
+  const lastViewportEmitTsRef = useRef<number>(0);
+  const viewportTrailingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestScaleRef = useRef<number>(1.0);
+  const latestPageRef = useRef<number>(1);
+  latestScaleRef.current = scale;
+  latestPageRef.current = currentPdfPage;
+
+  // Güvenli yayın sarmalayıcı: öğrenci asla çizim/viewport/PDF paketi yayınlayamaz
+  const teacherPublish = useCallback(
+    (payload: Record<string, any>, options?: { reliable?: boolean }) => {
+      if (!isTeacher) return;
+      publishBoardData(payload, options);
+    },
+    [isTeacher, publishBoardData]
+  );
+
+  // Normalize edilmiş (0..1) tek bir DrawAction'ı canvas'a çizer
+  const renderNormalizedAction = useCallback(
+    (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, action: DrawAction) => {
+      const w = canvas.width || 1;
+      const h = canvas.height || 1;
+      ctx.save();
+      if (action.kind === "freehand" && action.points && action.points.length > 0) {
+        if (action.tool === "highlighter") {
+          ctx.globalCompositeOperation = "multiply";
+          ctx.globalAlpha = 0.25;
+          ctx.strokeStyle = action.color || "#facc15";
+        } else if (action.tool === "eraser") {
+          ctx.globalCompositeOperation = "destination-out";
+          ctx.globalAlpha = 1.0;
+          ctx.strokeStyle = "#000000";
+        } else {
+          ctx.globalCompositeOperation = "source-over";
+          ctx.globalAlpha = 1.0;
+          ctx.strokeStyle =
+            action.color || (action.tool === "pen_blue" ? "#3b82f6" : "#ef4444");
+        }
+        ctx.lineWidth = Math.max(1.5, (action.lineWidthRatio || 0.004) * w);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        const p0 = action.points[0];
+        ctx.moveTo(p0.x * w, p0.y * h);
+        if (action.points.length === 1) {
+          ctx.lineTo(p0.x * w + 0.1, p0.y * h + 0.1);
+        } else {
+          for (let i = 1; i < action.points.length; i++) {
+            ctx.lineTo(action.points[i].x * w, action.points[i].y * h);
+          }
+        }
+        ctx.stroke();
+      } else if (action.kind === "shape" && action.start && action.end) {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 0.92;
+        ctx.strokeStyle = action.color || "#38bdf8";
+        ctx.lineWidth = Math.max(2, (action.lineWidthRatio || 0.003) * w);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        const sx = action.start.x * w;
+        const sy = action.start.y * h;
+        const ex = action.end.x * w;
+        const ey = action.end.y * h;
+        if (action.tool === "line") {
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+        } else if (action.tool === "rect") {
+          ctx.strokeRect(sx, sy, ex - sx, ey - sy);
+        } else if (action.tool === "arrow") {
+          const headLen = Math.max(10, 0.014 * w);
+          const angle = Math.atan2(ey - sy, ex - sx);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.lineTo(
+            ex - headLen * Math.cos(angle - Math.PI / 6),
+            ey - headLen * Math.sin(angle - Math.PI / 6)
+          );
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(
+            ex - headLen * Math.cos(angle + Math.PI / 6),
+            ey - headLen * Math.sin(angle + Math.PI / 6)
+          );
+          ctx.stroke();
+        } else if (action.tool === "circle") {
+          const rx = Math.abs(ex - sx) / 2;
+          const ry = Math.abs(ey - sy) / 2;
+          ctx.beginPath();
+          ctx.ellipse(
+            Math.min(sx, ex) + rx,
+            Math.min(sy, ey) + ry,
+            Math.max(rx, 1),
+            Math.max(ry, 1),
+            0,
+            0,
+            2 * Math.PI
+          );
+          ctx.stroke();
+        }
+      } else if (action.kind === "text" && action.text && typeof action.x === "number" && typeof action.y === "number") {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1.0;
+        const fontPx = Math.max(14, Math.round((action.lineWidthRatio || 0.022) * w));
+        ctx.font = `bold ${fontPx}px Inter, system-ui, sans-serif`;
+        ctx.fillStyle = action.color || "#f8fafc";
+        ctx.fillText(action.text, action.x * w, action.y * h);
+      }
+      ctx.restore();
+    },
+    []
+  );
+
+  // Sayfa bazlı hafızadaki (strokesByPage) tüm çizimleri canvas'a yeniden çizer
+  const redrawAllStrokes = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const allPages = Object.keys(strokesByPageRef.current)
+      .map(Number)
+      .sort((a, b) => a - b);
+    for (const pNum of allPages) {
+      const actions = strokesByPageRef.current[pNum] || [];
+      for (const act of actions) {
+        renderNormalizedAction(ctx, canvas, act);
+      }
+    }
+  }, [renderNormalizedAction]);
+
+  // Eğitmen görünüm (scroll / pan / zoom / sayfa) oranlarını 50ms throttle ile yayınlar
+  const emitViewportThrottled = useCallback(
+    (overrides?: { pageNum?: number; zoom?: number }) => {
+      if (!isTeacher) return;
+      const sendNow = () => {
+        const el = scrollContainerRef.current;
+        const maxScrollY = el ? Math.max(1, el.scrollHeight - el.clientHeight) : 1;
+        const maxScrollX = el ? Math.max(1, el.scrollWidth - el.clientWidth) : 1;
+        const scrollRatioY = el ? Math.max(0, Math.min(1, el.scrollTop / maxScrollY)) : 0;
+        const scrollRatioX = el ? Math.max(0, Math.min(1, el.scrollLeft / maxScrollX)) : 0;
+        lastViewportEmitTsRef.current = Date.now();
+        teacherPublish(
+          {
+            type: "BOARD_VIEWPORT",
+            pageNum: overrides?.pageNum ?? latestPageRef.current,
+            zoom: overrides?.zoom ?? latestScaleRef.current,
+            scrollRatioX,
+            scrollRatioY,
+          },
+          { reliable: true }
+        );
+      };
+
+      const elapsed = Date.now() - lastViewportEmitTsRef.current;
+      if (elapsed >= 50) {
+        if (viewportTrailingTimerRef.current) {
+          clearTimeout(viewportTrailingTimerRef.current);
+          viewportTrailingTimerRef.current = null;
+        }
+        sendNow();
+      } else {
+        if (viewportTrailingTimerRef.current) {
+          clearTimeout(viewportTrailingTimerRef.current);
+        }
+        viewportTrailingTimerRef.current = setTimeout(() => {
+          viewportTrailingTimerRef.current = null;
+          sendNow();
+        }, 55);
+      }
+    },
+    [isTeacher, teacherPublish]
+  );
+
+  // Öğrenci ekranında gelen viewport (scrollRatioX / scrollRatioY) konumunu uygular
+  const applyStudentViewportScroll = useCallback(
+    (scrollRatioX?: number, scrollRatioY?: number) => {
+      const applyOnce = () => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        if (typeof scrollRatioY === "number" && Number.isFinite(scrollRatioY)) {
+          const maxY = Math.max(0, el.scrollHeight - el.clientHeight);
+          el.scrollTop = Math.max(0, Math.min(maxY, scrollRatioY * maxY));
+        }
+        if (typeof scrollRatioX === "number" && Number.isFinite(scrollRatioX)) {
+          const maxX = Math.max(0, el.scrollWidth - el.clientWidth);
+          el.scrollLeft = Math.max(0, Math.min(maxX, scrollRatioX * maxX));
+        }
+      };
+      requestAnimationFrame(applyOnce);
+      setTimeout(applyOnce, 80);
+    },
+    []
+  );
 
   const renderPdfFromArrayBuffer = useCallback(
     async (arrayBuffer: ArrayBuffer, fileName: string, targetPage = 1) => {
@@ -884,6 +1095,8 @@ function SmartBoardConsoleInner({
     setCurrentPdfPage(1);
     setScale(1.0);
     setPan({ x: 0, y: 0 });
+    strokesByPageRef.current = {};
+    serverPdfMetaRef.current = null;
     handleClearCanvas();
     broadcastPdfClear();
     fetch(
@@ -894,10 +1107,11 @@ function SmartBoardConsoleInner({
         body: JSON.stringify({ clear_pdf: true }),
       }
     ).catch(() => {});
-    publishBoardData({ type: "PDF_CLEARED" });
+    teacherPublish({ type: "PDF_CLEARED" });
   };
 
   const handleGoToPdfPage = (pageNum: number) => {
+    if (!isTeacher) return;
     if (pdfPageImages.length === 0) return;
     const clamped = Math.max(1, Math.min(pdfPageImages.length, pageNum));
     setCurrentPdfPage(clamped);
@@ -905,53 +1119,61 @@ function SmartBoardConsoleInner({
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-    if (isTeacher) {
-      broadcastPdfPage(clamped);
-      fetch(
-        `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/board-state`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ page_num: clamped }),
-        }
-      ).catch(() => {});
-      publishBoardData({ type: "PDF_PAGE", pageNum: clamped });
-      if (serverPdfMetaRef.current) {
-        publishBoardData({
-          type: "PDF_UPDATED",
-          pdfUrl: serverPdfMetaRef.current.pdfUrl,
-          fileName: serverPdfMetaRef.current.fileName,
-          pageNum: clamped,
-          version: serverPdfMetaRef.current.version,
-        });
+    broadcastPdfPage(clamped);
+    fetch(
+      `${API_BASE}/api/v1/classroom/classes/${encodeURIComponent(classId)}/board-state`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ page_num: clamped }),
       }
+    ).catch(() => {});
+    teacherPublish({ type: "PDF_PAGE", pageNum: clamped });
+    emitViewportThrottled({ pageNum: clamped });
+    if (serverPdfMetaRef.current) {
+      teacherPublish({
+        type: "PDF_UPDATED",
+        pdfUrl: serverPdfMetaRef.current.pdfUrl,
+        fileName: serverPdfMetaRef.current.fileName,
+        pageNum: clamped,
+        version: serverPdfMetaRef.current.version,
+      });
     }
   };
 
-  // Zoom Kontrolleri
+  // Zoom Kontrolleri (Yalnızca Eğitmen)
   const handleZoomIn = () => {
-    setScale((prev) => Math.min(2.5, +(prev + 0.15).toFixed(2)));
+    if (!isTeacher) return;
+    setScale((prev) => {
+      const next = Math.min(2.5, +(prev + 0.15).toFixed(2));
+      emitViewportThrottled({ zoom: next });
+      return next;
+    });
   };
 
   const handleZoomOut = () => {
-    setScale((prev) => Math.max(0.8, +(prev - 0.15).toFixed(2)));
+    if (!isTeacher) return;
+    setScale((prev) => {
+      const next = Math.max(0.8, +(prev - 0.15).toFixed(2));
+      emitViewportThrottled({ zoom: next });
+      return next;
+    });
   };
 
   const handleResetZoom = () => {
+    if (!isTeacher) return;
     setScale(1.0);
     setPan({ x: 0, y: 0 });
+    emitViewportThrottled({ zoom: 1.0 });
   };
 
-  // Çizimleri Temizle
+  // Çizimleri Temizle (Aktif sayfa bazlı)
   const handleClearCanvas = () => {
     if (!isTeacher) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    strokesByPageRef.current[currentPdfPage] = [];
+    redrawAllStrokes();
     broadcastClear();
-    publishBoardData({ type: "BOARD_CLEAR" });
+    teacherPublish({ type: "CLEAR_PAGE", pageNum: currentPdfPage });
   };
 
   // Canvas Koordinat Dönüşümü
@@ -1177,18 +1399,82 @@ function SmartBoardConsoleInner({
     }),
   });
 
-  // LiveKit DataChannel Dinleyicisi (PDF_UPDATED, PDF_PAGE, PDF_CLEARED, DRAW_STROKE, DRAW_SHAPE, DRAW_TEXT, BOARD_CLEAR)
+  // Öğrenci odaya bağlandığında geç katılan tam senkronizasyon (REQUEST_FULL_SYNC) ister
   useEffect(() => {
-    if (isTeacher) return;
+    if (isTeacher || !isLiveKitConnected) return;
+    publishBoardData({ type: "REQUEST_FULL_SYNC" }, { reliable: true });
+  }, [isTeacher, isLiveKitConnected, publishBoardData]);
+
+  // LiveKit DataChannel Dinleyicisi (Öğretmen: REQUEST_FULL_SYNC yanıtlar, Öğrenci: tüm çizim/lazer/viewport/PDF uygular)
+  useEffect(() => {
     return subscribeBoardData((msg: any) => {
       if (!msg || typeof msg !== "object") return;
-      if (msg.type === "PDF_UPDATED" && msg.pdfUrl) {
+
+      // 1. EĞİTMEN: Geç katılan öğrencinin tam senkronizasyon isteğini yanıtla
+      if (isTeacher) {
+        if (msg.type === "REQUEST_FULL_SYNC") {
+          const el = scrollContainerRef.current;
+          const maxY = el ? Math.max(1, el.scrollHeight - el.clientHeight) : 1;
+          const maxX = el ? Math.max(1, el.scrollWidth - el.clientWidth) : 1;
+          teacherPublish(
+            {
+              type: "FULL_SYNC_STATE",
+              pdfUrl: serverPdfMetaRef.current?.pdfUrl || null,
+              fileName: serverPdfMetaRef.current?.fileName || pdfFileName,
+              version: serverPdfMetaRef.current?.version || 0,
+              pageNum: latestPageRef.current,
+              zoom: latestScaleRef.current,
+              scrollRatioX: el ? Math.max(0, Math.min(1, el.scrollLeft / maxX)) : 0,
+              scrollRatioY: el ? Math.max(0, Math.min(1, el.scrollTop / maxY)) : 0,
+              strokesByPage: strokesByPageRef.current,
+            },
+            { reliable: true }
+          );
+        }
+        return;
+      }
+
+      // 2. ÖĞRENCİ: Eğitmenden gelen tüm canlı komutları uygula
+      if (msg.type === "FULL_SYNC_STATE") {
+        if (msg.strokesByPage && typeof msg.strokesByPage === "object") {
+          strokesByPageRef.current = msg.strokesByPage;
+        }
+        if (typeof msg.zoom === "number" && msg.zoom >= 0.5 && msg.zoom <= 3) {
+          setScale(msg.zoom);
+        }
+        if (typeof msg.pageNum === "number" && msg.pageNum >= 1) {
+          setCurrentPdfPage(msg.pageNum);
+        }
+        const finishSync = () => {
+          syncCanvasSize();
+          redrawAllStrokes();
+          applyStudentViewportScroll(msg.scrollRatioX, msg.scrollRatioY);
+        };
+        if (msg.pdfUrl) {
+          fetchAndRenderServerPdf(
+            msg.pdfUrl,
+            msg.fileName || "Ders Dokümanı.pdf",
+            msg.pageNum || 1,
+            msg.version || 0
+          ).then(() => setTimeout(finishSync, 140));
+        } else {
+          setTimeout(finishSync, 60);
+        }
+      } else if (msg.type === "BOARD_VIEWPORT") {
+        if (typeof msg.pageNum === "number" && msg.pageNum >= 1) {
+          setCurrentPdfPage(msg.pageNum);
+        }
+        if (typeof msg.zoom === "number" && msg.zoom >= 0.5 && msg.zoom <= 3) {
+          setScale(msg.zoom);
+        }
+        applyStudentViewportScroll(msg.scrollRatioX, msg.scrollRatioY);
+      } else if (msg.type === "PDF_UPDATED" && msg.pdfUrl) {
         fetchAndRenderServerPdf(
           msg.pdfUrl,
           msg.fileName || "Ders Dokümanı.pdf",
           msg.pageNum || 1,
           msg.version || 0
-        );
+        ).then(() => setTimeout(redrawAllStrokes, 150));
       } else if (msg.type === "PDF_PAGE" && typeof msg.pageNum === "number") {
         setCurrentPdfPage(msg.pageNum);
         const el = pdfPageRefs.current[Math.max(0, msg.pageNum - 1)];
@@ -1199,10 +1485,50 @@ function SmartBoardConsoleInner({
         setPdfFileName(null);
         setPdfPageImages([]);
         setCurrentPdfPage(1);
+        strokesByPageRef.current = {};
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
         }
+      } else if (msg.type === "DRAW_MOVE" && msg.from && msg.to) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        renderNormalizedAction(ctx, canvas, {
+          strokeId: msg.strokeId || "live",
+          kind: "freehand",
+          tool: msg.tool || "pen_red",
+          color: msg.color || "#ef4444",
+          lineWidthRatio: msg.lineWidthRatio || 0.004,
+          pageNum: msg.pageNum || 1,
+          points: [msg.from, msg.to],
+        });
+      } else if (msg.type === "DRAW_COMMIT" && msg.action) {
+        const act = msg.action as DrawAction;
+        const pNum = act.pageNum || 1;
+        const existing = strokesByPageRef.current[pNum] || [];
+        if (!existing.some((x) => x.strokeId === act.strokeId)) {
+          strokesByPageRef.current[pNum] = [...existing, act];
+        }
+        redrawAllStrokes();
+      } else if (msg.type === "LASER_MOVE" && msg.visible !== false) {
+        const ws = workspaceRef.current;
+        if (!ws) return;
+        const rect = ws.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0 && typeof msg.x === "number" && typeof msg.y === "number") {
+          setLaserTrail((prev) => [
+            ...prev.slice(-18),
+            { x: msg.x * rect.width, y: msg.y * rect.height, ts: Date.now() },
+          ]);
+        }
+      } else if (msg.type === "CLEAR_PAGE") {
+        const pNum = typeof msg.pageNum === "number" ? msg.pageNum : 1;
+        strokesByPageRef.current[pNum] = [];
+        redrawAllStrokes();
+      } else if (msg.type === "BOARD_CLEAR") {
+        strokesByPageRef.current = {};
+        redrawAllStrokes();
       } else if (msg.type === "DRAW_STROKE" && msg.stroke) {
         const payload = msg.stroke as BoardStrokeEvent;
         const canvas = canvasRef.current;
@@ -1218,71 +1544,19 @@ function SmartBoardConsoleInner({
         ctx.lineTo(payload.to.x * scaleX, payload.to.y * scaleY);
         ctx.stroke();
         ctx.restore();
-      } else if (msg.type === "DRAW_SHAPE" && msg.shape) {
-        const payload = msg.shape as BoardShapeEvent;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        const scaleX = payload.canvasWidth ? canvas.width / payload.canvasWidth : 1;
-        const scaleY = payload.canvasHeight ? canvas.height / payload.canvasHeight : 1;
-        const sx = payload.start.x * scaleX;
-        const sy = payload.start.y * scaleY;
-        const ex = payload.end.x * scaleX;
-        const ey = payload.end.y * scaleY;
-        ctx.save();
-        ctx.globalCompositeOperation = "source-over";
-        ctx.strokeStyle = payload.color || "#38bdf8";
-        ctx.lineWidth = 3;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        if (payload.tool === "line") {
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(ex, ey);
-          ctx.stroke();
-        } else if (payload.tool === "rect") {
-          ctx.strokeRect(sx, sy, ex - sx, ey - sy);
-        } else if (payload.tool === "arrow") {
-          const headLen = 14;
-          const angle = Math.atan2(ey - sy, ex - sx);
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(ex, ey);
-          ctx.lineTo(ex - headLen * Math.cos(angle - Math.PI / 6), ey - headLen * Math.sin(angle - Math.PI / 6));
-          ctx.moveTo(ex, ey);
-          ctx.lineTo(ex - headLen * Math.cos(angle + Math.PI / 6), ey - headLen * Math.sin(angle + Math.PI / 6));
-          ctx.stroke();
-        } else if (payload.tool === "circle") {
-          const rx = Math.abs(ex - sx) / 2;
-          const ry = Math.abs(ey - sy) / 2;
-          ctx.beginPath();
-          ctx.ellipse(Math.min(sx, ex) + rx, Math.min(sy, ey) + ry, Math.max(rx, 1), Math.max(ry, 1), 0, 0, 2 * Math.PI);
-          ctx.stroke();
-        }
-        ctx.restore();
-      } else if (msg.type === "DRAW_TEXT" && msg.textEvent) {
-        const payload = msg.textEvent as BoardTextEvent;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        const scaleX = payload.canvasWidth ? canvas.width / payload.canvasWidth : 1;
-        const scaleY = payload.canvasHeight ? canvas.height / payload.canvasHeight : 1;
-        ctx.save();
-        ctx.globalCompositeOperation = "source-over";
-        ctx.font = "bold 24px Inter, system-ui, sans-serif";
-        ctx.fillStyle = payload.color || "#f8fafc";
-        ctx.fillText(payload.text, payload.x * scaleX, payload.y * scaleY);
-        ctx.restore();
-      } else if (msg.type === "BOARD_CLEAR") {
-        const canvas = canvasRef.current;
-        if (canvas) {
-          canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
-        }
       }
     });
-  }, [isTeacher, subscribeBoardData, fetchAndRenderServerPdf]);
+  }, [
+    isTeacher,
+    pdfFileName,
+    subscribeBoardData,
+    teacherPublish,
+    fetchAndRenderServerPdf,
+    syncCanvasSize,
+    redrawAllStrokes,
+    renderNormalizedAction,
+    applyStudentViewportScroll,
+  ]);
 
   const commitTextToCanvas = () => {
     if (!textInputBox) return;
@@ -1298,16 +1572,22 @@ function SmartBoardConsoleInner({
         ctx.fillText(text, textInputBox.canvasX, textInputBox.canvasY);
         ctx.restore();
         if (isTeacher) {
-          const textEvt = {
-            text,
-            x: textInputBox.canvasX,
-            y: textInputBox.canvasY,
+          const w = canvasRef.current.width || 1;
+          const h = canvasRef.current.height || 1;
+          const textAction: DrawAction = {
+            strokeId: `txt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            kind: "text",
+            tool: "text",
             color: shapeColor || "#f8fafc",
-            canvasWidth: canvasRef.current.width,
-            canvasHeight: canvasRef.current.height,
+            lineWidthRatio: 24 / w,
+            pageNum: currentPdfPage,
+            text,
+            x: textInputBox.canvasX / w,
+            y: textInputBox.canvasY / h,
           };
-          broadcastDrawText(textEvt);
-          publishBoardData({ type: "DRAW_TEXT", textEvent: textEvt });
+          const existing = strokesByPageRef.current[currentPdfPage] || [];
+          strokesByPageRef.current[currentPdfPage] = [...existing, textAction];
+          teacherPublish({ type: "DRAW_COMMIT", action: textAction }, { reliable: true });
         }
       }
     }
@@ -1381,7 +1661,19 @@ function SmartBoardConsoleInner({
       { x: rx, y: ry, ts: Date.now() },
     ]);
     if (isTeacher && rect.width > 0 && rect.height > 0) {
-      broadcastLaser(rx / rect.width, ry / rect.height);
+      const nx = rx / rect.width;
+      const ny = ry / rect.height;
+      broadcastLaser(nx, ny);
+      teacherPublish(
+        {
+          type: "LASER_MOVE",
+          x: nx,
+          y: ny,
+          pageNum: currentPdfPage,
+          visible: true,
+        },
+        { reliable: false }
+      );
     }
   };
 
@@ -1437,13 +1729,44 @@ function SmartBoardConsoleInner({
       ctx.lineTo(coords.x, coords.y);
       ctx.stroke();
       lastCoordRef.current = coords;
-      broadcastDrawStroke({
+
+      const w = canvas.width || 1;
+      const h = canvas.height || 1;
+      const toolColor =
+        activeTool === "highlighter"
+          ? "#facc15"
+          : activeTool === "pen_blue"
+          ? "#3b82f6"
+          : "#ef4444";
+      const baseWidth =
+        activeTool === "highlighter"
+          ? 22
+          : activeTool === "eraser"
+          ? 32
+          : 4;
+      const normPt = { x: coords.x / w, y: coords.y / h };
+      activeStrokeRef.current = {
+        strokeId: `st-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        kind: "freehand",
         tool: activeTool,
-        from: coords,
-        to: coords,
-        canvasWidth: canvas.width,
-        canvasHeight: canvas.height,
-      });
+        color: toolColor,
+        lineWidthRatio: baseWidth / w,
+        pageNum: currentPdfPage,
+        points: [normPt],
+      };
+      teacherPublish(
+        {
+          type: "DRAW_MOVE",
+          strokeId: activeStrokeRef.current.strokeId,
+          tool: activeTool,
+          color: toolColor,
+          lineWidthRatio: baseWidth / w,
+          pageNum: currentPdfPage,
+          from: normPt,
+          to: normPt,
+        },
+        { reliable: true }
+      );
     }
   };
 
@@ -1528,15 +1851,29 @@ function SmartBoardConsoleInner({
       ctx.lineTo(coords.x, coords.y);
       ctx.stroke();
 
-      const strokeEvt = {
-        tool: activeTool,
-        from: lastCoordRef.current,
-        to: coords,
-        canvasWidth: canvas.width,
-        canvasHeight: canvas.height,
-      };
-      broadcastDrawStroke(strokeEvt);
-      publishBoardData({ type: "DRAW_STROKE", stroke: strokeEvt });
+      const w = canvas.width || 1;
+      const h = canvas.height || 1;
+      const fromNorm = { x: lastCoordRef.current.x / w, y: lastCoordRef.current.y / h };
+      const toNorm = { x: coords.x / w, y: coords.y / h };
+      if (activeStrokeRef.current) {
+        activeStrokeRef.current.points = [
+          ...(activeStrokeRef.current.points || []),
+          toNorm,
+        ];
+        teacherPublish(
+          {
+            type: "DRAW_MOVE",
+            strokeId: activeStrokeRef.current.strokeId,
+            tool: activeStrokeRef.current.tool,
+            color: activeStrokeRef.current.color,
+            lineWidthRatio: activeStrokeRef.current.lineWidthRatio,
+            pageNum: currentPdfPage,
+            from: fromNorm,
+            to: toNorm,
+          },
+          { reliable: true }
+        );
+      }
 
       lastCoordRef.current = coords;
     }
@@ -1550,7 +1887,17 @@ function SmartBoardConsoleInner({
       if (ctx) {
         ctx.closePath();
       }
-      if (
+      const w = canvas.width || 1;
+      const h = canvas.height || 1;
+
+      if (isTeacher && activeStrokeRef.current) {
+        const committed = activeStrokeRef.current;
+        const pNum = committed.pageNum || currentPdfPage;
+        const existing = strokesByPageRef.current[pNum] || [];
+        strokesByPageRef.current[pNum] = [...existing, committed];
+        teacherPublish({ type: "DRAW_COMMIT", action: committed }, { reliable: true });
+        activeStrokeRef.current = null;
+      } else if (
         isTeacher &&
         startCoordRef.current &&
         lastShapeEndRef.current &&
@@ -1559,16 +1906,19 @@ function SmartBoardConsoleInner({
           activeTool === "rect" ||
           activeTool === "arrow")
       ) {
-        const shapeEvt = {
+        const shapeAction: DrawAction = {
+          strokeId: `sh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          kind: "shape",
           tool: activeTool,
-          start: startCoordRef.current,
-          end: lastShapeEndRef.current,
           color: shapeColor,
-          canvasWidth: canvas.width,
-          canvasHeight: canvas.height,
+          lineWidthRatio: 3 / w,
+          pageNum: currentPdfPage,
+          start: { x: startCoordRef.current.x / w, y: startCoordRef.current.y / h },
+          end: { x: lastShapeEndRef.current.x / w, y: lastShapeEndRef.current.y / h },
         };
-        broadcastDrawShape(shapeEvt);
-        publishBoardData({ type: "DRAW_SHAPE", shape: shapeEvt });
+        const existing = strokesByPageRef.current[currentPdfPage] || [];
+        strokesByPageRef.current[currentPdfPage] = [...existing, shapeAction];
+        teacherPublish({ type: "DRAW_COMMIT", action: shapeAction }, { reliable: true });
       }
     }
     isDrawingRef.current = false;
@@ -1890,19 +2240,24 @@ function SmartBoardConsoleInner({
           ) : pdfUrl ? (
             <div
               ref={scrollContainerRef}
-              onMouseDown={handlePanMouseDown}
-              onMouseMove={handlePanMouseMove}
-              onMouseUp={handlePanMouseUp}
-              onMouseLeave={handlePanMouseUp}
-              onTouchStart={handlePanTouchStart}
-              onTouchMove={handlePanTouchMove}
-              onTouchEnd={handlePanTouchEnd}
-              className={`w-full flex-1 min-h-0 overflow-auto relative rounded-2xl border border-slate-800 shadow-2xl bg-slate-900 select-none ${
-                activeTool === "pan"
+              onScroll={() => {
+                if (isTeacher) emitViewportThrottled();
+              }}
+              onMouseDown={isTeacher ? handlePanMouseDown : undefined}
+              onMouseMove={isTeacher ? handlePanMouseMove : undefined}
+              onMouseUp={isTeacher ? handlePanMouseUp : undefined}
+              onMouseLeave={isTeacher ? handlePanMouseUp : undefined}
+              onTouchStart={isTeacher ? handlePanTouchStart : undefined}
+              onTouchMove={isTeacher ? handlePanTouchMove : undefined}
+              onTouchEnd={isTeacher ? handlePanTouchEnd : undefined}
+              className={`w-full flex-1 min-h-0 relative rounded-2xl border border-slate-800 shadow-2xl bg-slate-900 select-none ${
+                !isTeacher
+                  ? "overflow-hidden pointer-events-none"
+                  : activeTool === "pan"
                   ? isPanning
-                    ? "cursor-grabbing"
-                    : "cursor-grab"
-                  : ""
+                    ? "overflow-auto cursor-grabbing"
+                    : "overflow-auto cursor-grab"
+                  : "overflow-auto"
               }`}
             >
               {isPdfLoading && (
@@ -1953,32 +2308,32 @@ function SmartBoardConsoleInner({
                 <canvas
                   ref={canvasRef}
                   onMouseDown={(e) => {
-                    if (activeTool !== "none" && activeTool !== "pan") {
+                    if (isTeacher && activeTool !== "none" && activeTool !== "pan") {
                       startDrawing(e.clientX, e.clientY);
                     }
                   }}
                   onMouseMove={(e) => {
-                    if (activeTool !== "none" && activeTool !== "pan") {
+                    if (isTeacher && activeTool !== "none" && activeTool !== "pan") {
                       drawMove(e.clientX, e.clientY);
                     }
                   }}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
+                  onMouseUp={isTeacher ? stopDrawing : undefined}
+                  onMouseLeave={isTeacher ? stopDrawing : undefined}
                   onTouchStart={(e) => {
-                    if (activeTool !== "none" && activeTool !== "pan" && e.touches.length === 1) {
+                    if (isTeacher && activeTool !== "none" && activeTool !== "pan" && e.touches.length === 1) {
                       e.preventDefault();
                       startDrawing(e.touches[0].clientX, e.touches[0].clientY);
                     }
                   }}
                   onTouchMove={(e) => {
-                    if (activeTool !== "none" && activeTool !== "pan" && e.touches.length === 1) {
+                    if (isTeacher && activeTool !== "none" && activeTool !== "pan" && e.touches.length === 1) {
                       e.preventDefault();
                       drawMove(e.touches[0].clientX, e.touches[0].clientY);
                     }
                   }}
-                  onTouchEnd={stopDrawing}
+                  onTouchEnd={isTeacher ? stopDrawing : undefined}
                   className={`absolute inset-0 w-full h-full z-10 mix-blend-normal ${
-                    activeTool === "none" || activeTool === "pan"
+                    !isTeacher || activeTool === "none" || activeTool === "pan"
                       ? "pointer-events-none"
                       : "pointer-events-auto cursor-crosshair"
                   }`}
@@ -2374,8 +2729,8 @@ function SmartBoardConsoleInner({
         </>
         )}
 
-        {/* PDF Sayfa Senkron Kontrolü */}
-        {pdfPageImages.length > 1 && (
+        {/* PDF Sayfa Senkron Kontrolü (Yalnızca Eğitmen) */}
+        {isTeacher && pdfPageImages.length > 1 && (
           <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-800/90 border border-slate-700/70 text-[11px] font-mono text-slate-200">
             <button
               type="button"
@@ -2410,9 +2765,11 @@ function SmartBoardConsoleInner({
           <span className="hidden lg:inline">Snapshot</span>
         </button>
 
+        {/* Zoom Kontrolleri (Yalnızca Eğitmen) */}
+        {isTeacher && (
+        <>
         <div className="w-px h-5 bg-slate-700 mx-0.5" />
 
-        {/* Zoom Kontrolleri */}
         <button
           type="button"
           onClick={handleZoomOut}
@@ -2441,6 +2798,8 @@ function SmartBoardConsoleInner({
         >
           <ZoomIn className="w-4 h-4" />
         </button>
+        </>
+        )}
       </div>
 
       {/* ========================================================================= */}

@@ -49,7 +49,7 @@ export interface LiveKitBoardContextValue {
   toggleMicrophone: () => Promise<void>;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
-  publishBoardData: (payload: Record<string, any>) => Promise<void>;
+  publishBoardData: (payload: Record<string, any>, options?: { reliable?: boolean }) => Promise<void>;
   subscribeBoardData: (listener: (payload: any) => void) => () => void;
 }
 
@@ -208,11 +208,13 @@ function LiveKitBoardBridge({
   }, [role, localParticipant]);
 
   const publishBoardData = useCallback(
-    async (payload: Record<string, any>) => {
+    async (payload: Record<string, any>, options?: { reliable?: boolean }) => {
       if (!room?.localParticipant || room.state !== "connected") return;
       try {
         const bytes = new TextEncoder().encode(JSON.stringify(payload));
-        await room.localParticipant.publishData(bytes, { reliable: true });
+        await room.localParticipant.publishData(bytes, {
+          reliable: options?.reliable ?? true,
+        });
       } catch (err) {
         console.warn("[LiveKit] DataChannel yayın hatası:", err);
       }
