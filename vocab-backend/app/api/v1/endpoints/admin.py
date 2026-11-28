@@ -10,6 +10,7 @@ from app.api.v1.endpoints.auth import get_current_user
 from app.services.telemetry_service import (
     record_telemetry,
     fetch_recent_telemetry,
+    fetch_all_user_country_telemetry,
     clear_warning_telemetry,
 )
 
@@ -287,34 +288,40 @@ async def get_admin_overview(
     except Exception:
         active_rooms = []
 
-    # 5 & 6. Telemetri: Yalnızca user_id IS NOT NULL olan gerçek üyeler (COUNT(DISTINCT user_id))
-    telemetry_7d = fetch_recent_telemetry(db, hours=168)
-    country_users_7d: Dict[str, Set[str]] = {}
-    country_users_24h: Dict[str, Set[str]] = {}
+    # 5. Ülke Bazlı Gerçek Kullanıcı Dağılımı (Tüm Zamanlar Toplam + Son 30 Gün, COUNT(DISTINCT user_id))
+    cutoff_30d = now_utc - timedelta(days=30)
+    all_country_rows = fetch_all_user_country_telemetry(db)
+    country_total_users: Dict[str, Set[str]] = {}
+    country_monthly_users: Dict[str, Set[str]] = {}
+
+    for row in all_country_rows:
+        r_uid = str(row.get("user_id") or "").strip()
+        if not r_uid or r_uid.lower() in ("null", "none", "undefined", "anon", "guest"):
+            continue
+        r_cc = str(row.get("country_code") or "").strip().upper()
+        if not r_cc or r_cc in ("UNKNOWN", "XX", "NULL", "NONE"):
+            continue
+
+        country_total_users.setdefault(r_cc, set()).add(r_uid)
+        r_dt = _parse_dt(row.get("created_at"))
+        if r_dt and r_dt >= cutoff_30d:
+            country_monthly_users.setdefault(r_cc, set()).add(r_uid)
+
+    # 6. Son 24 Saat Erken Uyarılar & Aktif Kullanıcılar
+    telemetry_24h = fetch_recent_telemetry(db, hours=24)
     warning_items: List[Dict[str, Any]] = []
 
-    for ev in telemetry_7d:
+    for ev in telemetry_24h:
         ev_dt = _parse_dt(ev.get("created_at"))
         is_24h = bool(ev_dt and ev_dt >= cutoff_24h)
         ev_uid = str(ev.get("user_id") or "").strip()
         if ev_uid.lower() in ("null", "none", "undefined", "anon", "guest"):
             ev_uid = ""
-        ev_type = str(ev.get("event_type") or "").strip().lower()
 
         if is_24h and ev_uid:
             active_today_ids.add(ev_uid)
 
         cc = str(ev.get("country_code") or "").strip().upper()
-        if (
-            ev_type == "visit"
-            and ev_uid
-            and cc
-            and cc not in ("UNKNOWN", "XX", "NULL", "NONE")
-        ):
-            country_users_7d.setdefault(cc, set()).add(ev_uid)
-            if is_24h:
-                country_users_24h.setdefault(cc, set()).add(ev_uid)
-
         sev = str(ev.get("severity") or "info").lower().strip()
         if is_24h and sev in ("critical", "warning"):
             et = str(ev.get("event_type") or "RISK")
@@ -370,18 +377,23 @@ async def get_admin_overview(
             },
         )
 
-    total_country_hits_7d = sum(len(uids) for uids in country_users_7d.values())
-    total_country_hits_24h = sum(len(uids) for uids in country_users_24h.values())
+    total_unique_all_time = sum(len(uids) for uids in country_total_users.values())
+    total_unique_30d = sum(len(uids) for uids in country_monthly_users.values())
     countries_list = [
         {
             "country": cc,
+            "total_users": len(uids),
+            "monthly_users": len(country_monthly_users.get(cc, set())),
             "count": len(uids),
-            "count_24h": len(country_users_24h.get(cc, set())),
-            "percentage": round((len(uids) / total_country_hits_7d) * 100, 1)
-            if total_country_hits_7d > 0
+            "percentage": round((len(uids) / total_unique_all_time) * 100, 1)
+            if total_unique_all_time > 0
             else 0.0,
         }
-        for cc, uids in sorted(country_users_7d.items(), key=lambda kv: len(kv[1]), reverse=True)
+        for cc, uids in sorted(
+            country_total_users.items(),
+            key=lambda kv: (len(kv[1]), len(country_monthly_users.get(kv[0], set()))),
+            reverse=True,
+        )
     ]
 
     critical_count = sum(1 for w in warning_items if w["severity"] == "critical")
@@ -416,8 +428,8 @@ async def get_admin_overview(
         },
         "countries": countries_list,
         "countries_meta": {
-            "total_7d": total_country_hits_7d,
-            "total_24h": total_country_hits_24h,
+            "total_all_time": total_unique_all_time,
+            "total_30d": total_unique_30d,
         },
         "early_warnings": {
             "risk_score": risk_score,

@@ -81,13 +81,14 @@ interface AdminOverviewResponse {
   };
   countries: Array<{
     country: string;
-    count: number;
-    count_24h?: number;
+    total_users: number;
+    monthly_users: number;
+    count?: number;
     percentage: number;
   }>;
   countries_meta?: {
-    total_7d: number;
-    total_24h: number;
+    total_all_time?: number;
+    total_30d?: number;
   };
   early_warnings: {
     risk_score: "LOW" | "MEDIUM" | "HIGH";
@@ -976,7 +977,7 @@ export default function AdminDashboardPage() {
                 </div>
               </section>
 
-              {/* BLOK 4: 🌍 ÜLKE BAZLI BAĞLANTI DAĞILIMI */}
+              {/* BLOK 4: 🌍 ÜLKE BAZLI BAĞLANTI DAĞILIMI (TOPLAM & SON 30 GÜN) */}
               <section className="lg:col-span-5 rounded-3xl bg-slate-900/90 border border-slate-800 p-5 sm:p-6 shadow-xl space-y-5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -986,62 +987,83 @@ export default function AdminDashboardPage() {
                     </h2>
                   </div>
                   <span className="text-[11px] font-mono text-slate-400">
-                    Son 7 Gün ({data.countries_meta?.total_7d || 0})
+                    Toplam &amp; Son 30 Gün
                   </span>
                 </div>
 
                 {data.countries.length === 0 ? (
                   <div className="p-6 rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 text-center text-xs text-slate-400 space-y-1">
                     <p className="font-semibold text-slate-300">
-                      Henüz coğrafi konum kaydı yok
+                      Henüz doğrulanmış kullanıcı konum kaydı yok
                     </p>
                     <p>
-                      Kullanıcılar siteye bağlandıkça Vercel ülke başlıkları burada canlı olarak gruplanacaktır.
+                      Oturum açmış gerçek üyeler bağlandıkça ülke bazlı tekil sayılar burada görünecektir.
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                    {data.countries.map((c) => {
-                      const flag = countryCodeToFlag(c.country);
-                      const label = COUNTRY_NAMES[c.country] || c.country;
-                      return (
-                        <div
-                          key={c.country}
-                          className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-1.5"
-                        >
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-lg leading-none">{flag}</span>
-                              <span className="font-bold text-white truncate">
-                                {label}
-                              </span>
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-                                {c.country}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0 font-mono">
-                              {typeof c.count_24h === "number" && c.count_24h > 0 && (
-                                <span className="text-[10px] text-emerald-300">
-                                  24s: {c.count_24h}
-                                </span>
-                              )}
-                              <span className="font-black text-sky-300">
-                                {c.count}
-                              </span>
-                              <span className="text-[11px] text-slate-400 w-10 text-right">
-                                %{c.percentage}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                            <div
-                              style={{ width: `${Math.max(4, Math.min(100, c.percentage))}%` }}
-                              className="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-500"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="overflow-x-auto rounded-2xl border border-slate-800 max-h-96 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-950 text-slate-400 font-bold uppercase text-[10px] sticky top-0 z-10">
+                        <tr>
+                          <th className="px-3.5 py-2.5">Ülke</th>
+                          <th className="px-2.5 py-2.5 text-right">Toplam</th>
+                          <th className="px-2.5 py-2.5 text-right">Son 1 Ay</th>
+                          <th className="px-3.5 py-2.5 text-right">Pay</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/80 bg-slate-950/50">
+                        {data.countries.map((c) => {
+                          const flag = countryCodeToFlag(c.country);
+                          const label = COUNTRY_NAMES[c.country] || c.country;
+                          const totalVal =
+                            typeof c.total_users === "number"
+                              ? c.total_users
+                              : c.count || 0;
+                          const monthlyVal =
+                            typeof c.monthly_users === "number"
+                              ? c.monthly_users
+                              : 0;
+                          return (
+                            <tr key={c.country} className="hover:bg-slate-800/40">
+                              <td className="px-3.5 py-2.5">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-base leading-none shrink-0">
+                                    {flag}
+                                  </span>
+                                  <span className="font-bold text-white truncate">
+                                    {label}
+                                  </span>
+                                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 shrink-0">
+                                    {c.country}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-2.5 py-2.5 text-right font-mono font-black text-sky-300">
+                                {totalVal}
+                              </td>
+                              <td className="px-2.5 py-2.5 text-right font-mono font-bold text-emerald-300">
+                                {monthlyVal}
+                              </td>
+                              <td className="px-3.5 py-2.5 text-right">
+                                <div className="inline-flex flex-col items-end gap-1 min-w-[54px]">
+                                  <span className="font-mono text-[11px] font-semibold text-slate-300">
+                                    %{c.percentage}
+                                  </span>
+                                  <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                    <div
+                                      style={{
+                                        width: `${Math.max(6, Math.min(100, c.percentage))}%`,
+                                      }}
+                                      className="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500"
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </section>

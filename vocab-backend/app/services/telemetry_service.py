@@ -156,6 +156,33 @@ def fetch_recent_telemetry(db: Any, hours: int = 168) -> List[Dict[str, Any]]:
     return rows
 
 
+def fetch_all_user_country_telemetry(db: Any) -> List[Dict[str, Any]]:
+    """
+    Tüm zamanlardaki user_id != NULL olan ülke bazlı gerçek kullanıcı kayıtlarını döner
+    (Toplam ve Son 30 Gün tekil kullanıcı hesabı için).
+    """
+    rows: List[Dict[str, Any]] = []
+    if type(db).__name__ not in ("FallbackDB", "FallbackDatabaseClient"):
+        try:
+            res = (
+                db.table("system_telemetry")
+                .select("user_id, country_code, event_type, created_at")
+                .order("created_at", desc=True)
+                .limit(10000)
+                .execute()
+            )
+            if res.data:
+                rows.extend(res.data)
+        except Exception as exc:
+            logger.debug(f"[Telemetry] Tüm zamanlar ülke sorgusu uyarısı: {exc}")
+
+    if not rows:
+        for item in list(_RECENT_TELEMETRY):
+            rows.append(item)
+
+    return rows
+
+
 def clear_warning_telemetry(db: Any) -> int:
     """
     system_telemetry tablosundaki ve bellek tamponundaki severity='warning' veya 'critical'
