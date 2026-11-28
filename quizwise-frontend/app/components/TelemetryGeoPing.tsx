@@ -5,27 +5,32 @@ import { usePathname } from "next/navigation";
 import { API_BASE } from "../config";
 import { useAuth } from "../context/AuthContext";
 
-const GEO_PING_SESSION_KEY = "vocaship_geo_ping_sent";
+const GEO_PING_SESSION_KEY = "vocaship_geo_ping_uid";
 
 export default function TelemetryGeoPing() {
-  const { user, isAuthReady } = useAuth();
+  const { user, token, isGuest, isAuthReady } = useAuth();
   const pathname = usePathname();
 
   useEffect(() => {
     if (!isAuthReady || typeof window === "undefined") return;
     // Otomatik tarayıcı / bot oturumlarını ping'leme
-    if (typeof navigator !== "undefined" && navigator.webdriver) return;
+    if (typeof navigator !== "undefined" && navigator.webdriver === true) return;
+    // Yalnızca oturum açmış gerçek üyeler (misafir/bot taramalarında asla ping atma)
+    const isAuthenticated = Boolean(user?.id && token && !isGuest);
+    if (!isAuthenticated || !user?.id) return;
+
+    const uid = String(user.id).trim();
+    if (!uid) return;
 
     try {
-      if (sessionStorage.getItem(GEO_PING_SESSION_KEY) === "1") {
+      if (sessionStorage.getItem(GEO_PING_SESSION_KEY) === uid) {
         return;
       }
-      sessionStorage.setItem(GEO_PING_SESSION_KEY, "1");
+      sessionStorage.setItem(GEO_PING_SESSION_KEY, uid);
     } catch {
       return;
     }
 
-    const uid = user?.id ? String(user.id) : null;
     let cancelled = false;
 
     const sendPing = async () => {
@@ -45,7 +50,10 @@ export default function TelemetryGeoPing() {
 
         await fetch(`${API_BASE}/api/v1/admin/ping`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({
             country_code,
             city,
@@ -61,7 +69,7 @@ export default function TelemetryGeoPing() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthReady, user?.id, pathname]);
+  }, [isAuthReady, user?.id, token, isGuest, pathname]);
 
   return null;
 }

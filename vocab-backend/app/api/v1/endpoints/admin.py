@@ -1,5 +1,6 @@
+import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from app.core import database as db_module
@@ -15,6 +16,7 @@ from app.services.telemetry_service import (
 router = APIRouter()
 
 ADMIN_EMAIL = "bpalaz1@gmail.com"
+BROWSER_UA_KEYWORDS = ("mozilla", "chrome", "safari", "firefox", "edg")
 BOT_UA_KEYWORDS = (
     "bot",
     "crawler",
@@ -26,6 +28,9 @@ BOT_UA_KEYWORDS = (
     "curl",
     "python",
 )
+# Aynı user_id için son 12 saatteki ziyaret tekilleştirme önbelleği
+_LAST_VISIT_BY_USER: Dict[str, float] = {}
+VISIT_DEDUP_SECONDS = 12 * 3600
 
 
 class TelemetryPingPayload(BaseModel):
@@ -97,15 +102,47 @@ def _recommendation_for_event(event_type: str, severity: str) -> str:
 async def telemetry_ping(
     request: Request,
     payload: Optional[TelemetryPingPayload] = None,
+    db: Any = Depends(get_db),
 ):
     """
-    Herkese açık hafif ziyaret & coğrafi konum kaydı.
-    Bot/sunucu pinglerini User-Agent filtresiyle eler; hata olursa ana akışı asla bloklamaz.
+    Yalnızca oturum açmış gerçek kullanıcıların (geçerli user_id + gerçek tarayıcı User-Agent)
+    ziyaretlerini kaydeder. Bot/sunucu yoklamalarını ve aynı user_id için son 12 saatteki
+    tekrarlı sayfa yenilemelerini tamamen eler.
     """
     try:
+        clean_uid = str((payload.user_id if payload else "") or "").strip()
+        if not clean_uid or clean_uid.lower() in ("null", "none", "undefined", "anon", "guest"):
+            return {"status": "ignored"}
+
         ua = (request.headers.get("user-agent") or "").strip().lower()
-        if not ua or any(kw in ua for kw in BOT_UA_KEYWORDS):
-            return {"status": "ignored_bot"}
+        has_browser_sig = any(sig in ua for sig in BROWSER_UA_KEYWORDS)
+        has_bot_sig = any(kw in ua for kw in BOT_UA_KEYWORDS)
+        if not ua or not has_browser_sig or has_bot_sig:
+            return {"status": "ignored"}
+
+        now_ts = time.time()
+        last_seen = _LAST_VISIT_BY_USER.get(clean_uid, 0.0)
+        if last_seen and (now_ts - last_seen) < VISIT_DEDUP_SECONDS:
+            return {"status": "ignored"}
+
+        # Sunucu yeniden başladıysa Supabase system_telemetry üzerinden son 12 saati kontrol et
+        if type(db).__name__ not in ("FallbackDB", "FallbackDatabaseClient"):
+            try:
+                cutoff_12h = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
+                recent_res = (
+                    db.table("system_telemetry")
+                    .select("id")
+                    .eq("event_type", "visit")
+                    .eq("user_id", clean_uid)
+                    .gte("created_at", cutoff_12h)
+                    .limit(1)
+                    .execute()
+                )
+                if recent_res.data and len(recent_res.data) > 0:
+                    _LAST_VISIT_BY_USER[clean_uid] = now_ts
+                    return {"status": "ignored"}
+            except Exception:
+                pass
 
         raw_country = (
             (payload.country_code if payload else None)
@@ -118,16 +155,16 @@ async def telemetry_ping(
             or request.headers.get("x-vercel-ip-city")
             or ""
         )
-        raw_uid = payload.user_id if payload else None
         raw_path = (payload.path if payload else None) or "/"
 
+        _LAST_VISIT_BY_USER[clean_uid] = now_ts
         record_telemetry(
             event_type="visit",
             severity="info",
-            message="Site ziyareti",
+            message="Gerçek kullanıcı ziyareti",
             country_code=raw_country,
             city=raw_city,
-            user_id=raw_uid,
+            user_id=clean_uid,
             path=raw_path,
         )
         return {"ok": True, "country_code": str(raw_country).strip().upper()}
@@ -250,24 +287,33 @@ async def get_admin_overview(
     except Exception:
         active_rooms = []
 
-    # 5 & 6. Telemetri: Ülkeler (7g & 24s) ve Erken Uyarılar (24s)
+    # 5 & 6. Telemetri: Yalnızca user_id IS NOT NULL olan gerçek üyeler (COUNT(DISTINCT user_id))
     telemetry_7d = fetch_recent_telemetry(db, hours=168)
-    country_counts_7d: Dict[str, int] = {}
-    country_counts_24h: Dict[str, int] = {}
+    country_users_7d: Dict[str, Set[str]] = {}
+    country_users_24h: Dict[str, Set[str]] = {}
     warning_items: List[Dict[str, Any]] = []
 
     for ev in telemetry_7d:
         ev_dt = _parse_dt(ev.get("created_at"))
         is_24h = bool(ev_dt and ev_dt >= cutoff_24h)
         ev_uid = str(ev.get("user_id") or "").strip()
+        if ev_uid.lower() in ("null", "none", "undefined", "anon", "guest"):
+            ev_uid = ""
+        ev_type = str(ev.get("event_type") or "").strip().lower()
+
         if is_24h and ev_uid:
             active_today_ids.add(ev_uid)
 
         cc = str(ev.get("country_code") or "").strip().upper()
-        if cc and cc not in ("UNKNOWN", "XX", "NULL", "NONE"):
-            country_counts_7d[cc] = country_counts_7d.get(cc, 0) + 1
+        if (
+            ev_type == "visit"
+            and ev_uid
+            and cc
+            and cc not in ("UNKNOWN", "XX", "NULL", "NONE")
+        ):
+            country_users_7d.setdefault(cc, set()).add(ev_uid)
             if is_24h:
-                country_counts_24h[cc] = country_counts_24h.get(cc, 0) + 1
+                country_users_24h.setdefault(cc, set()).add(ev_uid)
 
         sev = str(ev.get("severity") or "info").lower().strip()
         if is_24h and sev in ("critical", "warning"):
@@ -324,16 +370,18 @@ async def get_admin_overview(
             },
         )
 
-    total_country_hits_7d = sum(country_counts_7d.values())
-    total_country_hits_24h = sum(country_counts_24h.values())
+    total_country_hits_7d = sum(len(uids) for uids in country_users_7d.values())
+    total_country_hits_24h = sum(len(uids) for uids in country_users_24h.values())
     countries_list = [
         {
             "country": cc,
-            "count": cnt,
-            "count_24h": country_counts_24h.get(cc, 0),
-            "percentage": round((cnt / total_country_hits_7d) * 100, 1) if total_country_hits_7d > 0 else 0.0,
+            "count": len(uids),
+            "count_24h": len(country_users_24h.get(cc, set())),
+            "percentage": round((len(uids) / total_country_hits_7d) * 100, 1)
+            if total_country_hits_7d > 0
+            else 0.0,
         }
-        for cc, cnt in sorted(country_counts_7d.items(), key=lambda kv: kv[1], reverse=True)
+        for cc, uids in sorted(country_users_7d.items(), key=lambda kv: len(kv[1]), reverse=True)
     ]
 
     critical_count = sum(1 for w in warning_items if w["severity"] == "critical")
