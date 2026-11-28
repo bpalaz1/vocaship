@@ -92,6 +92,8 @@ interface AdminOverviewResponse {
       id: string;
       severity: "critical" | "warning" | string;
       event_type: string;
+      endpoint?: string | null;
+      detail?: string | null;
       message: string;
       recommendation: string;
       path?: string | null;
@@ -164,6 +166,7 @@ export default function AdminDashboardPage() {
   } | null>(null);
   const [isTogglingAiGuard, setIsTogglingAiGuard] = useState(false);
   const [isClosingRooms, setIsClosingRooms] = useState(false);
+  const [isClearingWarnings, setIsClearingWarnings] = useState(false);
   const [suspendingKey, setSuspendingKey] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
@@ -300,6 +303,31 @@ export default function AdminDashboardPage() {
       showBanner("error", err?.message || "Açık ders odaları temizlenemedi.");
     } finally {
       setIsClosingRooms(false);
+    }
+  };
+
+  const handleClearWarnings = async () => {
+    const token = getAuthToken();
+    if (!token || isClearingWarnings) return;
+    setIsClearingWarnings(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/actions/clear-warnings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.detail || `Uyarılar temizlenemedi (${res.status})`);
+      }
+      showBanner("success", json.message || "Tüm uyarılar temizlendi.");
+      await fetchOverview(true);
+    } catch (err: any) {
+      showBanner("error", err?.message || "Uyarılar temizlenirken hata oluştu.");
+    } finally {
+      setIsClearingWarnings(false);
     }
   };
 
@@ -510,6 +538,20 @@ export default function AdminDashboardPage() {
                   >
                     RİSK SKORU: {riskScore}
                   </span>
+                  <button
+                    type="button"
+                    disabled={isClearingWarnings || warnings.length === 0}
+                    onClick={handleClearWarnings}
+                    className="px-3 py-1 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 disabled:opacity-40 border border-emerald-400/50 text-emerald-200 text-[11px] font-black flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                    title="Çözülmüş warning ve critical uyarı kayıtlarını temizle"
+                  >
+                    {isClearingWarnings ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3 h-3" />
+                    )}
+                    <span>✓ Uyarıları Temizle</span>
+                  </button>
                 </div>
               </div>
 
@@ -612,9 +654,9 @@ export default function AdminDashboardPage() {
                             >
                               {isCritical ? "KRİTİK" : "UYARI"} • {w.event_type}
                             </span>
-                            {w.path && (
-                              <span className="text-[11px] font-mono text-slate-400">
-                                {w.path}
+                            {(w.endpoint || w.path) && (
+                              <span className="px-2 py-0.5 rounded-md bg-slate-950/90 border border-indigo-500/40 text-[11px] font-mono font-bold text-indigo-300">
+                                {w.endpoint || w.path}
                               </span>
                             )}
                           </div>
@@ -624,9 +666,9 @@ export default function AdminDashboardPage() {
                         </div>
 
                         <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1 min-w-0 flex-1">
-                            <p className="text-xs sm:text-sm font-bold text-white leading-snug">
-                              {w.message}
+                          <div className="space-y-1.5 min-w-0 flex-1">
+                            <p className="text-xs sm:text-sm font-bold text-white leading-snug break-words bg-slate-950/60 border border-slate-800/80 rounded-xl px-3 py-2 font-mono">
+                              {w.detail || w.message}
                             </p>
                             <p className="text-xs text-slate-300">
                               <strong className="text-indigo-300">Öneri:</strong>{" "}

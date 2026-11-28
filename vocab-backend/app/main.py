@@ -174,7 +174,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         event_type="SERVER_500",
         severity="critical",
         message=f"{type(exc).__name__}: {str(exc)}",
-        path=str(request.url.path),
+        path=f"{request.method} {request.url.path}",
         country_code=request.headers.get("x-vercel-ip-country"),
     )
     return JSONResponse(

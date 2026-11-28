@@ -13,20 +13,19 @@ export default function TelemetryGeoPing() {
 
   useEffect(() => {
     if (!isAuthReady || typeof window === "undefined") return;
-
-    const uid = user?.id ? String(user.id) : "";
-    const pingMarker = uid ? `user:${uid}` : "anon";
+    // Otomatik tarayıcı / bot oturumlarını ping'leme
+    if (typeof navigator !== "undefined" && navigator.webdriver) return;
 
     try {
-      const prev = sessionStorage.getItem(GEO_PING_SESSION_KEY);
-      if (prev === pingMarker || (prev?.startsWith("user:") && !uid)) {
+      if (sessionStorage.getItem(GEO_PING_SESSION_KEY) === "1") {
         return;
       }
-      sessionStorage.setItem(GEO_PING_SESSION_KEY, pingMarker);
+      sessionStorage.setItem(GEO_PING_SESSION_KEY, "1");
     } catch {
       return;
     }
 
+    const uid = user?.id ? String(user.id) : null;
     let cancelled = false;
 
     const sendPing = async () => {
@@ -50,7 +49,7 @@ export default function TelemetryGeoPing() {
           body: JSON.stringify({
             country_code,
             city,
-            user_id: uid || null,
+            user_id: uid,
             path: pathname || "/",
           }),
           keepalive: true,

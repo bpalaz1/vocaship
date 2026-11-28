@@ -6,11 +6,26 @@ from app.core import database as db_module
 from app.core.database import get_db
 from app.core.runtime_guard import runtime_guard
 from app.api.v1.endpoints.auth import get_current_user
-from app.services.telemetry_service import record_telemetry, fetch_recent_telemetry
+from app.services.telemetry_service import (
+    record_telemetry,
+    fetch_recent_telemetry,
+    clear_warning_telemetry,
+)
 
 router = APIRouter()
 
 ADMIN_EMAIL = "bpalaz1@gmail.com"
+BOT_UA_KEYWORDS = (
+    "bot",
+    "crawler",
+    "spider",
+    "vercel",
+    "uptime",
+    "health",
+    "headless",
+    "curl",
+    "python",
+)
 
 
 class TelemetryPingPayload(BaseModel):
@@ -85,9 +100,13 @@ async def telemetry_ping(
 ):
     """
     Herkese açık hafif ziyaret & coğrafi konum kaydı.
-    Hata olursa ana akışı asla yavaşlatmaz veya bloklamaz.
+    Bot/sunucu pinglerini User-Agent filtresiyle eler; hata olursa ana akışı asla bloklamaz.
     """
     try:
+        ua = (request.headers.get("user-agent") or "").strip().lower()
+        if not ua or any(kw in ua for kw in BOT_UA_KEYWORDS):
+            return {"status": "ignored_bot"}
+
         raw_country = (
             (payload.country_code if payload else None)
             or request.headers.get("x-vercel-ip-country")
@@ -249,14 +268,29 @@ async def get_admin_overview(
         if is_24h and sev in ("critical", "warning"):
             et = str(ev.get("event_type") or "RISK")
             meta = ev.get("metadata") if isinstance(ev.get("metadata"), dict) else {}
+            resolved_endpoint = str(
+                ev.get("endpoint")
+                or ev.get("path")
+                or meta.get("endpoint")
+                or meta.get("path")
+                or ""
+            ).strip() or None
+            resolved_detail = str(
+                ev.get("detail")
+                or ev.get("message")
+                or meta.get("detail")
+                or et
+            ).strip()
             warning_items.append(
                 {
                     "id": str(ev.get("id") or f"warn-{len(warning_items)}"),
                     "severity": sev,
                     "event_type": et,
-                    "message": str(ev.get("message") or et),
+                    "endpoint": resolved_endpoint,
+                    "detail": resolved_detail,
+                    "message": resolved_detail,
                     "recommendation": _recommendation_for_event(et, sev),
-                    "path": ev.get("path"),
+                    "path": resolved_endpoint,
                     "user_id": ev_uid or None,
                     "ip": str(meta.get("ip") or "").strip() or None,
                     "country_code": cc or None,
@@ -266,16 +300,20 @@ async def get_admin_overview(
 
     # Eğer FallbackDB aktifse en üst sıraya otomatik KRİTİK RİSK alarmı ekle
     if is_fallback:
+        db_detail = f"KRİTİK RİSK: Backend geçici FallbackDB modunda çalışıyor! ({db_module.DB_INIT_ERROR or 'Supabase bağlantısı kurulamadı'})"
         warning_items.insert(
             0,
             {
                 "id": "critical-db-fallback",
                 "severity": "critical",
                 "event_type": "DB_FALLBACK",
-                "message": f"KRİTİK RİSK: Backend geçici FallbackDB modunda çalışıyor! ({db_module.DB_INIT_ERROR or 'Supabase bağlantısı kurulamadı'})",
+                "endpoint": "GET /health",
+                "detail": db_detail,
+                "message": db_detail,
                 "recommendation": _recommendation_for_event("DB_FALLBACK", "critical"),
-                "path": "/health",
+                "path": "GET /health",
                 "user_id": None,
+                "ip": None,
                 "country_code": None,
                 "created_at": now_utc.isoformat(),
             },
@@ -475,5 +513,24 @@ async def close_stale_rooms(
             f"{closed_count} açık ders odası başarıyla kapatıldı."
             if closed_count > 0
             else "Kapatılacak açık ders odası bulunamadı."
+        ),
+    }
+
+
+@router.post("/actions/clear-warnings", status_code=status.HTTP_200_OK)
+async def clear_warnings(
+    db: Any = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """system_telemetry tablosundaki warning ve critical uyarı kayıtlarını temizler."""
+    cleared_count = clear_warning_telemetry(db)
+    return {
+        "ok": True,
+        "cleared_count": cleared_count,
+        "risk_score": "LOW",
+        "message": (
+            f"{cleared_count} uyarı kaydı temizlendi."
+            if cleared_count > 0
+            else "Temizlenecek aktif uyarı kaydı bulunamadı."
         ),
     }

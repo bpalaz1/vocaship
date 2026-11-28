@@ -154,3 +154,38 @@ def fetch_recent_telemetry(db: Any, hours: int = 168) -> List[Dict[str, Any]]:
                 rows.append(item)
 
     return rows
+
+
+def clear_warning_telemetry(db: Any) -> int:
+    """
+    system_telemetry tablosundaki ve bellek tamponundaki severity='warning' veya 'critical'
+    uyarı kayıtlarını temizler.
+    """
+    cleared_count = 0
+
+    # 1. Bellek içi tamponu temizle
+    try:
+        kept = [
+            item
+            for item in list(_RECENT_TELEMETRY)
+            if str(item.get("severity") or "").lower().strip() not in ("warning", "critical")
+        ]
+        removed_mem = len(_RECENT_TELEMETRY) - len(kept)
+        _RECENT_TELEMETRY.clear()
+        for item in kept:
+            _RECENT_TELEMETRY.append(item)
+        cleared_count += max(0, removed_mem)
+    except Exception as exc:
+        logger.debug(f"[Telemetry] Bellek temizleme uyarısı: {exc}")
+
+    # 2. Supabase system_telemetry tablosundaki warning/critical kayıtlarını sil
+    if type(db).__name__ not in ("FallbackDB", "FallbackDatabaseClient"):
+        for sev in ("warning", "critical"):
+            try:
+                res = db.table("system_telemetry").delete().eq("severity", sev).execute()
+                if res.data:
+                    cleared_count += len(res.data)
+            except Exception as exc:
+                logger.debug(f"[Telemetry] DB '{sev}' silme uyarısı: {exc}")
+
+    return cleared_count
