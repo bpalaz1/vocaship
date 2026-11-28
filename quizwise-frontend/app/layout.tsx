@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
@@ -7,6 +7,7 @@ import ActiveClassBanner from "./components/classroom/ActiveClassBanner";
 import MainContentWrapper from "./components/MainContentWrapper";
 import PaddleCheckoutListener from "./components/payments/PaddleCheckoutListener";
 import TelemetryGeoPing from "./components/TelemetryGeoPing";
+import ServiceWorkerRegistrar from "./components/ServiceWorkerRegistrar";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ExperienceProvider } from "./context/ExperienceContext";
 import { PersonaProvider } from "./context/PersonaContext";
@@ -25,15 +26,32 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#0B0F19",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "VocaShip | Çok Dilli Akıllı Kelime ve Okuma Platformu",
   description: "Bilimsel SM-2 aralıklı tekrar algoritması, çok dilli interaktif okuma odası ve sınıf içi etkileşimli kelime arenası.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "VocaShip",
+  },
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     shortcut: "/favicon.svg",
-    apple: "/apple-touch-icon.svg",
+    apple: [
+      { url: "/apple-icon", sizes: "180x180", type: "image/png" },
+    ],
   },
   openGraph: {
     title: "VocaShip | Çok Dilli Akıllı Kelime ve Okuma Platformu",
@@ -82,6 +100,9 @@ export default function RootLayout({
 
                       {/* Oturum Başına 1 Kez Hafif Coğrafi Konum & Ziyaret Telemetrisi */}
                       <TelemetryGeoPing />
+
+                      {/* PWA Service Worker Kaydı */}
+                      <ServiceWorkerRegistrar />
 
                       {/* Global Floating XP Bildirimi */}
                       <FloatingXP />

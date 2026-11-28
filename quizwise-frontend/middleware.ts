@@ -24,5 +24,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|favicon\\.svg|icon\\.svg|apple-touch-icon\\.svg).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon\\.ico|favicon\\.svg|icon\\.svg|icon|apple-icon|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.svg|sw\\.js|manifest\\.webmanifest).*)",
+  ],
 };
