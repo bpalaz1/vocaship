@@ -61,6 +61,15 @@ def record_telemetry(
         }
         _RECENT_TELEMETRY.appendleft(mem_entry)
 
+        # Kritik olaylarda opsiyonel webhook bildirimini arka planda tetikle
+        if clean_sev == "critical":
+            try:
+                from app.core.runtime_guard import dispatch_critical_webhook
+
+                dispatch_critical_webhook(clean_evt, clean_msg, path=clean_path or None)
+            except Exception:
+                pass
+
         db = db_module.get_db()
         if type(db).__name__ in ("FallbackDB", "FallbackDatabaseClient"):
             return

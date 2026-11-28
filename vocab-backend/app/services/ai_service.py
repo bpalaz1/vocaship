@@ -93,6 +93,11 @@ async def async_call_gemini_with_fallback(
             err_str = str(e)
             print(f"[Async Model Fallback] {model_name} başarısız: {err_str[:120]}... Sıradaki deneniyor.")
             if "429" in err_str or "503" in err_str:
+                try:
+                    from app.core.runtime_guard import runtime_guard
+                    runtime_guard.record_gemini_error(err_str)
+                except Exception:
+                    pass
                 await asyncio.sleep(0.25)
             continue
 
@@ -118,7 +123,11 @@ def call_gemini_with_fallback(prompt: str, temperature: float = 0.2) -> dict:
             err_str = str(e)
             print(f"[Model Fallback] {model_name} başarısız: {err_str[:120]}... Sıradaki deneniyor.")
             if "429" in err_str or "503" in err_str:
-                pass
+                try:
+                    from app.core.runtime_guard import runtime_guard
+                    runtime_guard.record_gemini_error(err_str)
+                except Exception:
+                    pass
             continue
 
     raise last_error

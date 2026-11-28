@@ -18,6 +18,10 @@ import {
   BookOpen,
   FileText,
   Mic,
+  Ban,
+  Trash2,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { API_BASE } from "../config";
 import { useAuth, getAuthToken } from "../context/AuthContext";
@@ -29,6 +33,14 @@ interface AdminOverviewResponse {
     db_mode: "supabase" | "fallback";
     db_error: string | null;
     server_time: string;
+  };
+  runtime_guard?: {
+    ai_circuit_open: boolean;
+    ai_circuit_manual: boolean;
+    ai_circuit_auto_remaining_sec: number;
+    blocked_ips_count: number;
+    blocked_ips: Array<{ ip: string; remaining_sec: number }>;
+    suspended_users_count: number;
   };
   users_summary: {
     total_users: number;
@@ -84,6 +96,7 @@ interface AdminOverviewResponse {
       recommendation: string;
       path?: string | null;
       user_id?: string | null;
+      ip?: string | null;
       country_code?: string | null;
       created_at: string;
     }>;
@@ -145,6 +158,13 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [actionBanner, setActionBanner] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [isTogglingAiGuard, setIsTogglingAiGuard] = useState(false);
+  const [isClosingRooms, setIsClosingRooms] = useState(false);
+  const [suspendingKey, setSuspendingKey] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
   const isAuthorizedAdmin = Boolean(
@@ -216,6 +236,115 @@ export default function AdminDashboardPage() {
     }, 30000);
     return () => clearInterval(interval);
   }, [isAuthReady, isAuthorizedAdmin, fetchOverview]);
+
+  const showBanner = (kind: "success" | "error", text: string) => {
+    setActionBanner({ kind, text });
+    setTimeout(() => {
+      setActionBanner((prev) => (prev?.text === text ? null : prev));
+    }, 5000);
+  };
+
+  const handleToggleAiGuard = async () => {
+    const token = getAuthToken();
+    if (!token || isTogglingAiGuard) return;
+    const currentlyOpen = Boolean(data?.runtime_guard?.ai_circuit_open);
+    setIsTogglingAiGuard(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/actions/toggle-ai-guard`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ enabled: !currentlyOpen }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.detail || `İşlem başarısız (${res.status})`);
+      }
+      showBanner("success", json.message || "AI Güvenli Mod güncellendi.");
+      await fetchOverview(true);
+    } catch (err: any) {
+      showBanner("error", err?.message || "AI Güvenli Mod değiştirilemedi.");
+    } finally {
+      setIsTogglingAiGuard(false);
+    }
+  };
+
+  const handleCloseStaleRooms = async () => {
+    const token = getAuthToken();
+    if (!token || isClosingRooms) return;
+    if (
+      !window.confirm(
+        "class_sessions tablosundaki aktif görünen tüm canlı ders odaları sonlandırılacak (status='ended'). Onaylıyor musunuz?"
+      )
+    ) {
+      return;
+    }
+    setIsClosingRooms(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/actions/close-stale-rooms`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.detail || `Odalar kapatılamadı (${res.status})`);
+      }
+      showBanner("success", json.message || "Açık ders odaları temizlendi.");
+      await fetchOverview(true);
+    } catch (err: any) {
+      showBanner("error", err?.message || "Açık ders odaları temizlenemedi.");
+    } finally {
+      setIsClosingRooms(false);
+    }
+  };
+
+  const handleSuspendTarget = async (opts: {
+    userId?: string | null;
+    ip?: string | null;
+    label: string;
+    rowKey: string;
+  }) => {
+    const token = getAuthToken();
+    if (!token || suspendingKey) return;
+    if (!opts.userId && !opts.ip) return;
+    if (
+      !window.confirm(
+        `"${opts.label}" için erişimi anında durdurmak istediğinizden emin misiniz?`
+      )
+    ) {
+      return;
+    }
+    setSuspendingKey(opts.rowKey);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/actions/suspend-user`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          user_id: opts.userId || null,
+          ip: opts.ip || null,
+          reason: `Admin panelinden erişim durduruldu (${opts.label})`,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.detail || `Erişim durdurulamadı (${res.status})`);
+      }
+      showBanner("success", json.message || `${opts.label} için erişim durduruldu.`);
+      await fetchOverview(true);
+    } catch (err: any) {
+      showBanner("error", err?.message || "Erişim durdurma işlemi başarısız oldu.");
+    } finally {
+      setSuspendingKey(null);
+    }
+  };
 
   // Yetki doğrulanmadan veya yetkisizse hiçbir şey render etme
   if (!isAuthReady || !isAuthorizedAdmin) {
@@ -308,6 +437,23 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {actionBanner && (
+          <div
+            className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-150 ${
+              actionBanner.kind === "success"
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
+                : "bg-rose-500/15 border-rose-500/40 text-rose-200"
+            }`}
+          >
+            {actionBanner.kind === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{actionBanner.text}</span>
+          </div>
+        )}
+
         {isLoading && !data ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((n) => (
@@ -347,7 +493,12 @@ export default function AdminDashboardPage() {
                   </h2>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {data.runtime_guard && (
+                    <span className="px-2.5 py-1 rounded-full bg-slate-950/90 border border-slate-700 text-[11px] font-mono text-slate-300">
+                      Bloklu IP: <strong className="text-rose-300">{data.runtime_guard.blocked_ips_count}</strong> • Askıda: <strong className="text-amber-300">{data.runtime_guard.suspended_users_count}</strong>
+                    </span>
+                  )}
                   <span
                     className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wider border ${
                       riskScore === "HIGH"
@@ -359,6 +510,64 @@ export default function AdminDashboardPage() {
                   >
                     RİSK SKORU: {riskScore}
                   </span>
+                </div>
+              </div>
+
+              {/* ⚡ ANINDA MÜDAHALE KONTROLLERİ ÇUBUĞU */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-200">
+                    ⚡ Anında Müdahale Kontrolleri
+                  </span>
+                  {data.runtime_guard?.ai_circuit_open && (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/60 text-rose-200 text-[10px] font-black animate-pulse">
+                      AI Maliyet Kilidi Devrede
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    disabled={isTogglingAiGuard}
+                    onClick={handleToggleAiGuard}
+                    className={`px-4 py-2 rounded-xl border text-xs font-black flex items-center gap-2 transition cursor-pointer active:scale-95 disabled:opacity-50 ${
+                      data.runtime_guard?.ai_circuit_open
+                        ? "bg-rose-600/25 hover:bg-rose-600/35 border-rose-400 text-rose-200 ring-2 ring-rose-500/35 shadow-lg shadow-rose-500/15"
+                        : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200"
+                    }`}
+                  >
+                    {isTogglingAiGuard ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <ShieldAlert
+                        className={`w-3.5 h-3.5 ${
+                          data.runtime_guard?.ai_circuit_open
+                            ? "text-rose-300"
+                            : "text-emerald-400"
+                        }`}
+                      />
+                    )}
+                    <span>
+                      🛡️ AI Güvenli Mod (
+                      {data.runtime_guard?.ai_circuit_open ? "Açık" : "Kapalı"})
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isClosingRooms}
+                    onClick={handleCloseStaleRooms}
+                    className="px-4 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/50 text-amber-200 text-xs font-black flex items-center gap-2 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    {isClosingRooms ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5 text-amber-300" />
+                    )}
+                    <span>🧹 Açık Ders Odalarını Temizle</span>
+                  </button>
                 </div>
               </div>
 
@@ -414,13 +623,40 @@ export default function AdminDashboardPage() {
                           </span>
                         </div>
 
-                        <p className="text-xs sm:text-sm font-bold text-white leading-snug">
-                          {w.message}
-                        </p>
-                        <p className="text-xs text-slate-300">
-                          <strong className="text-indigo-300">Öneri:</strong>{" "}
-                          {w.recommendation}
-                        </p>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <p className="text-xs sm:text-sm font-bold text-white leading-snug">
+                              {w.message}
+                            </p>
+                            <p className="text-xs text-slate-300">
+                              <strong className="text-indigo-300">Öneri:</strong>{" "}
+                              {w.recommendation}
+                            </p>
+                          </div>
+
+                          {(w.user_id || w.ip) && (
+                            <button
+                              type="button"
+                              disabled={suspendingKey === `warn-${w.id}`}
+                              onClick={() =>
+                                handleSuspendTarget({
+                                  userId: w.user_id,
+                                  ip: w.ip,
+                                  label: w.user_id ? `Kullanıcı (${w.user_id.slice(0, 8)})` : `IP (${w.ip})`,
+                                  rowKey: `warn-${w.id}`,
+                                })
+                              }
+                              className="px-2.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/50 text-rose-200 text-[11px] font-black flex items-center gap-1.5 shrink-0 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                            >
+                              {suspendingKey === `warn-${w.id}` ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Ban className="w-3 h-3" />
+                              )}
+                              <span>🚫 Erişimi Durdur</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -585,45 +821,77 @@ export default function AdminDashboardPage() {
                             <th className="px-2.5 py-2.5 text-center">Metin</th>
                             <th className="px-2.5 py-2.5 text-center">Hikaye</th>
                             <th className="px-2.5 py-2.5 text-center">Speaking</th>
-                            <th className="px-3.5 py-2.5 text-right">Toplam</th>
+                            <th className="px-3 py-2.5 text-right">Toplam</th>
+                            <th className="px-3 py-2.5 text-right">Müdahale</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/80 bg-slate-900/60">
-                          {data.quota_usage_today.top_quota_users.map((u) => (
-                            <tr key={u.id} className="hover:bg-slate-800/40">
-                              <td className="px-3.5 py-2.5 max-w-[180px]">
-                                <div className="font-bold text-white truncate">
-                                  {u.full_name || u.username}
-                                </div>
-                                <div className="text-[10px] text-slate-400 font-mono truncate">
-                                  {u.email || u.username}
-                                </div>
-                              </td>
-                              <td className="px-2.5 py-2.5 text-center">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                    u.plan_tier === "pro"
-                                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/35"
-                                      : "bg-slate-800 text-slate-300 border border-slate-700"
-                                  }`}
-                                >
-                                  {u.plan_tier}
-                                </span>
-                              </td>
-                              <td className="px-2.5 py-2.5 text-center font-mono text-slate-200">
-                                {u.custom_texts}
-                              </td>
-                              <td className="px-2.5 py-2.5 text-center font-mono text-slate-200">
-                                {u.ai_stories}
-                              </td>
-                              <td className="px-2.5 py-2.5 text-center font-mono text-slate-200">
-                                {u.speaking_sessions}
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right font-mono font-black text-indigo-300">
-                                {u.total_today}
-                              </td>
-                            </tr>
-                          ))}
+                          {data.quota_usage_today.top_quota_users.map((u) => {
+                            const isSelfAdmin =
+                              (u.email || "").toLowerCase().trim() === ADMIN_EMAIL;
+                            return (
+                              <tr key={u.id} className="hover:bg-slate-800/40">
+                                <td className="px-3.5 py-2.5 max-w-[165px]">
+                                  <div className="font-bold text-white truncate">
+                                    {u.full_name || u.username}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 font-mono truncate">
+                                    {u.email || u.username}
+                                  </div>
+                                </td>
+                                <td className="px-2.5 py-2.5 text-center">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                      u.plan_tier === "pro"
+                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/35"
+                                        : "bg-slate-800 text-slate-300 border border-slate-700"
+                                    }`}
+                                  >
+                                    {u.plan_tier}
+                                  </span>
+                                </td>
+                                <td className="px-2.5 py-2.5 text-center font-mono text-slate-200">
+                                  {u.custom_texts}
+                                </td>
+                                <td className="px-2.5 py-2.5 text-center font-mono text-slate-200">
+                                  {u.ai_stories}
+                                </td>
+                                <td className="px-2.5 py-2.5 text-center font-mono text-slate-200">
+                                  {u.speaking_sessions}
+                                </td>
+                                <td className="px-3 py-2.5 text-right font-mono font-black text-indigo-300">
+                                  {u.total_today}
+                                </td>
+                                <td className="px-3 py-2.5 text-right">
+                                  {isSelfAdmin ? (
+                                    <span className="text-[10px] font-mono text-slate-500">
+                                      Admin
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={suspendingKey === `user-${u.id}`}
+                                      onClick={() =>
+                                        handleSuspendTarget({
+                                          userId: u.id,
+                                          label: u.email || u.username || u.full_name,
+                                          rowKey: `user-${u.id}`,
+                                        })
+                                      }
+                                      className="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/50 text-rose-200 text-[10px] font-black inline-flex items-center gap-1 transition cursor-pointer active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                                    >
+                                      {suspendingKey === `user-${u.id}` ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Ban className="w-3 h-3" />
+                                      )}
+                                      <span>🚫 Erişimi Durdur</span>
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

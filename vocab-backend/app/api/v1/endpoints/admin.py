@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from app.core import database as db_module
 from app.core.database import get_db
+from app.core.runtime_guard import runtime_guard
 from app.api.v1.endpoints.auth import get_current_user
 from app.services.telemetry_service import record_telemetry, fetch_recent_telemetry
 
@@ -17,6 +18,16 @@ class TelemetryPingPayload(BaseModel):
     city: Optional[str] = None
     user_id: Optional[str] = None
     path: Optional[str] = None
+
+
+class ToggleAiGuardPayload(BaseModel):
+    enabled: Optional[bool] = None
+
+
+class SuspendUserPayload(BaseModel):
+    user_id: Optional[str] = None
+    ip: Optional[str] = None
+    reason: Optional[str] = None
 
 
 def _get_field(obj: Any, key: str, default: str = "") -> str:
@@ -237,6 +248,7 @@ async def get_admin_overview(
         sev = str(ev.get("severity") or "info").lower().strip()
         if is_24h and sev in ("critical", "warning"):
             et = str(ev.get("event_type") or "RISK")
+            meta = ev.get("metadata") if isinstance(ev.get("metadata"), dict) else {}
             warning_items.append(
                 {
                     "id": str(ev.get("id") or f"warn-{len(warning_items)}"),
@@ -246,6 +258,7 @@ async def get_admin_overview(
                     "recommendation": _recommendation_for_event(et, sev),
                     "path": ev.get("path"),
                     "user_id": ev_uid or None,
+                    "ip": str(meta.get("ip") or "").strip() or None,
                     "country_code": cc or None,
                     "created_at": ev.get("created_at") or now_utc.isoformat(),
                 }
@@ -289,8 +302,11 @@ async def get_admin_overview(
     else:
         risk_score = "LOW"
 
+    runtime_guard.hydrate_suspended_users(db)
+
     return {
         "system_health": system_health,
+        "runtime_guard": runtime_guard.get_status(),
         "users_summary": {
             "total_users": total_users,
             "pro_users": pro_users,
@@ -318,4 +334,146 @@ async def get_admin_overview(
             "warning_count": warning_count,
             "items": warning_items[:40],
         },
+    }
+
+
+@router.post("/actions/toggle-ai-guard", status_code=status.HTTP_200_OK)
+async def toggle_ai_guard(
+    payload: Optional[ToggleAiGuardPayload] = None,
+    _admin: dict = Depends(require_admin),
+):
+    """AI Güvenli Mod (ai_circuit_open) durumunu açar/kapatır ve telemetriye kaydeder."""
+    current_active = runtime_guard.is_ai_circuit_active()
+    next_state = (not current_active) if (payload is None or payload.enabled is None) else bool(payload.enabled)
+    guard_state = runtime_guard.set_ai_circuit_manual(next_state)
+
+    record_telemetry(
+        event_type="admin_toggle_ai_guard",
+        severity="warning" if next_state else "info",
+        message=(
+            "Admin AI Güvenli Mod (maliyet kilidi) devreye alındı."
+            if next_state
+            else "Admin AI Güvenli Mod (maliyet kilidi) kapatıldı; AI servisleri normale döndü."
+        ),
+        user_id=_get_field(_admin, "id") or None,
+        path="/api/v1/admin/actions/toggle-ai-guard",
+    )
+    return {
+        "ok": True,
+        "ai_circuit_open": guard_state["ai_circuit_open"],
+        "runtime_guard": guard_state,
+        "message": (
+            "AI Güvenli Mod AÇILDI — Yapay zekâ üretim uçları koruma altına alındı."
+            if next_state
+            else "AI Güvenli Mod KAPATILDI — Yapay zekâ servisleri yeniden aktif."
+        ),
+    }
+
+
+@router.post("/actions/suspend-user", status_code=status.HTTP_200_OK)
+async def suspend_user_or_ip(
+    payload: SuspendUserPayload,
+    db: Any = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Gönderilen user_id veya IP adresini anında blok listesine alır; users.role = 'suspended' yapar."""
+    target_uid = (payload.user_id or "").strip()
+    target_ip = (payload.ip or "").strip()
+    if not target_uid and not target_ip:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Engellemek için en az bir user_id veya ip adresi belirtilmelidir.",
+        )
+
+    admin_uid = _get_field(_admin, "id")
+    if target_uid and target_uid == admin_uid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sistem yöneticisi kendi hesabını askıya alamaz.",
+        )
+
+    if target_uid:
+        # Süper admin e-postasını korumaya al
+        try:
+            u_res = db.table("users").select("email").eq("id", target_uid).limit(1).execute()
+            if u_res.data and str(u_res.data[0].get("email") or "").strip().lower() == ADMIN_EMAIL:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Süper yönetici hesabı askıya alınamaz.",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+        runtime_guard.suspend_user(target_uid, db=db)
+
+    if target_ip:
+        runtime_guard.block_ip(target_ip, duration_seconds=900)
+
+    reason = (payload.reason or "Admin tek tıkla acil müdahale").strip()
+    record_telemetry(
+        event_type="admin_suspend",
+        severity="warning",
+        message=f"Erişim durduruldu (user_id={target_uid or '-'}, ip={target_ip or '-'}): {reason}",
+        user_id=target_uid or None,
+        path="/api/v1/admin/actions/suspend-user",
+        metadata={"ip": target_ip or None, "reason": reason},
+    )
+    return {
+        "ok": True,
+        "suspended_user_id": target_uid or None,
+        "blocked_ip": target_ip or None,
+        "runtime_guard": runtime_guard.get_status(),
+        "message": "Erişim anında durduruldu ve blok listesine alındı.",
+    }
+
+
+@router.post("/actions/close-stale-rooms", status_code=status.HTTP_200_OK)
+async def close_stale_rooms(
+    db: Any = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """class_sessions tablosundaki aktif görünen tüm dersleri sonlandırır (status='ended')."""
+    closed_count = 0
+    try:
+        sess_res = db.table("class_sessions").select("id, status").execute()
+        all_sessions = sess_res.data or []
+        for s in all_sessions:
+            st = str(s.get("status") or "").lower().strip()
+            sid = s.get("id")
+            if sid and st in ("live", "active", "in_progress", "ongoing"):
+                try:
+                    db.table("class_sessions").update({"status": "ended"}).eq("id", sid).execute()
+                    closed_count += 1
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # Bellek içi aktif ders kayıtlarını da temizle (varsa)
+    try:
+        from app.services import classroom_service
+
+        for s in getattr(classroom_service, "IN_MEMORY_CLASS_SESSIONS", []):
+            st = str(s.get("status") or "").lower().strip()
+            if st in ("live", "active", "in_progress", "ongoing"):
+                s["status"] = "ended"
+    except Exception:
+        pass
+
+    record_telemetry(
+        event_type="admin_close_stale_rooms",
+        severity="info",
+        message=f"Admin tarafından {closed_count} açık ders odası sonlandırıldı (status='ended').",
+        user_id=_get_field(_admin, "id") or None,
+        path="/api/v1/admin/actions/close-stale-rooms",
+    )
+    return {
+        "ok": True,
+        "closed_count": closed_count,
+        "message": (
+            f"{closed_count} açık ders odası başarıyla kapatıldı."
+            if closed_count > 0
+            else "Kapatılacak açık ders odası bulunamadı."
+        ),
     }

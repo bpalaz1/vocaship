@@ -3,6 +3,8 @@ VocaShip Backend - ASGI Application Entrypoint
 Exposes `app` for `uvicorn app.main:app` and `uvicorn main:app`.
 """
 
+import os
+import jwt
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,9 +13,13 @@ from app.api.v1.endpoints.reading import router as reading_router
 from app.api.v1.endpoints.speaking import router as speaking_router
 from app.api.v1.endpoints import tts
 from app.core import database as db_module
+from app.core.runtime_guard import runtime_guard, AI_MAINTENANCE_MESSAGE
 from app.services.telemetry_service import record_telemetry
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.services.quota_service import QuotaExceededException, ProRequiredException
+
+_GUARD_JWT_SECRET = os.getenv("JWT_SECRET_KEY", "vorego-super-secret-jwt-key-2026")
+_ADMIN_EMAIL = "bpalaz1@gmail.com"
 
 app = FastAPI(title="VocaShip API", version="1.0.0")
 
@@ -25,6 +31,87 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+def _extract_client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for") or ""
+    if xff:
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
+    xri = (request.headers.get("x-real-ip") or "").strip()
+    if xri:
+        return xri
+    if request.client and request.client.host:
+        return str(request.client.host)
+    return ""
+
+
+def _extract_jwt_claims(request: Request) -> dict:
+    auth_header = request.headers.get("Authorization") or ""
+    if not auth_header.startswith("Bearer "):
+        return {}
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return {}
+    try:
+        return jwt.decode(token, _GUARD_JWT_SECRET, algorithms=["HS256"]) or {}
+    except Exception:
+        return {}
+
+
+@app.middleware("http")
+async def runtime_guard_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path or "/"
+    low_path = path.lower()
+
+    # Sağlık ve admin kontrol uçlarını hiçbir zaman kilitleme
+    if low_path in ("/", "/health", "/api/v1/health") or low_path.startswith("/admin") or low_path.startswith("/api/v1/admin"):
+        return await call_next(request)
+
+    # Supabase'deki askıya alınmış kullanıcıları ilk istekte bir kez belleğe yükle
+    try:
+        runtime_guard.hydrate_suspended_users(db_module.get_db())
+    except Exception:
+        pass
+
+    claims = _extract_jwt_claims(request)
+    req_email = str(claims.get("email") or "").strip().lower()
+    req_role = str(claims.get("role") or "").strip().lower()
+    req_uid = str(claims.get("sub") or "").strip()
+    is_admin_req = (req_email == _ADMIN_EMAIL) or (req_role == "admin")
+
+    # 1. Askıya alınmış kullanıcı kontrolü (403)
+    if not is_admin_req and req_uid and runtime_guard.is_user_suspended(req_uid):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Hesabınızın erişimi sistem yöneticisi tarafından geçici olarak durduruldu."},
+            headers=_cors_error_headers(request),
+        )
+
+    # 2. IP blok & agresif istek koruması (429)
+    if not is_admin_req:
+        client_ip = _extract_client_ip(request)
+        is_blocked, block_msg = runtime_guard.check_and_track_ip(client_ip, path)
+        if is_blocked:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": block_msg or "Çok fazla istek algılandı. Lütfen daha sonra tekrar deneyin."},
+                headers=_cors_error_headers(request),
+            )
+
+    # 3. AI Güvenli Mod / Circuit Breaker (yalnızca AI üretim endpoint'lerinde 503)
+    if runtime_guard.is_ai_circuit_active() and runtime_guard.is_ai_protected_path(path):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": AI_MAINTENANCE_MESSAGE},
+            headers=_cors_error_headers(request),
+        )
+
+    return await call_next(request)
 
 
 def _cors_error_headers(request: Request) -> dict:

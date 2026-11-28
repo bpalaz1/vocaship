@@ -153,12 +153,23 @@ def get_working_gemini_response(
                 )
                 text = (getattr(response, "text", None) or "").strip()
                 if text:
+                    try:
+                        from app.core.runtime_guard import runtime_guard
+                        runtime_guard.record_gemini_success()
+                    except Exception:
+                        pass
                     return text
                 raise ValueError(f"Model '{model_name}' boş yanıt döndürdü.")
             except Exception as err:
                 last_error = err
                 err_str = str(err)
                 is_503_overload = "503" in err_str or "UNAVAILABLE" in err_str
+                if "429" in err_str or "503" in err_str or "RESOURCE_EXHAUSTED" in err_str or "UNAVAILABLE" in err_str:
+                    try:
+                        from app.core.runtime_guard import runtime_guard
+                        runtime_guard.record_gemini_error(err_str)
+                    except Exception:
+                        pass
                 if is_503_overload and attempt == 0:
                     logger.warning(f"Gemini model '{model_name}' 503 overload, retrying after 0.5s...")
                     time.sleep(0.5)
