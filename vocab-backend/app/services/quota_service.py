@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.database import get_db
 from app.core.local_db import LocalDatabaseClient
+from app.services.telemetry_service import record_telemetry
 
 logger = logging.getLogger("vocaship.quota")
 
@@ -336,6 +337,14 @@ def check_and_consume_quota(
         used = int(user_row.get("daily_custom_texts_used") or 0)
         max_limit = limits["max_daily_texts"]
         if used >= max_limit:
+            record_telemetry(
+                event_type="QUOTA_EXCEEDED",
+                severity="warning",
+                message=f"Kullanıcı günlük metin kotasını aştı ({used}/{max_limit}, tier={tier})",
+                user_id=user_id,
+                path=str(request.url.path),
+                country_code=request.headers.get("x-vercel-ip-country"),
+            )
             raise QuotaExceededException("text", tier=tier, limit=max_limit)
         if increment and user_id:
             _update_user_fields(user_id, {"daily_custom_texts_used": used + 1})
@@ -344,6 +353,14 @@ def check_and_consume_quota(
         used = int(user_row.get("daily_speaking_sessions_used") or 0)
         max_limit = limits["max_daily_speaking"]
         if used >= max_limit:
+            record_telemetry(
+                event_type="QUOTA_EXCEEDED",
+                severity="warning",
+                message=f"Kullanıcı günlük speaking kotasını aştı ({used}/{max_limit}, tier={tier})",
+                user_id=user_id,
+                path=str(request.url.path),
+                country_code=request.headers.get("x-vercel-ip-country"),
+            )
             raise QuotaExceededException("speaking", tier=tier, limit=max_limit)
         if increment and user_id:
             _update_user_fields(user_id, {"daily_speaking_sessions_used": used + 1})
@@ -355,6 +372,14 @@ def check_and_consume_quota(
             total_cards = cards_res.count if cards_res.count is not None else len(cards_res.data or [])
             max_limit = limits["max_flashcards"]
             if total_cards >= max_limit:
+                record_telemetry(
+                    event_type="QUOTA_EXCEEDED",
+                    severity="warning",
+                    message=f"Kullanıcı flashcard havuz limitini aştı ({total_cards}/{max_limit}, tier={tier})",
+                    user_id=user_id,
+                    path=str(request.url.path),
+                    country_code=request.headers.get("x-vercel-ip-country"),
+                )
                 raise QuotaExceededException("flashcards", tier=tier, limit=max_limit)
         except QuotaExceededException:
             raise

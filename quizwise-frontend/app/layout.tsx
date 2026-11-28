@@ -6,6 +6,7 @@ import FloatingXP from "./components/FloatingXP";
 import ActiveClassBanner from "./components/classroom/ActiveClassBanner";
 import MainContentWrapper from "./components/MainContentWrapper";
 import PaddleCheckoutListener from "./components/payments/PaddleCheckoutListener";
+import TelemetryGeoPing from "./components/TelemetryGeoPing";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ExperienceProvider } from "./context/ExperienceContext";
 import { PersonaProvider } from "./context/PersonaContext";
@@ -78,6 +79,9 @@ export default function RootLayout({
                     <UserStoriesProvider>
                       {/* Global Paddle.js ?_ptxn= Overlay Checkout Dinleyicisi */}
                       <PaddleCheckoutListener />
+
+                      {/* Oturum Başına 1 Kez Hafif Coğrafi Konum & Ziyaret Telemetrisi */}
+                      <TelemetryGeoPing />
 
                       {/* Global Floating XP Bildirimi */}
                       <FloatingXP />

@@ -22,11 +22,13 @@ from app.api.v1.endpoints.translate import router as translate_router
 from app.api.v1.endpoints.tts import router as tts_router
 from app.api.v1.endpoints.payments import router as payments_router
 from app.api.v1.endpoints.writing import router as writing_router
+from app.api.v1.endpoints.admin import router as admin_router
 
 router = APIRouter()
 
 router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 router.include_router(payments_router, prefix="/payments", tags=["Payments & Payouts"])
+router.include_router(admin_router, prefix="/admin", tags=["Admin & Telemetry"])
 
 router.include_router(ai_router, prefix="/ai", tags=["AI Flashcards"])
 router.include_router(ai_router, prefix="/dictionary", tags=["Dictionary & Instant Lookup"])

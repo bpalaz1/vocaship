@@ -20,6 +20,7 @@ import {
   Volume2,
   Crown,
   PenTool,
+  ShieldCheck,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import LanguageSelector from "./LanguageSelector";
@@ -128,6 +129,9 @@ export default function Navbar() {
   ];
 
   const currentUsername = user ? (userProfile.username || user.username || "") : "";
+  const isSuperAdmin = Boolean(
+    user?.email && user.email.toLowerCase().trim() === "bpalaz1@gmail.com"
+  );
   const isPro = Boolean(
     user &&
       (user.isPro ||
@@ -390,6 +394,18 @@ export default function Navbar() {
                           </p>
                         </div>
                       </div>
+
+                      {/* 🛡️ Gizli Admin Kontrol Merkezi Kısayolu (Yalnızca bpalaz1@gmail.com) */}
+                      {isSuperAdmin && (
+                        <Link
+                          href="/admin"
+                          onClick={() => setIsUserDropdownOpen(false)}
+                          className="w-full px-3 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/35 text-xs font-black text-rose-300 hover:text-rose-200 transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <ShieldCheck className="w-4 h-4 text-rose-400 shrink-0" />
+                          <span>🛡️ Admin Kontrol Merkezi</span>
+                        </Link>
+                      )}
 
                       {/* Deneme Sayacı / PRO'ya Geç Aksiyonu (Dropdown İçi) */}
                       {isTrialActive ? (

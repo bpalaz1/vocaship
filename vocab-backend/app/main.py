@@ -11,6 +11,7 @@ from app.api.v1.endpoints.reading import router as reading_router
 from app.api.v1.endpoints.speaking import router as speaking_router
 from app.api.v1.endpoints import tts
 from app.core import database as db_module
+from app.services.telemetry_service import record_telemetry
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.services.quota_service import QuotaExceededException, ProRequiredException
 
@@ -82,6 +83,13 @@ async def global_exception_handler(request: Request, exc: Exception):
             content={"detail": exc.detail},
             headers=headers,
         )
+    record_telemetry(
+        event_type="SERVER_500",
+        severity="critical",
+        message=f"{type(exc).__name__}: {str(exc)}",
+        path=str(request.url.path),
+        country_code=request.headers.get("x-vercel-ip-country"),
+    )
     return JSONResponse(
         status_code=500,
         content={"detail": str(exc)},
