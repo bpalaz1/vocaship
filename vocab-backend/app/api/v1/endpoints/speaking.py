@@ -37,18 +37,15 @@ from app.schemas.speaking import (
 )
 from app.services.ai_service import get_client, clean_json_response
 from app.services.gemini_service import async_get_working_gemini_response
+from app.core.runtime_guard import MODEL_CHAIN, runtime_guard
 from app.services.quota_service import check_and_consume_quota
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-PRIMARY_SPEAKING_MODEL = "gemini-2.5-flash"
-FAST_FALLBACK_MODELS = [
-    "gemini-flash-lite-latest",
-    "gemini-3.1-flash-lite-preview",
-    "gemini-2.5-flash",
-]
+PRIMARY_SPEAKING_MODEL = "gemini-flash-latest"
+FAST_FALLBACK_MODELS = list(MODEL_CHAIN)
 
 INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION = """Sen canlı, enerjik ve samimi bir İngilizce konuşma mentorusun.
 ASLA kuru, kitabi veya robotik cümleler kurma. Doğal konuşma diline uygun tepkiler ver ('Oh, really?...', 'That sounds amazing!', 'Well, to be honest...').
@@ -381,6 +378,12 @@ async def _call_single_model(
                 config=types.GenerateContentConfig(**cfg_kwargs),
             )
             if response and response.text:
+                runtime_guard.record_ai_result(
+                    success=True,
+                    actor="speaking",
+                    model_used=model_name,
+                    model_version=getattr(response, "model_version", None),
+                )
                 return parse_flexible_speaking_response(response.text)
         except Exception as search_err:
             logger.debug(f"Google Search grounding fallback on {model_name}: {search_err}")
@@ -400,6 +403,12 @@ async def _call_single_model(
             config=types.GenerateContentConfig(**cfg_kwargs),
         )
         if response and response.text:
+            runtime_guard.record_ai_result(
+                success=True,
+                actor="speaking",
+                model_used=model_name,
+                model_version=getattr(response, "model_version", None),
+            )
             return parse_flexible_speaking_response(response.text)
     except Exception:
         pass
@@ -413,6 +422,12 @@ async def _call_single_model(
             system_instruction=sys_inst,
         ),
     )
+    runtime_guard.record_ai_result(
+        success=True,
+        actor="speaking",
+        model_used=model_name,
+        model_version=getattr(response, "model_version", None),
+    )
     return parse_flexible_speaking_response(response.text)
 
 
@@ -423,13 +438,13 @@ async def async_call_speaking_gemini(
 ) -> dict:
     """
     Gerçek zamanlı hızlı Gemini çağrısı (<1sn hedefi):
-    Doğrudan hızlı gemini-flash-lite-latest, gemini-3.1-flash-lite-preview ve gemini-2.5-flash
+    Otomatik güncellenen MODEL_CHAIN (gemini-flash-latest -> gemini-3.8-flash -> gemini-2.5-flash)
     modellerini paralel yarıştırır; her yanıt doğrudan Gemini modelinden gerçek zamanlı üretilir.
     """
     client = get_client()
     sys_inst = system_instruction or INFINITE_ADAPTIVE_SYSTEM_INSTRUCTION
 
-    race_models = ["gemini-2.5-flash", "gemini-flash-lite-latest"]
+    race_models = ["gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash"]
     tasks = [
         asyncio.create_task(
             asyncio.wait_for(

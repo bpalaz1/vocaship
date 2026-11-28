@@ -8,18 +8,13 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 from app.core.config import settings
+from app.core.runtime_guard import MODEL_CHAIN, runtime_guard
 
 # .env dosyasından ortam değişkenlerini yükle
 load_dotenv()
 
-# Hızlı ve düşük gecikmeli (low latency) gerçek Gemini Flash model önceliği
-FALLBACK_MODELS = [
-    "gemini-2.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-2.5-flash",
-    "gemini-flash-latest",
-    "gemini-3.5-flash-lite",
-]
+# Google 1 Aralık 2026 uyumlu otomatik güncellenen Flash model zinciri
+FALLBACK_MODELS = list(MODEL_CHAIN)
 
 LANG_MAP = {
     "en": "English",
@@ -87,17 +82,25 @@ async def async_call_gemini_with_fallback(
                 ),
                 timeout=timeout_per_model,
             )
+            model_version = getattr(response, "model_version", None)
+            runtime_guard.record_ai_result(
+                success=True,
+                actor="ai_service",
+                model_used=model_name,
+                model_version=model_version,
+            )
             return clean_json_response(response.text)
         except Exception as e:
             last_error = e
             err_str = str(e)
             print(f"[Async Model Fallback] {model_name} başarısız: {err_str[:120]}... Sıradaki deneniyor.")
+            runtime_guard.record_ai_result(
+                success=False,
+                actor="ai_service",
+                detail=err_str,
+                model_used=model_name,
+            )
             if "429" in err_str or "503" in err_str:
-                try:
-                    from app.core.runtime_guard import runtime_guard
-                    runtime_guard.record_gemini_error(err_str)
-                except Exception:
-                    pass
                 await asyncio.sleep(0.25)
             continue
 
@@ -117,17 +120,24 @@ def call_gemini_with_fallback(prompt: str, temperature: float = 0.2) -> dict:
                 contents=prompt,
                 config=_build_json_config(model_name, temperature),
             )
+            model_version = getattr(response, "model_version", None)
+            runtime_guard.record_ai_result(
+                success=True,
+                actor="ai_service",
+                model_used=model_name,
+                model_version=model_version,
+            )
             return clean_json_response(response.text)
         except Exception as e:
             last_error = e
             err_str = str(e)
             print(f"[Model Fallback] {model_name} başarısız: {err_str[:120]}... Sıradaki deneniyor.")
-            if "429" in err_str or "503" in err_str:
-                try:
-                    from app.core.runtime_guard import runtime_guard
-                    runtime_guard.record_gemini_error(err_str)
-                except Exception:
-                    pass
+            runtime_guard.record_ai_result(
+                success=False,
+                actor="ai_service",
+                detail=err_str,
+                model_used=model_name,
+            )
             continue
 
     raise last_error

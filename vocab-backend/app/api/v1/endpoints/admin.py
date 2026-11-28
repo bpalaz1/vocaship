@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from app.core import database as db_module
 from app.core.database import get_db
-from app.core.runtime_guard import runtime_guard
+from app.core.runtime_guard import MODEL_CHAIN, runtime_guard
 from app.api.v1.endpoints.auth import get_current_user
 from app.services.telemetry_service import (
     record_telemetry,
@@ -153,6 +153,11 @@ async def get_admin_overview(
         "db_mode": "fallback" if is_fallback else "supabase",
         "db_error": db_module.DB_INIT_ERROR,
         "server_time": now_utc.isoformat(),
+        "active_ai_model": runtime_guard.last_used_model,
+        "resolved_model_version": runtime_guard.last_model_version or runtime_guard.last_used_model,
+        "auto_update_enabled": "gemini-flash-latest" in MODEL_CHAIN,
+        "model_chain": list(MODEL_CHAIN),
+        "ai_error_rate_1m": runtime_guard.get_ai_error_rate_1m(),
     }
 
     # 2 & 3. Kullanıcı Özeti & Bugünkü Kota Tüketimi

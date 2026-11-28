@@ -33,6 +33,11 @@ interface AdminOverviewResponse {
     db_mode: "supabase" | "fallback";
     db_error: string | null;
     server_time: string;
+    active_ai_model?: string;
+    resolved_model_version?: string;
+    auto_update_enabled?: boolean;
+    model_chain?: string[];
+    ai_error_rate_1m?: number;
   };
   runtime_guard?: {
     ai_circuit_open: boolean;
@@ -436,6 +441,36 @@ export default function AdminDashboardPage() {
                     </span>
                   </>
                 )}
+                {(() => {
+                  const resolvedModel =
+                    data?.system_health?.resolved_model_version ||
+                    data?.system_health?.active_ai_model ||
+                    "gemini-flash-latest";
+                  const autoUpdate = data?.system_health?.auto_update_enabled ?? true;
+                  const chain = (
+                    data?.system_health?.model_chain || [
+                      "gemini-flash-latest",
+                      "gemini-3.8-flash",
+                      "gemini-3.5-flash-lite",
+                      "gemini-2.5-flash",
+                    ]
+                  ).join(" → ");
+                  const errRate = data?.system_health?.ai_error_rate_1m ?? 0;
+                  return (
+                    <>
+                      <span>•</span>
+                      <span
+                        title={`Yedek Model Zinciri: ${chain} | Son 1 dk Hata Oranı: %${errRate}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-violet-500/20 to-cyan-500/20 border border-cyan-400/40 text-cyan-200 text-[11px] font-bold font-mono shadow-sm cursor-help"
+                      >
+                        <span>🤖 AI Motoru: {resolvedModel}</span>
+                        {autoUpdate && (
+                          <span className="text-violet-200 font-semibold">(Oto-Güncel)</span>
+                        )}
+                      </span>
+                    </>
+                  );
+                })()}
               </p>
             </div>
           </div>

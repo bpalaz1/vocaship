@@ -10,6 +10,13 @@ from typing import Any, Deque, Dict, Optional, Set, Tuple
 
 logger = logging.getLogger("vocaship.runtime_guard")
 
+MODEL_CHAIN = [
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash",
+]
+
 AI_PROTECTED_KEYWORDS = (
     "stories",
     "speaking",
@@ -102,7 +109,10 @@ class RuntimeGuard:
         self.ai_circuit_auto_until: float = 0.0
         self.blocked_ips: Dict[str, float] = {}
         self.suspended_user_ids: Set[str] = set()
+        self.last_used_model: str = "gemini-flash-latest"
+        self.last_model_version: str = ""
         self._gemini_error_timestamps: Deque[float] = deque(maxlen=30)
+        self._ai_recent_calls: Deque[Tuple[float, bool]] = deque(maxlen=200)
         self._ip_request_windows: Dict[str, Deque[float]] = {}
         self._suspended_hydrated: bool = False
 
@@ -116,6 +126,9 @@ class RuntimeGuard:
 
         while self._gemini_error_timestamps and now - self._gemini_error_timestamps[0] > 60.0:
             self._gemini_error_timestamps.popleft()
+
+        while self._ai_recent_calls and now - self._ai_recent_calls[0][0] > 60.0:
+            self._ai_recent_calls.popleft()
 
     def is_ai_circuit_active(self) -> bool:
         now = time.time()
@@ -138,6 +151,45 @@ class RuntimeGuard:
     def record_gemini_success(self) -> None:
         with self._lock:
             self._gemini_error_timestamps.clear()
+
+    def record_ai_result(
+        self,
+        success: bool,
+        actor: Optional[str] = None,
+        detail: str = "",
+        model_used: Optional[str] = None,
+        model_version: Optional[str] = None,
+    ) -> bool:
+        """
+        Her Gemini çağrısının sonucunu, kullanılan modeli ve Google'dan dönen gerçek
+        model_version bilgisini kaydeder; son 1 dakikalık hata oranını günceller.
+        """
+        now = time.time()
+        with self._lock:
+            self._prune_locked(now)
+            self._ai_recent_calls.append((now, bool(success)))
+            if success:
+                self._gemini_error_timestamps.clear()
+                if model_used and str(model_used).strip():
+                    self.last_used_model = str(model_used).strip()
+                if model_version and str(model_version).strip():
+                    self.last_model_version = str(model_version).strip()
+                return False
+
+        err_str = str(detail or "")
+        if any(code in err_str for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")):
+            return self.record_gemini_error(err_str)
+        return False
+
+    def get_ai_error_rate_1m(self) -> float:
+        now = time.time()
+        with self._lock:
+            self._prune_locked(now)
+            total = len(self._ai_recent_calls)
+            if total == 0:
+                return 0.0
+            failures = sum(1 for _, ok in self._ai_recent_calls if not ok)
+            return round((failures / total) * 100.0, 1)
 
     def record_gemini_error(self, detail: str = "") -> bool:
         """
@@ -290,6 +342,19 @@ class RuntimeGuard:
                     for ip, until in self.blocked_ips.items()
                 ],
                 "suspended_users_count": len(self.suspended_user_ids),
+                "model_chain": list(MODEL_CHAIN),
+                "last_used_model": self.last_used_model,
+                "last_model_version": self.last_model_version or self.last_used_model,
+                "ai_error_rate_1m": round(
+                    (
+                        sum(1 for _, ok in self._ai_recent_calls if not ok)
+                        / len(self._ai_recent_calls)
+                        * 100.0
+                    )
+                    if self._ai_recent_calls
+                    else 0.0,
+                    1,
+                ),
             }
 
 
